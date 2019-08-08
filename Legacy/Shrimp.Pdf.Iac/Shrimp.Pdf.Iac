@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net462</TargetFramework>
+    <Configurations>Debug;Release;MiniBuild</Configurations>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Scripts.fs" />
+    <Compile Include="Library.fs" />
+  </ItemGroup>
+
+
+
+  <ItemGroup>
+    <PackageReference Include="Fake.IO.FileSystem" Version="5.6.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <COMReference Include="Acrobat.dll">
+      <Guid>78165d71-df28-11d3-9a89-005004a56d53</Guid>
+      <VersionMajor>1</VersionMajor>
+      <VersionMinor>0</VersionMinor>
+      <WrapperTool>tlbimp</WrapperTool>
+      <Lcid>0</Lcid>
+      <Isolated>false</Isolated>
+    </COMReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Atrous.Elmish">
+      <HintPath>..\Atrous.Elmish\bin\Debug\net462\Atrous.Elmish.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.5.2" />
+    <PackageReference Update="System.ValueTuple" Version="4.5.0" />
+  </ItemGroup>
+</Project>

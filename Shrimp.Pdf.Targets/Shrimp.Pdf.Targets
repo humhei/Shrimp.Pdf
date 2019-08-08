@@ -1,0 +1,45 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Configurations>Debug;Release;MiniBuild</Configurations>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Remove="Hangtag\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Legacy\Shared\Shared.fs" />
+    <Compile Include="Remoting.fs" />
+    <Compile Include="FontGen.fs" />
+    <Compile Include="Colors.fs" />
+    <Compile Include="FileSystem.fs" />
+    <Compile Include="Types.fs" />
+    <Compile Include="Operators.fs" />
+    <Compile Include="Actions.fs" />
+    <Compile Include="Btw.fs" />
+    <Compile Include="FinanceWrapper.fs" />
+    <Compile Include="Sticker.fs" />
+    <Compile Include="Hangtag.fs" />
+    <Compile Include="Commercial.fs" />
+    <Compile Include="Product.fs" />
+    <Compile Include="Target.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Deedle" Version="2.0.0-beta01" />
+    <PackageReference Include="Fable.Remoting.DotnetClient" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Atrous.Entities\Atrous.Entities.fsproj" />
+    <ProjectReference Include="..\Atrous.Pdf.Parser\Atrous.Pdf.Parser.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.5.2" />
+    <PackageReference Update="System.ValueTuple" Version="4.5.0" />
+  </ItemGroup>
+
+</Project>

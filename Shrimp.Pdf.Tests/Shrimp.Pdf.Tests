@@ -1,0 +1,63 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net462</TargetFrameworks>
+    <Platforms>AnyCPU;x86</Platforms>
+    <Configurations>Debug;Release;MiniBuild</Configurations>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Remove="datas\健耐\Bench\**" />
+    <EmbeddedResource Remove="datas\健耐\通用贴标\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Script1.fsx" />
+    <None Include="PantoneTest.fsx" />
+    <None Include="FParsec.fsx" />
+    <Compile Include="Tests.FParsec.fs" />
+    <Compile Include="Tests.Types.fs" />
+    <!--<Compile Include="datas\健耐\RealClothing\Orders\大底成分标.fs" />
+    <Compile Include="datas\健耐\RealClothing\Orders\外箱正唛贴标.fs" />
+    <Compile Include="datas\健耐\RealClothing\Orders\挂牌.fs" />
+    <Compile Include="datas\健耐\RealClothing\Orders\生产细节.fs" />
+    <Compile Include="datas\健耐\RealClothing\吊牌.fs" />
+    <Compile Include="datas\健耐\RealClothing\女鞋吊牌.fs" />
+    <Compile Include="datas\健耐\RealClothing\男鞋吊牌.fs" />
+    <Compile Include="datas\健耐\RealClothing\Build.fs" />-->
+    <Compile Include="datas\健耐\通用贴标\Map.fs" />
+    <Compile Include="datas\健耐\通用贴标\Orders\示意图.fs" />
+    <Compile Include="datas\健耐\通用贴标\Orders\合同附件.fs" />
+    <Compile Include="datas\健耐\通用贴标\Mosaic拷贝纸.fs" />
+    <Compile Include="datas\健耐\通用贴标\Tru拷贝纸.fs" />
+    <Compile Include="datas\健耐\通用贴标\通用贴标.fs" />
+    <Compile Include="datas\健耐\通用贴标\Build.fs" />
+    <Compile Include="Tests.AcrobatIac.fs" />
+    <Compile Include="Tests.AiIac.fs" />
+    <Compile Include="Tests.Composite.fs" />
+    <Compile Include="Tests.Pdf.fs" />
+    <Compile Include="Tests.Runner.fs" />
+    <None Include="packages.fsx" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Expecto" Version="8.2.2" />
+    <PackageReference Include="FAKE" Version="5.0.0-rc012.95" />
+    <PackageReference Include="Fantomas" Version="2.8.1" />
+    <PackageReference Include="FsPickler" Version="5.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Atrous.Pdf.Barcode\Atrous.Pdf.Barcode.fsproj" />
+    <ProjectReference Include="..\Atrous.Pdf.Parser\Atrous.Pdf.Parser.fsproj" />
+    <ProjectReference Include="..\Atrous.Pdf.Targets\Atrous.Pdf.Targets.fsproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.5.2" />
+    <PackageReference Update="System.ValueTuple" Version="4.5.0" />
+  </ItemGroup>
+
+</Project>

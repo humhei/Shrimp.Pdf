@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Configurations>Debug;Release;MiniBuild</Configurations>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="PdfCanvasEditor.fs" />
+    <Compile Include="Extract.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Colourful" Version="1.2.2" />
+    <PackageReference Include="FParsec" Version="1.0.3" />
+    <PackageReference Include="itext7" Version="7.1.2" />
+    <PackageReference Include="itext7.font-asian" Version="7.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Atrous.Elmish\Atrous.Elmish.fsproj" />
+    <ProjectReference Include="..\Atrous.Pdf.Extensions\Atrous.Pdf.Extensions.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.5.2" />
+    <PackageReference Update="System.ValueTuple" Version="4.5.0" />
+  </ItemGroup>
+
+</Project>
