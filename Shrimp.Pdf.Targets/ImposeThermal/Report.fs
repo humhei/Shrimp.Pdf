@@ -1,15 +1,15 @@
-﻿namespace Atrous.Pdfargets.ImposeThermal
+﻿namespace Shrimp.Pdfargets.ImposeThermal
 open Fake.IO
 open iText.Kernel.Pdf
-open Atrous.Pdf
+open Shrimp.Pdf
 open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas
-open Atrous.Entities.Types
+open Shrimp.Entities.Types
 open iText.Layout
 open iText.Layout.Element
 [<RequireQualifiedAccess>]
 module Report =
-    open Atrous.Pdf.Targets
+    open Shrimp.Pdf.Targets
     open iText.Layout.Layout
     open Types
 

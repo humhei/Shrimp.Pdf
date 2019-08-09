@@ -1,17 +1,17 @@
-﻿namespace Atrous.Entities
+﻿namespace Shrimp.Entities
 
 
 module Types = 
     open System
     open Fake.IO.FileSystemOperators
-    open Atrous.Pdf
-    open Atrous.Utils
+    open Shrimp.Pdf
+    open Shrimp.Utils
     open iText.Kernel.Geom
-    open Atrous.Pdf.Colors
-    open Atrous.Extensions
-    open Atrous.Pdf.Types
-    open Atrous.Pdf.Extensions
-    open Atrous
+    open Shrimp.Pdf.Colors
+    open Shrimp.Extensions
+    open Shrimp.Pdf.Types
+    open Shrimp.Pdf.Extensions
+    open Shrimp
 
     [<RequireQualifiedAccess>]
     type RetrieveFrom =
@@ -137,8 +137,8 @@ module Types =
 
     [<RequireQualifiedAccess>]
     module OpenSize =
-        open Atrous.Utils
-        open Atrous.Pdf.Extensions
+        open Shrimp.Utils
+        open Shrimp.Pdf.Extensions
 
 
         let inline create width height openKind openNum =
@@ -294,8 +294,8 @@ module Types =
 
     [<RequireQualifiedAccess>]
     module PressSize =
-        open Atrous.Pdf.Extensions
-        open Atrous.Utils
+        open Shrimp.Pdf.Extensions
+        open Shrimp.Utils
 
         let eight = {Number = 8; Width = toInche 510.;Height = toInche 390.}
 

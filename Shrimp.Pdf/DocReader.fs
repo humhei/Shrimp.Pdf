@@ -1,12 +1,12 @@
-﻿namespace Atrous.Pdf
+﻿namespace Shrimp.Pdf
 
-open Atrous.Pdf.Types
+open Shrimp.Pdf.Types
 open iText.Kernel.Pdf
 open iText.Kernel.Pdf.Canvas.Parser
-open Atrous.Pdf.Parser
-open Atrous.Pdf.Filters
-open Atrous.Pdf.Extensions
-open Atrous.Pdf.PageReader
+open Shrimp.Pdf.Parser
+open Shrimp.Pdf.Filters
+open Shrimp.Pdf.Extensions
+open Shrimp.Pdf.PageReader
 
 module DocReader =
     [<RequireQualifiedAccess>]
@@ -38,7 +38,7 @@ module DocReader =
 
     [<RequireQualifiedAccess>]
     module ColorCard =
-        open Atrous.Pdf.Colors
+        open Shrimp.Pdf.Colors
 
         let toColoredText colorCard = 
             let colorNameToText colorName =

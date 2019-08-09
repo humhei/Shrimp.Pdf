@@ -1,11 +1,11 @@
-﻿namespace Atrous.Pdflmish
+﻿namespace Shrimp.Pdflmish
 [<RequireQualifiedAccess>]
 module Program =
     open System.Diagnostics
     open System
-    open Atrous.Elmish
+    open Shrimp.Elmish
     open BlackFox.ColoredPrintf
-    open Atrous.Pdf.Types
+    open Shrimp.Pdf.Types
 
 
     let inline watch (f:'a -> 'b -> 'c) (p: TimeSpan -> 'a -> 'c -> unit) =

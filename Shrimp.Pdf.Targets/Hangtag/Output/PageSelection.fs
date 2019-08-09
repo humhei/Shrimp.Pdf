@@ -1,9 +1,9 @@
-﻿namespace Atrous.Pdfargets.Hangtag.Output
+﻿namespace Shrimp.Pdfargets.Hangtag.Output
 module internal PageSelection =
-    open Atrous.Pdf.Types
-    open Atrous.Pdf.Targets.Reports
-    open Atrous.Pdf.Colors
-    open Atrous.Pdf.Targets.Hangtag
+    open Shrimp.Pdf.Types
+    open Shrimp.Pdf.Targets.Reports
+    open Shrimp.Pdf.Colors
+    open Shrimp.Pdf.Targets.Hangtag
 
     let notFirstPageElement =
         fun (ns: int list) -> List.skip 1 ns

@@ -1,11 +1,11 @@
-﻿namespace Atrous.Pdfargets.Hangtag.Output
+﻿namespace Shrimp.Pdfargets.Hangtag.Output
 [<RequireQualifiedAccess>]
 module internal Seam =
-    open Atrous.Pdf.Types
-    open Atrous.Entities.Types
+    open Shrimp.Pdf.Types
+    open Shrimp.Entities.Types
     open PageSelection
-    open Atrous.Pdf.Manipulates
-    open Atrous.Pdf.Targets.Actions
+    open Shrimp.Pdf.Manipulates
+    open Shrimp.Pdf.Targets.Actions
     open Manipulates
 
     let cutting (hangtag: Hangtag) (ms: Manipulate<_> list) =

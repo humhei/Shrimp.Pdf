@@ -1,7 +1,7 @@
 ﻿module Tests.Composite
 //open Expecto
 //open System
-//open Atrous.Pdf
+//open Shrimp.Pdf
 //open LiteDB
 //open Types
 //open FSharp.ExcelProvider
@@ -9,12 +9,12 @@
 //open Types
 //open LiteDB.FSharp.Extensions
 //open LiteDB.FSharp.Linq
-//open Atrous.Entities.Types
-//open Atrous.Pdf.Targets
+//open Shrimp.Entities.Types
+//open Shrimp.Pdf.Targets
 //open ExcelProcess
 //open FParsec
 //open ArrayParsers
-//open Atrous.Entities
+//open Shrimp.Entities
 //open MatrixParsers
 //open SheetParsers
 //open System.Diagnostics

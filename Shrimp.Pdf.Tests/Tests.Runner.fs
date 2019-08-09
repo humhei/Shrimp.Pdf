@@ -7,7 +7,7 @@ open Tests.Composite
 open Tests.AcrobatIac
 open Tests.FParsec
 open Tests.AiIac
-open Atrous.Pdf.Targets.Remoting
+open Shrimp.Pdf.Targets.Remoting
 open Tests.Types.Input
 open Hello.XLParser
 

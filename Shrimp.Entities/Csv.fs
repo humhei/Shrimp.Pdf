@@ -1,9 +1,9 @@
-﻿namespace Atrous.EntitiesCsv
+﻿namespace Shrimp.EntitiesCsv
 
 open System.IO
 open Microsoft.FSharp.Reflection
 open System
-open Atrous.Entities.Converters
+open Shrimp.Entities.Converters
 
 type ImposerDataCell =
     {

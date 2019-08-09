@@ -1,13 +1,13 @@
-﻿namespace Atrous.Entities
+﻿namespace Shrimp.Entities
 module XLParser =
     open ExcelProcess
     open FParsec
-    open Atrous.Entities.Types
+    open Shrimp.Entities.Types
     open MatrixParsers
-    open Atrous.Utils
+    open Shrimp.Utils
 
     module Math =
-        open Atrous.Extensions
+        open Shrimp.Extensions
 
         let isHalf float =
             ((float * 2.).ToString() |> (String.isInt32))

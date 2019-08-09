@@ -1,15 +1,15 @@
-﻿namespace Atrous.Pdflect
+﻿namespace Shrimp.Pdflect
 
 open iText.Kernel.Pdf.Canvas.Parser.Data
-open Atrous.Pdf.Colors
-open Atrous.Pdf.Filters
-open Atrous.Pdf.Extensions
+open Shrimp.Pdf.Colors
+open Shrimp.Pdf.Filters
+open Shrimp.Pdf.Extensions
 open Types
 
 [<RequireQualifiedAccess>]
 module FsSizeOfMM =
-    open Atrous.Utils
-    open Atrous.Pdf.Types
+    open Shrimp.Utils
+    open Shrimp.Pdf.Types
 
     let sizeLitterBigger (width: float<mm>) (height: float<mm>) (size: FsSizeOfMM) =
         size.Width >++ width
@@ -60,8 +60,8 @@ module Select =
 
 [<RequireQualifiedAccess>]
 module Path =
-    open Atrous.Pdf.Types
-    open Atrous.Utils
+    open Shrimp.Pdf.Types
+    open Shrimp.Utils
 
     let stroke colors (info: PathRenderInfo) =
         PathRenderInfo.hasSolidStroke info 
@@ -116,8 +116,8 @@ module Text =
 
 [<RequireQualifiedAccess>]
 module AnalyticSubpath =
-    open Atrous.Utils
-    open Atrous.Pdf.Types
+    open Shrimp.Utils
+    open Shrimp.Pdf.Types
 
     let sizeLitterBigger (width: float<mm>) (height: float<mm>) (analyticSubpath: AnalyticSubpath) =
         let bound = AnalyticSubpath.getBound analyticSubpath

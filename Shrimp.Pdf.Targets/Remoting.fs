@@ -1,4 +1,4 @@
-﻿namespace Atrous.Pdfargets
+﻿namespace Shrimp.Pdfargets
 module Remoting =
     open Fable.Remoting.DotnetClient
     open LegacyShared

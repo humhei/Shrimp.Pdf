@@ -1,13 +1,13 @@
 ﻿namespace RealClothing
 [<RequireQualifiedAccess>]
 module 吊牌 =
-    open Atrous.Pdf
+    open Shrimp.Pdf
     open System.IO
-    open Atrous.Pdf.Targets.Types
-    open Atrous.Entities.Types
-    open Atrous.Pdf.Colors
-    open Atrous.Pdf.Types
-    open Atrous.Pdf.Utils
+    open Shrimp.Pdf.Targets.Types
+    open Shrimp.Entities.Types
+    open Shrimp.Pdf.Colors
+    open Shrimp.Pdf.Types
+    open Shrimp.Pdf.Utils
 
     let private name = __SOURCE_FILE__ |> Path.GetFileNameWithoutExtension
     let productInput item =

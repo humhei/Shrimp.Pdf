@@ -1,4 +1,4 @@
-namespace Atrous.Pdf
+namespace Shrimp.Pdf
 [<RequireQualifiedAccess>]
 module Iac =
     open Acrobat

@@ -1,4 +1,4 @@
-﻿namespace Atrous.Pdfargets
+﻿namespace Shrimp.Pdfargets
 [<RequireQualifiedAccess>]
 module Btw =
     open System
@@ -6,23 +6,23 @@ module Btw =
     open Fake.IO
     open iText.Kernel.Pdf.Canvas.Parser.Data
     open iText.Kernel.Colors
-    open Atrous.Pdf.Extensions
+    open Shrimp.Pdf.Extensions
 
-    open Atrous.Pdf
-    open Atrous.Utils
-    open Atrous.Pdf.Colors
-    open Atrous.Pdf.Types
-    open Atrous.Pdf.Reuses
-    open Atrous.Pdf.PageReader
-    open Atrous.Pdf.DocReader
-    open Atrous.Pdf.Manipulates
-    open Atrous.Pdf.Select
-    open Atrous.Entities.Types
-    open Atrous.Entities.Csv
-    open Atrous.Pdf.Targets.Types
-    open Atrous.Pdf.Targets.Actions
+    open Shrimp.Pdf
+    open Shrimp.Utils
+    open Shrimp.Pdf.Colors
+    open Shrimp.Pdf.Types
+    open Shrimp.Pdf.Reuses
+    open Shrimp.Pdf.PageReader
+    open Shrimp.Pdf.DocReader
+    open Shrimp.Pdf.Manipulates
+    open Shrimp.Pdf.Select
+    open Shrimp.Entities.Types
+    open Shrimp.Entities.Csv
+    open Shrimp.Pdf.Targets.Types
+    open Shrimp.Pdf.Targets.Actions
     open Reuses
-    open Atrous.Extensions
+    open Shrimp.Extensions
     open Manipulates
 
     [<RequireQualifiedAccess>]
@@ -215,7 +215,7 @@ module Btw =
                 |> ignore
 
     module Output = 
-        open Atrous.Utils
+        open Shrimp.Utils
         
         type UserState =
             { Arg: ExplicitImposingArgument

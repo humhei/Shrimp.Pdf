@@ -1,4 +1,4 @@
-﻿namespace Atrous.Entities
+﻿namespace Shrimp.Entities
 
 
 open LiteDB
@@ -6,8 +6,8 @@ open LiteDB.FSharp.Extensions
 open LiteDB.FSharp.Linq
 open LiteDB.FSharp
 open Types
-open Atrous
-open Atrous.Utils
+open Shrimp
+open Shrimp.Utils
 
 [<RequireQualifiedAccess>]
 module LiteRepository = 

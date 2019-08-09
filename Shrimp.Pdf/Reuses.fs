@@ -1,14 +1,14 @@
-﻿namespace Atrous.Pdf
+﻿namespace Shrimp.Pdf
 
 module Reuses =
     open iText.Kernel.Pdf
     open Types
-    open Atrous.Pdf.Extensions
+    open Shrimp.Pdf.Extensions
     open iText.Kernel.Geom
     open iText.Kernel.Pdf.Canvas
-    open Atrous.Utils
-    open Atrous.Extensions
-    open Atrous
+    open Shrimp.Utils
+    open Shrimp.Extensions
+    open Shrimp
 
     let private assignPlatesWithPages (arg: ImposingArgument) (dest: PdfDocument) (pages: PdfPage list) = 
         let hspaces = Seq.repeatToInfinite arg.HSpaces

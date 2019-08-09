@@ -1,4 +1,4 @@
-﻿namespace Atrous.Pdf
+﻿namespace Shrimp.Pdf
 
 open iText.Kernel.Pdf
 open iText.Kernel.Pdf.Xobject

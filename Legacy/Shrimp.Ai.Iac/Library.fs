@@ -1,4 +1,4 @@
-namespace Atrous.Ai
+namespace Shrimp.Ai
 [<RequireQualifiedAccess>]
 module ExtendIac =
     open Illustrator

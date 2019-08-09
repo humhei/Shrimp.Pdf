@@ -2,14 +2,14 @@
 open Fake.Runtime
 open iText.Kernel.Colors
 open iText.Kernel.Geom
-open Atrous.Pdf
+open Shrimp.Pdf
 open Fake.IO.FileSystemOperators
 open Fake.Core
 open LiteDB
 open LiteDB.FSharp
 open LiteDB.FSharp.Extensions
-open Atrous.Entities.Types
-open Atrous.Pdf.Targets
+open Shrimp.Entities.Types
+open Shrimp.Pdf.Targets
 open Tests.Types
 open LiteDB.FSharp.Linq
 open System
@@ -18,7 +18,7 @@ open FSharp.ExcelProvider
 open ExcelProcess
 open ArrayParser
 open FParsec.CharParsers
-open Atrous.Pdf.Entities
+open Shrimp.Pdf.Entities
 
 let xlTecPath =  root + @"\超众\工艺\工艺1814-1816 口舌转印标（阿达）.xlsx"
 useNewDatabase <| fun db ->

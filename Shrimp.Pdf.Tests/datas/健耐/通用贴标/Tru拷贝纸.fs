@@ -1,9 +1,9 @@
 ﻿namespace 通用贴标
 [<RequireQualifiedAccess>]
 module Tru拷贝纸 =
-    open Atrous.Entities.Types
+    open Shrimp.Entities.Types
     open System.IO
-    open Atrous.Pdf.Targets.Types
+    open Shrimp.Pdf.Targets.Types
     open 通用贴标.Orders.Order
 
     let private name = __SOURCE_FILE__ |> Path.GetFileNameWithoutExtension

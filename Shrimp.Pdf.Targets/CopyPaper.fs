@@ -1,20 +1,20 @@
 ﻿
-namespace Atrous.Pdf.Targets
+namespace Shrimp.Pdf.Targets
 
 [<RequireQualifiedAccess>]
 module internal CopyPaper =
-    open Atrous.Entities.Types
+    open Shrimp.Entities.Types
     open System.IO
-    open Atrous.Pdf.Types
+    open Shrimp.Pdf.Types
     open Fake.IO
-    open Atrous.Pdf.Colors
+    open Shrimp.Pdf.Colors
     open Types
-    open Atrous.Pdf.Manipulates
-    open Atrous.Pdf.Extensions
-    open Atrous.Pdf
+    open Shrimp.Pdf.Manipulates
+    open Shrimp.Pdf.Extensions
+    open Shrimp.Pdf
     open FileSystem
     open Fake.IO.FileSystemOperators
-    open Atrous.Pdf.Targets.Actions
+    open Shrimp.Pdf.Targets.Actions
     [<AutoOpen>]
     module private Actions =
 

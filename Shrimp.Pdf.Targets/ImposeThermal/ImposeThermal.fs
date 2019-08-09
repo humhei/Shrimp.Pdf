@@ -1,13 +1,13 @@
-﻿namespace Atrous.Pdfargets
+﻿namespace Shrimp.Pdfargets
 [<RequireQualifiedAccess>]
 module ImposeThermal =
     open iText.Kernel.Pdf
-    open Atrous.Pdf
-    open Atrous.Entities.Types
+    open Shrimp.Pdf
+    open Shrimp.Entities.Types
     open System
-    open  Atrous.Pdf.Targets.ImposeThermal
+    open  Shrimp.Pdf.Targets.ImposeThermal
     open Types
-    open Atrous.Pdf.Targets
+    open Shrimp.Pdf.Targets
     open LiteDB.FSharp.Extensions
     open LiteDB.FSharp.Linq
     open Fake.IO.FileSystemOperators

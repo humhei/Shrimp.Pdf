@@ -1,12 +1,12 @@
 #load @"../../../packages.fsx"
-open Atrous.Pdf.Entities
+open Shrimp.Pdf.Entities
 open Expecto.Logging
-open Atrous.Pdf
+open Shrimp.Pdf
 open Fake.IO.FileSystemOperators
 open Fake.Core
 open LiteDB.FSharp.Extensions
-open Atrous.Entities.Types
-open Atrous.Pdf.Targets
+open Shrimp.Entities.Types
+open Shrimp.Pdf.Targets
 open Tests.Types
 open LiteDB.FSharp.Linq
 open System

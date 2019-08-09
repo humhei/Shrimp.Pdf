@@ -1,16 +1,16 @@
-﻿namespace Atrous.Pdfargets.FinanceWrapper
-open Atrous.Pdf.Targets
-open Atrous.Pdf
-open Atrous.Pdf.Colors
-open Atrous.Pdf.Types
-open Atrous.Entities.Types
-open Atrous.Pdf.Extensions
-open Atrous.Extensions
-open Atrous.Utils
-open Atrous
-open Atrous.Pdf.Targets.Actions
+﻿namespace Shrimp.Pdfargets.FinanceWrapper
+open Shrimp.Pdf.Targets
+open Shrimp.Pdf
+open Shrimp.Pdf.Colors
+open Shrimp.Pdf.Types
+open Shrimp.Entities.Types
+open Shrimp.Pdf.Extensions
+open Shrimp.Extensions
+open Shrimp.Utils
+open Shrimp
+open Shrimp.Pdf.Targets.Actions
 module FinanceWrapper =
-    open Atrous.Pdf.Targets.Types
+    open Shrimp.Pdf.Targets.Types
 
     type UserState =
         { Btw: Btw.Output.UserState
@@ -46,7 +46,7 @@ module FinanceWrapper =
         bindedFlow,pdf
 
 open FinanceWrapper
-open Atrous.Pdf.Targets.Types
+open Shrimp.Pdf.Targets.Types
 
 [<RequireQualifiedAccess>]
 module private CostBundle =
@@ -124,8 +124,8 @@ module Printer =
 
 [<RequireQualifiedAccess>]
 module DigitalPrinting =
-    open Atrous.Pdf.Targets.Actions.Manipulates
-    open Atrous.Pdf.Reuses
+    open Shrimp.Pdf.Targets.Actions.Manipulates
+    open Shrimp.Pdf.Reuses
 
     let fillFinance costBundle chunkPrice state digital =
         let printer = DigitalPrinting.asPrinter digital
@@ -283,7 +283,7 @@ module OffsetPress =
         |> Seq.maxBy (fun financeUserState -> financeUserState.Finance.Benifit)
 [<RequireQualifiedAccess>]
 module ManualPress = 
-    open Atrous.Utils
+    open Shrimp.Utils
 
     let fillFinance curriedCost chunkPrice state (pieceSize: FsSize) =
         let arg,tb = ManualPress.preImpose state.Btw.Arg pieceSize

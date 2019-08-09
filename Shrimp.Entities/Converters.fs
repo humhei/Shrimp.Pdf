@@ -1,12 +1,12 @@
-﻿namespace Atrous.Entities
+﻿namespace Shrimp.Entities
 module Converters =
     open System.Collections.Generic
     open System
-    open Atrous.Pdf.ColorBook
+    open Shrimp.Pdf.ColorBook
     open System.Collections.Immutable
-    open Atrous.Pdf.Colors
-    open Atrous.Pdf
-    open Atrous.Pdf.Colors.ColorConverter
+    open Shrimp.Pdf.Colors
+    open Shrimp.Pdf
+    open Shrimp.Pdf.Colors.ColorConverter
     
     let pantoneConverter enum = 
         let hex = unbox enum

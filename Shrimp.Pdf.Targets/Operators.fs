@@ -1,12 +1,12 @@
-﻿namespace Atrous.Pdfargets
-open Atrous.Pdf.Operators
+﻿namespace Shrimp.Pdfargets
+open Shrimp.Pdf.Operators
 
 
 [<AutoOpen>]
 module Operators =
-    open Atrous.Pdf
-    open Atrous.Pdf.Types
-    open Atrous.Pdf.Targets.Types
+    open Shrimp.Pdf
+    open Shrimp.Pdf.Types
+    open Shrimp.Pdf.Targets.Types
     open System.IO
     open Deedle
     open System.Collections.Generic

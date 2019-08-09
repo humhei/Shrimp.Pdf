@@ -16,9 +16,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Atrous.Extensions\Atrous.Extensions.fsproj" />
-    <ProjectReference Include="..\Atrous.Logger\Atrous.Logger.fsproj" />
-    <ProjectReference Include="..\Atrous.Utils\Atrous.Utils.fsproj" />
+    <ProjectReference Include="..\Shrimp.Extensions\Shrimp.Extensions.fsproj" />
+    <ProjectReference Include="..\Shrimp.Logger\Shrimp.Logger.fsproj" />
+    <ProjectReference Include="..\Shrimp.Utils\Shrimp.Utils.fsproj" />
   </ItemGroup>
 
 </Project>

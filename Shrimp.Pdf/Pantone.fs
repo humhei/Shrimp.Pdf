@@ -1,9 +1,9 @@
-﻿namespace Atrous.Pdf
+﻿namespace Shrimp.Pdf
 module ColorBook =
     open iText.Kernel.Pdf
-    open Atrous.Pdf
+    open Shrimp.Pdf
     open Fake.IO.Globbing.Operators
-    open Atrous
+    open Shrimp
 
     let normalizePdfName (name : PdfName) =
         let name = name.ToString()

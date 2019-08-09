@@ -1,14 +1,14 @@
-﻿namespace Atrous.Pdfargets.Hangtag
+﻿namespace Shrimp.Pdfargets.Hangtag
 [<AutoOpen>]
 module internal Operators =
-    open Atrous.Entities.Types
-    open Atrous.Pdf.Types
-    open Atrous.Pdf.Targets.Types
+    open Shrimp.Entities.Types
+    open Shrimp.Pdf.Types
+    open Shrimp.Pdf.Targets.Types
     open Fake.IO
-    open Atrous.Pdf.Targets
+    open Shrimp.Pdf.Targets
     open System.IO
-    open Atrous.Pdf.Reuses
-    open Atrous.Pdf.Operators
+    open Shrimp.Pdf.Reuses
+    open Shrimp.Pdf.Operators
 
     let rec nestRun userState nestedFlow f =
         Flow.Reuse (fun model ->

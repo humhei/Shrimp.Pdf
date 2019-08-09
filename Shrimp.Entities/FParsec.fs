@@ -1,9 +1,9 @@
-﻿namespace Atrous.Entities
+﻿namespace Shrimp.Entities
 
 module FParsec =
     open FParsec
-    open Atrous.Pdf.Types
-    open Atrous.Utils
+    open Shrimp.Pdf.Types
+    open Shrimp.Utils
     let email : Parser<_,unit> = 
         let prefix = 
             let isIdentifierFirstChar c = isLetter c

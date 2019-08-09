@@ -26,8 +26,8 @@
     </COMReference>
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Atrous.Elmish">
-      <HintPath>..\Atrous.Elmish\bin\Debug\net462\Atrous.Elmish.dll</HintPath>
+    <Reference Include="Shrimp.Elmish">
+      <HintPath>..\Shrimp.Elmish\bin\Debug\net462\Shrimp.Elmish.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>

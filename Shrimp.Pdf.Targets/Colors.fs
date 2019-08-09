@@ -1,10 +1,10 @@
-﻿namespace Atrous.Pdfargets
+﻿namespace Shrimp.Pdfargets
 open iText.Kernel.Colors
-open Atrous.Pdf.Colors
+open Shrimp.Pdf.Colors
 
 [<RequireQualifiedAccess>]
 module Color =
-    open Atrous.Pdf.ColorBook
+    open Shrimp.Pdf.ColorBook
     let _pageNum =  Color._pantone PantoneColorEnum.``PANTONE 1935 C``
     let pageNum writer = Color.pantone PantoneColorEnum.``PANTONE 1935 C`` writer
 

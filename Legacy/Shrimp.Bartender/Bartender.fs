@@ -1,9 +1,9 @@
-﻿namespace Atrous.Pdf
+﻿namespace Shrimp.Pdf
 
 [<RequireQualifiedAccess>]
 module Bartender =
 
-    open Atrous.Utils.AsyncUtils
+    open Shrimp.Utils.AsyncUtils
     open Seagull.BarTender.Print
     open Fake.IO
     open Microsoft.Win32

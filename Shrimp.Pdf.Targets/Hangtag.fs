@@ -1,9 +1,9 @@
-﻿namespace Atrous.Pdfargets
+﻿namespace Shrimp.Pdfargets
 
 [<RequireQualifiedAccess>]
 module Hangtag =
-    open Atrous.Pdf.Targets.Types
-    open Atrous
+    open Shrimp.Pdf.Targets.Types
+    open Shrimp
 
     let paperCost ht =
         Logger.notImplemented()

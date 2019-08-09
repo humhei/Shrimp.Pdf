@@ -1,9 +1,9 @@
-﻿namespace Atrous.Pdf
+﻿namespace Shrimp.Pdf
 module Filters =
     open iText.Kernel.Pdf.Canvas.Parser.Data
-    open Atrous.Pdf.Extensions
+    open Shrimp.Pdf.Extensions
     open Types
-    open Atrous.Utils
+    open Shrimp.Utils
     open iText.Kernel.Geom
 
     let inline (<&>) (p1: 'a -> bool) (p2: 'a -> bool) =

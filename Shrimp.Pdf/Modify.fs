@@ -1,4 +1,4 @@
-﻿namespace Atrous.Pdf
+﻿namespace Shrimp.Pdf
 
 open Parser.Core.Editor
 
@@ -13,7 +13,7 @@ module Modify =
     open iText.Kernel.Pdf.Canvas
     open iText.Kernel.Pdf.Canvas.Parser.Data
     open iText.Kernel.Colors
-    open Atrous.Pdf.Extensions
+    open Shrimp.Pdf.Extensions
 
     let private modify f =
         Modify.Fix <| fun arg ->
@@ -72,7 +72,7 @@ module Modify =
     type private ApperanceSetting = AbstractRenderInfo -> list<PdfCanvas -> PdfCanvas>
 
     module private ApperanceSetting =
-        open Atrous
+        open Shrimp
 
         let create (setFill: (PdfCanvas -> PdfCanvas)) (setStroke: (PdfCanvas -> PdfCanvas)) : ApperanceSetting =
             fun info ->

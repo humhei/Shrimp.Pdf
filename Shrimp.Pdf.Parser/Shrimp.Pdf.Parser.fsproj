@@ -6,8 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="PdfCanvasEditor.fs" />
-    <Compile Include="Extract.fs" />
+    <Compile Include="Read.fs" />
+    <Compile Include="Edit.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,8 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Atrous.Elmish\Atrous.Elmish.fsproj" />
-    <ProjectReference Include="..\Atrous.Pdf.Extensions\Atrous.Pdf.Extensions.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.Extensions\Shrimp.Pdf.Extensions.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

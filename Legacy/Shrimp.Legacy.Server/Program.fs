@@ -6,7 +6,7 @@ open LegacyShared
 
 open Fable.Remoting.Server
 open Fable.Remoting.Giraffe
-open Atrous
+open Shrimp
 
 //let publicPath = Path.GetFullPath "../LegacyClient/public"
 

@@ -1,13 +1,13 @@
-﻿namespace Atrous.Pdfargets.ImposeThermal
+﻿namespace Shrimp.Pdfargets.ImposeThermal
 [<RequireQualifiedAccess>]
 module Iac =
     open Fake.IO
     open System.IO
     open Fake.IO.FileSystemOperators
-    open Atrous.Pdf
+    open Shrimp.Pdf
     open iText.Kernel.Geom
     open System.IO.Compression
-    open Atrous.Pdf.Targets
+    open Shrimp.Pdf.Targets
 
     let saveToEps (srcs: string list) = 
         srcs |> List.map (fun src ->

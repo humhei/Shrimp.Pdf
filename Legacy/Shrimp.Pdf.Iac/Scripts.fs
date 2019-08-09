@@ -1,4 +1,4 @@
-﻿namespace Atrous.Pdf
+﻿namespace Shrimp.Pdf
 
 module Scripts = 
     open System

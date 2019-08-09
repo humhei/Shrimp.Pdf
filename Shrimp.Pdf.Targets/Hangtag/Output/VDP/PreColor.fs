@@ -1,15 +1,15 @@
-﻿namespace Atrous.Pdfargets.Hangtag.Output.VDP
-open Atrous.Entities.Types
-open Atrous.Pdf
-open Atrous.Pdf.Extensions
-open Atrous.Pdf.Colors
-open Atrous.Pdf.Targets
-open Atrous.Pdf.Targets.Reports
+﻿namespace Shrimp.Pdfargets.Hangtag.Output.VDP
+open Shrimp.Entities.Types
+open Shrimp.Pdf
+open Shrimp.Pdf.Extensions
+open Shrimp.Pdf.Colors
+open Shrimp.Pdf.Targets
+open Shrimp.Pdf.Targets.Reports
 
 [<RequireQualifiedAccess>]
 module PreColor =
-    open Atrous.Pdf.Targets.Hangtag
-    open Atrous.Pdf.Types
+    open Shrimp.Pdf.Targets.Hangtag
+    open Shrimp.Pdf.Types
 
     let run frontPath (pdfDoc: Pdf) (btw:Btw) =
         let backBleed = btw.Bleed

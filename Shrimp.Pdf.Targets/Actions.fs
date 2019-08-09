@@ -1,20 +1,20 @@
-﻿namespace Atrous.Pdfargets
+﻿namespace Shrimp.Pdfargets
 open iText.Kernel.Pdf.Canvas.Parser.Data
 
 module Actions = 
     [<RequireQualifiedAccess>]
     module Read =
-        open Atrous.Pdf
+        open Shrimp.Pdf
         open System
         open Types
-        open Atrous.Entities.Types
-        open Atrous.Pdf.Extensions
-        open Atrous.Pdf.Filters
-        open Atrous.Pdf.Colors
-        open Atrous.Pdf.DocReader
-        open Atrous.Pdf.Select
-        open Atrous.Extensions
-        open Atrous.Pdf.Targets
+        open Shrimp.Entities.Types
+        open Shrimp.Pdf.Extensions
+        open Shrimp.Pdf.Filters
+        open Shrimp.Pdf.Colors
+        open Shrimp.Pdf.DocReader
+        open Shrimp.Pdf.Select
+        open Shrimp.Extensions
+        open Shrimp.Pdf.Targets
 
         let private readAndSetUserState reader setUserState =
             Flow.Read (fun doc state ->
@@ -82,10 +82,10 @@ module Actions =
 
 
     module FromState =
-        open Atrous.Pdf.Types
-        open Atrous.Pdf.Reuses
-        open Atrous.Pdf
-        open Atrous.Pdf.Extensions
+        open Shrimp.Pdf.Types
+        open Shrimp.Pdf.Reuses
+        open Shrimp.Pdf
+        open Shrimp.Pdf.Extensions
         open Types
 
         let imposeWithStateOfArgs : Flow<ReportInfo<_,_>> = 
@@ -101,21 +101,21 @@ module Actions =
             )
 
     module Manipulates =
-        open Atrous.Pdf.Types
-        open Atrous.Pdf.Manipulates
-        open Atrous.Pdf.Operators
-        open Atrous.Pdf.Targets
-        open Atrous.Pdf
-        open Atrous.Pdf.Extensions
-        open Atrous.Pdf.Colors
-        open Atrous.Pdf.Filters
-        open Atrous.Pdf.Select
-        open Atrous.Pdf.PageReader
-        open Atrous.Entities.Types
-        open Atrous.Utils
+        open Shrimp.Pdf.Types
+        open Shrimp.Pdf.Manipulates
+        open Shrimp.Pdf.Operators
+        open Shrimp.Pdf.Targets
+        open Shrimp.Pdf
+        open Shrimp.Pdf.Extensions
+        open Shrimp.Pdf.Colors
+        open Shrimp.Pdf.Filters
+        open Shrimp.Pdf.Select
+        open Shrimp.Pdf.PageReader
+        open Shrimp.Entities.Types
+        open Shrimp.Utils
         open iText.Kernel.Pdf.Canvas
-        open Atrous.Pdf.DocReader
-        open Atrous.Pdf.Targets.Types
+        open Shrimp.Pdf.DocReader
+        open Shrimp.Pdf.Targets.Types
 
         let removeCuttingLineAI arg =
             arg |> removePathWithStrokeColors Colors.AI.cuttingLine
@@ -241,14 +241,14 @@ module Actions =
                 | Bleed.Some _ -> batch [trimToStrokeCyanOrMegenta;bleedOut]
 
     module Reuses =
-        open Atrous.Entities.Types
-        open Atrous.Pdf.Targets.Types
-        open Atrous.Pdf.Types
-        open Atrous.Pdf.Reuses
+        open Shrimp.Entities.Types
+        open Shrimp.Pdf.Targets.Types
+        open Shrimp.Pdf.Types
+        open Shrimp.Pdf.Reuses
         open FileSystem
         open iText.Kernel.Pdf
         open Fake.IO.FileSystemOperators
-        open Atrous.Pdf.Extensions
+        open Shrimp.Pdf.Extensions
 
         let imposeExplicit (arg: ExplicitImposingArgument) =
             ExplicitImposingArgument.toImplicit arg |> impose
@@ -287,8 +287,8 @@ module Actions =
     module Operators =
 
         open System.IO
-        open Atrous.Pdf.Types
-        open Atrous.Pdf.Operators
+        open Shrimp.Pdf.Types
+        open Shrimp.Pdf.Operators
         open Manipulates
         open Types
 

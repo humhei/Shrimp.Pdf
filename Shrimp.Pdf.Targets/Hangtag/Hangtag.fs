@@ -1,7 +1,7 @@
 ﻿
-namespace Atrous.Pdf.Targets.Hangtag
+namespace Shrimp.Pdf.Targets.Hangtag
 
-open Atrous.Pdf.Targets.Hangtag.Output
+open Shrimp.Pdf.Targets.Hangtag.Output
 
 [<RequireQualifiedAccess>]
 module Hangtag =

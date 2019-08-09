@@ -1,8 +1,8 @@
-﻿namespace Atrous.Entities.Literal
+﻿namespace Shrimp.Entities.Literal
 
 module XLParser =
     open FParsec
-    open Atrous.Utils
+    open Shrimp.Utils
 
     [<RequireQualifiedAccess>]
     module Shoes =

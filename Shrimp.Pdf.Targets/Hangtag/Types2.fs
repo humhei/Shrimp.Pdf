@@ -1,11 +1,11 @@
-﻿namespace Atrous.Pdfargets.Hangtag
+﻿namespace Shrimp.Pdfargets.Hangtag
 
-open Atrous.Entities.Types
-open Atrous.Pdf.Types
-open Atrous.Pdf.Colors
+open Shrimp.Entities.Types
+open Shrimp.Pdf.Types
+open Shrimp.Pdf.Colors
 [<AutoOpen>]
 module Type =
-    open Atrous.Pdf.Targets.Reports
+    open Shrimp.Pdf.Targets.Reports
 
     [<RequireQualifiedAccess>]
     type PlateRole =
@@ -84,8 +84,8 @@ module Type =
 
     [<RequireQualifiedAccess>]
     module HangtagUnit =
-        open Atrous.Pdf.Targets.Reports
-        open Atrous.Pdf.Utils
+        open Shrimp.Pdf.Targets.Reports
+        open Shrimp.Pdf.Utils
 
         let dummy =
             {
@@ -144,8 +144,8 @@ module Type =
 
     [<RequireQualifiedAccess>]
     module ReportUnit =
-        open Atrous.Pdf.Targets.Reports
-        open Atrous.Pdf.Targets.Types
+        open Shrimp.Pdf.Targets.Reports
+        open Shrimp.Pdf.Targets.Types
 
         let dummyHangtag =
             FinanceUnit.createDummy HangtagUnit.dummy
@@ -193,9 +193,9 @@ module Type =
     [<RequireQualifiedAccess>]
     module internal ReportInfo =
         open iText.Kernel.Pdf.Canvas.Parser.Data
-        open Atrous.Pdf.Targets.Reports
-        open Atrous.Pdf.Targets
-        open Atrous.Pdf.Targets.Types
+        open Shrimp.Pdf.Targets.Reports
+        open Shrimp.Pdf.Targets
+        open Shrimp.Pdf.Targets.Types
 
         let fillWith p tpOrder state = ReportInfo.fill p tpOrder state ReportUnit.dummyHangtag
 

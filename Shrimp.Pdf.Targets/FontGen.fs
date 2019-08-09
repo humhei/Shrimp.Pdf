@@ -1,9 +1,9 @@
-﻿namespace Atrous.Pdfargets
+﻿namespace Shrimp.Pdfargets
 [<RequireQualifiedAccess>]        
 module FontGen =
     open iText.Kernel.Font
     open iText.IO.Font
-    open Atrous.Pdf.Types
+    open Shrimp.Pdf.Types
     module private PrivateWrapper = 
         let [<Literal>] Heiti = "AdobeHeitiStd-Regular"
         let [<Literal>] DaHei = "方正大黑简体"

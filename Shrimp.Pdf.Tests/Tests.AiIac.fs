@@ -1,10 +1,10 @@
 ﻿module Tests.AiIac
 //open Expecto
-//open Atrous.Pdf
+//open Shrimp.Pdf
 //open LiteDB
 //open Types
 //open Fake.IO
-//open Atrous.Ai
+//open Shrimp.Ai
 
 //let pass() = Expect.isTrue true "passed"
 //let fail() = Expect.isTrue false "failed"

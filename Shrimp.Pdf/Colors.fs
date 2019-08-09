@@ -1,8 +1,8 @@
-﻿namespace Atrous.Pdf.Colors
-open Atrous.Pdf
+﻿namespace Shrimp.Pdf.Colors
+open Shrimp.Pdf
 open iText.Kernel.Pdf
-open Atrous.Pdf.ColorBook
-open Atrous
+open Shrimp.Pdf.ColorBook
+open Shrimp
 
 module ColorConverter = 
     open Colourful.Conversion
@@ -94,7 +94,7 @@ module Separation =
 module Color =
     open Fake.IO
     open System
-    open Atrous.Pdf.Parser
+    open Shrimp.Pdf.Parser
     open iText.Kernel.Pdf.Colorspace
     open iText.Kernel
     open iText.Kernel.Pdf.Canvas.Parser
@@ -103,7 +103,7 @@ module Color =
     open Fake.IO.Globbing.Operators
     open System.IO
     open iText.Layout.Element
-    open Atrous.Utils
+    open Shrimp.Utils
 
     let isCmyk (color: Color) =
         match color with 
@@ -181,8 +181,8 @@ module Color =
 [<RequireQualifiedAccess>]
 module Colors =
     open iText.Kernel.Colors
-    open Atrous.Pdf.Extensions
-    open Atrous.Extensions
+    open Shrimp.Pdf.Extensions
+    open Shrimp.Extensions
     let distinct (colors: Color seq) =
         colors |> Seq.disctintByComparer Color.comparer
         

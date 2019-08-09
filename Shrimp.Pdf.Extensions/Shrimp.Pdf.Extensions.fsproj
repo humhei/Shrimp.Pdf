@@ -2,25 +2,24 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <Configurations>Debug;Release;MiniBuild</Configurations>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Extensions.fs" />
+    <EmbeddedResource Include="reference.conf" />
+    <Compile Include="Library.fs" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Akka" Version="1.3.14" />
     <PackageReference Include="itext7" Version="7.1.2" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Atrous.Extensions\Atrous.Extensions.fsproj" />
-    <ProjectReference Include="..\Atrous.Logger\Atrous.Logger.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.Logger\Shrimp.Pdf.Logger.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="4.5.2" />
-    <PackageReference Update="System.ValueTuple" Version="4.5.0" />
+    <PackageReference Update="FSharp.Core" Version="4.7.0" />
   </ItemGroup>
 
 </Project>

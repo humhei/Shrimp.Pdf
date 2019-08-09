@@ -34,7 +34,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Atrous.Bartender\Atrous.Legacy.Bartender.fsproj" />
+    <ProjectReference Include="..\Shrimp.Bartender\Shrimp.Legacy.Bartender.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

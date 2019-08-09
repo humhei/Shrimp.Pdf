@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28010.2041
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Atrous.Bartender", "Atrous.Bartender\Atrous.Bartender.fsproj", "{903516F0-734E-4F99-9203-F547ED14289B}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Bartender", "Shrimp.Bartender\Shrimp.Bartender.fsproj", "{903516F0-734E-4F99-9203-F547ED14289B}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Atrous.Legacy.Server", "Atrous.Legacy.Server\Atrous.Legacy.Server.fsproj", "{4D40EA9D-E946-43B8-875C-45D86D240F3E}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Legacy.Server", "Shrimp.Legacy.Server\Shrimp.Legacy.Server.fsproj", "{4D40EA9D-E946-43B8-875C-45D86D240F3E}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Atrous.Elmish", "..\Atrous.Elmish\Atrous.Elmish.fsproj", "{1109E451-0E4A-4238-A53D-B772B38BCB50}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Elmish", "..\Shrimp.Elmish\Shrimp.Elmish.fsproj", "{1109E451-0E4A-4238-A53D-B772B38BCB50}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

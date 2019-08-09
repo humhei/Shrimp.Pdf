@@ -1,7 +1,7 @@
 ﻿module MyTests
 
 open Expecto
-open Atrous.Pdf
+open Shrimp.Pdf
 let pass() = Expect.isTrue true "passed"
 let fail() = Expect.isTrue false "failed"
 let MyTests =

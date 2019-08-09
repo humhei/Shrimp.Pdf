@@ -1,10 +1,10 @@
-﻿namespace Atrous.Pdfargets.Hangtag
+﻿namespace Shrimp.Pdfargets.Hangtag
 [<RequireQualifiedAccess>]
 module internal ReportingScene =
-    open Atrous.Pdf.Targets.Reports
-    open Atrous.Pdf.Targets.Types
-    open Atrous.Entities.Types
-    open Atrous.Pdf.Utils
+    open Shrimp.Pdf.Targets.Reports
+    open Shrimp.Pdf.Targets.Types
+    open Shrimp.Entities.Types
+    open Shrimp.Pdf.Utils
 
     let house_benefit =
         ReportingScene.PlateScene

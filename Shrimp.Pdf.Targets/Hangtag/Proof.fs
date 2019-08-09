@@ -1,23 +1,23 @@
-﻿namespace Atrous.Pdfargets.Hangtag
+﻿namespace Shrimp.Pdfargets.Hangtag
 module internal Proof =
-    open Atrous.Entities.Types
-    open Atrous.Pdf.Targets.Types
-    open Atrous.Pdf.Reuses
-    open Atrous.Pdf.Types
-    open Atrous.Pdf.Extensions
-    open Atrous.Pdf.Utils
-    open Atrous.Pdf.Operators
+    open Shrimp.Entities.Types
+    open Shrimp.Pdf.Targets.Types
+    open Shrimp.Pdf.Reuses
+    open Shrimp.Pdf.Types
+    open Shrimp.Pdf.Extensions
+    open Shrimp.Pdf.Utils
+    open Shrimp.Pdf.Operators
     open System.IO
     open Fake.IO
-    open Atrous.Pdf.Manipulates
-    open Atrous.Pdf.Targets.Reports
-    open Atrous.Pdf.Targets
+    open Shrimp.Pdf.Manipulates
+    open Shrimp.Pdf.Targets.Reports
+    open Shrimp.Pdf.Targets
     open iText.Kernel.Pdf
-    open Atrous.Pdf
+    open Shrimp.Pdf
     open iText.Kernel.Geom
     open iText.Kernel.Colors
-    open Atrous.Pdf.Colors
-    open Atrous.Pdf.Targets.Actions
+    open Shrimp.Pdf.Colors
+    open Shrimp.Pdf.Targets.Actions
     open Manipulates
     open FromState
 
@@ -162,6 +162,6 @@ module internal Proof =
                     addSeamMark
                 ] 
             ]
-            |> Atrous.Pdf.Targets.Operators.run backPdf
+            |> Shrimp.Pdf.Targets.Operators.run backPdf
             |> ignore
             | _ -> ()

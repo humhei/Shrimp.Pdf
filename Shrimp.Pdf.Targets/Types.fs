@@ -1,4 +1,4 @@
-﻿namespace Atrous.Pdfargets
+﻿namespace Shrimp.Pdfargets
 
 module Types = 
     open System
@@ -11,16 +11,16 @@ module Types =
     open iText.Kernel.Geom
     open Fake.IO
     open Fake.IO.FileSystemOperators
-    open Atrous.Pdf.Extensions
-    open Atrous.Pdf
-    open Atrous.Pdf.Operators
-    open Atrous.Pdf.Colors
-    open Atrous.Utils
-    open Atrous.Pdf.Types
-    open Atrous.Entities.Types
-    open Atrous.Entities.Csv
-    open Atrous
-    open Atrous.Extensions
+    open Shrimp.Pdf.Extensions
+    open Shrimp.Pdf
+    open Shrimp.Pdf.Operators
+    open Shrimp.Pdf.Colors
+    open Shrimp.Utils
+    open Shrimp.Pdf.Types
+    open Shrimp.Entities.Types
+    open Shrimp.Entities.Csv
+    open Shrimp
+    open Shrimp.Extensions
 
     [<AutoOpen>]
     module InfixExtensions =
@@ -553,7 +553,7 @@ module Types =
                 ) 
             else Logger.notImplemented()
 
-        /// iAtrousne IdSaveTransferMulti
+        /// iShrimpne IdSaveTransferMulti
         let splitBySelectors selectors (tpOrder: TypedOrder<_>) =
             List.zip tpOrder.Pages tpOrder.TpTable.Rows 
             |> List.groupBy (fun (page,row) ->
@@ -1011,8 +1011,8 @@ module Types =
     //[<RequireQualifiedAccess>]
     //module ReportInfo =
     //    open System.IO
-    //    open Atrous.Pdf.Utils
-    //    open Atrous.Pdf.Operators
+    //    open Shrimp.Pdf.Utils
+    //    open Shrimp.Pdf.Operators
 
     //    let customDummy v =
     //        {

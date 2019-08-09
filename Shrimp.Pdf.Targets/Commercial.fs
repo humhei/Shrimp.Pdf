@@ -1,14 +1,14 @@
-﻿namespace Atrous.Pdfargets
+﻿namespace Shrimp.Pdfargets
 
 [<RequireQualifiedAccess>]
 module Commercial =
-    open Atrous.Pdf
-    open Atrous.Pdf.Types
-    open Atrous.Entities.Types
-    open Atrous.Pdf.Targets.Types
-    open Atrous.Pdf.Targets.Actions
-    open Atrous.Pdf.Targets.FinanceWrapper
-    open Atrous
+    open Shrimp.Pdf
+    open Shrimp.Pdf.Types
+    open Shrimp.Entities.Types
+    open Shrimp.Pdf.Targets.Types
+    open Shrimp.Pdf.Targets.Actions
+    open Shrimp.Pdf.Targets.FinanceWrapper
+    open Shrimp
         
 
     let makeSure (p: Product) tarm targetName = function

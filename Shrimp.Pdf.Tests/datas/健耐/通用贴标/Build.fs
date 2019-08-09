@@ -2,13 +2,13 @@
 open Expecto
 open System
 open ExcelProcess
-open Atrous.Entities
+open Shrimp.Entities
 open Tests.Types
 open Input
 open 通用贴标.Orders.Order
 
 module Build =
-    open Atrous.Pdf.Targets.Types
+    open Shrimp.Pdf.Targets.Types
 
     let productInputs =
         [

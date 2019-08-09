@@ -6,7 +6,7 @@ open Input
 open Bench.Orders.Order
 
 module Build =
-    open Atrous.Pdf.Targets.Types
+    open Shrimp.Pdf.Targets.Types
 
     let productInputs =
         [

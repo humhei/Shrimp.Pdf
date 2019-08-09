@@ -1,13 +1,13 @@
-﻿namespace Atrous.Pdfargets.Hangtag.Output.VDP.Shuffle
-open Atrous.Entities.Types
-open Atrous.Pdf.Types
+﻿namespace Shrimp.Pdfargets.Hangtag.Output.VDP.Shuffle
+open Shrimp.Entities.Types
+open Shrimp.Pdf.Types
 open iText.Kernel.Pdf.Canvas.Parser.Data
-open Atrous.Pdf
-open Atrous.Pdf.Extensions
-open Atrous.Pdf.Targets
-open Atrous.Pdf.Targets.Reports
+open Shrimp.Pdf
+open Shrimp.Pdf.Extensions
+open Shrimp.Pdf.Targets
+open Shrimp.Pdf.Targets.Reports
 open Types
-open Atrous.Pdf.Targets.Hangtag
+open Shrimp.Pdf.Targets.Hangtag
 
 [<RequireQualifiedAccess>]
 module internal PreImpose =

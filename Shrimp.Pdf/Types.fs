@@ -1,4 +1,4 @@
-﻿namespace Atrous.Pdf
+﻿namespace Shrimp.Pdf
 
 module Types = 
     open iText.Kernel.Pdf
@@ -13,9 +13,9 @@ module Types =
     open System.Collections.Generic
     open iText.Kernel.Font
     open iText.Layout.Element
-    open Atrous.Pdf.Colors
-    open Atrous.Utils
-    open Atrous.Pdf.Extensions
+    open Shrimp.Pdf.Colors
+    open Shrimp.Utils
+    open Shrimp.Pdf.Extensions
     open iText.Kernel.Pdf.Canvas.Parser.Data
     open System.Collections.Concurrent
     open iText.Kernel.Colors
@@ -85,11 +85,7 @@ module Types =
 
     let tmp src = src |> Path.changeExtension ".pdftmp" 
             
-    [<RequireQualifiedAccess>]
-    type PageBoxKind =
-        | TrimBox
-        | AllBox
-        | CropBox
+
 
     type Margin = 
          {
@@ -532,7 +528,7 @@ module Types =
 
     [<RequireQualifiedAccess>]
     module ImposingArgument =
-        open Atrous
+        open Shrimp
 
         let dummy : ImposingArgument = ImposingArgumentBase.createDummy None Background.None
 

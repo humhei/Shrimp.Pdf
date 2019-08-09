@@ -1,16 +1,16 @@
 ﻿namespace RealClothing.Orders
 module Order =
-    open Atrous.Entities.Types
+    open Shrimp.Entities.Types
     open System.IO
     open ExcelProcess
     open MatrixParsers
     open SheetParsers
     open FParsec
-    open Atrous.Entities
+    open Shrimp.Entities
     open XLParser
     open Tests.Types.Input
     open LiteDB.FSharp
-    open Atrous.Pdf.Colors
+    open Shrimp.Pdf.Colors
 
     [<CLIMutable>]
     type Item =

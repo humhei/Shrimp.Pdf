@@ -1,28 +1,28 @@
-﻿namespace Atrous.Pdf
+﻿namespace Shrimp.Pdf
 
 module Manipulates =
     open FParsec
-    open Atrous.Pdf.PageReader
+    open Shrimp.Pdf.PageReader
     open iText.Kernel.Colors
     open iText.Kernel.Pdf
     open iText.Kernel.Pdf.Canvas
     open Fake.IO
     open Types
-    open Atrous.Pdf.Parser
-    open Atrous.Pdf.Colors.ColorConverter
+    open Shrimp.Pdf.Parser
+    open Shrimp.Pdf.Colors.ColorConverter
     open iText.Layout
     open iText.Kernel
-    open Atrous.Pdf.Colors
+    open Shrimp.Pdf.Colors
     open iText.Layout.Properties
-    open Atrous.Pdf.Extensions
-    open Atrous.Pdf.Operators
-    open Atrous.Utils
-    open Atrous.Pdf.Filters
+    open Shrimp.Pdf.Extensions
+    open Shrimp.Pdf.Operators
+    open Shrimp.Utils
+    open Shrimp.Pdf.Filters
     open iText.Kernel.Geom
-    open Atrous.Pdf.Parser.Operators
+    open Shrimp.Pdf.Parser.Operators
     open iText.Kernel.Pdf.Canvas.Parser.Data
-    open Atrous.Pdf.Select
-    open Atrous.Pdf.DocReader
+    open Shrimp.Pdf.Select
+    open Shrimp.Pdf.DocReader
 
     let private fixWithSelect select (modify: Modify) (arg: ManipulateArgument<_>) =
         let f = modify |> Modify.toFunction

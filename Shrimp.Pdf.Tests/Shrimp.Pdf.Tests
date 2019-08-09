@@ -49,9 +49,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Atrous.Pdf.Barcode\Atrous.Pdf.Barcode.fsproj" />
-    <ProjectReference Include="..\Atrous.Pdf.Parser\Atrous.Pdf.Parser.fsproj" />
-    <ProjectReference Include="..\Atrous.Pdf.Targets\Atrous.Pdf.Targets.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.Barcode\Shrimp.Pdf.Barcode.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.Parser\Shrimp.Pdf.Parser.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.Targets\Shrimp.Pdf.Targets.fsproj" />
   </ItemGroup>
 
 

@@ -1,19 +1,19 @@
 ﻿namespace Bench.Orders
 
-open Atrous.Entities.Types
+open Shrimp.Entities.Types
 
 [<RequireQualifiedAccess>]
 module 包装 = 
-    open Atrous.Pdf
+    open Shrimp.Pdf
     open System.IO
     open System
     open Tests.Types.Input
     open ExcelProcess
     open MatrixParsers
     open FParsec
-    open Atrous.Entities.XLParser
+    open Shrimp.Entities.XLParser
     open ExcelProcess.SheetParsers
-    open Atrous.Pdf.Utils
+    open Shrimp.Pdf.Utils
 
     let xlsxName s = 
         sprintf "%s%s" s (__SOURCE_FILE__ |> Path.GetFileNameWithoutExtension)

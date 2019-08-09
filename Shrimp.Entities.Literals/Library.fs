@@ -1,6 +1,6 @@
-﻿namespace Atrous.Entities.Literal
+﻿namespace Shrimp.Entities.Literal
 open Deedle
-open Atrous.Extensions
+open Shrimp.Extensions
 [<RequireQualifiedAccess>]
 module ClearLiteral =
     let [<Literal>] art = "ART"

@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Atrous.Pdf.Iac\Atrous.Pdf.Iac.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.Iac\Shrimp.Pdf.Iac.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Atrous.Pdf.Barcode\Atrous.Pdf.Barcode.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.Barcode\Shrimp.Pdf.Barcode.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

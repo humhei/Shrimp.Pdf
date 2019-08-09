@@ -1,25 +1,25 @@
 ﻿module Tests.Types
 open Fake.IO
 open Fake.IO.FileSystemOperators
-open Atrous.Pdf.Targets
+open Shrimp.Pdf.Targets
 open LiteDB
 open LiteDB.FSharp
-open Atrous.Entities.Types
+open Shrimp.Entities.Types
 open LiteDB.FSharp.Extensions
 open System
-open Atrous.Pdf.Targets.Types
-open Atrous.Entities
+open Shrimp.Pdf.Targets.Types
+open Shrimp.Entities
 open System.Collections.Generic
-open Atrous.Pdf
+open Shrimp.Pdf
 open Newtonsoft.Json
 open Newtonsoft.Json.Linq
 open System.Collections.Concurrent
 open Microsoft.FSharp.Reflection
-open Atrous.Utils
-open Atrous.Pdf.Colors
-open Atrous.Pdf.Types
-open Atrous.Pdf.Targets.Types
-open Atrous
+open Shrimp.Utils
+open Shrimp.Pdf.Colors
+open Shrimp.Pdf.Types
+open Shrimp.Pdf.Targets.Types
+open Shrimp
 
 let workingDirectory = __SOURCE_DIRECTORY__ </> @"bin\Debug\netcoreapp2.1"
 let [<Literal>] root = __SOURCE_DIRECTORY__ + @"\datas"

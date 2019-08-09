@@ -1,12 +1,7 @@
-namespace Atrous.Pdf.Logger
+﻿namespace Shrimp.Pdf
 
 [<RequireQualifiedAccess>]
-module Logger = 
-    open System
-    open Deedle
-
-    let notSupportedPathRendingMode others =
-        printfn "Warning: Not supported path rendering mode %A" others
-
-    let notSupportedTextRendingMode others =
-        printfn "Warning: Not supported text rendering mode %A" others
+module Logger =
+    let unSupportedTextRenderMode(textRendingMode: int) =
+        let stackTrace = new System.Diagnostics.StackTrace();
+        printfn "Unsupported text render mode \n %s" (stackTrace.ToString())

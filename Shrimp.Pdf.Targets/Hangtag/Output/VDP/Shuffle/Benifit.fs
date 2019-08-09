@@ -1,13 +1,13 @@
-﻿namespace Atrous.Pdfargets.Hangtag.Output.VDP.Shuffle
-open Atrous.Entities.Types
-open Atrous.Pdf.Types
-open Atrous.Pdf
-open Atrous.Pdf.Reuses
-open Atrous.Pdf.Extensions
-open Atrous.Pdf.Targets
-open Atrous.Pdf.Targets.Reports
+﻿namespace Shrimp.Pdfargets.Hangtag.Output.VDP.Shuffle
+open Shrimp.Entities.Types
+open Shrimp.Pdf.Types
+open Shrimp.Pdf
+open Shrimp.Pdf.Reuses
+open Shrimp.Pdf.Extensions
+open Shrimp.Pdf.Targets
+open Shrimp.Pdf.Targets.Reports
 open Types
-open Atrous.Pdf.Targets.Hangtag
+open Shrimp.Pdf.Targets.Hangtag
 
 [<RequireQualifiedAccess>]
 module Benifit =

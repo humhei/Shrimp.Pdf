@@ -1,31 +1,31 @@
 ﻿
-namespace Atrous.Pdf.Targets.Hangtag.Output
+namespace Shrimp.Pdf.Targets.Hangtag.Output
 
-open Atrous.Entities.Types
+open Shrimp.Entities.Types
 open System.IO
-open Atrous.Pdf.Types
+open Shrimp.Pdf.Types
 open Fake.IO
-open Atrous.Pdf
+open Shrimp.Pdf
 open iText.Kernel.Geom
-open Atrous.Pdf.Utils
-open Atrous.Pdf.Reuses
-open Atrous.Pdf.Manipulates
+open Shrimp.Pdf.Utils
+open Shrimp.Pdf.Reuses
+open Shrimp.Pdf.Manipulates
 open iText.Kernel.Colors
-open Atrous.Pdf.Extensions
-open Atrous.Pdf.Operators
-open Atrous.Pdf.Colors
-open Atrous.Pdf.Targets.Actions
+open Shrimp.Pdf.Extensions
+open Shrimp.Pdf.Operators
+open Shrimp.Pdf.Colors
+open Shrimp.Pdf.Targets.Actions
 open Reuses
-open Atrous.Pdf.Targets
-open Atrous.Pdf.Targets.Reports
+open Shrimp.Pdf.Targets
+open Shrimp.Pdf.Targets.Reports
 open Types
 open Actions
-open Atrous.Pdf.Targets.Hangtag.Output.VDP.Shuffle
+open Shrimp.Pdf.Targets.Hangtag.Output.VDP.Shuffle
 
 [<RequireQualifiedAccess>]
 module Output =
-    open Atrous.Pdf.Targets.Hangtag
-    open Atrous.Pdf.Targets.Hangtag.Output.VDP
+    open Shrimp.Pdf.Targets.Hangtag
+    open Shrimp.Pdf.Targets.Hangtag.Output.VDP
     open PageSelection
     open Actions
     open Manipulates

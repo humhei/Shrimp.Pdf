@@ -1,10 +1,10 @@
 ﻿namespace 通用贴标
 [<RequireQualifiedAccess>]
 module Maps =
-    open Atrous.Pdf
-    open Atrous.Entities.Types
+    open Shrimp.Pdf
+    open Shrimp.Entities.Types
     open System.IO
-    open Atrous.Pdf.Targets
+    open Shrimp.Pdf.Targets
     open System
     type ArtZip =
         {

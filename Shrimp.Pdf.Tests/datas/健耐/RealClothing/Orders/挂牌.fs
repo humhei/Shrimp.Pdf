@@ -1,17 +1,17 @@
 ﻿namespace RealClothing.Orders
 module 挂牌 =
     open FParsec
-    open Atrous.Entities
+    open Shrimp.Entities
     open ExcelProcess
     open MatrixParsers
     open XLParser.FParsec
-    open Atrous.Entities.XLParser
+    open Shrimp.Entities.XLParser
     open SheetParsers
     open Tests.Types.Input
     open System.IO
-    open Atrous.Entities.Types
-    open Atrous.Pdf.ColorBook
-    open Atrous.Pdf
+    open Shrimp.Entities.Types
+    open Shrimp.Pdf.ColorBook
+    open Shrimp.Pdf
 
     //type BarcodeRow = 
     //    {

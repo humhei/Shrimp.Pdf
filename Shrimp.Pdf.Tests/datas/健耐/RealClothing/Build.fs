@@ -7,7 +7,7 @@ open RealClothing.Orders.Order
 open RealClothing.Orders
 
 module Build =
-    open Atrous.Pdf.Targets.Types
+    open Shrimp.Pdf.Targets.Types
 
     let productInputs =
         [

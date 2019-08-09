@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Atrous.Utils\Atrous.Utils.fsproj" />
+    <ProjectReference Include="..\..\Shrimp.Utils\Shrimp.Utils.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,5 +1,5 @@
 ﻿
-namespace Atrous.Pdf.Targets
+namespace Shrimp.Pdf.Targets
 
 open System.IO
 open Fake.IO

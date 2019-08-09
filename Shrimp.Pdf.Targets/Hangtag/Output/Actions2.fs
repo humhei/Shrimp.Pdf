@@ -1,14 +1,14 @@
-﻿namespace Atrous.Pdfargets.Hangtag.Output
+﻿namespace Shrimp.Pdfargets.Hangtag.Output
 module internal Actions =
-    open Atrous.Entities.Types
-    open Atrous.Pdf.Types
-    open Atrous.Pdf.Manipulates
-    open Atrous.Pdf.Reuses
+    open Shrimp.Entities.Types
+    open Shrimp.Pdf.Types
+    open Shrimp.Pdf.Manipulates
+    open Shrimp.Pdf.Reuses
     open PageSelection
-    open Atrous.Pdf.Targets.Actions.Manipulates
-    open Atrous.Pdf.Colors
-    open Atrous.Pdf
-    open Atrous.Pdf.Targets
+    open Shrimp.Pdf.Targets.Actions.Manipulates
+    open Shrimp.Pdf.Colors
+    open Shrimp.Pdf
+    open Shrimp.Pdf.Targets
     open iText.Kernel.Colors
 
     let addCroppinglinePage (hangtag: Hangtag) =

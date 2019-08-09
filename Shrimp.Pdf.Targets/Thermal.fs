@@ -1,25 +1,25 @@
 ﻿
-namespace Atrous.Pdf.Targets
+namespace Shrimp.Pdf.Targets
 
 [<RequireQualifiedAccess>]
 module Thermal =
-    open Atrous.Pdf
+    open Shrimp.Pdf
     open iText.Kernel.Pdf.Canvas.Parser.Data
     open LiteDB.FSharp.Extensions
     open LiteDB.FSharp.Linq
-    open Atrous.Entities.Types
+    open Shrimp.Entities.Types
     open Fake.IO.FileSystemOperators
-    open Atrous.Pdf.Types
+    open Shrimp.Pdf.Types
     open FParsec
     open Actions
-    open Atrous.Pdf.Utils
+    open Shrimp.Pdf.Utils
     open Types
     open Reuses
-    open Atrous.Pdf.Reuses
-    open Atrous.Pdf.Manipulates
+    open Shrimp.Pdf.Reuses
+    open Shrimp.Pdf.Manipulates
     open FromState
-    open Atrous.Pdf.Extensions
-    open Atrous.Pdf.Targets.Reports
+    open Shrimp.Pdf.Extensions
+    open Shrimp.Pdf.Targets.Reports
 
     [<RequireQualifiedAccess>]
     module ReportingScene =
@@ -223,14 +223,14 @@ module Thermal =
                         ]
                     )
                 ]
-                |> Atrous.Pdf.Targets.Operators.run pdf
+                |> Shrimp.Pdf.Targets.Operators.run pdf
             let scenes =
                 [
                     ReportingScene.house
                     ReportingScene.reconciliation
                 ]
 
-            mds |> List.iter (fun md -> scenes |> List.iter (Atrous.Pdf.Targets.Reports.ReportingScene.report md))
+            mds |> List.iter (fun md -> scenes |> List.iter (Shrimp.Pdf.Targets.Reports.ReportingScene.report md))
 
         | _ -> ()
 

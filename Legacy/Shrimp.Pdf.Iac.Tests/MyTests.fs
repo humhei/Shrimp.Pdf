@@ -1,7 +1,7 @@
 ﻿module MyTests
 
 open Expecto
-open Atrous.Pdf
+open Shrimp.Pdf
 open Fake.IO
 open Fake.IO.FileSystemOperators
 let pass() = Expect.isTrue true "passed"

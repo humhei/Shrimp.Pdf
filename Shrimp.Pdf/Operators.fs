@@ -1,4 +1,4 @@
-﻿namespace Atrous.Pdf
+﻿namespace Shrimp.Pdf
 #nowarn "0064"
 
 module Operators = 
@@ -6,12 +6,12 @@ module Operators =
     open System.Diagnostics
     open iText.Kernel.Pdf
     open iText.Kernel.Pdf.Canvas
-    open Atrous.Pdf.Types
+    open Shrimp.Pdf.Types
     open Fake.IO
     open iText.Kernel.Pdf.Canvas.Parser.Data
-    open Atrous.Pdf.Select
-    open Atrous.Pdf.Extensions
-    open Atrous.Utils
+    open Shrimp.Pdf.Select
+    open Shrimp.Pdf.Extensions
+    open Shrimp.Utils
 
     let private select (selectWithArgs: ManipulateArgument<_> -> AbstractRenderInfo -> bool) (manipulate: ManipulateArgument<_> -> FlowState<_>) =
         fun arg ->

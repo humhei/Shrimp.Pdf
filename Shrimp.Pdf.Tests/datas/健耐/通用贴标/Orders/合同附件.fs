@@ -1,18 +1,18 @@
 namespace 通用贴标.Orders
 open 通用贴标
 module Order =
-    open Atrous.Entities.Types
+    open Shrimp.Entities.Types
     open System.IO
     open ExcelProcess
     open MatrixParsers
     open ArrayParsers
     open SheetParsers
     open FParsec
-    open Atrous.Entities
+    open Shrimp.Entities
     open Tests.Types.Input
     open System
     open LiteDB.FSharp
-    open Atrous.Entities.XLParser
+    open Shrimp.Entities.XLParser
 
     [<CLIMutable>]
     type Item =

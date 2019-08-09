@@ -1,6 +1,6 @@
 ﻿module Tests.AcrobatIac
 //open Expecto
-//open Atrous.Pdf
+//open Shrimp.Pdf
 //open Types
 //open Fake.IO.FileSystemOperators
 

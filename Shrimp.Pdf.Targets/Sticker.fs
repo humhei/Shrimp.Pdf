@@ -1,18 +1,18 @@
-﻿namespace Atrous.Pdfargets
+﻿namespace Shrimp.Pdfargets
 
 [<RequireQualifiedAccess>]
 module Sticker =
-    open Atrous.Pdf.Extensions
-    open Atrous.Pdf
-    open Atrous.Pdf.Colors
-    open Atrous.Pdf.Types
-    open Atrous.Pdf.Reuses
-    open Atrous.Entities.Types
-    open Atrous.Pdf.Targets.Types
-    open Atrous.Pdf.Targets.Actions
+    open Shrimp.Pdf.Extensions
+    open Shrimp.Pdf
+    open Shrimp.Pdf.Colors
+    open Shrimp.Pdf.Types
+    open Shrimp.Pdf.Reuses
+    open Shrimp.Entities.Types
+    open Shrimp.Pdf.Targets.Types
+    open Shrimp.Pdf.Targets.Actions
     open Manipulates
-    open Atrous.Pdf.Targets.FinanceWrapper
-    open Atrous
+    open Shrimp.Pdf.Targets.FinanceWrapper
+    open Shrimp
 
     let makeSure (p: Product) tarm targetName (sticker: Sticker) =
         match sticker.DocType with 

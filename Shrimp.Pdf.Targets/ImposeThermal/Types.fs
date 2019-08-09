@@ -1,10 +1,10 @@
-﻿namespace Atrous.Pdfargets.ImposeThermal
+﻿namespace Shrimp.Pdfargets.ImposeThermal
 module Types =
 
-    open Atrous.Pdf.Targets
+    open Shrimp.Pdf.Targets
     open iText.Kernel.Pdf
-    open Atrous.Entities.Types
-    open Atrous.Pdf
+    open Shrimp.Entities.Types
+    open Shrimp.Pdf
     open iText.Kernel.Font
     type ParserResult =
         {

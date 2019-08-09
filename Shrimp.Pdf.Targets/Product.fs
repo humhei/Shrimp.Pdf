@@ -1,12 +1,12 @@
-﻿namespace Atrous.Pdfargets
+﻿namespace Shrimp.Pdfargets
 
 [<RequireQualifiedAccess>]
 module Product = 
-    open Atrous.Entities.Types
+    open Shrimp.Entities.Types
     open Types
-    open Atrous.Pdf
-    open Atrous.Pdf.Extensions
-    open Atrous
+    open Shrimp.Pdf
+    open Shrimp.Pdf.Extensions
+    open Shrimp
 
     let destExtension (p:Product) = ".pdf"
 

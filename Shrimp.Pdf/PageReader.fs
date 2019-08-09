@@ -1,11 +1,11 @@
-﻿namespace Atrous.PdfageReader
+﻿namespace Shrimp.PdfageReader
 
-open Atrous.Pdf.Types
+open Shrimp.Pdf.Types
 open iText.Kernel.Pdf
 open iText.Kernel.Pdf.Canvas.Parser
-open Atrous.Pdf.Parser
-open Atrous.Pdf.Filters
-open Atrous.Pdf.Extensions
+open Shrimp.Pdf.Parser
+open Shrimp.Pdf.Filters
+open Shrimp.Pdf.Extensions
 
 type PageReaderArgument =
     {
@@ -16,8 +16,8 @@ type PageReaderArgument =
 
 [<RequireQualifiedAccess>]
 module PageReader =
-    open Atrous.Pdf.Select
-    open Atrous.Pdf.Colors
+    open Shrimp.Pdf.Select
+    open Shrimp.Pdf.Colors
     //let private pathsAll filters (arg: PageReaderArgument) =
     //    Extract.paths arg.PageNum (all filters) arg.Parser |> List.ofSeq
 

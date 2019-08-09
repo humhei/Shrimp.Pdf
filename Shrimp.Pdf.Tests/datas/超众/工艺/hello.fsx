@@ -1,9 +1,9 @@
-#I @"D:\VsCode\Gitee\Atrous\Atrous.Pdf.Tests\bin\x86\Debug\net462"
+#I @"D:\VsCode\Gitee\Shrimp\Shrimp.Pdf.Tests\bin\x86\Debug\net462"
 #r @"EPPlus.Core.dll"
 #r @"ExcelProcesser.dll"
 open ExcelProcess
-open Atrous.Pdf.Entities
-let xlTecPath =  @"D:\VsCode\Gitee\Atrous\Atrous.Pdf.Tests\datas\超众\工艺\工艺1814-1816 口舌转印标（阿达）.xlsx"
+open Shrimp.Pdf.Entities
+let xlTecPath =  @"D:\VsCode\Gitee\Shrimp\Shrimp.Pdf.Tests\datas\超众\工艺\工艺1814-1816 口舌转印标（阿达）.xlsx"
 
 let sheet = 
     xlTecPath

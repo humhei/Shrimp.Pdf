@@ -1,6 +1,6 @@
 ﻿namespace RealClothing.Orders
 module 外箱正唛细节 =
-    open Atrous.Entities.Types
+    open Shrimp.Entities.Types
 
     type CartonDetail =
         {

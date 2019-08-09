@@ -1,5 +1,5 @@
 ﻿
-namespace Atrous.Pdf.Targets
+namespace Shrimp.Pdf.Targets
 
 
 
@@ -9,12 +9,12 @@ module Target =
     open LiteDB.FSharp.Extensions
     open Types
     open Fake.IO.FileSystemOperators
-    open Atrous.Entities.Types
-    open Atrous.Entities
-    open Atrous.Pdf
-    open Atrous.Pdf.Extensions
-    open Atrous.Extensions
-    open Atrous
+    open Shrimp.Entities.Types
+    open Shrimp.Entities
+    open Shrimp.Pdf
+    open Shrimp.Pdf.Extensions
+    open Shrimp.Extensions
+    open Shrimp
 
     let private execute (tarm: TargetModel) f = 
         let globalDirs = tarm.GlobalConfig.GlobalDirs
