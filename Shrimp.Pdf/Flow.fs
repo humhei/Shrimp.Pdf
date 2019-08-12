@@ -1,14 +1,17 @@
 ﻿namespace Shrimp.Pdf
 
+open Fake.IO
+
 type FlowModel =
     { File: string }
 
 type Flow =
     | Reuse of (FlowModel -> FlowModel list)
 
-[<RequireQualifiedAccess>]
+[<AutoOpen>]
 module Operators =
     let run (file: string) (flows: Flow list) =
+
         ([ {File = file} ], flows) 
         ||> List.fold(fun models flow ->
             models

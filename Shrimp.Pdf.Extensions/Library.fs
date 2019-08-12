@@ -9,6 +9,29 @@ open System.IO
 open System
 
 
+type AffineTransformRecord =
+    { ScaleX: float 
+      ScaleY: float 
+      TranslateX: float 
+      TranslateY: float 
+      ShearX: float 
+      ShearY: float }
+with
+    member x.m00 = x.ScaleX
+
+    member x.m01 = x.ShearX
+
+    member x.m10 = x.ShearY
+
+    member x.m11 = x.ScaleY
+
+    member x.m02 = x.TranslateX
+
+    member x.m12 = x.TranslateY
+        
+
+
+
 type PageBoxKind =
     | TrimBox = 0
     | ActualBox = 1
@@ -372,68 +395,54 @@ module Extensions =
                     create x y width height
                 | _ -> failwith "not implemented"
 
-        type Matrix with 
-            member matrix.m00 =
-                matrix.Get(0)
-
-            member matrix.m10 =
-                matrix.Get(1)
-
-            member matrix.m01 =
-                matrix.Get(3)
-
-            member matrix.m11 =
-                matrix.Get(4)
-
-            member matrix.m02 =
-                matrix.Get(6)
-
-            member matrix.m12 =
-                matrix.Get(7)
-
-        [<RequireQualifiedAccess>]
-        module Matrix = 
-            let m00 (matrix: Matrix) =
-                matrix.m00
-
-            let m10 (matrix: Matrix) =
-                matrix.m10
-
-            let m01 (matrix: Matrix) =
-                matrix.m01
-
-            let m11 (matrix: Matrix) =
-                matrix.m11
-
-            let m02 (matrix: Matrix) =
-                matrix.m02
-
-            let m12 (matrix: Matrix) =
-                matrix.m12
 
         [<RequireQualifiedAccess>]
         module AffineTransform = 
+
             let create m00 m10 m01 m11 m02 m12 = 
-                new AffineTransform(m00,m10,m01,m11,m02,m12)
+                new AffineTransform(m00, m10, m01, m11, m02, m12)
 
-            let createFromMatrix (matrix: Matrix) =
-                [|
-                    Matrix.m00 matrix
-                    Matrix.m10 matrix
-                    Matrix.m01 matrix
-                    Matrix.m11 matrix
-                    Matrix.m02 matrix
-                    Matrix.m12 matrix
-                |]
-                |> AffineTransform
+            let toRecord (affineTransform: AffineTransform) =
+                { ScaleX = affineTransform.GetScaleX() 
+                  ShearX = affineTransform.GetShearX() 
+                  ShearY = affineTransform.GetShearY() 
+                  ScaleY = affineTransform.GetScaleY() 
+                  TranslateX = affineTransform.GetTranslateX() 
+                  TranslateY = affineTransform.GetTranslateY() }
 
-            let transform (p0: Point) (atf:AffineTransform) = 
+            let ofRecord (record: AffineTransformRecord) =
+                create 
+                    record.m00
+                    record.m10
+                    record.m01
+                    record.m11
+                    record.m02
+                    record.m12
+
+
+            let ofMatrix (matrix: Matrix) =
+                let values =
+                    [| matrix.Get(Matrix.I11)
+                       matrix.Get(Matrix.I12)
+                       matrix.Get(Matrix.I21)
+                       matrix.Get(Matrix.I22)
+                       matrix.Get(Matrix.I31)
+                       matrix.Get(Matrix.I32) |]
+
+                new AffineTransform(values)
+
+            let toMatrix (affineTransform: AffineTransform) =
+                let values = Array.create 6 0.f
+                affineTransform.GetMatrix(values)
+                new Matrix(values.[Matrix.I11], values.[Matrix.I12], values.[Matrix.I21], values.[Matrix.I22], values.[Matrix.I31], values.[Matrix.I32])
+
+            let transform (p0: Point) (affineTransform: AffineTransform) = 
                 let p1 = new Point()
-                atf.Transform(p0,p1)
+                affineTransform.Transform(p0,p1)
 
-            let inverseTransform (p0: Point) (atf:AffineTransform) = 
+            let inverseTransform (p0: Point) (affineTransform: AffineTransform) = 
                 let p1 = new Point()
-                atf.InverseTransform(p0,p1)
+                affineTransform.InverseTransform(p0,p1)
 
 
         type AffineTransform with 
@@ -459,13 +468,21 @@ module Extensions =
                 let p4 = new Point (rect.GetRightF(),rect.GetYF())
                 [p1; p2; p3 ;p4] |> List.map (fun p -> AffineTransform.inverseTransform p this) |> Rectangle.createFromPoints
     
-            member this.AsMatrix() =
-                let array = Array.create 6 0.f
-                this.GetMatrix(array)
-                Matrix(array.[0], array.[1], array.[2], array.[3], array.[4], array.[5])
-        
+        [<RequireQualifiedAccess>]
+        module AffineTransformRecord =
+            let ofAffineTransform (affineTransform: AffineTransform) =
+                AffineTransform.toRecord affineTransform
 
+            let toAffineTransform (record: AffineTransformRecord) =
+                AffineTransform.ofRecord record
 
+            let ofMatrix (matrix: Matrix) =
+                AffineTransform.ofMatrix matrix
+                |> ofAffineTransform
+
+            let toMatrix (record: AffineTransformRecord) =
+                AffineTransform.ofRecord record
+                |> AffineTransform.toMatrix
 
         type AbstractRenderInfo with 
             member this.GetFillColor() =
@@ -481,15 +498,16 @@ module Extensions =
                 | :? TextRenderInfo as info -> info.GetStrokeColor()
                 | _ -> failwith "Not implemented"
 
+
         [<RequireQualifiedAccess>]
         module Subpath =
 
             let toRawPoints (subpath: Subpath) =
                 subpath.GetPiecewiseLinearApproximation()
 
-            let toActualPoints (ctm:Matrix) subpath =
+            let toActualPoints (ctm: Matrix) subpath =
                 toRawPoints subpath
-                |> Seq.map (fun pt -> (AffineTransform.createFromMatrix ctm).Tranform(pt))
+                |> Seq.map (fun pt -> (AffineTransform.ofMatrix ctm).Tranform(pt))
                 |> List.ofSeq
 
             let getActualBound ctm (subpath: Subpath) =
@@ -733,6 +751,18 @@ module Extensions =
 
 
 
+
+        type PdfCanvas with 
+            member x.AddXObject(xObject: PdfXObject, affineTransformRecord: AffineTransformRecord) =
+                x.AddXObject
+                    ( xObject,float32 affineTransformRecord.m00,
+                      float32 affineTransformRecord.m10,
+                      float32 affineTransformRecord.m01,
+                      float32 affineTransformRecord.m11,
+                      float32 affineTransformRecord.m02,
+                      float32 affineTransformRecord.m12 )
+
+
         [<RequireQualifiedAccess>]
         module PdfCanvas = 
 
@@ -757,8 +787,8 @@ module Extensions =
             let stroke (canvas:PdfCanvas) =
                 canvas.Stroke()
 
-            let newPath (canvas: PdfCanvas) =
-                canvas.NewPath()
+            let endPath (canvas: PdfCanvas) =
+                canvas.EndPath()
 
             let showText (text: string) (canvas:PdfCanvas)=
                 canvas.ShowText(text)

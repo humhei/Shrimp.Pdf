@@ -19,3 +19,6 @@ module Reuses =
 
             splitDocument.Reader.Close()
             splitDocument.Writer.Close()
+            [model]
+
+        |> Flow.Reuse

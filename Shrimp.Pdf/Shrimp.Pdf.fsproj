@@ -40,24 +40,16 @@
     <Compile Include="ColorCard.fs" />
     <Compile Include="Colors.fs" />
     <Compile Include="Types.fs" />
-    <Compile Include="Filters.fs" />
-    <Compile Include="Select.fs" />
-    <Compile Include="Operators.fs" />
-    <Compile Include="Modify.fs" />
-    <Compile Include="PageReader.fs" />
-    <Compile Include="DocReader.fs" />
-    <Compile Include="Manipulates.fs" />
+    <Compile Include="Imposing.fs" />
+    <Compile Include="Flow.fs" />
     <Compile Include="Reuses.fs" />
-    <Compile Include="Elmish.fs" />
 
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="BlackFox.ColoredPrintf" Version="1.0.2" />
     <PackageReference Include="Colourful" Version="2.0.3" />
-    <PackageReference Include="Fake.IO.FileSystem" Version="5.0.0-rc012.95" />
+    <PackageReference Include="Fake.IO.FileSystem" Version="5.15.4" />
     <PackageReference Include="FParsec" Version="1.0.3" />
-    <PackageReference Include="LiteDB.FSharp" Version="2.6.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -67,7 +59,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="4.5.2" />
+    <PackageReference Update="FSharp.Core" Version="4.7.0" />
     <PackageReference Update="System.ValueTuple" Version="4.5.0" />
   </ItemGroup>
 

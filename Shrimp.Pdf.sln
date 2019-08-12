@@ -7,9 +7,11 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf", "Shrimp.Pdf\Sh
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.Parser", "Shrimp.Pdf.Parser\Shrimp.Pdf.Parser.fsproj", "{E8CBA96A-2453-4B74-BEF3-1845E6FCB6F0}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Shrimp.Pdf.Extensions", "Shrimp.Pdf.Extensions\Shrimp.Pdf.Extensions.fsproj", "{D97B0B3B-D06D-4012-9B89-2E112D94A12D}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.Extensions", "Shrimp.Pdf.Extensions\Shrimp.Pdf.Extensions.fsproj", "{D97B0B3B-D06D-4012-9B89-2E112D94A12D}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Shrimp.Pdf.Logger", "Shrimp.Pdf.Logger\Shrimp.Pdf.Logger.fsproj", "{6BB040AE-A68C-4EB0-9A98-2E93BEDFA66D}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.Logger", "Shrimp.Pdf.Logger\Shrimp.Pdf.Logger.fsproj", "{6BB040AE-A68C-4EB0-9A98-2E93BEDFA66D}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Shrimp.Pdf.Texts", "Shrimp.Pdf.Texts\Shrimp.Pdf.Texts.fsproj", "{C43B51E7-1D66-482E-98B2-D64E17322C43}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -42,6 +44,12 @@ Global
 		{6BB040AE-A68C-4EB0-9A98-2E93BEDFA66D}.MiniBuild|Any CPU.Build.0 = Debug|Any CPU
 		{6BB040AE-A68C-4EB0-9A98-2E93BEDFA66D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6BB040AE-A68C-4EB0-9A98-2E93BEDFA66D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C43B51E7-1D66-482E-98B2-D64E17322C43}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C43B51E7-1D66-482E-98B2-D64E17322C43}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C43B51E7-1D66-482E-98B2-D64E17322C43}.MiniBuild|Any CPU.ActiveCfg = Debug|Any CPU
+		{C43B51E7-1D66-482E-98B2-D64E17322C43}.MiniBuild|Any CPU.Build.0 = Debug|Any CPU
+		{C43B51E7-1D66-482E-98B2-D64E17322C43}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C43B51E7-1D66-482E-98B2-D64E17322C43}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
