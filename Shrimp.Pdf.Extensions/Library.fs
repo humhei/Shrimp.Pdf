@@ -13,6 +13,7 @@ type PageBoxKind =
     | TrimBox = 0
     | ActualBox = 1
     | CropBox = 2
+    | AllBox = 3
 
 [<RequireQualifiedAccess>]
 type RelativePosition =
@@ -24,12 +25,17 @@ type StraightLine =
     { Start: Point
       End: Point }
 
-type Origin =
-    | LeftTop = 0
-    | RightTop = 1
-    | LeftBottom = 2
-    | RightBottom = 3
-    | Center = 4
+[<RequireQualifiedAccess>]
+type Position =
+    | LeftBottom of float * float
+    | Left of float * float
+    | LeftTop of float * float
+    | Top of float * float
+    | RightTop of float * float
+    | Right of float * float
+    | RightBottom of float * float
+    | Bottom of float * float
+    | Center of float * float
 
 
 type DashPattern =
@@ -46,21 +52,29 @@ with
         float32 x.Phase
 
 [<RequireQualifiedAccess>]
-module Origin =
-    let (|Left|_|) = function
-        | Origin.LeftTop | Origin.LeftBottom -> Some ()
+module Position =
+    let (|LeftEdge|_|) = function
+        | Position.LeftTop (0., _) 
+        | Position.LeftBottom (0., _) 
+        | Position.Left(0., _) -> Some ()
         | _ -> None
     
-    let (|Bottom|_|) = function
-        | Origin.LeftBottom | Origin.RightBottom -> Some ()
+    let (|BottomEdge|_|) = function
+        | Position.LeftBottom (_, 0.)
+        | Position.RightBottom (_, 0.)
+        | Position.Bottom (_, 0.)-> Some ()
         | _ -> None
 
-    let (|Top|_|) = function
-        | Origin.LeftTop | Origin.RightTop -> Some ()
+    let (|TopEdge|_|) = function
+        | Position.LeftTop (_, 0.) 
+        | Position.RightTop (_, 0.)
+        | Position.Top(_, 0.) -> Some ()
         | _ -> None
 
-    let (|Right|_|) = function
-        | Origin.RightBottom | Origin.RightTop -> Some ()
+    let (|RightEdge|_|) = function
+        | Position.RightBottom (0., _) 
+        | Position.RightTop (0., _)
+        | Position.Right (0., _) -> Some ()
         | _ -> None
 
 [<RequireQualifiedAccess>]
@@ -85,41 +99,10 @@ module StraightLine =
                 None // intersection is not within the line segments
             else
                 Some(
-                    (Ax+r*(Bx-Ax)),  // Px
-                    (Ay+r*(By-Ay)))  // Py
+                    Point(Ax+r*(Bx-Ax), Ay+r*(By-Ay))
+                )  // Py
 
 module Extensions =
-
-    let private possibleFolders = 
-        [ "../Assets"(*UWP*) ] 
-
-    /// application.conf should be copied to target folder
-    let private fallBackByApplicationConf config =
-        let folder = System.IO.Path.GetDirectoryName(Assembly.GetEntryAssembly().Location)
-        let folders = 
-            [ folder ] 
-            @ possibleFolders
-                |> List.map (fun m -> Path.Combine(folder, m))
-
-        folders 
-        |> List.map (fun folder -> Path.Combine(folder, "application.conf"))
-        |> List.tryFind (fun file -> File.Exists(file))
-        |> function
-            | Some file ->
-                let texts = File.ReadAllText(file, Text.Encoding.UTF8)
-                let applicationConfig = ConfigurationFactory.ParseString(texts)
-                applicationConfig.WithFallback(config)
-            | None -> config
-
-    let private config = 
-        ConfigurationFactory
-            .FromResource<StraightLine>("Shrimp.Pdf.Extensions.reference.conf")
-        |> fallBackByApplicationConf
-
-    let tolerance = config.GetDouble("shrimp.pdf.extensions.tolerance")
-
-    let inline (@=) a b =
-        float (abs (a - b)) < tolerance
 
     [<AutoOpen>]
     module iText = 
@@ -130,12 +113,10 @@ module Extensions =
 
         [<RequireQualifiedAccess>]
         module GlyphLine =
+            let getAllGlyphs (glyphLine: GlyphLine) =
+                [ for i = 0 to glyphLine.Size() - 1 do 
+                    yield glyphLine.Get(i) ]
 
-            let getAllGlyphs (gl: GlyphLine) =
-                [
-                    for i = 0 to gl.Size() - 1 do 
-                        yield gl.Get(i)
-                ]
 
         [<RequireQualifiedAccess>]
         module PdfFont =
@@ -169,8 +150,6 @@ module Extensions =
                     |> List.sum
                     |> float
                 unit / TEXT_SPACE_COEFF
-
-            //let [<Literal>] heightLerance = 1.2
 
 
         type TextRenderingMode = PdfCanvasConstants.TextRenderingMode
@@ -340,21 +319,20 @@ module Extensions =
                 && rect1.GetHeightF() @= rect2.GetHeightF()
 
             /// only support Origin.Bottom
-            let increaseHeight (origin: Origin) (height:float) (rect: Rectangle) = 
+            let increaseHeight (origin: Position) (height:float) (rect: Rectangle) = 
                 match origin with 
-                | Origin.Bottom _ ->
+                | Position.Bottom _ ->
                     let x = rect.GetXF()
                     let y = rect.GetYF()
                     let w = rect.GetWidthF()
                     let h = rect.GetHeightF() + height
                     create x y w h
-
                 | _ -> failwith "not implemented"
 
             /// only support Origin.Bottom
-            let setHeight (origin: Origin) (w: float) (rect: Rectangle) =
+            let setHeight (origin: Position) (w: float) (rect: Rectangle) =
                 match origin with 
-                | Origin.Bottom _ ->
+                | Position.Bottom _ ->
                     let x = rect.GetXF()
                     let y = rect.GetYF()
                     let h = rect.GetHeightF()
@@ -362,9 +340,9 @@ module Extensions =
                 | _ -> failwith "not implemented"
 
             /// only support Origin.Left
-            let increaseWidth (origin: Origin) (width:float) (rect: Rectangle) = 
+            let increaseWidth (origin: Position) (width:float) (rect: Rectangle) = 
                 match origin with 
-                | Origin.Left ->
+                | Position.LeftEdge _ ->
                     let x = rect.GetXF()
                     let y = rect.GetYF()
                     let w = rect.GetWidthF() + width
@@ -374,9 +352,9 @@ module Extensions =
                 | _ -> failwith "not implemented"
 
             /// only support Origin.Left
-            let setWidth (origin: Origin) (w: float) (rect: Rectangle) =
+            let setWidth (origin: Position) (w: float) (rect: Rectangle) =
                 match origin with 
-                | Origin.Left ->
+                | Position.LeftEdge _ ->
                     let x = rect.GetXF()
                     let y = rect.GetYF()
                     let h = rect.GetHeightF()
@@ -384,15 +362,14 @@ module Extensions =
                 | _ -> failwith "not implemented"
 
             /// only support Origin.LeftBottom
-            let scale (origin: Origin) scaleX scaleY (rect: Rectangle) =
+            let scale (origin: Position) scaleX scaleY (rect: Rectangle) =
                 match origin with 
-                | Origin.LeftBottom ->
+                | Position.LeftBottom (0., 0.) ->
                     let width = rect.GetWidthF() * scaleX
                     let height = rect.GetHeightF() * scaleY
                     let x = rect.GetXF()
                     let y = rect.GetYF()
                     create x y width height
-
                 | _ -> failwith "not implemented"
 
         type Matrix with 
@@ -624,7 +601,7 @@ module Extensions =
             let isStrokeVisible (info: TextRenderInfo) =             
                 let md = info.GetTextRenderMode()
                 match md with 
-                | PdfCanvasConstants.TextRenderingMode.STROKE 
+                | PdfCanvasConstants.TextRenderingMode.STROKE
                 | PdfCanvasConstants.TextRenderingMode.FILL_STROKE  
                 | PdfCanvasConstants.TextRenderingMode.STROKE_CLIP -> true
                 |  _ -> false
@@ -755,6 +732,7 @@ module Extensions =
                 | _ -> failwith "Invalid token"
 
 
+
         [<RequireQualifiedAccess>]
         module PdfCanvas = 
 
@@ -821,6 +799,25 @@ module Extensions =
             let setBleedBox (rect: Rectangle) (page: PdfPage) =
                 page.SetBleedBox rect
 
+            let setPageBox pageBoxKind (rect: Rectangle) (page: PdfPage) =
+                match pageBoxKind with 
+                | PageBoxKind.TrimBox -> setTrimBox rect page
+                | PageBoxKind.CropBox -> setCropBox rect page
+                | PageBoxKind.ActualBox ->
+                    page 
+                    |> setMediaBox rect
+                    |> setCropBox rect
+
+                | PageBoxKind.AllBox ->
+                    page 
+                    |> setMediaBox rect
+                    |> setCropBox rect
+                    |> setTrimBox rect
+                    |> setArtBox rect
+                    |> setBleedBox rect
+
+                | _ -> failwith "Invalid token"
+
             let getActualWidth (page: PdfPage) = 
                 page.GetActualBox().GetWidth() |> float
 
@@ -845,8 +842,16 @@ module Extensions =
                     Rectangle.min (getCropBox page) (getMediaBox page)
                 | _ -> failwith "Invalid token"
 
-            let getCanvas (page: PdfPage) =
-                new PdfCanvas(page)
+            let getActualBox (page: PdfPage) =
+                page.GetActualBox()
+
+        [<RequireQualifiedAccess>]
+        module PdfDocument =
+            let getPages (doc: PdfDocument) =
+                [
+                    for i = 1 to doc.GetNumberOfPages() do
+                        yield doc.GetPage(i)
+                ]
 
         [<RequireQualifiedAccess>]
         module Canvas =

@@ -170,11 +170,9 @@ type internal PdfCanvasEditor(selector: Selector, modifier: Modifier) =
         | "Tj" | "TJ" when List.contains EventType.RENDER_TEXT eventTypes ->
                 match modifier with
                 | Modifier.DropColor ->
-                    let newOperatorRange = 
-                        { operatorRange with 
-                            Operator = new PdfLiteral("n") }
-
-                    PdfCanvas.writeOperatorRange newOperatorRange currentPdfCanvas
+                    currentPdfCanvas.SetTextRenderingMode(TextRenderingMode.INVISIBLE)
+                    |> ignore
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
 
                 | Modifier.Fix (fix) ->
                     let pathRenderInfo = eventListener.CurrentRenderInfo

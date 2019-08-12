@@ -1,138 +1,152 @@
 ﻿namespace Shrimp.Pdf.Colors
-open Shrimp.Pdf
 open iText.Kernel.Pdf
-open Shrimp.Pdf.ColorBook
-open Shrimp
+open Shrimp.Pdf
+open Colourful.Conversion
+open iText.Kernel.Colors
+open Colourful
+open System
+open iText.Kernel
+open Extensions
+open System.Linq
+open System.Collections.Generic
 
-module ColorConverter = 
-    open Colourful.Conversion
-    open iText.Kernel.Colors
-    open Colourful
 
-    [<RequireQualifiedAccess>]
-    module LabColor =
+[<RequireQualifiedAccess>]
+module Colourful =
 
-        let getL (c: LabColor) =
-            c.L
+    let private avaliableRGBWorkingSpacesTexts =
+        [
+            "SRGB"           
+            "PROPHOTORGB"    
+            "PALSECAMRGB"    
+            "NTSCRGB"        
+            "EKTASPACEPS5"   
+            "DONRGB4"        
+            "COLORMATCHRGB"  
+            "CIERGB"         
+            "SMPTECRGB"      
+            "BRUCERGB"       
+            "BESTRGB"        
+            "APPLESRGB"      
+            "ADOBERGB1998"   
+            "ECIRGBV2"       
+            "REC2020"        
+            "REC709"         
+            "SRGBSIMPLIFIED" 
+            "BETARGB"        
+            "WIDEGAMUTRGB"   
+        ]
 
-        let encodeToString (values: int list) =
-            match values with 
-            | [l;a;b] -> 
-                sprintf "0x%02x%02x%02x" l (a + 128) (b + 128)
-            | _ -> invalidArg "value" (values.ToString())
-        
+    let targetRGBWoringSpace =
+        let text = config.GetString("shrimp.pdf.colourful.targetRGBWorkingSpace")
+        match text.ToUpper() with 
+        | "SRGB"            -> RGBWorkingSpaces.sRGB
+        | "PROPHOTORGB"     -> RGBWorkingSpaces.ProPhotoRGB
+        | "PALSECAMRGB"     -> RGBWorkingSpaces.PALSECAMRGB
+        | "NTSCRGB"         -> RGBWorkingSpaces.NTSCRGB
+        | "EKTASPACEPS5"    -> RGBWorkingSpaces.EktaSpacePS5
+        | "DONRGB4"         -> RGBWorkingSpaces.DonRGB4
+        | "COLORMATCHRGB"   -> RGBWorkingSpaces.ColorMatchRGB
+        | "CIERGB"          -> RGBWorkingSpaces.CIERGB
+        | "SMPTECRGB"       -> RGBWorkingSpaces.SMPTECRGB
+        | "BRUCERGB"        -> RGBWorkingSpaces.BruceRGB
+        | "BESTRGB"         -> RGBWorkingSpaces.BestRGB
+        | "APPLESRGB"       -> RGBWorkingSpaces.ApplesRGB
+        | "ADOBERGB1998"    -> RGBWorkingSpaces.AdobeRGB1998
+        | "ECIRGBV2"        -> RGBWorkingSpaces.ECIRGBv2
+        | "REC2020"         -> RGBWorkingSpaces.Rec2020
+        | "REC709"          -> RGBWorkingSpaces.Rec709
+        | "SRGBSIMPLIFIED"  -> RGBWorkingSpaces.sRGBSimplified
+        | "BETARGB"         -> RGBWorkingSpaces.BetaRGB
+        | "WIDEGAMUTRGB"    -> RGBWorkingSpaces.WideGamutRGB
+        | _ -> failwithf "targetRGBWoringSpace: expect one of %A" avaliableRGBWorkingSpacesTexts
 
-        let fromHex (hex: int) =
-            let l = hex >>> 16 |> byte |> int
-            let a = hex >>> 8 |> byte |> int
-            let b = hex >>> 0 |> byte |> int
-            let a2 = a - 128
-            let b2 = b - 128
-            [l;a2;b2] |> List.map float |> LabColor
+    let converter = 
+        ColourfulConverter(TargetRGBWorkingSpace = targetRGBWoringSpace)
 
-    let private converter = new ColourfulConverter(TargetRGBWorkingSpace = RGBWorkingSpaces.sRGB)
-    converter.WhitePoint <- Illuminants.D65
-    let toLight (c: Color) = 
-        match c with
-        | :? DeviceRgb as rgb -> 
-            let r,g,b = 
-                let cs = rgb.GetColorValue()
-                cs |> Seq.map float |> List.ofSeq |> fun cs -> cs.[0],cs.[1],cs.[2]
-            let input = new RGBColor(r,g,b)
-            converter.ToLab(input).L
-        | :? DeviceGray as gray ->
-            gray.GetColorValue().[0] |> float |> fun n -> n * 100.
-        | _ -> failwith "Not implemented"
+    let private avaliableWhitePoints =
+        [
+            "A"
+            "B"
+            "C"
+            "D50"
+            "D55"
+            "D65"
+            "D75"
+            "E"
+            "F2"
+            "F7"
+            "F11"
+        ]
 
-    [<RequireQualifiedAccess>]
-    module DeviceRgb =
-        open Colourful
 
-        let fromLab (lab: LabColor) =
-            let rgb = converter.ToRGB(lab)
-            let r = float32 rgb.R
-            let g = float32 rgb.G
-            let b = float32 rgb.B
-            DeviceRgb(r,g,b)
+    converter.WhitePoint <- 
+        match config.GetString("").ToUpper() with
+        |"A"    -> Illuminants.A
+        |"B"    -> Illuminants.B
+        |"C"    -> Illuminants.C
+        |"D50"  -> Illuminants.D50
+        |"D55"  -> Illuminants.D55
+        |"D65"  -> Illuminants.D65
+        |"D75"  -> Illuminants.D75
+        |"E"    -> Illuminants.E
+        |"F2"   -> Illuminants.F2
+        |"F7"   -> Illuminants.F7
+        |"F11"  -> Illuminants.F11
+        | _ -> failwithf "whitePoint: expect one of %A" avaliableWhitePoints
+
+
+[<RequireQualifiedAccess>]
+module LabColor =
+
+    /// encode to colorbook enum value
+    let encode (labColor: LabColor) =
+        sprintf "0x%02x%02x%02x" (int labColor.L) (int labColor.a + 128) (int labColor.b + 128)
+
+    /// decode from colorbook enum value
+    let decode (hex: int) =
+        let l = hex >>> 16 |> byte |> int
+        let a = hex >>> 8 |> byte |> int
+        let b = hex >>> 0 |> byte |> int
+        let a2 = a - 128
+        let b2 = b - 128
+        [l; a2; b2] |> List.map float |> LabColor
 
 
 
 [<RequireQualifiedAccess>]
 module DeviceRgb =
-    open iText.Kernel.Colors
-    let magenta = DeviceRgb(255,0,255)
-    
-[<RequireQualifiedAccess>]
-module DeviceGray =
-    open iText.Kernel.Colors
-    let pantoneSignature = DeviceGray(0.754f)
+    let ofLab (lab: LabColor) =
+        let rgb = Colourful.converter.ToRGB(lab)
+        let r = float32 rgb.R
+        let g = float32 rgb.G
+        let b = float32 rgb.B
+        DeviceRgb(r,g,b)
+
 
 [<RequireQualifiedAccess>]
 module DeviceCmyk =
-    open iText.Kernel.Colors
     let white = DeviceCmyk(0,0,0,0)
 
 [<RequireQualifiedAccess>]
 module Separation =
-    open iText.Kernel.Colors
-    open iText.Kernel.Pdf.Colorspace
     let equal (c1: Separation) (c2: Separation) =
         let c1ColorSpace = c1.GetColorSpace().GetPdfObject() :?> PdfArray |> Seq.map string |> String.concat "-"
         let c2ColorSpace = c2.GetColorSpace().GetPdfObject() :?> PdfArray |> Seq.map string |> String.concat "-"
         let b = c1ColorSpace = c2ColorSpace && c1.GetColorValue() = c2.GetColorValue()
         b
 
-    let colorName (color: Separation) =
-        match color.GetColorSpace() with 
-        | :? PdfSpecialCs.Separation as colorSpace ->
-            let array = colorSpace.GetPdfObject() :?> PdfArray
-            array.GetAsName(1) |> ColorBook.normalizePdfName
-        | _ -> Logger.notImplemented()
-
-
 [<RequireQualifiedAccess>]
 module Color =
-    open Fake.IO
-    open System
-    open Shrimp.Pdf.Parser
-    open iText.Kernel.Pdf.Colorspace
-    open iText.Kernel
-    open iText.Kernel.Pdf.Canvas.Parser
-    open iText.Kernel.Colors
-    open Extensions
-    open Fake.IO.Globbing.Operators
-    open System.IO
-    open iText.Layout.Element
-    open Shrimp.Utils
 
     let isCmyk (color: Color) =
         match color with 
         | :? DeviceCmyk -> true
         | _ -> false
 
-    let toColoredText (text: string) color =
-        let t = new Text(text)
-        t.SetFontColor(color)
-
-    let _registion =
-        let file = Path.getFullName "Resources/Colors/registion.pdf"
-        let doc = new PdfDocument(new PdfReader(file))
-        let parser = new PdfDocumentContentParser(doc)
-        let infos = Extract.paths 1 (fun _ -> true) parser
-        let info = infos |> Seq.exactlyOne
-        info.GetStrokeColor() :?> Separation
-
-    let injectSeperation (writer: PdfDocument) (color: Separation) =
-        let colorSpace = 
-            let spcs = 
-                lock writer (fun _ ->
-                    color.GetColorSpace().GetPdfObject().CopyTo(writer)
-                )
-            PdfColorSpace.MakeColorSpace(spcs)
-        Color.MakeColor(colorSpace,_registion.GetColorValue())
 
     let registion (writer:PdfDocument) =
-        injectSeperation writer _registion
+        PdfDocument.obtainSperationColorFromResources "registration" writer
         
     let isSeparation (c: Color) =
         match c with 
@@ -144,7 +158,7 @@ module Color =
         | :? Colors.Separation as sepa -> Some sepa
         | _ -> None
 
-    let equal (c1: Color) (c2: Color) =
+    let isValueEqual (c1: Color) (c2: Color) =
         let isSeparationEqual = 
             match c1 with 
             | :? Colors.Separation as c1 ->
@@ -153,41 +167,29 @@ module Color =
                 | _ -> false
             | _ -> false
         isSeparationEqual || c1 = c2
-        
-    let comparer =
-        CustomEqualityComparer<Color>(equal)
 
-    let _colorBook text =
-        let file = !!("Resources/Colors/*/*.pdf") |> Seq.find (fun path ->
-            let fileName = Path.GetFileNameWithoutExtension (path)
-            fileName = text
-        )
-        let doc = new PdfDocument(new PdfReader(file))
-        let parser = new PdfDocumentContentParser(doc)
-        let infos = Extract.paths 2 (fun _ -> true) parser
-        let info = infos |> Seq.exactlyOne
-        info.GetFillColor() :?> Separation
+    let pantoneSolidCoated (pantoneEnum: PantoneColorEnum) writer =
+        PdfDocument.obtainSperationColorFromResources (@"Pantone+ Solid Coated/" + pantoneEnum.ToString()) writer
 
-    let colorBook text writer =
-        injectSeperation writer (_colorBook text)
+    let pantoneTPX (tpxColorEnum: TPXColorEnum) writer =
+        PdfDocument.obtainSperationColorFromResources (@"TPX/" + tpxColorEnum.ToString()) writer
 
-    let _pantone (pantoneEnum: PantoneColorEnum) =
-        let text = pantoneEnum.ToString()
-        _colorBook text
-
-    let pantone (pantoneEnum: PantoneColorEnum) writer =
-        injectSeperation writer (_pantone pantoneEnum)
 
 [<RequireQualifiedAccess>]
 module Colors =
-    open iText.Kernel.Colors
-    open Shrimp.Pdf.Extensions
-    open Shrimp.Extensions
     let distinct (colors: Color seq) =
-        colors |> Seq.disctintByComparer Color.comparer
+        let comparer =
+            { new IEqualityComparer<Color> with 
+                member __.Equals(x,y) = 
+                    Color.isValueEqual x y
+
+                member __.GetHashCode(_) = 0
+            }
+
+        colors.Distinct(comparer)
         
     let contain c cs =
-        cs |> List.exists (Color.equal c)
+        cs |> List.exists (Color.isValueEqual c)
 
     let except cs1 cs2 =
         cs2 |> List.filter (fun c -> 
@@ -195,111 +197,28 @@ module Colors =
             |> not
         )
 
-type ColorMap =
-    | Red = 0
-    | Black = 1
-    | Magenta = 2
-
-
 [<RequireQualifiedAccess>]
-module ColorMap =
-    open iText.Kernel.Colors
-    open System.Collections.Generic
-
-    let colorMaps : IDictionary<ColorMap,Color list> =
-        [
-            ColorMap.Red,[DeviceCmyk(0,100,100,0) :> Color]
-            ColorMap.Black,[DeviceCmyk.BLACK;DeviceGray.BLACK]
-            ColorMap.Magenta,[DeviceCmyk.MAGENTA]
-        ] |> dict
-
-    let findCmykColor s =
-        colorMaps.[s] |> Seq.find Color.isCmyk
-
-    let ofColor (color: Color) =
-        let pair = 
-            colorMaps |> Seq.find (fun (KeyValue(k,v)) ->
-                v |> List.exists (Color.equal color)
-            )
-        pair.Key
-
-    let toZH (c: ColorMap) =
-        match c with 
-        | ColorMap.Black -> "黑色"
-        | ColorMap.Red -> "红色"
-        | ColorMap.Magenta -> "玫红色"
-        | _ -> Logger.invalidToken()
-
-    let toColoredText s =
-        let color = findCmykColor s
-        let s = toZH s
-        Color.toColoredText s color
-
-[<RequireQualifiedAccess>]
-type ColoredText =
-    | Common of iText.Layout.Element.Text
-    | FromDoc of (PdfDocument -> iText.Layout.Element.Text)
-
-[<RequireQualifiedAccess>]
-module ColoredText =
-    let toTextElement doc coloredText =
-        match coloredText with 
-        | ColoredText.Common text -> text
-        | ColoredText.FromDoc textGenerator -> textGenerator doc
-
-[<RequireQualifiedAccess>]
-type ColorCard =
-    | Enum of ColorMap
-    | Pantone of PantoneColorEnum
-    | TPX of TPXColorEnum
-    
-[<RequireQualifiedAccess>]
-module ColorCard =
-    open iText.Kernel.Colors
-    open System
-
-    let parse (colorName: string) =
-        match Enum.TryParse(colorName) with
-        | true,color -> ColorCard.Pantone color 
-        | false,_ -> 
-            match Enum.TryParse(colorName) with 
-            | true,color -> ColorCard.TPX color
-            | false,_ -> failwithf "Cannot find colorCard by %s" colorName
-
-    let ofColor (color: Color) =
-        match color with 
-        | :? Separation as separation ->
-            let name = Separation.colorName separation
-            parse name
-        | :? DeviceCmyk | :? DeviceRgb | :? DeviceGray ->
-            ColorMap.ofColor color |> ColorCard.Enum
-        | _ -> Logger.notImplemented()
-
-
-[<RequireQualifiedAccess>]
-type DesiredColor =
+type PrintingColor =
     | CMYK
     | Single of ColorCard
     | Double of ColorCard * ColorCard
 
 [<RequireQualifiedAccess>]
-module DesiredColor =
+module PrintingColor =
     let black =
-        ColorMap.Black 
-        |> ColorCard.Enum
-        |> DesiredColor.Single 
+        KnownColor.Black
+        |> ColorCard.KnownColor
+        |> PrintingColor.Single 
 
     let isBlack = function 
-        | DesiredColor.Single colorCard ->
+        | PrintingColor.Single colorCard ->
             match colorCard with 
-            | ColorCard.Enum enum when enum = ColorMap.Black -> true
+            | ColorCard.KnownColor enum when enum = KnownColor.Black -> true
             | _ -> false
         | _ -> false
 
-    let (|Black|_|) dc =
-        if isBlack dc then Some dc else None
-
     let isCmyk dc =
         match dc with 
-        | DesiredColor.CMYK -> true
+        | PrintingColor.CMYK -> true
         | _ -> false
+

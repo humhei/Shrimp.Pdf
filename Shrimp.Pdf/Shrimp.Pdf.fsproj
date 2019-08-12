@@ -17,21 +17,27 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="Resources\Marks\*.pdf">
+    <None Include="reference.conf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Resources\Marks\*.pdf">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
     <None Include="Resources\Colors\*.pdf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
     <None Include="Resources\Colors\*\*.pdf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
 
     <None Update="Resources\Colors\registion.pdf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
+
+    <Compile Include="Resources.fs" />
+
     <Compile Include="Marks.fs" />
-    <Compile Include="Pantone.fs" />
+    <Compile Include="ColorCard.fs" />
     <Compile Include="Colors.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Filters.fs" />
@@ -48,6 +54,7 @@
 
   <ItemGroup>
     <PackageReference Include="BlackFox.ColoredPrintf" Version="1.0.2" />
+    <PackageReference Include="Colourful" Version="2.0.3" />
     <PackageReference Include="Fake.IO.FileSystem" Version="5.0.0-rc012.95" />
     <PackageReference Include="FParsec" Version="1.0.3" />
     <PackageReference Include="LiteDB.FSharp" Version="2.6.0" />

@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="reference.conf" />
+    <Compile Include="Operators.fs" />
     <Compile Include="Library.fs" />
   </ItemGroup>
 
