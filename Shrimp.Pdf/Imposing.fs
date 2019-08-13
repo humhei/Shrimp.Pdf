@@ -1,20 +1,8 @@
 ﻿namespace Shrimp.Pdf
 open iText.Kernel.Pdf
-open System
-open Fake.IO
-open iText.Kernel.Pdf.Canvas.Parser
 open iText.Kernel.Geom
-open iText.Kernel.Pdf.Xobject
 open iText.Kernel.Pdf.Canvas
-open System.IO
-open iText.Layout
-open System.Collections.Generic
-open iText.Kernel.Font
-open iText.Layout.Element
 open Shrimp.Pdf.Extensions
-open iText.Kernel.Pdf.Canvas.Parser.Data
-open System.Collections.Concurrent
-open iText.Kernel.Colors
 open System.Linq
 
 module Imposing =
@@ -30,21 +18,6 @@ module Imposing =
             { Length = mm 3.8
               Distance = mm 3.2
               Width = mm 0.2 }
-
-
-
-
-
-    /// HFilp : Horizontal flip
-    /// VFile: Vertical flip
-    /// FB: Front and Backgroup
-    [<RequireQualifiedAccess>]
-    type FlipWay =
-        | HFlip
-        | VFlip
-        | FB
-
-
 
     [<RequireQualifiedAccess>]
     type Sheet_PlaceTable =
@@ -81,6 +54,21 @@ module Imposing =
         | ColumnAutomatic of ColumnAutomaticFillingMode
         | RowAutomatic of RowAutomaticFillingMode
 
+
+    [<RequireQualifiedAccess>]
+    module FillingMode =
+        let (|ColNumsSpecific|_|) = function
+            | FillingMode.Numeric numericFillingMode ->
+                Some numericFillingMode.ColNums
+            | FillingMode.RowAutomatic rowAutomaticFillingMode -> Some rowAutomaticFillingMode.ColNums
+            | _ -> None
+
+
+        let (|RowNumSpecific|_|) = function
+            | FillingMode.Numeric numericFillingMode ->
+                Some numericFillingMode.RowNum
+            | FillingMode.ColumnAutomatic columnAutomaticFillingMode -> Some columnAutomaticFillingMode.RowNum
+            | _ -> None
 
     type _ImposingArguments =
         {
@@ -130,6 +118,9 @@ module Imposing =
             | uniqueValues, rowNum when List.exists (fun m -> m > 0) uniqueValues && rowNum > 0 ->
                 FillingMode.Numeric { ColNums = args.ColNums; RowNum = rowNum }
 
+            | [], _ ->
+                failwith "colNums cannot be empty"
+
             | _ -> failwith "Invalid token"
 
         member x.Value = args
@@ -138,51 +129,108 @@ module Imposing =
 
         static member Create (f) = new ImposingArguments(f)
 
-
+    /// coordinate origin is left top of table
+    /// y: top -> bottom --------0 -> tableHeight
     type ImposingCell = 
         { Page: PdfPage
           Size: FsSize
-          UseBleed: bool
-          Cropmark: Cropmark option
           X: float
           Y: float
-          Rotation: Rotation }
+          ImposingRow: ImposingRow }
+
+    with 
+        member private x.ImposingSheet: ImposingSheet = x.ImposingRow.ImposingSheet
+
+        member private x.ImposingDocument: ImposingDocument = x.ImposingSheet.ImposingDocument
+
+        member private x.SplitDocument = x.ImposingDocument.SplitDocument
+
+        member x.ImposingArguments: ImposingArguments = x.ImposingDocument.ImposingArguments
+        
+        member x.Cropmark = x.ImposingArguments.Value.Cropmark
+
+        member x.UseBleed = x.ImposingArguments.Value.UseBleed
+
+        member x.Rotation = x.ImposingArguments.Value.XObjectRotation
 
 
-    [<RequireQualifiedAccess>]
-    module ImposingCell =
-        let internal addToPdfCanvas (splitDocument: SplitDocument) (pdfCanvas: PdfCanvas) (cell: ImposingCell) =
-            let xObject = cell.Page.CopyAsFormXObject(splitDocument.Writer)
-            let xObjectContentBox = 
-                if cell.UseBleed
-                then 
-                    match PdfFormXObject.tryGetTrimBox xObject with 
-                    | Some trimBox -> trimBox
-                    | None -> cell.Page.GetActualBox()
-                else cell.Page.GetActualBox()
+        static member AddToPdfCanvas (cellContentAreas_ExtendByCropmarkDistance: Rectangle list) (pdfCanvas: PdfCanvas) (cell: ImposingCell) =
+            let addXObject (pdfCanvas: PdfCanvas) = 
+                let xObject = cell.Page.CopyAsFormXObject(cell.SplitDocument.Writer)
+                let xObjectContentBox = 
+                    if cell.UseBleed
+                    then 
+                        match PdfFormXObject.tryGetTrimBox xObject with 
+                        | Some trimBox -> trimBox
+                        | None -> cell.Page.GetActualBox()
+                    else cell.Page.GetActualBox()
 
-            let affineTransfromRecord: AffineTransformRecord =
-                { ScaleX = cell.Size.Width / xObjectContentBox.GetWidthF() 
-                  ScaleY = cell.Size.Height / xObjectContentBox.GetHeightF() 
-                  TranslateX = 0.
-                  TranslateY = 0. 
-                  ShearX = 0. 
-                  ShearY = 0. }
+                let scaleX = cell.Size.Width / xObjectContentBox.GetWidthF() 
+                let scaleY = cell.Size.Height / xObjectContentBox.GetHeightF() 
 
-            pdfCanvas.AddXObject(xObject, affineTransfromRecord)
+                let affineTransfromRecord: AffineTransformRecord =
+                    { ScaleX = scaleX
+                      ScaleY = scaleY
+                      TranslateX = cell.X - xObjectContentBox.GetXF() * scaleX
+                      TranslateY = -(cell.Size.Height + cell.Y) - xObjectContentBox.GetYF() * scaleY
+                      ShearX = 0. 
+                      ShearY = 0. }
 
+                pdfCanvas.AddXObject(xObject, affineTransfromRecord)
 
-    type ImposingRow(sheet: ImposingSheet) = 
+            let addCropmarks (pdfCanvas: PdfCanvas) =
+                match cell.Cropmark with 
+                | Some cropmark ->
+                    let height = cell.Size.Height
+
+                    let allCropmarkLines = 
+                        let x = cell.X
+                        let y = cell.Y
+                        let distance = cropmark.Distance
+                        let length = cropmark.Length
+                        let width = cell.Size.Width
+                        [
+                            x, y-distance, x, y-distance-length                             ///left top VLine
+                            x-distance, y, x-distance-length, y                             ///left top HLine
+                            x-distance, y+height, x-distance-length, y+height               ///left bottom VLine
+                            x, y+distance+height, x, y+distance+length+height               ///left bottom HLine
+                            x+width, y-distance, x+width, y-distance-length                 ///right top VLine
+                            x+distance+width, y, x+distance+length+width, y                 ///right top HLine
+                            x+distance+width, y+height, x+distance+length+width, y+height   ///right bottom VLine     
+                            x+width, y+distance+height, x+width, y+distance+length+height   ///right bottom HLine
+                        ] |> List.map (fun (x1, y1, x2 , y2) ->
+                            { Start = new Point(x1, y1); End = new Point(x2, y2) }
+                        )
+                    
+                    let interspatialCropmarkLines = 
+                        allCropmarkLines
+                        |> List.filter (fun l -> List.forall (fun cropamrkRedArea -> l.IsOutsideOf(cropamrkRedArea)) cellContentAreas_ExtendByCropmarkDistance)
+                    
+                    (pdfCanvas, interspatialCropmarkLines)
+                    ||> List.fold (fun (pdfCanvas: PdfCanvas) line ->
+                        pdfCanvas
+                            .MoveTo(line.Start.x, -(line.Start.y))
+                            .LineTo(line.End.x, -(line.End.y))
+                            .Stroke()
+                    )
+
+                | None -> pdfCanvas
+
+            pdfCanvas
+            |> addXObject
+            |> addCropmarks
+
+    and ImposingRow(sheet: ImposingSheet) = 
         let cells = ResizeArray<ImposingCell>()
         let mutable x = 0.
 
-        member private x.SplitDocument : SplitDocument = sheet.ImposingDocument.SplitDocument
-
         member private x.ImposingArguments : ImposingArguments  = sheet.ImposingDocument.ImposingArguments
 
-        member internal x.AddToCanvas (pdfCanvas: PdfCanvas) = 
+        member internal x.ImposingSheet = sheet
+
+        member internal x.AddToCanvas cellContentAreas_ExtendByCropmarkDistance (pdfCanvas: PdfCanvas) = 
             (pdfCanvas, cells)
-            ||> Seq.fold (ImposingCell.addToPdfCanvas x.SplitDocument)
+            ||> Seq.fold (ImposingCell.AddToPdfCanvas cellContentAreas_ExtendByCropmarkDistance)
 
 
         member internal this.Push(readerPage: PdfPage) =
@@ -194,12 +242,9 @@ module Imposing =
                   Size = match args.DesiredSizeOp with 
                           | Some size -> size 
                           | None -> FsSize.ofRectangle(readerPage.GetActualBox()) 
-
-                  UseBleed = args.UseBleed 
-                  Cropmark = args.Cropmark 
                   X = x
                   Y = sheet.Y
-                  Rotation = args.XObjectRotation }
+                  ImposingRow = this }
 
                   
             let addNewCell_UpdateState() =
@@ -207,22 +252,23 @@ module Imposing =
                 cells.Add(newCell)
                 true
 
-            match fillingMode with 
-            | FillingMode.Numeric numericFillingMode ->
-                if cells.Count = numericFillingMode.ColNums.[sheet.RowsCount] then
-                    false
-                else
-                    addNewCell_UpdateState()
 
-            | FillingMode.Automatic automaticFillingMode ->
-                let pageSize = Background.getPageSize automaticFillingMode.Background
-                if x + newCell.Size.Width + args.Margin.Left + args.Margin.Right > pageSize.Width then 
-                    false
-                else 
-                    addNewCell_UpdateState()
+            let willWidthExceedPageWidth = 
+                let pageSize = Background.getPageSize args.Background
+                newCell.X + newCell.Size.Width + args.Margin.Left + args.Margin.Right > pageSize.Width
 
+            if willWidthExceedPageWidth then false
+            else 
+                match fillingMode with 
+                | FillingMode.ColNumsSpecific colNums ->
+                    if cells.Count = colNums.[(sheet.RowsCount - 1) % colNums.Length] then
+                        false
+                    else
+                        addNewCell_UpdateState()
 
-            | _ -> failwith "Not implemented"
+                | _ -> addNewCell_UpdateState()
+
+        member internal this.Cells = cells
 
         member this.Height = 
             if cells.Count = 0 then 0.
@@ -236,10 +282,6 @@ module Imposing =
             match Seq.tryLast cells with 
             | Some cell -> cell.X + cell.Size.Width
             | None -> 0.
-
-        member this.GetClonedCells() =
-            cells 
-            |> List.ofSeq
 
 
 
@@ -260,95 +302,144 @@ module Imposing =
             let args = x.ImposingArguments.Value
             let fillingMode = x.ImposingArguments.FillingMode
 
-            let overflowResult =
+            let addNewRow_UpdateState_PushAgain() =
+                match Seq.tryLast rows with 
+                | None -> ()
+                | Some lastRow -> 
+                    y <- lastRow.Height + y + args.VSpaces.[(rows.Count - 1) % args.VSpaces.Length]
+
+                let newRow = new ImposingRow(x)
+                rows.Add(newRow)
+                x.Push(readerPage)
+
+
+            let willHeightExeedPageHeight =
+                let pageSize = Background.getPageSize args.Background
+
+                match Seq.tryLast rows with 
+                | Some row -> row.Height + y > pageSize.Height
+
+                | None -> false
+
+
+            let willRowNumExceedSpecificRowNumResult = 
                 match fillingMode with 
-                | FillingMode.Numeric numericFillingMode ->
-                    if rows.Count = numericFillingMode.RowNum 
-                    then Result.Error ([])
-                    else Result.Ok ()
+                | FillingMode.RowNumSpecific rowNum -> rows.Count - 1 = rowNum 
+                | _ -> false
 
-                | FillingMode.Automatic automaticFillingMode ->
-                    let pageSize = Background.getPageSize automaticFillingMode.Background
 
-                    match Seq.tryLast rows with 
-                    | Some row ->
-                        let lastRowHeight = row.Height
+            let removeLastRow_UpdateState() =
+                rows.RemoveAt(rows.Count - 1)
+                |> ignore
+                                
+                let newLastRow = rows.[rows.Count - 1]
+                y <- newLastRow.Cells.[0].Y
 
-                        if lastRowHeight + y > pageSize.Width 
-                        then 
-                            rows.Remove(row)
-                            |> ignore
-                            Result.Error (row.GetClonedCells())
-                        else Result.Ok ()
+            if willHeightExeedPageHeight 
+            then 
+                let lastRow = rows.Last()
+                let cells = lastRow.Cells
 
-                    | None -> Result.Ok()
+                if cells.Count = 1 
+                then
+                    cells.RemoveAt(cells.Count - 1)
+                else
+                    removeLastRow_UpdateState()
 
-                | _ -> failwith "Not implemented"
+                false
 
-            match overflowResult with 
-            | Result.Error _ -> overflowResult
-            | Result.Ok () ->
-                let addNewRow_UpdateState_PushAgain() =
-                    match Seq.tryLast rows with 
-                    | None -> ()
-                    | Some lastRow -> 
-                        y <- lastRow.Height + y + args.VSpaces.[rows.Count % args.VSpaces.Length]
+            elif willRowNumExceedSpecificRowNumResult 
+            then
+                removeLastRow_UpdateState()
 
-                    let newRow = new ImposingRow(x)
-                    rows.Add(newRow)
-                    x.Push(readerPage)
+                false
 
-                if rows.Count = 0 
-                then addNewRow_UpdateState_PushAgain()
-                else 
-                    let row = rows.Last()
-                    if row.Push(readerPage)
-                    then Result.Ok()
-                    else addNewRow_UpdateState_PushAgain()
+            elif rows.Count = 0 
+            then addNewRow_UpdateState_PushAgain()
+            else 
+                let row = rows.Last()
+                if row.Push(readerPage)
+                then true
+                else addNewRow_UpdateState_PushAgain()
+
+
 
 
         member internal x.Draw() =
+            let args = x.ImposingArguments.Value
+
             let newPage = x.SplitDocument.Writer.AddNewPage()
             
             let pdfCanvas = 
                 PdfCanvas(newPage)
 
+            let cellContentAreas_ExtendByCropmarkDistance = 
+                match args.Cropmark with 
+                | Some cropmark ->
+                    let cells =
+                        rows
+                        |> Seq.collect (fun row -> row.Cells)
+                    cells
+                    |> List.ofSeq
+                    |> List.map (fun cell ->
+                        let rect = Rectangle.create cell.X cell.Y cell.Size.Width cell.Size.Height
+                        Rectangle.applyMargin (Margin.Create (cropmark.Distance - tolerance)) rect
+                    )
+                | _ -> []
+
             (pdfCanvas, rows)
             ||> Seq.fold (fun pdfCanvas row -> 
-                row.AddToCanvas(pdfCanvas)
+                row.AddToCanvas cellContentAreas_ExtendByCropmarkDistance pdfCanvas
             )
             |> ignore
 
-
-        member x.Width =
-            let isSheetTrimmed = 
-                match x.ImposingArguments.Value.BackgroundOp with 
-                | None -> true
-                | Some backgrounp ->
-                    match backgrounp.TableAlignment with 
-                    | TableAlignment.Trimmed -> true
-                    | _ -> false
-
-
-        member x.Height =
-            match Seq.tryLast rows with 
-            | Some row -> row.Height 
-            | None -> 0.
+            let height = x.Height
 
 
 
+            PdfPage.setPageBox (PageBoxKind.AllBox) (Rectangle.create -args.Margin.Left -(height - args.Margin.Top) x.Width height) newPage
+            |> ignore
+
+
+        member x.TableWidth = 
+            let args = x.ImposingArguments.Value
+            match args.Sheet_PlaceTable with
+            | Sheet_PlaceTable.Trim_CenterTable ->
+                if rows.Count = 0 then 0.
+                else 
+                    rows
+                    |> Seq.map (fun row -> row.Width)
+                    |> Seq.max
+
+            | Sheet_PlaceTable.At _ ->
+                let pageSize = Background.getPageSize args.Background
+                pageSize.Width
+
+        member x.Width = 
+            let margin = x.ImposingArguments.Value.Margin
+            margin.Left + margin.Right + x.TableWidth
+
+
+        member x.TableHeight =
+            let args = x.ImposingArguments.Value
+            match args.Sheet_PlaceTable with
+            | Sheet_PlaceTable.Trim_CenterTable ->
+                match Seq.tryLast rows with 
+                | Some row -> row.Height + x.Y
+                | None -> 0.
+
+            | Sheet_PlaceTable.At _ ->
+                let pageSize = Background.getPageSize args.Background
+                pageSize.Height
+
+        member x.Height = 
+            let margin = x.ImposingArguments.Value.Margin
+            x.TableHeight + margin.Bottom + margin.Top
 
         member x.RowsCount = rows.Count 
 
-        member x.Margin = x.ImposingArguments.Value.Margin
-
-        member x.BackgroupOp = x.ImposingArguments.Value.BackgroundOp
-
-
-
+    /// Build() -> Draw()
     and ImposingDocument (splitDocument: SplitDocument, imposingArguments: ImposingArguments) =  
-      // The main constructor is 'private' and so users do not see it,
-      // it takes columns and calculates the maximal column length
         let sheets = new ResizeArray<ImposingSheet>()
             
         member x.SplitDocument: SplitDocument = splitDocument
@@ -356,7 +447,7 @@ module Imposing =
         member x.ImposingArguments: ImposingArguments = imposingArguments
 
         member x.Draw() =
-            if sheets.Count = 0 then failwith "cannot draw documents, tables is empty"
+            if sheets.Count = 0 then failwith "cannot draw documents, sheets is empty"
 
             for sheet in sheets do
                 sheet.Draw()
@@ -369,16 +460,10 @@ module Imposing =
             let reader = splitDocument.Reader
 
             for i = 1 to reader.GetNumberOfPages() do
-                let rec loop readerPages = 
-                    for readerPage in readerPages do 
-                        match sheets.Last().Push(readerPage) with 
-                        | Result.Ok _ -> ()
-                        | Result.Error cells ->
-                            cells 
-                            |> List.map (fun cell -> cell.Page)
-                            |> loop
-
                 let readerPage = reader.GetPage(i)
-                loop [readerPage]
+
+                while (not (sheets.Last().Push(readerPage))) do 
+                    sheets.Add(new ImposingSheet(x))
+
 
 

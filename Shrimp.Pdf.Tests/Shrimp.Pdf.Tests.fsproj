@@ -10,6 +10,7 @@
     <None Include="datas\*\*.pdf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <Compile Include="ManipulateTests.fs" />
     <Compile Include="ReuseTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

@@ -126,7 +126,7 @@ module DeviceRgb =
 
 [<RequireQualifiedAccess>]
 module DeviceCmyk =
-    let white = DeviceCmyk(0,0,0,0)
+    let WHITE = DeviceCmyk(0,0,0,0)
 
 [<RequireQualifiedAccess>]
 module Separation =
@@ -188,12 +188,12 @@ module Colors =
 
         colors.Distinct(comparer)
         
-    let contain c cs =
-        cs |> List.exists (Color.isValueEqual c)
+    let contain color colors =
+        colors |> List.exists (Color.isValueEqual color)
 
-    let except cs1 cs2 =
-        cs2 |> List.filter (fun c -> 
-            contain c cs1 
+    let except colors1 colors2 =
+        colors2 |> List.filter (fun c -> 
+            contain c colors1 
             |> not
         )
 
@@ -205,7 +205,7 @@ type PrintingColor =
 
 [<RequireQualifiedAccess>]
 module PrintingColor =
-    let black =
+    let BLACK =
         KnownColor.Black
         |> ColorCard.KnownColor
         |> PrintingColor.Single 
@@ -217,8 +217,8 @@ module PrintingColor =
             | _ -> false
         | _ -> false
 
-    let isCmyk dc =
-        match dc with 
+    let isCmyk printingColor =
+        match printingColor with 
         | PrintingColor.CMYK -> true
         | _ -> false
 

@@ -14,6 +14,7 @@ let allTests =
     testList "All Tests"
         [
             ReuseTests.reuseTests
+            ManipulateTests.manipulateTests
         ]
 
 [<EntryPoint>]

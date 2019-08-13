@@ -3,34 +3,33 @@
 open iText.Kernel.Pdf
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf.Canvas.Parser
-open iText.Kernel.Pdf.Canvas.Parser
-open iText.Kernel.Pdf.Canvas.Parser.Listener
-open System.Collections.Generic
-open iText.Kernel.Pdf
-open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf.Extensions
 open Listeners
-open System.IO
+open System.Collections.Generic
 
 
 
 type OperatorRange =
     { Operator: PdfLiteral 
-      Operands: seq<PdfObject> }
+      Operands: IList<PdfObject> }
 
 [<RequireQualifiedAccess>]
 module PdfCanvas =
     let writeOperatorRange (operatorRange: OperatorRange) (pdfCanvas: PdfCanvas) =
         let outputStream = pdfCanvas.GetContentStream().GetOutputStream()
-        for operand in operatorRange.Operands do
-            outputStream.Write(operand).WriteSpace()
-            |> ignore
+        let operands = operatorRange.Operands
+        for i = 0 to operands.Count - 1 do
+            let operand = operands.[i]
 
-        outputStream.Write(operatorRange.Operator).WriteNewLine() |> ignore
+            if i = operands.Count - 1 then 
+                outputStream.Write(operand).WriteNewLine()
+                |> ignore
+            else 
+                outputStream.Write(operand).WriteSpace()
+                |> ignore
 
-
-
+        pdfCanvas
 
 type internal CallbackableContentOperator (originalOperator) =
     member this.OriginalOperator: IContentOperator = originalOperator
@@ -123,18 +122,10 @@ module Selector =
         loop selector
 
 
-
-
-type FixArgs =
-    { RenderInfo: AbstractRenderInfo
-      OperatorRange: OperatorRange
-      Canvas: PdfCanvas }
-
-
 [<RequireQualifiedAccess>]
 type Modifier =
     | DropColor
-    | Fix of (FixArgs -> unit)
+    | Actions of (list<PdfCanvas -> PdfCanvas>)
 
 
 
@@ -147,7 +138,8 @@ type internal PdfCanvasEditor(selector: Selector, modifier: Modifier) =
     let mutable eventListener: FilteredEventListenerEx<AbstractRenderInfo> = null
 
     override this.InvokeOperatorRange (operatorRange: OperatorRange) =
-        match operatorRange.Operator.ToString() with 
+        let operatorName = operatorRange.Operator.ToString()
+        match operatorName with 
         | "f" | "F" | "f*" | "S" | "s" | "B" | "B*" | "b" | "b*" 
             when List.contains EventType.RENDER_PATH eventTypes ->
                 match modifier with
@@ -157,34 +149,26 @@ type internal PdfCanvasEditor(selector: Selector, modifier: Modifier) =
                             Operator = new PdfLiteral("n") }
 
                     PdfCanvas.writeOperatorRange newOperatorRange currentPdfCanvas
+                    |> ignore
 
-                | Modifier.Fix (fix) ->
-                    let pathRenderInfo = eventListener.CurrentRenderInfo
+                | Modifier.Actions (pdfCanvasActions) ->
+                    PdfCanvas.useCanvas currentPdfCanvas (pdfCanvasActions @ [PdfCanvas.writeOperatorRange operatorRange])
 
-                    let args =
-                        { RenderInfo = pathRenderInfo
-                          OperatorRange = operatorRange 
-                          Canvas = currentPdfCanvas }
-                    fix args
 
         | "Tj" | "TJ" when List.contains EventType.RENDER_TEXT eventTypes ->
                 match modifier with
                 | Modifier.DropColor ->
-                    currentPdfCanvas.SetTextRenderingMode(TextRenderingMode.INVISIBLE)
-                    |> ignore
+                    currentPdfCanvas.SetTextRenderingMode(TextRenderingMode.INVISIBLE) |> ignore
                     PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
 
-                | Modifier.Fix (fix) ->
-                    let pathRenderInfo = eventListener.CurrentRenderInfo
 
-                    let args =
-                        { RenderInfo = pathRenderInfo
-                          OperatorRange = operatorRange 
-                          Canvas = currentPdfCanvas }
-                    fix args
+                | Modifier.Actions (pdfCanvasActions) ->
+                    PdfCanvas.useCanvas currentPdfCanvas (pdfCanvasActions @ [PdfCanvas.writeOperatorRange operatorRange])
+
         | _ -> 
             PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-
+            |> ignore
 
     member this.EditContent(pdfCanvas: PdfCanvas, contentBytes: byte [], resources: PdfResources) =
         eventListener <- this.GetEventListener() :?> FilteredEventListenerEx<AbstractRenderInfo>  
@@ -195,9 +179,8 @@ type internal PdfCanvasEditor(selector: Selector, modifier: Modifier) =
         currentPdfCanvas.GetContentStream()
 
 
-
 [<RequireQualifiedAccess>]
-module PdfPage =
+module internal PdfPage =
     let modify (selector: Selector) (modifier: Modifier) (page: PdfPage) =
         let editor = new PdfCanvasEditor(selector, modifier)
 
@@ -232,3 +215,22 @@ module PdfPage =
             let fixedStream = loop resources pageContents
             page.Put(PdfName.Contents, fixedStream)
             |> ignore
+
+
+type IntegralDocument private (reader: string, writer: string) =
+    let reader = new PdfReader(reader)
+
+    let writer = new PdfWriter(writer)
+
+    let pdfDocument = new PdfDocument(reader, writer)
+
+    member x.Value = pdfDocument
+
+    static member Create(reader, writer) = new IntegralDocument(reader, writer)
+
+[<RequireQualifiedAccess>]
+module IntegralDocument =
+    let modify (selector: Selector) (modifier: Modifier) (document: IntegralDocument) =
+        for i = 1 to document.Value.GetNumberOfPages() do
+            let page = document.Value.GetPage(i)
+            PdfPage.modify selector modifier page

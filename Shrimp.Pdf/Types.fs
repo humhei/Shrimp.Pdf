@@ -1,21 +1,7 @@
 ﻿namespace Shrimp.Pdf
 open iText.Kernel.Pdf
-open System
-open Fake.IO
-open iText.Kernel.Pdf.Canvas.Parser
 open iText.Kernel.Geom
-open iText.Kernel.Pdf.Xobject
-open iText.Kernel.Pdf.Canvas
-open System.IO
-open iText.Layout
-open System.Collections.Generic
-open iText.Kernel.Font
-open iText.Layout.Element
 open Shrimp.Pdf.Extensions
-open iText.Kernel.Pdf.Canvas.Parser.Data
-open System.Collections.Concurrent
-open iText.Kernel.Colors
-open System.Linq
 
 
 
@@ -186,3 +172,4 @@ type SplitDocument private (reader: string, writer: string) =
 
 
              
+

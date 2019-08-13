@@ -80,7 +80,7 @@ module Resources =
                     let parser = new PdfDocumentContentParser(doc)
 
                     let paths = 
-                        PdfDocumentContentParser.parsePaths (2) (fun _ -> true) parser
+                        PdfDocumentContentParser.parsePaths 2 (fun _ -> true) parser
 
                     let path = paths |> Seq.exactlyOne
 

@@ -6,19 +6,13 @@ open Fake.IO
 module Reuses =
     open Shrimp.Pdf.Extensions
     
-    let impose (imposingArgument: ImposingArguments) =
-        fun (model: FlowModel) ->
-            let splitDocument =
-                SplitDocument.Create(model.File, Path.changeExtension "writer.pdf" model.File)
-            
-            let imposingDocument = new ImposingDocument(splitDocument, imposingArgument)
-
+    let impose (imposingArguments: ImposingArguments) =
+        fun (model: FlowModel) (splitDocument: SplitDocument) ->
+            let imposingDocument = new ImposingDocument(splitDocument, imposingArguments)
             imposingDocument.Build()
 
             imposingDocument.Draw()
 
-            splitDocument.Reader.Close()
-            splitDocument.Writer.Close()
             [model]
 
         |> Flow.Reuse

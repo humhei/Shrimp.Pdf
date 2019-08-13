@@ -103,7 +103,7 @@ module Position =
 [<RequireQualifiedAccess>]
 module StraightLine =
     /// http://www.navision-blog.de/blog/2008/12/02/calculate-the-intersection-of-two-lines-in-fsharp-2d/
-    let calcIntersection (line1: StraightLine) (line2: StraightLine) =
+    let intersection (line1: StraightLine) (line2: StraightLine) =
         let A,B,C,D = line1.Start,line1.End,line2.Start,line2.End
         let (Ax,Ay,Bx,By,Cx,Cy,Dx,Dy) =
             (A.x, A.y, B.x, B.y, C.x, C.y, D.x, D.y)
@@ -246,7 +246,7 @@ module Extensions =
             member line.IsCrossOf (rect: Rectangle) =
                 let rectLines = rect.ToStaightLines()
                 rectLines |> List.tryPick (fun sl ->
-                    StraightLine.calcIntersection sl line 
+                    StraightLine.intersection sl line 
                 )
                 |> function 
                     | Some _ -> true
@@ -264,7 +264,7 @@ module Extensions =
                 new Rectangle(x,y,width,height)
                 
             /// <param name="points" at least two unique points></param>
-            let createFromPoints (points: Point seq) =
+            let ofPoints (points: Point seq) =
                 let xs,ys = 
                     points 
                     |> Seq.map (fun p -> p.x,p.y) 
@@ -279,20 +279,20 @@ module Extensions =
 
 
             /// <param name="rects" at least one rectange></param>
-            let createFromRectangles (rects: Rectangle seq) =
+            let ofRectangles (rects: Rectangle seq) =
                 rects |> Seq.collect (fun rect ->
                     let x = rect.GetXF()
                     let y = rect.GetYF()
                     let top = rect.GetTopF()
                     let right = rect.GetRightF()
                     [Point(x,y);Point(top,right)]
-                ) |> createFromPoints
+                ) |> ofPoints
 
 
-            let asPdfArray (rect: Rectangle) =
+            let toPdfArray (rect: Rectangle) =
                 new PdfArray(rect)
 
-            let asStraightLines (rect: Rectangle) =
+            let toStraightLines (rect: Rectangle) =
                 let x = rect.GetXF()
                 let y = rect.GetYF()
                 let right = rect.GetRightF()
@@ -330,10 +330,8 @@ module Extensions =
                 Point(rect.GetXF(), rect.GetTopF())
 
 
-            let min (rect1: Rectangle) (rect2: Rectangle) =
-                if rect1.IsInsideOf(rect2)
-                then rect1
-                else rect2
+            let getIntersection (rect1: Rectangle) (rect2: Rectangle) =
+                rect1.GetIntersection(rect2)
 
             let equal (rect1: Rectangle) (rect2: Rectangle) =
                 rect1.GetXF() @= rect2.GetXF()
@@ -459,14 +457,14 @@ module Extensions =
                 let p2 = new Point (rect.GetRightF(),rect.GetTopF())
                 let p3 = new Point (rect.GetXF(),rect.GetTopF())
                 let p4 = new Point (rect.GetRightF(),rect.GetYF())
-                [p1; p2; p3 ;p4] |> List.map (fun p -> AffineTransform.transform p this) |> Rectangle.createFromPoints
+                [p1; p2; p3 ;p4] |> List.map (fun p -> AffineTransform.transform p this) |> Rectangle.ofPoints
 
             member this.InverseTransform(rect: Rectangle) = 
                 let p1 = new Point (rect.GetXF(),rect.GetYF())
                 let p2 = new Point (rect.GetRightF(),rect.GetTopF())
                 let p3 = new Point (rect.GetXF(),rect.GetTopF())
                 let p4 = new Point (rect.GetRightF(),rect.GetYF())
-                [p1; p2; p3 ;p4] |> List.map (fun p -> AffineTransform.inverseTransform p this) |> Rectangle.createFromPoints
+                [p1; p2; p3 ;p4] |> List.map (fun p -> AffineTransform.inverseTransform p this) |> Rectangle.ofPoints
     
         [<RequireQualifiedAccess>]
         module AffineTransformRecord =
@@ -512,7 +510,7 @@ module Extensions =
 
             let getActualBound ctm (subpath: Subpath) =
                 toActualPoints ctm subpath
-                |> Rectangle.createFromPoints
+                |> Rectangle.ofPoints
 
             let isNotEmpty (subpath: Subpath) =
                 let points = toRawPoints subpath
@@ -536,7 +534,7 @@ module Extensions =
                 |> List.collect (Subpath.toActualPoints ctm)
 
             let getBound (info: PathRenderInfo) =     
-                info |> toActualPoints |> Rectangle.createFromPoints
+                info |> toActualPoints |> Rectangle.ofPoints
 
             let isStrokeVisible (info: PathRenderInfo) =             
                 info.GetPath().GetSubpaths().Count <> 0
@@ -712,7 +710,7 @@ module Extensions =
                 xobject.GetBBox().ToRectangle()
 
             let setBBox (rect: Rectangle) (xobject:PdfFormXObject) =
-                xobject.SetBBox(rect |> Rectangle.asPdfArray)
+                xobject.SetBBox(rect |> Rectangle.toPdfArray)
 
             let tryGetTrimBox (xobject:PdfFormXObject) =
                 let rect = xobject.GetPdfObject().GetAsRectangle(PdfName.TrimBox)
@@ -767,9 +765,15 @@ module Extensions =
         module PdfCanvas = 
 
             /// saveState -> f -> restoreState
-            let useCanvas (canvas: #PdfCanvas) f =
+            let useCanvas (canvas: #PdfCanvas) fs =
                 canvas.SaveState() |> ignore
-                f(canvas)
+                
+                let canvas: #PdfCanvas = 
+                    (canvas, fs) 
+                    ||> List.fold (fun canvas f -> 
+                        f canvas
+                    )
+
                 canvas.RestoreState() |> ignore
 
             let setDashpattern (dashPattern: DashPattern) (canvas:PdfCanvas) =
@@ -806,7 +810,7 @@ module Extensions =
             member this.GetActualBox() = 
                 let crop = this.GetCropBox()
                 let media = this.GetMediaBox()
-                Rectangle.min crop media
+                Rectangle.getIntersection crop media
 
             member this.GetActualHeight() = this.GetActualBox().GetHeight() |> float
             member this.GetActualWidth() = this.GetActualBox().GetWidth() |> float
@@ -869,7 +873,7 @@ module Extensions =
                 | PageBoxKind.TrimBox -> page.GetTrimBox()
                 | PageBoxKind.CropBox -> page.GetCropBox()
                 | PageBoxKind.ActualBox ->
-                    Rectangle.min (getCropBox page) (getMediaBox page)
+                    Rectangle.getIntersection (getCropBox page) (getMediaBox page)
                 | _ -> failwith "Invalid token"
 
             let getActualBox (page: PdfPage) =
@@ -886,16 +890,15 @@ module Extensions =
         [<RequireQualifiedAccess>]
         module Canvas =
             open iText.Layout
-            open iText.Kernel.Colors
 
             let useCanvas (page: PdfPage) (rootArea: Rectangle) f =
                 let doc = page.GetDocument()
                 let pdfCanvas = new PdfCanvas(page)
-                PdfCanvas.useCanvas pdfCanvas (fun pdfCanvas ->
+                PdfCanvas.useCanvas pdfCanvas [fun pdfCanvas ->
                     let canvas = 
                         new Canvas(pdfCanvas,doc,rootArea,true)
                     f canvas
-                )
+                ]
 
             let useCanvasInPageBox (page: PdfPage) (pageBoxKind: PageBoxKind) f =
                 let bbox = PdfPage.getPageBox pageBoxKind page
