@@ -17,12 +17,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="reference.conf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <EmbeddedResource Include="reference.conf">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </EmbeddedResource>
     <None Include="Resources\Marks\*.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
+    <None Include="Resources\Fonts\*.otf">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+
     <None Include="Resources\Colors\*.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
@@ -35,6 +39,8 @@
     </None>
 
     <Compile Include="Resources.fs" />
+
+    <Compile Include="Fonts.fs" />
 
     <Compile Include="Marks.fs" />
     <Compile Include="ColorCard.fs" />
@@ -62,6 +68,10 @@
   <ItemGroup>
     <PackageReference Update="FSharp.Core" Version="4.7.0" />
     <PackageReference Update="System.ValueTuple" Version="4.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Resources\Fonts\" />
   </ItemGroup>
 
 </Project>

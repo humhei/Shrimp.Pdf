@@ -20,6 +20,8 @@ module internal Config =
     let private possibleFolders = 
         [ "../Assets"(*UWP*) ] 
 
+    type private AssemblyFinder = AssemblyFinder
+
     /// application.conf should be copied to target folder
     let private fallBackByApplicationConf config =
         let folder = System.IO.Path.GetDirectoryName(Assembly.GetEntryAssembly().Location)
@@ -40,13 +42,13 @@ module internal Config =
 
     let internal config = 
         ConfigurationFactory
-            .FromResource<StraightLine>("Shrimp.Pdf.reference.conf")
+            .FromResource<AssemblyFinder>("Shrimp.Pdf.reference.conf")
         |> fallBackByApplicationConf
 
 [<AutoOpen>]
 module Resources =
     open Fake.IO
-    let private resourceDirectory = 
+    let internal resourceDirectory = 
         Path.getFullName (config.GetString("shrimp.pdf.resourcesDirectory"))
 
 

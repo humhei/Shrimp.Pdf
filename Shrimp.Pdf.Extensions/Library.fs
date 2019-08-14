@@ -7,6 +7,75 @@ open Akka.Configuration
 open System.Reflection
 open System.IO
 open System
+open iText.Layout
+open iText.Kernel.Colors
+open iText.Layout.Properties
+open System.Collections.Concurrent
+open iText.Kernel.Pdf
+
+
+type RegisterableFont =
+    { PdfEncodings: string
+      Path: string 
+      FontFamily: string }
+
+[<AutoOpen>]
+module FontExtensions =
+    let private fontRegisterCache = new ConcurrentDictionary<string, RegisterableFont>()
+
+    type PdfFontFactory with
+        static member Register(registerableFont: RegisterableFont) =
+            fontRegisterCache.GetOrAdd(registerableFont.Path, fun path ->
+                PdfFontFactory.Register(path)
+                registerableFont
+            ) |> ignore
+
+        static member internal CreateFont(registerableFont: RegisterableFont) =
+            fontRegisterCache.GetOrAdd(registerableFont.Path, fun path ->
+                PdfFontFactory.Register(path)
+                registerableFont
+            ) |> ignore
+
+            PdfFontFactory.CreateRegisteredFont(registerableFont.FontFamily, registerableFont.PdfEncodings)
+
+[<RequireQualifiedAccess>]
+type PdfFontFactory =
+    | Registerable of RegisterableFont
+    /// See iText.IO.Font.Constants.StandardFonts
+    | StandardFonts of string
+
+
+[<RequireQualifiedAccess>]
+type Rotation =
+    | None = 0
+    | Clockwise = 1
+    | Counterclockwise = 2
+    | R180 = 3
+
+[<RequireQualifiedAccess>]
+module Rotation =
+    let getAngle = function
+        | Rotation.Clockwise  -> 90.
+        | Rotation.Counterclockwise -> -90.
+        | Rotation.R180 -> 180.
+        | Rotation.None -> 0.
+        | _ -> failwith "invalid token"
+
+
+
+type PdfDocumentWithCachedResources(reader: PdfReader, writer: PdfWriter) =
+    inherit PdfDocument(reader, writer)
+    let fontsCache = new ConcurrentDictionary<PdfFontFactory, PdfFont>()
+
+    member x.GetOrCreatePdfFont(fontFactory: PdfFontFactory) =
+        fontsCache.GetOrAdd((fontFactory), fun (fontFactory) ->
+            match fontFactory with 
+            | PdfFontFactory.StandardFonts fontName -> PdfFontFactory.CreateFont(fontName)
+            | PdfFontFactory.Registerable registerableFont ->
+                PdfFontFactory.CreateFont(registerableFont)
+        )
+
+
 
 
 type AffineTransformRecord =
@@ -39,10 +108,15 @@ type PageBoxKind =
     | AllBox = 3
 
 [<RequireQualifiedAccess>]
+type CanvasFontSize =
+    | Numeric of size: float
+    | OfRootArea of scale: float
+
+[<RequireQualifiedAccess>]
 type RelativePosition =
-    | Inbox 
-    | CrossBox
-    | OutBox
+    | Inbox = 0
+    | CrossBox = 1
+    | OutBox = 2
 
 type StraightLine =
     { Start: Point
@@ -76,28 +150,57 @@ with
 
 [<RequireQualifiedAccess>]
 module Position =
+
+    let (|LeftRange|_|) = function
+        | Position.LeftTop (x, y) 
+        | Position.LeftBottom (x, y) 
+        | Position.Left(x, y) -> Some (x, y)
+        | _ -> None
+
+    let (|BottomRange|_|) = function
+        | Position.LeftBottom (x, y)
+        | Position.RightBottom (x, y)
+        | Position.Bottom (x, y)-> Some (x, y)
+        | _ -> None
+
+    let (|TopRange|_|) = function
+        | Position.LeftTop (x, y) 
+        | Position.RightTop (x, y)
+        | Position.Top(x, y) -> Some (x, y)
+        | _ -> None
+
+    let (|RightRange|_|) = function
+        | Position.RightBottom (x, y) 
+        | Position.RightTop (x, y)
+        | Position.Right (x, y) -> Some (x, y)
+        | _ -> None
+
+    let (|XCenterRange|_|) = function
+        | Position.Center (x, y) 
+        | Position.Bottom (x, y) 
+        | Position.Top(x, y) -> Some (x, y)
+        | _ -> None
+
+    let (|YCenterRange|_|) = function
+        | Position.Center (x, y) 
+        | Position.Left (x, y) 
+        | Position.Right(x, y) -> Some (x, y)
+        | _ -> None
+
     let (|LeftEdge|_|) = function
-        | Position.LeftTop (0., _) 
-        | Position.LeftBottom (0., _) 
-        | Position.Left(0., _) -> Some ()
+        | LeftRange (0., _) -> Some ()
         | _ -> None
     
     let (|BottomEdge|_|) = function
-        | Position.LeftBottom (_, 0.)
-        | Position.RightBottom (_, 0.)
-        | Position.Bottom (_, 0.)-> Some ()
+        | BottomRange (_, 0.) -> Some ()
         | _ -> None
 
     let (|TopEdge|_|) = function
-        | Position.LeftTop (_, 0.) 
-        | Position.RightTop (_, 0.)
-        | Position.Top(_, 0.) -> Some ()
+        | TopRange (_, 0.) -> Some ()
         | _ -> None
 
     let (|RightEdge|_|) = function
-        | Position.RightBottom (0., _) 
-        | Position.RightTop (0., _)
-        | Position.Right (0., _) -> Some ()
+        | RightRange (0., _)  -> Some ()
         | _ -> None
 
 [<RequireQualifiedAccess>]
@@ -165,6 +268,11 @@ module Extensions =
                 ascender,descender
 
             /// float/pt
+            let calcLineHeightUnit (font: PdfFont) =
+                let (ascender, descender) = calcAscenderAndDescender font
+                float (ascender - descender) / TEXT_SPACE_COEFF
+
+            /// float/pt
             let calcLineWidthUnit (text: string) (font: PdfFont) =
                 let line = font.CreateGlyphLine(text)
                 let unit =
@@ -226,6 +334,24 @@ module Extensions =
                 elif this.IsOutsideOf(rect) then RelativePosition.OutBox
                 elif this.IsCrossOf(rect) then RelativePosition.CrossBox
                 else failwith "invalid token"
+
+            member rect.GetPoint(position: Position) =
+                let x = 
+                    match position with 
+                    | Position.XCenterRange (x, y) -> (rect.GetXF() + rect.GetRightF()) / 2. + x
+                    | Position.LeftRange (x, y) -> rect.GetXF() + x
+                    | Position.RightRange (x, y) -> rect.GetRightF() + x
+                    | _ -> failwith "Invalid token"
+
+
+                let y = 
+                    match position with 
+                    | Position.YCenterRange (x, y) -> (rect.GetBottomF() + rect.GetTopF()) / 2. + y
+                    | Position.TopRange (x, y) -> rect.GetTopF() + y
+                    | Position.BottomRange (x, y) -> rect.GetBottomF() + y
+                    | _ -> failwith "Invalid token"
+
+                new Point (x, y)
 
 
         and Point with
@@ -392,6 +518,8 @@ module Extensions =
                     let y = rect.GetYF()
                     create x y width height
                 | _ -> failwith "not implemented"
+
+
 
 
         [<RequireQualifiedAccess>]
@@ -680,7 +808,6 @@ module Extensions =
 
 
 
-
         [<RequireQualifiedAccess>]
         module CanvasGraphicsState =
             let getDashPattern (gs: CanvasGraphicsState) =
@@ -748,8 +875,6 @@ module Extensions =
                 | _ -> failwith "Invalid token"
 
 
-
-
         type PdfCanvas with 
             member x.AddXObject(xObject: PdfXObject, affineTransformRecord: AffineTransformRecord) =
                 x.AddXObject
@@ -765,14 +890,10 @@ module Extensions =
         module PdfCanvas = 
 
             /// saveState -> f -> restoreState
-            let useCanvas (canvas: #PdfCanvas) fs =
+            let useCanvas (canvas: #PdfCanvas) f =
                 canvas.SaveState() |> ignore
                 
-                let canvas: #PdfCanvas = 
-                    (canvas, fs) 
-                    ||> List.fold (fun canvas f -> 
-                        f canvas
-                    )
+                let canvas: #PdfCanvas = f canvas
 
                 canvas.RestoreState() |> ignore
 
@@ -797,13 +918,79 @@ module Extensions =
             let showText (text: string) (canvas:PdfCanvas)=
                 canvas.ShowText(text)
 
+            let rectangle (rect: Rectangle) (canvas: PdfCanvas) =
+                canvas.Rectangle(rect)
+
             let setTextRendingMode textRenderingMode (canvas:PdfCanvas)=
                 canvas.SetTextRenderingMode(textRenderingMode)
 
-            let addXObject (xobject: PdfFormXObject) (x: float) (y: float) (canvas: PdfCanvas) =
-                canvas.AddXObject (xobject,float32 x,float32 y)
+            let addXObject (xobject: PdfFormXObject) (affineTransformRecord: AffineTransformRecord) (canvas: PdfCanvas) =
+                canvas.AddXObject (xobject, affineTransformRecord)
+
+            let beginText (canvas: PdfCanvas) =
+                canvas.BeginText()
+
+            let endText (canvas: PdfCanvas) =
+                canvas.EndText()
 
 
+        [<RequireQualifiedAccess>]
+        module Canvas =
+
+            let addText 
+                (text: string) 
+                (fsPdfFont: PdfFontFactory) 
+                (canvasFontSize: CanvasFontSize) 
+                (fontColor: Color) 
+                (fontRotation: Rotation)
+                (position: Position) 
+                (canvas: Canvas) = 
+
+                    let pdfFont =
+                        let pdfDocument = canvas.GetPdfDocument() :?> PdfDocumentWithCachedResources
+                        pdfDocument.GetOrCreatePdfFont(fsPdfFont)
+
+                    let fontSize =
+                        match canvasFontSize with 
+                        | CanvasFontSize.Numeric size -> size
+                        | CanvasFontSize.OfRootArea (scale) ->
+                            let rect = canvas.GetRootArea()
+                            let lineHeightUnit = PdfFont.calcLineHeightUnit (pdfFont)
+                            let lineWidthUnit = PdfFont.calcLineWidthUnit text pdfFont
+            
+                            let fontSize =
+                                let horizonalMaxSize = rect.GetWidthF() / lineWidthUnit
+                                let verticalMaxSize = rect.GetHeightF() / lineHeightUnit
+                                (min verticalMaxSize horizonalMaxSize) * scale
+
+                            fontSize
+
+
+                    let point =
+                        let rootArea = canvas.GetRootArea()
+                        rootArea.GetPoint(position)
+
+                    let horizonal = 
+                        match position with 
+                        | Position.XCenterRange (x, y) -> TextAlignment.CENTER
+                        | Position.LeftRange (x, y) -> TextAlignment.LEFT
+                        | Position.RightRange (x, y) -> TextAlignment.RIGHT
+                        | _ -> failwith "Invalid token"
+
+
+                    let vertical = 
+                        match position with 
+                        | Position.YCenterRange (x, y) -> VerticalAlignment.MIDDLE
+                        | Position.TopRange (x, y) -> VerticalAlignment.TOP
+                        | Position.BottomRange (x, y) -> VerticalAlignment.BOTTOM
+                        | _ -> failwith "Invalid token"
+
+
+                    canvas
+                        .SetFont(pdfFont)
+                        .SetFontColor(fontColor)
+                        .SetFontSize(float32 fontSize)
+                        .ShowTextAligned(text,float32 point.x,float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getAngle fontRotation))
 
                 
         type PdfPage with
@@ -813,7 +1000,18 @@ module Extensions =
                 Rectangle.getIntersection crop media
 
             member this.GetActualHeight() = this.GetActualBox().GetHeight() |> float
+
             member this.GetActualWidth() = this.GetActualBox().GetWidth() |> float
+
+            member page.GetPageBox(pageBoxKind) =
+                match pageBoxKind with 
+                | PageBoxKind.TrimBox -> page.GetTrimBox()
+                | PageBoxKind.CropBox -> page.GetCropBox()
+                | PageBoxKind.ActualBox ->
+                    page.GetActualBox()
+
+                | _ -> failwith "Invalid token"
+
 
         [<RequireQualifiedAccess>]
         module PdfPage = 
@@ -869,12 +1067,7 @@ module Extensions =
                 page.GetActualBox().GetHeight() |> float
 
             let getPageBox pageBoxKind (page: PdfPage) =
-                match pageBoxKind with 
-                | PageBoxKind.TrimBox -> page.GetTrimBox()
-                | PageBoxKind.CropBox -> page.GetCropBox()
-                | PageBoxKind.ActualBox ->
-                    Rectangle.getIntersection (getCropBox page) (getMediaBox page)
-                | _ -> failwith "Invalid token"
+                page.GetPageBox(pageBoxKind)
 
             let getActualBox (page: PdfPage) =
                 page.GetActualBox()
@@ -887,19 +1080,4 @@ module Extensions =
                         yield doc.GetPage(i)
                 ]
 
-        [<RequireQualifiedAccess>]
-        module Canvas =
-            open iText.Layout
 
-            let useCanvas (page: PdfPage) (rootArea: Rectangle) f =
-                let doc = page.GetDocument()
-                let pdfCanvas = new PdfCanvas(page)
-                PdfCanvas.useCanvas pdfCanvas [fun pdfCanvas ->
-                    let canvas = 
-                        new Canvas(pdfCanvas,doc,rootArea,true)
-                    f canvas
-                ]
-
-            let useCanvasInPageBox (page: PdfPage) (pageBoxKind: PageBoxKind) f =
-                let bbox = PdfPage.getPageBox pageBoxKind page
-                useCanvas page bbox f

@@ -37,21 +37,7 @@ module Rectangle =
         let height = rect.GetHeightF() + top + bottom
         Rectangle.create x y width height
 
-[<RequireQualifiedAccess>]
-type Rotation =
-    | None = 0
-    | Clockwise = 1
-    | Counterclockwise = 2
-    | R180 = 3
 
-[<RequireQualifiedAccess>]
-module Rotation =
-    let getDegree = function
-        | Rotation.Clockwise  -> 90.
-        | Rotation.Counterclockwise -> -90.
-        | Rotation.R180 -> 180.
-        | Rotation.None -> 0.
-        | _ -> failwith "invalid token"
 
 
 type FsSize =

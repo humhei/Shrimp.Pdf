@@ -270,7 +270,7 @@ module Imposing =
 
         member internal this.Cells = cells
 
-        member this.Height = 
+        member internal this.Height = 
             if cells.Count = 0 then 0.
             else
                 cells
@@ -278,7 +278,7 @@ module Imposing =
                 |> Seq.max
 
 
-        member this.Width =
+        member internal this.Width =
             match Seq.tryLast cells with 
             | Some cell -> cell.X + cell.Size.Width
             | None -> 0.
@@ -299,8 +299,10 @@ module Imposing =
         member internal x.Y = y
 
         member internal x.Push(readerPage: PdfPage) =
+
             let args = x.ImposingArguments.Value
             let fillingMode = x.ImposingArguments.FillingMode
+
 
             let addNewRow_UpdateState_PushAgain() =
                 match Seq.tryLast rows with 
@@ -401,7 +403,7 @@ module Imposing =
             |> ignore
 
 
-        member x.TableWidth = 
+        member internal x.TableWidth = 
             let args = x.ImposingArguments.Value
             match args.Sheet_PlaceTable with
             | Sheet_PlaceTable.Trim_CenterTable ->
@@ -415,12 +417,12 @@ module Imposing =
                 let pageSize = Background.getPageSize args.Background
                 pageSize.Width
 
-        member x.Width = 
+        member internal x.Width = 
             let margin = x.ImposingArguments.Value.Margin
             margin.Left + margin.Right + x.TableWidth
 
 
-        member x.TableHeight =
+        member internal x.TableHeight =
             let args = x.ImposingArguments.Value
             match args.Sheet_PlaceTable with
             | Sheet_PlaceTable.Trim_CenterTable ->
@@ -432,7 +434,7 @@ module Imposing =
                 let pageSize = Background.getPageSize args.Background
                 pageSize.Height
 
-        member x.Height = 
+        member internal x.Height = 
             let margin = x.ImposingArguments.Value.Margin
             x.TableHeight + margin.Bottom + margin.Top
 
@@ -453,17 +455,38 @@ module Imposing =
                 sheet.Draw()
 
         member x.Build() =
+            let args = x.ImposingArguments.Value
             sheets.Clear()
 
             sheets.Add(new ImposingSheet(x))
 
             let reader = splitDocument.Reader
 
-            for i = 1 to reader.GetNumberOfPages() do
-                let readerPage = reader.GetPage(i)
+            let readerPages = PdfDocument.getPages reader
+            let rec loop readerPages (sheet: ImposingSheet) =
+                match readerPages with 
+                | readerPage :: t ->
+                    if sheet.Push(readerPage) 
+                    then 
+                        if args.IsRepeated 
+                        then loop readerPages sheet
+                        else loop t sheet
+                    else 
 
-                while (not (sheets.Last().Push(readerPage))) do 
-                    sheets.Add(new ImposingSheet(x))
+                        match args.IsRepeated, t.Length with 
+                        | true, i when i > 0 ->
+                            let newSheet = new ImposingSheet(x)
+                            sheets.Add(newSheet)
+                            loop t newSheet
 
+                        | true, 0 -> ()
 
+                        | false, _ -> 
+                            let newSheet = new ImposingSheet(x)
+                            sheets.Add(newSheet)
+                            loop readerPages newSheet
 
+                        | _ -> failwith "Invalid token"
+                | [] -> ()
+
+            loop readerPages (sheets.Last())
