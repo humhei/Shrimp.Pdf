@@ -1,9 +1,11 @@
-﻿namespace Shrimp.Pdf
+﻿
+namespace Shrimp.Pdf
 open iText.Kernel.Pdf
 open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf.Extensions
 open System.Linq
+open System
 
 module Imposing =
 
@@ -26,14 +28,14 @@ module Imposing =
 
     [<RequireQualifiedAccess>]
     type Background =
-        | PageSize of FsPageSize
+        | Size of FsSize
         | File of string
 
     [<RequireQualifiedAccess>]
     module Background =
-        let getPageSize (backgrounp: Background) =
+        let getSize (backgrounp: Background) =
             match backgrounp with 
-            | Background.PageSize pageSize -> pageSize
+            | Background.Size pageSize -> pageSize
             | _ -> failwith "Not implemented"
 
     type NumericFillingMode =
@@ -70,6 +72,55 @@ module Imposing =
             | FillingMode.ColumnAutomatic columnAutomaticFillingMode -> Some columnAutomaticFillingMode.RowNum
             | _ -> None
 
+
+    type PageOrientation =
+        | Landscape  = 0
+        | Portrait = 1
+
+    type DesiredPageOrientation =
+        | Landscape  = 0
+        | Portrait = 1
+        | Automatic = 2
+
+
+    type FsPageSize = private FsPageSize of size: FsSize * orientation: PageOrientation
+    with 
+        member x.PageOrientation = 
+            let (FsPageSize (size, pageOrientation)) = x
+            pageOrientation
+
+        member x.Size = 
+            let (FsPageSize (size, pageOrientation)) = x
+            size
+
+        member x.Width = x.Size.Width
+
+        member x.Height = x.Size.Height
+
+
+    [<RequireQualifiedAccess>]
+    module FsPageSize =
+        let create (size: FsSize) pageOrientation =
+            match pageOrientation with 
+            | PageOrientation.Landscape -> 
+                FsPageSize (FsSize.landscape size, pageOrientation)
+            | PageOrientation.Portrait ->
+                FsPageSize (FsSize.portrait size, pageOrientation)
+            | _ -> failwith "Invalid token"
+
+
+
+
+    [<RequireQualifiedAccess>]
+    module DesiredPageOrientation =
+
+        let (|PageOrientation|_|) = function
+            | DesiredPageOrientation.Landscape -> Some PageOrientation.Landscape
+            | DesiredPageOrientation.Portrait -> Some PageOrientation.Portrait
+            | DesiredPageOrientation.Automatic -> None
+            | _ -> failwith "Invalid token"
+
+
     type _ImposingArguments =
         {
             ColNums: int list
@@ -80,15 +131,15 @@ module Imposing =
             Margin: Margin
             UseBleed: bool
             Background: Background
+            DesiredPageOrientation: DesiredPageOrientation
             Sheet_PlaceTable: Sheet_PlaceTable
             XObjectRotation: Rotation
             DesiredSizeOp: FsSize option
             IsRepeated: bool
         }
 
-    type ImposingArguments private (f: _ImposingArguments -> _ImposingArguments) =
-        
-        let args = 
+    with 
+        static member DefaultValue =
             {
                 ColNums = [0]
                 RowNum = 0
@@ -98,36 +149,47 @@ module Imposing =
                 Margin = Margin.Create(0.)
                 UseBleed = false
                 XObjectRotation = Rotation.None
-                Background = Background.PageSize FsPageSize.A4
+                Background = Background.Size FsSize.A4
                 Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable
                 DesiredSizeOp = None
                 IsRepeated = false
-            } |> f
-        
-        let fillingMode =
-            match List.distinct args.ColNums, args.RowNum with
-            | [0], 0 ->
-                FillingMode.Automatic
+                DesiredPageOrientation = DesiredPageOrientation.Automatic
+            }
 
-            | uniqueValues, 0 when List.exists (fun m -> m > 0) uniqueValues ->
-                FillingMode.RowAutomatic { ColNums =  args.ColNums }
+    type ImposingArguments = private ImposingArguments of fillingMode: FillingMode * value: _ImposingArguments
+    with 
+        member x.Value =
+            let (ImposingArguments (fillingMode, value)) = x
+            value
 
-            | [0], rowNum when rowNum > 0 ->
-                FillingMode.ColumnAutomatic { RowNum =  args.RowNum }
+        member x.FillingMode = 
+            let (ImposingArguments (fillingMode, value)) = x
+            fillingMode
 
-            | uniqueValues, rowNum when List.exists (fun m -> m > 0) uniqueValues && rowNum > 0 ->
-                FillingMode.Numeric { ColNums = args.ColNums; RowNum = rowNum }
+        static member Create(mapping: _ImposingArguments -> _ImposingArguments) = 
+            let args = mapping _ImposingArguments.DefaultValue
 
-            | [], _ ->
-                failwith "colNums cannot be empty"
+            let fillingMode =
+                match List.distinct args.ColNums, args.RowNum with
+                | [0], 0 ->
+                    FillingMode.Automatic
 
-            | _ -> failwith "Invalid token"
+                | uniqueValues, 0 when List.exists (fun m -> m > 0) uniqueValues ->
+                    FillingMode.RowAutomatic { ColNums =  args.ColNums }
 
-        member x.Value = args
+                | [0], rowNum when rowNum > 0 ->
+                    FillingMode.ColumnAutomatic { RowNum =  args.RowNum }
 
-        member x.FillingMode = fillingMode
+                | uniqueValues, rowNum when List.exists (fun m -> m > 0) uniqueValues && rowNum > 0 ->
+                    FillingMode.Numeric { ColNums = args.ColNums; RowNum = rowNum }
 
-        static member Create (f) = new ImposingArguments(f)
+                | [], _ ->
+                    failwith "colNums cannot be empty"
+
+                | _ -> failwith "Invalid token"
+
+            ImposingArguments(fillingMode, args)
+
 
     /// coordinate origin is left top of table
     /// y: top -> bottom --------0 -> tableHeight
@@ -228,6 +290,8 @@ module Imposing =
 
         member internal x.ImposingSheet = sheet
 
+        member private x.PageSize = sheet.PageSize
+
         member internal x.AddToCanvas cellContentAreas_ExtendByCropmarkDistance (pdfCanvas: PdfCanvas) = 
             (pdfCanvas, cells)
             ||> Seq.fold (ImposingCell.AddToPdfCanvas cellContentAreas_ExtendByCropmarkDistance)
@@ -254,7 +318,7 @@ module Imposing =
 
 
             let willWidthExceedPageWidth = 
-                let pageSize = Background.getPageSize args.Background
+                let pageSize = this.PageSize
                 newCell.X + newCell.Size.Width + args.Margin.Left + args.Margin.Right > pageSize.Width
 
             if willWidthExceedPageWidth then false
@@ -285,7 +349,12 @@ module Imposing =
 
 
 
-    and ImposingSheet(imposingDocument: ImposingDocument) =
+    and ImposingSheet(imposingDocument: ImposingDocument, pageOrientation: PageOrientation) =
+        
+        let pageSize = 
+            let size = Background.getSize imposingDocument.ImposingArguments.Value.Background
+            FsPageSize.create (size) pageOrientation
+
         let rows = ResizeArray<ImposingRow>()
 
         let mutable y = 0.
@@ -293,6 +362,8 @@ module Imposing =
         member private x.SplitDocument : SplitDocument = imposingDocument.SplitDocument
 
         member private x.ImposingArguments : ImposingArguments  = imposingDocument.ImposingArguments
+
+        member internal x.PageSize: FsPageSize = pageSize
 
         member internal x.ImposingDocument: ImposingDocument = imposingDocument
 
@@ -302,7 +373,6 @@ module Imposing =
 
             let args = x.ImposingArguments.Value
             let fillingMode = x.ImposingArguments.FillingMode
-
 
             let addNewRow_UpdateState_PushAgain() =
                 match Seq.tryLast rows with 
@@ -315,53 +385,46 @@ module Imposing =
                 x.Push(readerPage)
 
 
-            let willHeightExeedPageHeight =
-                let pageSize = Background.getPageSize args.Background
-
-                match Seq.tryLast rows with 
-                | Some row -> row.Height + y > pageSize.Height
-
-                | None -> false
-
-
-            let willRowNumExceedSpecificRowNumResult = 
-                match fillingMode with 
-                | FillingMode.RowNumSpecific rowNum -> rows.Count - 1 = rowNum 
-                | _ -> false
-
-
-            let removeLastRow_UpdateState() =
-                rows.RemoveAt(rows.Count - 1)
-                |> ignore
-                                
-                let newLastRow = rows.[rows.Count - 1]
-                y <- newLastRow.Cells.[0].Y
-
-            if willHeightExeedPageHeight 
-            then 
-                let lastRow = rows.Last()
-                let cells = lastRow.Cells
-
-                if cells.Count = 1 
-                then
-                    cells.RemoveAt(cells.Count - 1)
-                else
-                    removeLastRow_UpdateState()
-
-                false
-
-            elif willRowNumExceedSpecificRowNumResult 
-            then
-                removeLastRow_UpdateState()
-
-                false
-
-            elif rows.Count = 0 
+            if rows.Count = 0 
             then addNewRow_UpdateState_PushAgain()
             else 
                 let row = rows.Last()
                 if row.Push(readerPage)
-                then true
+                then 
+                    let removeLastRow_UpdateState() =
+                        rows.RemoveAt(rows.Count - 1)
+                        |> ignore
+                                
+                        let newLastRow = rows.[rows.Count - 1]
+                        y <- newLastRow.Cells.[0].Y
+
+                    let heightExeedPageHeight =
+                        match Seq.tryLast rows with 
+                        | Some row -> row.Height + y + args.Margin.Top + args.Margin.Bottom > pageSize.Height
+
+                        | None -> false
+
+                    let rowNumExceedSpecificRowNumResult = 
+                        match fillingMode with 
+                        | FillingMode.RowNumSpecific rowNum -> rows.Count > rowNum 
+                        | _ -> false
+
+                    if heightExeedPageHeight 
+                    then
+                        let lastRow = rows.Last()
+                        let cells = lastRow.Cells
+
+                        if cells.Count = 1 
+                        then
+                            cells.RemoveAt(cells.Count - 1)
+                        removeLastRow_UpdateState()
+
+                        false
+                    elif rowNumExceedSpecificRowNumResult 
+                    then
+                        removeLastRow_UpdateState()
+                        false
+                    else true
                 else addNewRow_UpdateState_PushAgain()
 
 
@@ -414,7 +477,6 @@ module Imposing =
                     |> Seq.max
 
             | Sheet_PlaceTable.At _ ->
-                let pageSize = Background.getPageSize args.Background
                 pageSize.Width
 
         member internal x.Width = 
@@ -431,7 +493,6 @@ module Imposing =
                 | None -> 0.
 
             | Sheet_PlaceTable.At _ ->
-                let pageSize = Background.getPageSize args.Background
                 pageSize.Height
 
         member internal x.Height = 
@@ -449,7 +510,7 @@ module Imposing =
         member x.ImposingArguments: ImposingArguments = imposingArguments
 
         member x.Draw() =
-            if sheets.Count = 0 then failwith "cannot draw documents, sheets is empty"
+            if sheets.Count = 0 then failwith "cannot draw documents, sheets is empty, please invoke Build() first"
 
             for sheet in sheets do
                 sheet.Draw()
@@ -458,35 +519,61 @@ module Imposing =
             let args = x.ImposingArguments.Value
             sheets.Clear()
 
-            sheets.Add(new ImposingSheet(x))
-
             let reader = splitDocument.Reader
 
+
+
             let readerPages = PdfDocument.getPages reader
-            let rec loop readerPages (sheet: ImposingSheet) =
+
+            let rec produceSheet readerPages (sheet: ImposingSheet) =
                 match readerPages with 
                 | readerPage :: t ->
                     if sheet.Push(readerPage) 
                     then 
                         if args.IsRepeated 
-                        then loop readerPages sheet
-                        else loop t sheet
+                        then produceSheet readerPages sheet
+                        else produceSheet t sheet
                     else 
 
                         match args.IsRepeated, t.Length with 
                         | true, i when i > 0 ->
-                            let newSheet = new ImposingSheet(x)
-                            sheets.Add(newSheet)
-                            loop t newSheet
+                            sheet, t
 
-                        | true, 0 -> ()
+                        | true, 0 -> sheet, []
 
                         | false, _ -> 
-                            let newSheet = new ImposingSheet(x)
-                            sheets.Add(newSheet)
-                            loop readerPages newSheet
+                            sheet, readerPages
 
                         | _ -> failwith "Invalid token"
-                | [] -> ()
+                | [] -> sheet, []
 
-            loop readerPages (sheets.Last())
+
+            let rec produceSheets (readerPages: PdfPage list) (sheets: ImposingSheet list) =
+                if readerPages.Length = 0 then sheets
+                else
+                    match args.DesiredPageOrientation with 
+                    | DesiredPageOrientation.PageOrientation pageOrientation ->
+                        let producedSheet, leftPages = 
+                            produceSheet readerPages (new ImposingSheet(x, pageOrientation))
+                        produceSheets leftPages (producedSheet :: sheets)
+
+                    | DesiredPageOrientation.Automatic ->
+                        let producedSheet, leftPages = 
+                            let producedSheet1, leftPages1 = 
+                                produceSheet readerPages (new ImposingSheet(x, PageOrientation.Landscape))
+
+                            let producedSheet2, leftPages2 = 
+                                produceSheet readerPages (new ImposingSheet(x, PageOrientation.Portrait))
+                        
+                            if leftPages1.Length >= leftPages2.Length 
+                            then producedSheet2, leftPages2
+                            else producedSheet1, leftPages1
+
+                        produceSheets leftPages (producedSheet :: sheets)
+
+                    | _ -> failwith "Invalid token"
+
+
+            let producedSheets = produceSheets readerPages []
+
+            sheets.AddRange(List.rev producedSheets)

@@ -2,17 +2,18 @@
 
 open iText.Kernel.Pdf
 open iText.Kernel.Pdf.Canvas
-open iText.Kernel.Pdf.Canvas.Parser
-open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf.Extensions
-open Listeners
 open System.Collections.Generic
 open FParsec.CharParsers
 open FParsec
-open iText.Kernel.Colors
+open iText.Kernel.Pdf
+open iText.Kernel.Pdf.Canvas
+open iText.Kernel.Pdf.Canvas.Parser
+open iText.Kernel.Pdf.Canvas.Parser.Data
+open Shrimp.Pdf.Extensions
 open iText.Layout
 open Shrimp.Pdf
-
+open Listeners
 
 type OperatorRange =
     { Operator: PdfLiteral 
@@ -34,195 +35,6 @@ module PdfCanvas =
                 |> ignore
 
         pdfCanvas
-
-type internal CallbackableContentOperator (originalOperator) =
-    member this.OriginalOperator: IContentOperator = originalOperator
-
-    interface IContentOperator with 
-        member this.Invoke(processor,operator,operands) =
-            let processor = processor :?> OperatorRangeCallbackablePdfCanvasProcessor
-            let operatorName = operator.ToString()
-            if operatorName <> "Do" then 
-                try 
-                    this.OriginalOperator.Invoke(processor, operator, operands)
-                with ex ->
-                    if ex.Message = "Dictionary doesn't have supported font data." 
-                    then
-                        printfn "Skip checking MM font %A" operator
-                        let size = (operands.[1]) :?> PdfNumber
-                        let size = size.FloatValue()
-                        processor.GetGraphicsState().SetFontSize(size)
-
-                    else failwithf "%A" ex
-
-            processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
-
-and internal OperatorRangeCallbackablePdfCanvasProcessor(listener) =
-    inherit PdfCanvasProcessor(listener)
-    abstract member InvokeOperatorRange: OperatorRange -> unit
-
-    default this.InvokeOperatorRange(operatorRange) = ()
-
-    override this.RegisterContentOperator(operatorString: string , operator: IContentOperator) : IContentOperator =
-        let wrapper = new CallbackableContentOperator(operator)
-        let formOperator = base.RegisterContentOperator(operatorString, wrapper)
-        match formOperator with 
-        | :? CallbackableContentOperator as wrapper -> wrapper.OriginalOperator
-        | _ -> formOperator
-
-
-[<RequireQualifiedAccess>]
-type RenderInfoSelector = 
-    | Path of (PathRenderInfo -> bool)
-    | Text of (TextRenderInfo -> bool)
-    | AND of RenderInfoSelector list
-    | OR of RenderInfoSelector list
-
-
-[<RequireQualifiedAccess>]
-module Selector =
-    let toEventTypes selector =
-        let rec loop selector =
-            match selector with 
-            | RenderInfoSelector.Path _ -> [EventType.RENDER_PATH]
-            | RenderInfoSelector.Text _ -> [EventType.RENDER_TEXT]
-            | RenderInfoSelector.AND selectors ->
-                selectors
-                |> List.collect(loop)
-
-            | RenderInfoSelector.OR selectors ->
-                selectors
-                |> List.collect(loop)
-
-        loop selector
-        |> List.distinct
-
-    let toRenderInfoPredication (selector) =
-        let rec loop selector =
-            match selector with 
-            | RenderInfoSelector.Path prediate -> 
-                fun (renderInfo: AbstractRenderInfo) ->
-                    match renderInfo with 
-                    | :? PathRenderInfo as pathRenderInfo ->
-                        prediate pathRenderInfo
-                    | _ -> false
-
-            | RenderInfoSelector.Text prediate -> 
-                fun (renderInfo: AbstractRenderInfo) ->
-                    match renderInfo with 
-                    | :? TextRenderInfo as textRenderInfo ->
-                        prediate textRenderInfo
-                    | _ -> false
-
-            | RenderInfoSelector.AND selectors ->
-                fun (renderInfo: AbstractRenderInfo) ->
-                    selectors |> List.forall (fun selector -> loop selector renderInfo)
-                
-
-            | RenderInfoSelector.OR selectors ->
-                fun (renderInfo: AbstractRenderInfo) ->
-                    selectors |> List.exists (fun selector -> loop selector renderInfo)
-
-        loop selector
-
-
-[<Struct>]
-type _SelectionModifierAddNewArguments =
-    { CurrentRenderInfo: AbstractRenderInfo }
-
-[<RequireQualifiedAccess>]
-type SelectionModifier =
-    | DropColor
-    | AddNew of (_SelectionModifierAddNewArguments -> list<PdfCanvas -> PdfCanvas>)
-    | Modify of (list<PdfCanvas -> PdfCanvas>)
-
-
-type internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionModifier) =
-    inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(Selector.toEventTypes selector, Selector.toRenderInfoPredication selector))
-    
-    let eventTypes = Selector.toEventTypes selector
-    
-    let mutable currentPdfCanvas = null
-    let mutable eventListener: FilteredEventListenerEx<AbstractRenderInfo> = null
-
-    override this.InvokeOperatorRange (operatorRange: OperatorRange) =
-        let operatorName = operatorRange.Operator.ToString()
-        let (|Path|_|) operatorName =
-            match operatorName with 
-            | "f" | "F" | "f*" | "S" | "s" | "B" | "B*" | "b" | "b*" 
-                when List.contains EventType.RENDER_PATH eventTypes-> Some ()
-            | _ -> None
-
-        let (|Text|_|) operatorName =
-            match operatorName with 
-            | "Tj" | "TJ" when List.contains EventType.RENDER_TEXT eventTypes ->
-                Some ()
-            | _ -> None
-
-        let (|PathOrText|_|) operatorName =
-            match operatorName with 
-            | Path _ -> Some ()
-            | Text _ -> Some ()
-            | _ -> None
-
-        match operatorName with 
-        | Path ->
-            match modifier with
-            | SelectionModifier.DropColor ->
-                let newOperatorRange = 
-                    { operatorRange with 
-                        Operator = new PdfLiteral("n") }
-
-                PdfCanvas.writeOperatorRange newOperatorRange currentPdfCanvas
-                |> ignore
-            | _ -> ()
-
-        | Text ->
-            match modifier with
-            | SelectionModifier.DropColor ->
-                PdfCanvas.useCanvas currentPdfCanvas (fun pdfCanvas ->
-                    pdfCanvas.SetTextRenderingMode(TextRenderingMode.INVISIBLE) |> ignore
-                    PdfCanvas.writeOperatorRange operatorRange pdfCanvas
-                )
-                |> ignore
-            | _ -> ()
-
-        | _ -> ()
-
-
-        match operatorName with 
-        | PathOrText ->
-            match modifier with
-                | SelectionModifier.Modify (pdfCanvasActions) ->
-                    PdfCanvas.useCanvas currentPdfCanvas (fun canvas ->
-                        (canvas, (pdfCanvasActions @ [PdfCanvas.writeOperatorRange operatorRange]))
-                        ||> List.fold(fun canvas action ->
-                            action canvas 
-                        )
-                    )
-                | SelectionModifier.AddNew addNew -> 
-                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas |> ignore
-                    PdfCanvas.useCanvas currentPdfCanvas (fun canvas ->
-                        let pdfCanvasActions = addNew { CurrentRenderInfo = eventListener.CurrentRenderInfo }
-                        (canvas, (pdfCanvasActions))
-                        ||> List.fold(fun canvas action ->
-                            action canvas 
-                        )
-                    )
-
-                    ()
-                | _ -> ()
-        | _ -> 
-            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-            |> ignore
-
-    member this.EditContent(pdfCanvas: PdfCanvas, contentBytes: byte [], resources: PdfResources) =
-        eventListener <- this.GetEventListener() :?> FilteredEventListenerEx<AbstractRenderInfo>  
-        currentPdfCanvas <- pdfCanvas
-
-        base.ProcessContent(contentBytes, resources)
-
-        currentPdfCanvas.GetContentStream()
 
 
 type Begin = Begin of int
@@ -272,6 +84,45 @@ type PageSelector =
     | Expr of PageSelectorExpr
 
 
+
+
+type internal CallbackableContentOperator (originalOperator) =
+    member this.OriginalOperator: IContentOperator = originalOperator
+
+    interface IContentOperator with 
+        member this.Invoke(processor,operator,operands) =
+            let processor = processor :?> OperatorRangeCallbackablePdfCanvasProcessor
+            let operatorName = operator.ToString()
+            if operatorName <> "Do" then 
+                try 
+                    this.OriginalOperator.Invoke(processor, operator, operands)
+                with ex ->
+                    if ex.Message = "Dictionary doesn't have supported font data." 
+                    then
+                        printfn "Skip checking MM font %A" operator
+                        let size = (operands.[1]) :?> PdfNumber
+                        let size = size.FloatValue()
+                        processor.GetGraphicsState().SetFontSize(size)
+
+                    else failwithf "%A" ex
+
+            processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
+
+and internal OperatorRangeCallbackablePdfCanvasProcessor(listener) =
+    inherit PdfCanvasProcessor(listener)
+    abstract member InvokeOperatorRange: OperatorRange -> unit
+
+    default this.InvokeOperatorRange(operatorRange) = ()
+
+    override this.RegisterContentOperator(operatorString: string , operator: IContentOperator) : IContentOperator =
+        let wrapper = new CallbackableContentOperator(operator)
+        let formOperator = base.RegisterContentOperator(operatorString, wrapper)
+        match formOperator with 
+        | :? CallbackableContentOperator as wrapper -> wrapper.OriginalOperator
+        | _ -> formOperator
+
+
+
 [<AutoOpen>]
 module Extensions =
 
@@ -299,6 +150,129 @@ module Extensions =
             | PageSelector.Expr expr -> pdfDocument.GetPageNumbers(expr)
             | PageSelector.All -> [1..numberOfPages]
 
+
+
+
+[<Struct>]
+type _SelectionModifierAddNewArguments =
+    { CurrentRenderInfo: AbstractRenderInfo }
+
+[<Struct>]
+type _SelectionModifierModifyArguments =
+    { Close: OperatorRange }
+
+[<RequireQualifiedAccess>]
+type SelectionModifier =
+    | DropColor
+    | AddNew of (_SelectionModifierAddNewArguments -> list<PdfCanvas -> PdfCanvas>)
+    | Modify of (_SelectionModifierModifyArguments -> list<PdfCanvas -> PdfCanvas>)
+
+
+type internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionModifier) =
+    inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(RenderInfoSelector.toEventTypes selector, RenderInfoSelector.toRenderInfoPredication selector))
+    
+    let eventTypes = RenderInfoSelector.toEventTypes selector
+    
+    let mutable currentPdfCanvas = null
+    let mutable eventListener: FilteredEventListenerEx<AbstractRenderInfo> = null
+
+
+
+    override this.InvokeOperatorRange (operatorRange: OperatorRange) =
+        let operatorName = operatorRange.Operator.ToString()
+        let (|Path|_|) operatorName =
+            match operatorName with 
+            | "f" | "F" | "f*" | "S" | "s" | "B" | "B*" | "b" | "b*" 
+                when List.contains EventType.RENDER_PATH eventTypes-> Some ()
+            | _ -> None
+
+        let (|Text|_|) operatorName =
+            match operatorName with 
+            | "Tj" | "TJ" when List.contains EventType.RENDER_TEXT eventTypes ->
+                Some ()
+            | _ -> None
+
+        let (|PathOrText|_|) operatorName =
+            match operatorName with 
+            | Path _ -> Some ()
+            | Text _ -> Some ()
+            | _ -> None
+
+        match operatorName with 
+        | PathOrText ->
+            match eventListener.CurrentRenderInfoStatus with 
+            | CurrentRenderInfoStatus.Skiped -> 
+                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                |> ignore
+
+            | CurrentRenderInfoStatus.Selected ->
+                match operatorName with 
+                | Path ->
+                    match modifier with
+                    | SelectionModifier.DropColor ->
+                        let newOperatorRange = 
+                            { operatorRange with 
+                                Operator = new PdfLiteral("n")
+                                Operands = ResizeArray [new PdfLiteral("n") :> PdfObject]}
+
+                        PdfCanvas.writeOperatorRange newOperatorRange currentPdfCanvas
+                        |> ignore
+                    | _ -> ()
+
+                | Text ->
+                    match modifier with
+                    | SelectionModifier.DropColor ->
+                        PdfCanvas.useCanvas currentPdfCanvas (fun pdfCanvas ->
+                            pdfCanvas.SetTextRenderingMode(TextRenderingMode.INVISIBLE) |> ignore
+                            PdfCanvas.writeOperatorRange operatorRange pdfCanvas
+                        )
+                        |> ignore
+                    | _ -> ()
+
+                | _ -> ()
+
+
+                match operatorName with 
+                | PathOrText ->
+                    match modifier with
+                        | SelectionModifier.Modify (modify) ->
+                            PdfCanvas.useCanvas currentPdfCanvas (fun canvas ->
+                                let pdfCanvasActions = modify { Close = operatorRange }
+                                (canvas, pdfCanvasActions)
+                                ||> List.fold(fun canvas action ->
+                                    action canvas 
+                                )
+                            )
+                        | SelectionModifier.AddNew addNew -> 
+                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas |> ignore
+                            PdfCanvas.useCanvas currentPdfCanvas (fun canvas ->
+                                let pdfCanvasActions = addNew { CurrentRenderInfo = eventListener.CurrentRenderInfo }
+                                (canvas, (pdfCanvasActions))
+                                ||> List.fold(fun canvas action ->
+                                    action canvas 
+                                )
+                            )
+
+                            ()
+                        | _ -> ()
+                | _ -> 
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
+            | _ -> failwith "Invalid token"
+        | _ ->
+            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+            |> ignore
+    member this.EditContent(pdfCanvas: PdfCanvas, contentBytes: byte [], resources: PdfResources) =
+        eventListener <- this.GetEventListener() :?> FilteredEventListenerEx<AbstractRenderInfo>  
+        currentPdfCanvas <- pdfCanvas
+
+        base.ProcessContent(contentBytes, resources)
+
+        currentPdfCanvas.GetContentStream()
+
+
+
+
 [<RequireQualifiedAccess>]
 module internal PdfPage =
     let modify (renderInfoSelector: RenderInfoSelector) (modifier: SelectionModifier) (page: PdfPage) =
@@ -320,11 +294,11 @@ module internal PdfPage =
                     )
                     loop resources s
                 else
-                    failwith "No implemented"
+                    failwith "Not implemented"
 
             | :? PdfDictionary as map ->
-                failwith "No implemented"
-            | _ -> failwith "No implemented"
+                failwith "Not implemented"
+            | _ -> failwith "Not implemented"
 
         let pageContents = page.GetPdfObject().Get(PdfName.Contents)
 
@@ -338,9 +312,6 @@ module internal PdfPage =
 
 
 type IntegralDocument private (reader: string, writer: string) =
-    let reader = new PdfReader(reader)
-
-    let writer = new PdfWriter(writer)
 
     let pdfDocument = new PdfDocumentWithCachedResources(reader, writer)
 
@@ -351,25 +322,12 @@ type IntegralDocument private (reader: string, writer: string) =
 
 [<RequireQualifiedAccess>]
 module IntegralDocument =
-    let modify (pageSelector: PageSelector) (renderInfoSelector: RenderInfoSelector) (selectionModifier: SelectionModifier) (document: IntegralDocument) =
+    let modify (pageSelector: PageSelector) (renderInfoSelectorFactory: PdfPage -> RenderInfoSelector) (selectionModifier: SelectionModifier) (document: IntegralDocument) =
         let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
         for i = 1 to document.Value.GetNumberOfPages() do
             if List.contains i selectedPageNumbers then
                 let page = document.Value.GetPage(i)
+                let renderInfoSelector = renderInfoSelectorFactory page
                 PdfPage.modify renderInfoSelector selectionModifier page
 
 
-
-    let addNew (pageSelector: PageSelector) (pageBoxKind: PageBoxKind) (actions: list<Canvas -> Canvas>) (document: IntegralDocument) =
-
-        let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
-        for i = 1 to document.Value.GetNumberOfPages() do
-            if List.contains i selectedPageNumbers then
-                let page = document.Value.GetPage(i)
-
-                let canvas = new Canvas(page, page.GetPageBox(pageBoxKind))
-                (canvas, actions)
-                ||> List.fold(fun pdfCanvas action ->
-                    action pdfCanvas
-                ) 
-                |> ignore

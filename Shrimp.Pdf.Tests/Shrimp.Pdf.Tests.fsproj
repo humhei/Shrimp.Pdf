@@ -6,11 +6,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="datas\" />
+    <Folder Include="datas\real samples\" />
     <None Include="datas\*\*.pdf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <Compile Include="Types.fs" />
+    <Compile Include="FileOperationTests.fs" />
+    <Compile Include="RealSamplesTest.fs" />
     <Compile Include="ManipulateTests.fs" />
     <Compile Include="ReuseTests.fs" />
     <Compile Include="Program.fs" />

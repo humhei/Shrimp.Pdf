@@ -55,30 +55,18 @@ module FsSize =
         { Width = rect.GetWidthF() 
           Height = rect.GetHeightF() }
 
-type FsPageSize = FsPageSize of FsSize
-with 
-    member x.Size = 
-        let (FsPageSize size) = x
-        size
+    let landscape (size: FsSize) =
+        if size.Width >= size.Height then size
+        else
+            { Width = max size.Width size.Height
+              Height = min size.Width size.Height }
 
-    member x.Width = 
-        let (FsPageSize size) = x
-        size.Width
+    let portrait (size: FsSize) =
+        if size.Height >= size.Width then size
+        else
+            { Width = min size.Width size.Height
+              Height = max size.Width size.Height }
 
-    member x.Height = x.Size.Height
-
-[<RequireQualifiedAccess>]
-module FsPageSize =
-    let create width height = FsPageSize (FsSize.create width height)
-
-
-    let landscape (size: FsPageSize) =
-        { Width = max size.Width size.Height
-          Height = min size.Width size.Height }
-
-    let portrait (size: FsPageSize) =
-        { Width = min size.Width size.Height
-          Height = max size.Width size.Height }
 
     let rotate (rotation: Rotation) size = 
         match rotation with 
@@ -89,7 +77,9 @@ module FsPageSize =
             { Height = size.Width
               Width = size.Height }
         | _ -> failwith "Invalid token"
-        
+
+
+
     let clockwise size = 
         rotate Rotation.Clockwise size
 
@@ -98,9 +88,8 @@ module FsPageSize =
         let height = pageSize.GetHeightF()
         create width height
 
-    let toPageSize (fsPageSize: FsPageSize) =
-        new PageSize(float32 fsPageSize.Width,float32 fsPageSize.Height)
-
+    let toPageSize (size: FsSize) =
+        new PageSize(float32 size.Width,float32 size.Height)
 
 
     let A0 = ofPageSize PageSize.A0
@@ -112,11 +101,6 @@ module FsPageSize =
     let A3 = ofPageSize PageSize.A3
 
     let A4 = ofPageSize PageSize.A4
-
-[<RequireQualifiedAccess>]
-module PageSize =
-    let ofFsPageSize (fsPageSize: FsPageSize) =
-        FsPageSize.toPageSize fsPageSize
 
 
 type ContentResizeMode =
@@ -144,11 +128,16 @@ module PdfPage =
         | _ -> failwith "not implemented"
 
 
-
-type SplitDocument private (reader: string, writer: string) =
+type ReaderDocument (reader: string) =
     let reader = new PdfDocument(new PdfReader(reader))
 
-    let writer = new PdfDocument(new PdfWriter(writer))
+    member x.Reader = reader
+
+
+type SplitDocument (reader: string, writer: string) =
+    let reader = new PdfDocument(new PdfReader(reader))
+
+    let writer = new PdfDocumentWithCachedResources(writer)
 
     member x.Reader = reader
 

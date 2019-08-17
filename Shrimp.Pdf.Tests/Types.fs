@@ -15,5 +15,5 @@ open System.IO
 let runWithBackup path =
     let newPath = Path.changeExtension ".tests.pdf" path
     File.Copy(path, newPath, true)
-    run newPath
+    run { UserState = (); File = newPath }
 

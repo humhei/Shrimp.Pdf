@@ -11,6 +11,7 @@ open iText.Kernel.Pdf.Canvas.Parser
 open Shrimp.Pdf.Parser
 open iText.Kernel.Colors
 open iText.Kernel.Pdf.Colorspace
+open Extensions
 
 
 //open Shrimp.Pdf.Parser
@@ -49,7 +50,7 @@ module internal Config =
 module Resources =
     open Fake.IO
     let internal resourceDirectory = 
-        Path.getFullName (config.GetString("shrimp.pdf.resourcesDirectory"))
+        Path.GetFullPath (config.GetString("shrimp.pdf.resourcesDirectory"))
 
 
     [<RequireQualifiedAccess>]
@@ -82,8 +83,8 @@ module Resources =
                     let parser = new PdfDocumentContentParser(doc)
 
                     let paths = 
-                        PdfDocumentContentParser.parsePaths 2 (fun _ -> true) parser
-
+                        PdfDocumentContentParser.parse 2 (RenderInfoSelector.Path (fun _ -> true)) parser
+                        |> Seq.choose AbstractRenderInfo.asPathRenderInfo
                     let path = paths |> Seq.exactlyOne
 
                     path.GetFillColor()

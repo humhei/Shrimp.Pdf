@@ -14,9 +14,12 @@ let allTests =
     testList "All Tests"
         [
             ReuseTests.reuseTests
+            FileOperationTests.fileOperationTests
             ManipulateTests.manipulateTests
+            RealSampleTests.realSamplesTests
         ]
 
 [<EntryPoint>]
 let main argv =
     runTests testConfig allTests
+    Console.Read()
