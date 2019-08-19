@@ -32,7 +32,7 @@ module Reuses =
             imposingDocument.Build()
 
             imposingDocument.Draw()
-            (flowModel.UserState, imposingArguments, imposingDocument)
+            (imposingArguments, imposingDocument)
         |> Reuse
 
 
@@ -57,7 +57,7 @@ module Reuses =
         |> Reuse
 
     let duplicatePages (pageSelector: PageSelector) (copiedNumber: int)  =
-        if copiedNumber < 0 then failwithf "copied number %d should be bigger than 0" copiedNumber
+        if copiedNumber <= 0 then failwithf "copied number %d should be bigger than 0" copiedNumber
 
         fun flowModel (splitDocument: SplitDocument) ->
             let pageNumSequence = 
@@ -100,7 +100,7 @@ module Reuses =
                 let selector = renderInfoSelectorFactory readerPage
                 let infos = PdfDocumentContentParser.parse i selector parser
                 for info in infos do
-                    let bound = AbstractRenderInfo.getBound info
+                    let bound = AbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth info
                     let writer = splitDocument.Writer
                     let writerPageResource = readerPage.CopyTo(writer)
                     PdfPage.setPageBox PageBoxKind.AllBox bound writerPageResource |> ignore

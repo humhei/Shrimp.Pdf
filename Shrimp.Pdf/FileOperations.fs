@@ -8,24 +8,24 @@ open iText.Kernel.Pdf.Canvas.Parser
 open iText.Kernel.Pdf
 open System.IO
 
-[<RequireQualifiedAccess>]
-type FileOperationOutputDirectoryOptions =
-    | ReaderDirectoryPath
-    | CustomDirectoryPath of string
-
-type DocumentSplitArguments =
-    { PageNumPerDocument: int 
-      OutputDirectory: FileOperationOutputDirectoryOptions
-      Override: bool }
-with 
-    static member DefalutValue =
-        { PageNumPerDocument = 1 
-          OutputDirectory = FileOperationOutputDirectoryOptions.ReaderDirectoryPath 
-          Override =  true }
-
-
 
 module FileOperations =
+
+    [<RequireQualifiedAccess>]
+    type FileOperationOutputDirectoryOptions =
+        | ReaderDirectoryPath
+        | CustomDirectoryPath of string
+
+    type DocumentSplitArguments =
+        { PageNumPerDocument: int 
+          OutputDirectory: FileOperationOutputDirectoryOptions
+          Override: bool }
+    with 
+        static member DefalutValue =
+            { PageNumPerDocument = 1 
+              OutputDirectory = FileOperationOutputDirectoryOptions.ReaderDirectoryPath 
+              Override =  true }
+
 
     let splitDocumentToMany (f: DocumentSplitArguments -> DocumentSplitArguments)  =
         let args = f DocumentSplitArguments.DefalutValue

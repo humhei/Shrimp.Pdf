@@ -31,18 +31,41 @@ with
 
     /// internal use
     /// using <+> instead
-    static member Bind (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'newUserState2>) =
+    static member Bind (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: IntegralDocument) ->
             let middleUserState = manipulate1.Value flowModel document
             manipulate2.Value {File = flowModel.File; UserState = middleUserState} document
         |> Manipulate
 
+    /// internal use
+    /// using <++> instead
+    static member Bind_TupleUserState (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
+        fun flowModel (document: IntegralDocument) ->
+            let middleUserState: 'middleUserState = manipulate1.Value flowModel document
+            middleUserState, manipulate2.Value {File = flowModel.File; UserState = middleUserState} document
+        |> Manipulate
+
+    /// internal use
+    /// using <.+> instead
+    static member Bind_FstUserState (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
+        fun flowModel (document: IntegralDocument) ->
+            let middleUserState: 'middleUserState = manipulate1.Value flowModel document
+            manipulate2.Value {File = flowModel.File; UserState = middleUserState} document |> ignore
+            middleUserState
+        |> Manipulate
+
+    /// internal use
+    /// using ||>> instead
     member x.TransformUserState (mapping) =
         fun userState document ->
             x.Value userState document
             |> mapping
         |> Manipulate
 
+[<RequireQualifiedAccess>]
+module Manipulate =
+    /// followed by <++> or <.+> to rediscover userState
+    let dummy = Manipulate(fun model doc -> model.UserState)
 
 type FileOperation<'oldUserState, 'newUserState> = 
     FileOperation of (FlowModel<'oldUserState> -> ReaderDocument -> FlowModel<'newUserState> list)
@@ -96,24 +119,62 @@ with
 
     /// internal use
     /// using <+> instead
-    static member Bind (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'newUserState2>) =
+    static member Bind (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
         fun flowModel ->
             let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModel, flow1) 
 
             let newFlowModels = 
                 middleFlowModels
                 |> List.collect (fun middleFlowModel ->
-                    Flow<'middleUserState, 'newUserState2>.Run (middleFlowModel, flow2) 
+                    Flow<'middleUserState, 'newUserState>.Run (middleFlowModel, flow2) 
                 )
             newFlowModels
         |> Flow.Transform
 
+
+    /// internal use
+    /// using <++> instead
+    static member Bind_TuplingUserState (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
+        fun flowModel ->
+            let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModel, flow1) 
+
+            let newFlowModels = 
+                middleFlowModels
+                |> List.collect (fun middleFlowModel ->
+                    Flow<'middleUserState, 'modifiedUserState>.Run (middleFlowModel, flow2) 
+                    |> List.map (fun flowModel ->
+                        { File = flowModel.File; UserState = middleFlowModel.UserState, flowModel.UserState }
+                    )
+                )
+            newFlowModels
+        |> Flow.Transform
+
+
+    /// internal use
+    /// using <.+> instead
+    static member Bind_FstUserState (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
+        fun flowModel ->
+            let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModel, flow1) 
+
+            let newFlowModels = 
+                middleFlowModels
+                |> List.collect (fun middleFlowModel ->
+                    Flow<'middleUserState, 'modifiedUserState>.Run (middleFlowModel, flow2) 
+                    |> List.map (fun flowModel ->
+                        { File = flowModel.File; UserState = middleFlowModel.UserState }
+                    )
+                )
+            newFlowModels
+        |> Flow.Transform
+
+    /// internal use
+    /// using ||>> instead
     member x.TransformUserState mapping  =
         fun flowModel ->
-                Flow<_, _>.Run(flowModel, x) 
-                |> List.map (fun newFlowModel ->
-                    { File = newFlowModel.File; UserState = mapping flowModel.UserState}
-                )
+            Flow<_, _>.Run(flowModel, x) 
+            |> List.map (fun newFlowModel ->
+                { File = newFlowModel.File; UserState = mapping flowModel.UserState}
+            )
         |> Flow.Transform 
 
 [<AutoOpen>]
@@ -129,3 +190,8 @@ module Operators =
         ((^a or ^b): (static member Bind: ^a * ^b -> ^c) (flow1, flow2))
 
 
+    let inline (<++>) (flow1: ^a) (flow2: ^b) = 
+        ((^a or ^b): (static member Bind_TupleUserState: ^a * ^b -> ^c) (flow1, flow2))
+
+    let inline (<.+>) (flow1: ^a) (flow2: ^b) = 
+        ((^a or ^b): (static member Bind_FstUserState: ^a * ^b -> ^c) (flow1, flow2))

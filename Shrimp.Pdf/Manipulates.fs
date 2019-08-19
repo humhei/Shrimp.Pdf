@@ -46,9 +46,10 @@ module Manipulates =
 
     type PageModifingArguments<'userState> =
         { UserState: 'userState
-          Page: PdfPage }
+          Page: PdfPage
+          PageNum: int }
 
-    let modifyPage (pageSelector: PageSelector) (renderInfoSelectorFactory: PdfPage -> RenderInfoSelector) operator  = 
+    let modifyPage (pageSelector: PageSelector) (renderInfoSelectorFactory: PageModifingArguments<_> -> RenderInfoSelector) operator  = 
         fun (flowModel: FlowModel<_>) (document: IntegralDocument) ->
             let document = document.Value
             let parser = new PdfDocumentContentParser(document)
@@ -60,12 +61,35 @@ module Manipulates =
             |> List.choose(fun (i, page) ->
                 let pageNum = (i + 1)
                 if List.contains pageNum selectedPageNumbers then
-                    let renderInfoSelector = renderInfoSelectorFactory page
+                    let renderInfoSelector = 
+                        renderInfoSelectorFactory 
+                            { UserState = flowModel.UserState;
+                              Page = page
+                              PageNum = pageNum }
                     let infos = PdfDocumentContentParser.parse pageNum renderInfoSelector parser
                     operator 
                         { UserState = flowModel.UserState;
-                          Page = page }
+                          Page = page
+                          PageNum = pageNum }
                         infos 
                 else None
             )
         |> Manipulate
+
+    let trimToVisible pageSelector =
+        modifyPage 
+            pageSelector
+            (fun _ -> 
+                RenderInfoSelector.OR 
+                    [ RenderInfoSelector.Path PathRenderInfo.isVisible
+                      RenderInfoSelector.Text TextRenderInfo.isVisible ]
+            )
+            (fun args renderInfos ->
+                let bound = 
+                    renderInfos
+                    |> Seq.map (AbstractRenderInfo.getBound BoundGettingOptions.WithStrokeWidth)
+                    |> Rectangle.ofRectangles
+                args.Page.SetActualBox(bound)
+                |> ignore
+                None
+            ) ||>> ignore

@@ -4,6 +4,66 @@ open iText.Kernel.Pdf.Canvas.Parser.Listener
 open System.Collections.Generic
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf.Extensions
+open iText.Kernel.Geom
+open iText.Kernel.Pdf.Canvas
+open System.Reflection
+
+[<AutoOpen>]
+module private Reflection =
+    let private gs_fieldInfo = typeof<AbstractRenderInfo>.GetField("gs", BindingFlags.NonPublic ||| BindingFlags.Instance)
+    type AbstractRenderInfo with 
+        member this.GetInnerGS() =
+            let value = gs_fieldInfo.GetValue(this) 
+            value :?> ParserGraphicsState
+
+type ParserGraphicsStatePreservation(source: ParserGraphicsState) =
+    inherit CanvasGraphicsState(source)
+    let clippingPath =
+        match source.GetClippingPath()  with 
+        | null -> None
+        | path -> Some path
+
+    member this.ClippingPath = clippingPath
+
+type internal PathRenderInfoPreservation(pathRenderInfo: PathRenderInfo) =
+    inherit PathRenderInfo(new Stack<_>(pathRenderInfo.GetCanvasTagHierarchy()), pathRenderInfo.GetInnerGS(), pathRenderInfo.GetPath(), pathRenderInfo.GetOperation())
+    let mutable graphicsStateIsPreserved = false
+
+    override this.PreserveGraphicsState() =
+        this.CheckGraphicsState();
+        this.gs <- new ParserGraphicsStatePreservation(this.gs :?> ParserGraphicsState)
+        graphicsStateIsPreserved <- true
+
+    override this.GetGraphicsState() =
+        this.CheckGraphicsState()
+        if graphicsStateIsPreserved 
+        then this.gs 
+        else (new ParserGraphicsStatePreservation(this.gs :?> ParserGraphicsState)) :> CanvasGraphicsState
+
+    override this.IsGraphicsStatePreserved() = graphicsStateIsPreserved
+
+    override this.ReleaseGraphicsState() =
+        if (not graphicsStateIsPreserved) then this.gs <- null
+
+type TextRenderInfoPreservation(textRenderInfo: TextRenderInfo) =
+    inherit TextRenderInfo(textRenderInfo.GetPdfString(), textRenderInfo.GetInnerGS(), textRenderInfo.GetTextMatrix(), new Stack<_>(textRenderInfo.GetCanvasTagHierarchy()))
+
+    let mutable graphicsStateIsPreserved = false
+
+    override this.PreserveGraphicsState() =
+        this.CheckGraphicsState();
+        this.gs <- new ParserGraphicsStatePreservation(this.gs :?> ParserGraphicsState)
+        graphicsStateIsPreserved <- true
+
+    override this.GetGraphicsState() =
+        this.CheckGraphicsState()
+        if graphicsStateIsPreserved 
+        then this.gs 
+        else (new ParserGraphicsStatePreservation(this.gs :?> ParserGraphicsState)) :> CanvasGraphicsState
+
+    override this.IsGraphicsStatePreserved() = graphicsStateIsPreserved
+
+    override this.ReleaseGraphicsState() = if (not graphicsStateIsPreserved) then this.gs <- null
 
 module internal Listeners =
 
@@ -13,26 +73,36 @@ module internal Listeners =
 
     [<AllowNullLiteral>]
     /// a type named FilteredEventListener is already defined in itext7
-    type FilteredEventListenerEx<'T when 'T :> AbstractRenderInfo and 'T: null>(supportedEvents: EventType list, filter: 'T -> bool) =
+    type FilteredEventListenerEx(supportedEvents: EventType list, filter: AbstractRenderInfo -> bool) =
         let mutable currentRenderInfo = null
         let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Selected
-        let parsedRenderInfos = List<'T>()
+        let parsedRenderInfos = List<AbstractRenderInfo>()
 
 
         member this.CurrentRenderInfo = currentRenderInfo
 
         member this.CurrentRenderInfoStatus = currentRenderInfoStatus
 
-        member this.ParsedRenderInfos = parsedRenderInfos :> seq<'T>
+        member this.ParsedRenderInfos = parsedRenderInfos :> seq<AbstractRenderInfo>
 
 
         interface IEventListener with 
             member this.EventOccurred(data, tp) = 
-                let data = data :?> 'T
-                if filter data then
-                    data.PreserveGraphicsState()
-                    parsedRenderInfos.Add(data)
-                    currentRenderInfo <- data
+                let renderInfo = 
+                    match data with 
+                    | :? PathRenderInfo as pathRenderInfo ->
+                        new PathRenderInfoPreservation(pathRenderInfo) :> AbstractRenderInfo
+
+                    | :? TextRenderInfo as textRenderInfo ->
+                        new TextRenderInfoPreservation(textRenderInfo) :> AbstractRenderInfo
+                    | _ -> failwithf "Unspported renderinfo type %s" (data.GetType().FullName) 
+
+                if filter renderInfo then
+                    //let parserCanvasState = renderInfo.GetGraphicsState() :?> ParserGraphicsState
+                    renderInfo.PreserveGraphicsState()
+
+                    parsedRenderInfos.Add(renderInfo)
+                    currentRenderInfo <- renderInfo
                     currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
                 else 
                     currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
@@ -52,6 +122,7 @@ module internal Listeners =
 type RenderInfoSelector = 
     | Path of (PathRenderInfo -> bool)
     | Text of (TextRenderInfo -> bool)
+    | Dummy
     | AND of RenderInfoSelector list
     | OR of RenderInfoSelector list
 
@@ -62,6 +133,7 @@ module RenderInfoSelector =
             match selector with 
             | RenderInfoSelector.Path _ -> [EventType.RENDER_PATH]
             | RenderInfoSelector.Text _ -> [EventType.RENDER_TEXT]
+            | RenderInfoSelector.Dummy -> []
             | RenderInfoSelector.AND selectors ->
                 selectors
                 |> List.collect(loop)
@@ -90,6 +162,8 @@ module RenderInfoSelector =
                         prediate textRenderInfo
                     | _ -> false
 
+            | RenderInfoSelector.Dummy _ -> fun _ -> false
+
             | RenderInfoSelector.AND selectors ->
                 fun (renderInfo: AbstractRenderInfo) ->
                     selectors |> List.forall (fun selector -> loop selector renderInfo)
@@ -109,6 +183,10 @@ module PdfDocumentContentParser =
     let parse (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: PdfDocumentContentParser) =
         let et = RenderInfoSelector.toEventTypes renderInfoSelector
         let filter = RenderInfoSelector.toRenderInfoPredication renderInfoSelector
-        let listener = new FilteredEventListenerEx<'T>(et,filter)
-        parser.ProcessContent(pageNum, listener).ParsedRenderInfos |> Seq.cast<'T>
+        let listener = new FilteredEventListenerEx(et,filter)
+
+        match et with 
+        | [] -> [] :> seq<AbstractRenderInfo>
+        | _ ->
+            parser.ProcessContent(pageNum, listener).ParsedRenderInfos
         

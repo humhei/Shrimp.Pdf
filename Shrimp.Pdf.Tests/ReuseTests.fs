@@ -20,9 +20,11 @@ let reuseTests =
                         ColNums = [4]
                         RowNum = 4
                         Cropmark = Some Cropmark.defaultValue
+                        Background = Background.Size FsSize.A0
                         HSpaces = [mm 3; mm 9]
                         VSpaces = [mm 3; mm 9]
-                        Margin = Margin.Create(mm 0, mm 6, mm 9, mm 12)
+                        Margin = Margin.Create(mm 30, mm 30, mm 30, mm 40)
+                        UseBleed = true
                     }))
                 )
         )
@@ -50,6 +52,30 @@ let reuseTests =
         |> runWithBackup "datas/reuse/imposing stepAndRepeat.pdf" 
         |> ignore
 
+    testCase "Imposing when use bleed and bleedBox bigger than actualbox" <| fun _ -> 
+        Flow.Reuse (
+            impose (fun _ ->
+                (ImposingArguments.Create(fun args ->
+                { args with 
+                    DesiredSizeOp = Some { Width = mm 50; Height = mm 50}
+                    ColNums = [4]
+                    RowNum = 4
+                    Cropmark = Some Cropmark.defaultValue
+                    Background = Background.Size FsSize.A0
+                    HSpaces = [mm 3; mm 9]
+                    VSpaces = [mm 3; mm 9]
+                    Margin = Margin.Create(mm 30, mm 30, mm 30, mm 40)
+                    UseBleed = true
+                }))
+            )
+        )
+        
+                
+
+        |> runWithBackup "datas/reuse/Imposing when use bleed and bleedBox bigger than actualbox.pdf" 
+        |> ignore
+
+
     testCase "duplicate all pages 15x tests" <| fun _ -> 
         Flow.Reuse (duplicatePages PageSelector.All 15)
         |> runWithBackup "datas/reuse/duplicate all pages 15x.pdf" 
@@ -72,7 +98,8 @@ let reuseTests =
                 (RenderInfoSelector.Path 
                     (fun pathRenderInfo -> 
                         pathRenderInfo.GetStrokeColor() = DeviceRgb.BLUE 
-                        && (PathRenderInfo.getBound pathRenderInfo).IsInsideOf(actualBox))
+                        && PathRenderInfo.isVisible pathRenderInfo
+                        && (PathRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth pathRenderInfo).IsInsideOf(actualBox))
                 )
             )
         )

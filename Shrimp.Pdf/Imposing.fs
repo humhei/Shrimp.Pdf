@@ -133,7 +133,6 @@ module Imposing =
             Background: Background
             DesiredPageOrientation: DesiredPageOrientation
             Sheet_PlaceTable: Sheet_PlaceTable
-            XObjectRotation: Rotation
             DesiredSizeOp: FsSize option
             IsRepeated: bool
         }
@@ -148,7 +147,6 @@ module Imposing =
                 VSpaces = [0.]
                 Margin = Margin.Create(0.)
                 UseBleed = false
-                XObjectRotation = Rotation.None
                 Background = Background.Size FsSize.A4
                 Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable
                 DesiredSizeOp = None
@@ -207,28 +205,152 @@ module Imposing =
 
         member private x.SplitDocument = x.ImposingDocument.SplitDocument
 
+
         member x.ImposingArguments: ImposingArguments = x.ImposingDocument.ImposingArguments
         
+        member x.HSpaces = x.ImposingArguments.Value.HSpaces
+
+        member x.VSpaces = x.ImposingArguments.Value.VSpaces
+
         member x.Cropmark = x.ImposingArguments.Value.Cropmark
 
         member x.UseBleed = x.ImposingArguments.Value.UseBleed
 
-        member x.Rotation = x.ImposingArguments.Value.XObjectRotation
+        member private cell.GetXObjectContentBox() =
+            let xObjectContentBox = 
+                if cell.UseBleed
+                then PdfPage.getTrimBox cell.Page
+                else cell.Page.GetActualBox()
 
+            xObjectContentBox
+
+        member private cell.GetScale() =
+            let xObjectContentBox = cell.GetXObjectContentBox()
+                
+
+            let scaleX = cell.Size.Width / xObjectContentBox.GetWidthF() 
+            let scaleY = cell.Size.Height / xObjectContentBox.GetHeightF() 
+            scaleX, scaleY
+
+        member private cell.GetClippedXObject() =
+            let scaleX, scaleY = cell.GetScale()
+
+            let xobject = cell.Page.CopyAsFormXObject(cell.SplitDocument.Writer)
+            if cell.UseBleed
+            then 
+                let trimBox = PdfPage.getTrimBox cell.Page
+                        
+                let actualBox = cell.Page.GetActualBox()
+
+                if Rectangle.equal trimBox actualBox then xobject
+                else 
+                    let (|ColumnFirst|ColumnLast|ColumnMiddle|ColumnFirstAndLast|) (cell: ImposingCell) =
+                        let cells = cell.ImposingRow.Cells
+                        let index = cell.ImposingRow.Cells.IndexOf(cell)
+                        if cells.Count = 1 then ColumnFirstAndLast
+                        else
+                            match index with 
+                            | 0 -> ColumnFirst
+                            | index when index = cells.Count - 1 -> ColumnLast
+                            | _ -> ColumnMiddle 
+
+                    let (|RowFirst|RowLast|RowMiddle|RowFirstAndLast|) (row: ImposingRow) =
+                        let rows = row.ImposingSheet.Rows
+                        let index = rows.IndexOf(row)
+                        if rows.Count = 1 then RowFirstAndLast
+                        else
+                            match  index with 
+                            | 0 -> RowFirst
+                            | index when index = rows.Count - 1 -> RowLast
+                            | _ -> RowMiddle
+                    let bbox = 
+                        let x, width =
+
+                            let index = cell.ImposingRow.Cells.IndexOf(cell)
+                            match cell with 
+                            | ColumnFirst ->
+                                let x = actualBox.GetXF()
+                                
+                                let width = 
+                                    let nextHSpace = cell.HSpaces.[(index) % cell.HSpaces.Length] / scaleX
+                                    trimBox.GetRightF() - actualBox.GetLeftF() + nextHSpace / 2.
+
+                                x, width
+
+                            | ColumnFirstAndLast ->  actualBox.GetXF() ,actualBox.GetWidthF()
+
+                            | ColumnMiddle ->
+                                let preHSpace = cell.HSpaces.[(index - 1) % cell.HSpaces.Length] / scaleX
+                                let nextHSpace = cell.HSpaces.[(index) % cell.HSpaces.Length] / scaleX
+
+                                let x = trimBox.GetXF() - preHSpace / 2.
+                                let width = trimBox.GetWidthF() + nextHSpace / 2. + preHSpace / 2.
+                                x, width
+
+                            | ColumnLast ->
+                                let preHSpace = cell.HSpaces.[(index - 1) % cell.HSpaces.Length] / scaleX
+
+                                let x = trimBox.GetXF() - preHSpace / 2.
+
+                                let width = trimBox.GetWidthF() + preHSpace / 2.
+
+                                x,width
+
+                        let y, height = 
+                            let row = cell.ImposingRow
+                            let rows = row.ImposingSheet.Rows
+                            let index = rows.IndexOf(row)
+
+                            match row with 
+                            | RowFirst ->
+                                let nextVSpace = cell.VSpaces.[(index) % cell.VSpaces.Length] / scaleY
+
+                                let y = trimBox.GetYF() - nextVSpace / 2.
+
+                                let height = actualBox.GetTopF() - trimBox.GetBottomF() + nextVSpace / 2.
+                                y, height
+
+                            | RowMiddle ->
+                                let preVSpace = cell.VSpaces.[(index - 1) % cell.VSpaces.Length] / scaleY
+
+                                let nextVSpace = cell.VSpaces.[(index) % cell.VSpaces.Length] / scaleY
+
+                                let y = trimBox.GetYF() - nextVSpace / 2.
+                                let height = trimBox.GetHeightF() + nextVSpace / 2. + preVSpace / 2.
+                                y, height
+
+                            | RowFirstAndLast -> actualBox.GetYF(), actualBox.GetHeightF()
+                            | RowLast -> 
+                                let y = actualBox.GetYF()
+
+                                let preVSpace = cell.VSpaces.[(index - 1) % cell.VSpaces.Length] / scaleY
+
+                                let height = trimBox.GetTopF() - actualBox.GetBottomF() + preVSpace / 2.
+
+                                y, height
+
+                        Rectangle.create x y width height
+
+                    let resetBBoxWhenTrimBoxIsNotInsideActualBox (bbox: Rectangle) =
+                        let x = max (actualBox.GetXF()) (bbox.GetXF())
+                        let width = min (actualBox.GetWidthF()) (bbox.GetWidthF())
+
+                        let y = max (actualBox.GetYF()) (bbox.GetYF())
+                        let height = min (actualBox.GetHeightF()) (bbox.GetHeightF())
+
+                        Rectangle.create x y width height
+
+                    let bbox = resetBBoxWhenTrimBoxIsNotInsideActualBox bbox
+
+                    xobject.SetBBox(Rectangle.toPdfArray bbox) 
+
+            else xobject
 
         static member AddToPdfCanvas (cellContentAreas_ExtendByCropmarkDistance: Rectangle list) (pdfCanvas: PdfCanvas) (cell: ImposingCell) =
             let addXObject (pdfCanvas: PdfCanvas) = 
-                let xObject = cell.Page.CopyAsFormXObject(cell.SplitDocument.Writer)
-                let xObjectContentBox = 
-                    if cell.UseBleed
-                    then 
-                        match PdfFormXObject.tryGetTrimBox xObject with 
-                        | Some trimBox -> trimBox
-                        | None -> cell.Page.GetActualBox()
-                    else cell.Page.GetActualBox()
-
-                let scaleX = cell.Size.Width / xObjectContentBox.GetWidthF() 
-                let scaleY = cell.Size.Height / xObjectContentBox.GetHeightF() 
+                let xObject = cell.GetClippedXObject()
+                let xObjectContentBox = cell.GetXObjectContentBox()
+                let scaleX, scaleY = cell.GetScale()
 
                 let affineTransfromRecord: AffineTransformRecord =
                     { ScaleX = scaleX
@@ -305,7 +427,9 @@ module Imposing =
                 { Page = readerPage 
                   Size = match args.DesiredSizeOp with 
                           | Some size -> size 
-                          | None -> FsSize.ofRectangle(readerPage.GetActualBox()) 
+                          | None -> 
+                                if args.UseBleed then FsSize.ofRectangle(readerPage.GetTrimBox())
+                                else FsSize.ofRectangle(readerPage.GetActualBox()) 
                   X = x
                   Y = sheet.Y
                   ImposingRow = this }
@@ -332,7 +456,7 @@ module Imposing =
 
                 | _ -> addNewCell_UpdateState()
 
-        member internal this.Cells = cells
+        member internal this.Cells: ResizeArray<ImposingCell> = cells
 
         member internal this.Height = 
             if cells.Count = 0 then 0.
@@ -499,6 +623,8 @@ module Imposing =
             let margin = x.ImposingArguments.Value.Margin
             x.TableHeight + margin.Bottom + margin.Top
 
+        member internal x.Rows: ResizeArray<ImposingRow> = rows
+
         member x.RowsCount = rows.Count 
 
     /// Build() -> Draw()
@@ -527,7 +653,8 @@ module Imposing =
 
             let rec produceSheet readerPages (sheet: ImposingSheet) =
                 match readerPages with 
-                | readerPage :: t ->
+                | (readerPage : PdfPage) :: t ->
+
                     if sheet.Push(readerPage) 
                     then 
                         if args.IsRepeated 

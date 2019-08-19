@@ -46,7 +46,7 @@ let manipulateTests =
                         ),
                         SelectionModifier.AddNew (fun args -> 
                             let textRenderInfo = args.CurrentRenderInfo :?> TextRenderInfo
-                            let border = TextRenderInfo.getBound textRenderInfo
+                            let border = TextRenderInfo.getBound BoundGettingOptions.WithStrokeWidth textRenderInfo
                             [
                                 PdfCanvas.addRectangle border (fun args ->
                                     { args with 
@@ -98,10 +98,15 @@ let manipulateTests =
                         )
                     ]
                 )
-
         )
         |> runWithBackup "datas/manipulate/add page-scaling text.pdf" 
         |> ignore
 
+    ftestCase "trim to visible test" <| fun _ -> 
+        Flow.Manipulate(
+            trimToVisible PageSelector.All
+        )
+        |> runWithBackup "datas/manipulate/trim to visible.pdf" 
+        |> ignore
 
   ]

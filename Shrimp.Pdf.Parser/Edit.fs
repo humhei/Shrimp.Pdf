@@ -174,7 +174,7 @@ type internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionM
     let eventTypes = RenderInfoSelector.toEventTypes selector
     
     let mutable currentPdfCanvas = null
-    let mutable eventListener: FilteredEventListenerEx<AbstractRenderInfo> = null
+    let mutable eventListener: FilteredEventListenerEx = null
 
 
 
@@ -262,8 +262,9 @@ type internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionM
         | _ ->
             PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
             |> ignore
+
     member this.EditContent(pdfCanvas: PdfCanvas, contentBytes: byte [], resources: PdfResources) =
-        eventListener <- this.GetEventListener() :?> FilteredEventListenerEx<AbstractRenderInfo>  
+        eventListener <- this.GetEventListener() :?> FilteredEventListenerEx
         currentPdfCanvas <- pdfCanvas
 
         base.ProcessContent(contentBytes, resources)

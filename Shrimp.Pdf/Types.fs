@@ -5,37 +5,9 @@ open Shrimp.Pdf.Extensions
 
 
 
-type Margin = 
-    { Left: float
-      Top: float
-      Right: float
-      Bottom: float }
-with   
-    static member Create(value) =
-        { Left = value 
-          Top = value 
-          Right = value 
-          Bottom = value }
 
-    static member Create(left, top, right, bottom) =
-        { Left = left 
-          Top = top 
-          Right = right 
-          Bottom = bottom }
            
 
-[<RequireQualifiedAccess>]
-module Rectangle = 
-    let applyMargin (margin:Margin) (rect: Rectangle) =
-        let left = margin.Left
-        let top = margin.Top
-        let right = margin.Right
-        let bottom = margin.Bottom
-        let x = rect.GetXF() - left
-        let y = rect.GetYF() - bottom
-        let width = rect.GetWidthF() + left + right 
-        let height = rect.GetHeightF() + top + bottom
-        Rectangle.create x y width height
 
 
 

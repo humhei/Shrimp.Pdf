@@ -13,6 +13,23 @@ open iText.Layout.Properties
 open System.Collections.Concurrent
 open iText.Kernel.Pdf
 
+type Margin = 
+    { Left: float
+      Top: float
+      Right: float
+      Bottom: float }
+with   
+    static member Create(value) =
+        { Left = value 
+          Top = value 
+          Right = value 
+          Bottom = value }
+
+    static member Create(left, top, right, bottom) =
+        { Left = left 
+          Top = top 
+          Right = right 
+          Bottom = bottom }
 
 type TileTable = private TileTable of colNum: int * rowNum: int
 with 
@@ -78,6 +95,8 @@ module FontExtensions =
 
 
 open FontExtensions
+open Akka
+open iText.Kernel.Pdf.Canvas.Parser
 
 /// StandardFonts: See iText.IO.Font.Constants.StandardFonts
 [<RequireQualifiedAccess>]
@@ -299,8 +318,8 @@ module Extensions =
 
             let private TEXT_SPACE_COEFF = FontProgram.UNITS_NORMALIZATION |> float
 
-            let calcAscenderAndDescender (font: PdfFont) =
-                let fontMetrics = font.GetFontProgram().GetFontMetrics();
+            let private calcAscenderAndDescender (font: PdfFont) =
+                let fontMetrics = font.GetFontProgram().GetFontMetrics()
                 let ascender,descender =
                     if (fontMetrics.GetWinAscender() = 0 
                         || fontMetrics.GetWinDescender() = 0 
@@ -586,6 +605,17 @@ module Extensions =
 
                 create x y width height
 
+            let applyMargin (margin:Margin) (rect: Rectangle) =
+                let left = margin.Left
+                let top = margin.Top
+                let right = margin.Right
+                let bottom = margin.Bottom
+                let x = rect.GetXF() - left
+                let y = rect.GetYF() - bottom
+                let width = rect.GetWidthF() + left + right 
+                let height = rect.GetHeightF() + top + bottom
+                create x y width height
+
         [<RequireQualifiedAccess>]
         module AffineTransform = 
 
@@ -708,6 +738,11 @@ module Extensions =
                 let points = toRawPoints subpath
                 points.Count > 0
 
+
+        type BoundGettingOptions =
+            | WithStrokeWidth = 0
+            | WithoutStrokeWidth = 1
+
         [<RequireQualifiedAccess>]
         module PathRenderInfo =
 
@@ -725,9 +760,6 @@ module Extensions =
                 |> List.ofSeq
                 |> List.collect (Subpath.toActualPoints ctm)
 
-            let getBound (info: PathRenderInfo) =     
-                info |> toActualPoints |> Rectangle.ofPoints
-
             let isStrokeVisible (info: PathRenderInfo) =             
                 info.GetPath().GetSubpaths().Count <> 0
                 && 
@@ -736,7 +768,10 @@ module Extensions =
                     | FILLANDSTROKE -> true
                     | _ -> false
 
-            let isFillVisible (info: PathRenderInfo) =   
+            let isFillVisible (info: PathRenderInfo) =
+                let m = info.GetGraphicsState() :?> ParserGraphicsState
+                let path = m.GetClippingPath()
+                let k = path.GetSubpaths()
                 info.GetPath().GetSubpaths().Count <> 0
                 &&
                     match info.GetOperation() with 
@@ -759,6 +794,19 @@ module Extensions =
                     | others -> 
                         failwithf "unSupported path render operation %d" others
                 else []
+
+            let getBound (boundGettingOptions: BoundGettingOptions) (info: PathRenderInfo) =     
+                let boundWithoutWidth = info |> toActualPoints |> Rectangle.ofPoints
+                match boundGettingOptions with 
+                | BoundGettingOptions.WithoutStrokeWidth -> boundWithoutWidth
+                | BoundGettingOptions.WithStrokeWidth ->
+                    if isStrokeVisible info then
+                        let grahpicsState = info.GetGraphicsState()
+                        let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
+                        Rectangle.applyMargin widthMargin boundWithoutWidth
+                    else boundWithoutWidth
+                | _ -> failwith "Invalid token"
+
 
         [<RequireQualifiedAccess>]
         module TextRenderInfo =
@@ -788,12 +836,8 @@ module Extensions =
                 let descent = info.GetDescentLine()
                 descent.GetStartPoint().Get(0)
 
-            let getBound (info: TextRenderInfo) =
-                let width = getWidth info
-                let height = getHeight info
-                let x = getX info
-                let y = getY info
-                Rectangle.create x y width height
+
+
 
 
             let getText (info:TextRenderInfo) =
@@ -814,9 +858,27 @@ module Extensions =
                 | PdfCanvasConstants.TextRenderingMode.STROKE_CLIP -> true
                 |  _ -> false
 
+            let getBound (boundGettingOptions: BoundGettingOptions) (info: TextRenderInfo) =
+                let width = getWidth info
+                let height = getHeight info
+                let x = getX info
+                let y = getY info
+                let boundWithoutWidth = Rectangle.create x y width height
+
+                match boundGettingOptions with 
+                | BoundGettingOptions.WithoutStrokeWidth -> boundWithoutWidth
+                | BoundGettingOptions.WithStrokeWidth ->
+                    if isStrokeVisible info then 
+                        let grahpicsState = info.GetGraphicsState()
+                        let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
+                        Rectangle.applyMargin widthMargin boundWithoutWidth
+                    else boundWithoutWidth
+                | _ -> failwith "Invalid token"
+
             
             let isVisible (info: TextRenderInfo) =
                 isFillVisible info || isStrokeVisible info
+
 
             let getVisibleColors (info: TextRenderInfo) =
                 let fillColor = info.GetFillColor()
@@ -852,7 +914,7 @@ module Extensions =
                 | :? PathRenderInfo as prInfo -> fPathRenderInfo prInfo 
                 | _ -> failwith "Invaid token"
 
-            let getBound info = cata TextRenderInfo.getBound PathRenderInfo.getBound info
+            let getBound boundGettingOptions info = cata (TextRenderInfo.getBound boundGettingOptions) (PathRenderInfo.getBound boundGettingOptions) info
             
             let getVisibleColors (info: AbstractRenderInfo) = cata TextRenderInfo.getVisibleColors PathRenderInfo.getVisibleColors info
 
@@ -1159,6 +1221,18 @@ module Extensions =
                 | PageBoxKind.AllBox -> failwith "PageBoxKind.AllBox is settable only"
                 | _ -> failwith "Invalid token"
 
+            member page.SetActualBox(rect: Rectangle) =
+                page
+                    .SetCropBox(rect)
+                    .SetMediaBox(rect)
+
+            member page.SetAllBox(rect: Rectangle) =
+                page
+                    .SetTrimBox(rect)
+                    .SetBleedBox(rect)
+                    .SetCropBox(rect)
+                    .SetArtBox(rect)
+                    .SetMediaBox(rect)
 
         [<RequireQualifiedAccess>]
         module PdfPage = 
