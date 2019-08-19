@@ -98,7 +98,7 @@ let reuseTests =
                 (RenderInfoSelector.Path 
                     (fun pathRenderInfo -> 
                         pathRenderInfo.GetStrokeColor() = DeviceRgb.BLUE 
-                        && PathRenderInfo.isVisible pathRenderInfo
+                        && PathRenderInfo.hasFillOrStroke pathRenderInfo
                         && (PathRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth pathRenderInfo).IsInsideOf(actualBox))
                 )
             )

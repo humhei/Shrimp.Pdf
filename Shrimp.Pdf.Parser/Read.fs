@@ -8,62 +8,78 @@ open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas
 open System.Reflection
 
-[<AutoOpen>]
-module private Reflection =
-    let private gs_fieldInfo = typeof<AbstractRenderInfo>.GetField("gs", BindingFlags.NonPublic ||| BindingFlags.Instance)
-    type AbstractRenderInfo with 
-        member this.GetInnerGS() =
-            let value = gs_fieldInfo.GetValue(this) 
-            value :?> ParserGraphicsState
 
-type ParserGraphicsStatePreservation(source: ParserGraphicsState) =
-    inherit CanvasGraphicsState(source)
-    let clippingPath =
-        match source.GetClippingPath()  with 
-        | null -> None
-        | path -> Some path
+[<RequireQualifiedAccess>]
+module private AbstractRenderInfo =
+    type VisibleGettingOptions =
+        | Stroke = 0
+        | Fill = 1
 
-    member this.ClippingPath = clippingPath
+    let getParserGraphicsStatePreservation (info: AbstractRenderInfo) =
+        match info with 
+        | :? PathRenderInfoEx as info ->info.GetParserGraphicsStatePreservation()
+        | :? TextRenderInfoEx as info -> info.GetParserGraphicsStatePreservation()
+        | _ -> failwith "renderInfo should be either pathRenderInfoEx or TextRenderInfoEx"
 
-type internal PathRenderInfoPreservation(pathRenderInfo: PathRenderInfo) =
-    inherit PathRenderInfo(new Stack<_>(pathRenderInfo.GetCanvasTagHierarchy()), pathRenderInfo.GetInnerGS(), pathRenderInfo.GetPath(), pathRenderInfo.GetOperation())
-    let mutable graphicsStateIsPreserved = false
+    let isVisible (options: VisibleGettingOptions) (info: AbstractRenderInfo) =
+        let parserGraphicsStatePreservation = getParserGraphicsStatePreservation info
 
-    override this.PreserveGraphicsState() =
-        this.CheckGraphicsState();
-        this.gs <- new ParserGraphicsStatePreservation(this.gs :?> ParserGraphicsState)
-        graphicsStateIsPreserved <- true
+        match options with 
+        | VisibleGettingOptions.Fill -> AbstractRenderInfo.hasFill info
+        | VisibleGettingOptions.Stroke -> AbstractRenderInfo.hasStroke info
+        | _ -> failwith "Invalid token"
+        &&
+            match info with 
+            | :? PathRenderInfoEx as info -> not (info.IsPathModifiesClippingPath())
+            | _ -> true
+        && 
+            match parserGraphicsStatePreservation.TryGetClippingArea() with 
+                | Some clippingBound ->
+                    let bound = AbstractRenderInfo.getBound BoundGettingOptions.WithStrokeWidth info
+                    match Rectangle.tryGetIntersection bound clippingBound with 
+                    | Some _ -> true
+                    | None -> false
+                | None -> true
 
-    override this.GetGraphicsState() =
-        this.CheckGraphicsState()
-        if graphicsStateIsPreserved 
-        then this.gs 
-        else (new ParserGraphicsStatePreservation(this.gs :?> ParserGraphicsState)) :> CanvasGraphicsState
+    let isStrokeVisible info = isVisible VisibleGettingOptions.Stroke info
 
-    override this.IsGraphicsStatePreserved() = graphicsStateIsPreserved
+    let isFillVisible info = isVisible VisibleGettingOptions.Fill info
 
-    override this.ReleaseGraphicsState() =
-        if (not graphicsStateIsPreserved) then this.gs <- null
+    let tryGetVisibleBound  (info: AbstractRenderInfo)=
+        match isStrokeVisible info, isFillVisible info with 
+        | true, _ 
+        | false, true ->
+            let bound = AbstractRenderInfo.getBound BoundGettingOptions.WithStrokeWidth info
+            match (getParserGraphicsStatePreservation info).TryGetClippingArea() with 
+            | Some clippingBound -> Rectangle.tryGetIntersection bound clippingBound 
+            | None -> Some bound
+        | _ -> None
 
-type TextRenderInfoPreservation(textRenderInfo: TextRenderInfo) =
-    inherit TextRenderInfo(textRenderInfo.GetPdfString(), textRenderInfo.GetInnerGS(), textRenderInfo.GetTextMatrix(), new Stack<_>(textRenderInfo.GetCanvasTagHierarchy()))
+[<RequireQualifiedAccess>]
+module PathRenderInfoEx =
 
-    let mutable graphicsStateIsPreserved = false
+    let isStrokeVisible (info: PathRenderInfoEx) =             
+        AbstractRenderInfo.isStrokeVisible info
 
-    override this.PreserveGraphicsState() =
-        this.CheckGraphicsState();
-        this.gs <- new ParserGraphicsStatePreservation(this.gs :?> ParserGraphicsState)
-        graphicsStateIsPreserved <- true
+    let isFillVisible (info: PathRenderInfoEx) = AbstractRenderInfo.isFillVisible info         
+        
+    let isVisible (info: PathRenderInfoEx) = isFillVisible info || isStrokeVisible info
 
-    override this.GetGraphicsState() =
-        this.CheckGraphicsState()
-        if graphicsStateIsPreserved 
-        then this.gs 
-        else (new ParserGraphicsStatePreservation(this.gs :?> ParserGraphicsState)) :> CanvasGraphicsState
+    let tryGetVisibleBound (info: PathRenderInfoEx) = AbstractRenderInfo.tryGetVisibleBound info
 
-    override this.IsGraphicsStatePreserved() = graphicsStateIsPreserved
 
-    override this.ReleaseGraphicsState() = if (not graphicsStateIsPreserved) then this.gs <- null
+[<RequireQualifiedAccess>]
+module TextRenderInfoEx =
+    let isStrokeVisible (info: TextRenderInfoEx) =             
+        AbstractRenderInfo.isStrokeVisible info
+
+    let isFillVisible (info: TextRenderInfoEx) = AbstractRenderInfo.isFillVisible info         
+        
+    let isVisible (info: TextRenderInfoEx) = isFillVisible info || isStrokeVisible info
+
+    let tryGetVisibleBound (info: TextRenderInfoEx) = AbstractRenderInfo.tryGetVisibleBound info
+
+
 
 module internal Listeners =
 
@@ -76,6 +92,9 @@ module internal Listeners =
     type FilteredEventListenerEx(supportedEvents: EventType list, filter: AbstractRenderInfo -> bool) =
         let mutable currentRenderInfo = null
         let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Selected
+        let mutable currentClippingPathCtm = null
+        let mutable currentClippingPathInfo = null
+
         let parsedRenderInfos = List<AbstractRenderInfo>()
 
 
@@ -88,25 +107,30 @@ module internal Listeners =
 
         interface IEventListener with 
             member this.EventOccurred(data, tp) = 
-                let renderInfo = 
-                    match data with 
-                    | :? PathRenderInfo as pathRenderInfo ->
-                        new PathRenderInfoPreservation(pathRenderInfo) :> AbstractRenderInfo
+                match tp with 
+                | EventType.CLIP_PATH_CHANGED -> 
+                    currentClippingPathInfo <- (data :?> ClippingPathInfo)
+                    currentClippingPathInfo.PreserveGraphicsState()
 
-                    | :? TextRenderInfo as textRenderInfo ->
-                        new TextRenderInfoPreservation(textRenderInfo) :> AbstractRenderInfo
-                    | _ -> failwithf "Unspported renderinfo type %s" (data.GetType().FullName) 
+                | _ ->
+                    let renderInfo = 
+                        match data with 
+                        | :? PathRenderInfo as pathRenderInfo ->
+                            new PathRenderInfoEx(pathRenderInfo, currentClippingPathInfo) :> AbstractRenderInfo
 
-                if filter renderInfo then
-                    //let parserCanvasState = renderInfo.GetGraphicsState() :?> ParserGraphicsState
-                    renderInfo.PreserveGraphicsState()
+                        | :? TextRenderInfo as textRenderInfo ->
+                            new TextRenderInfoEx(textRenderInfo, currentClippingPathInfo) :> AbstractRenderInfo
+                        | _ -> failwithf "Unspported renderinfo type %s" (data.GetType().FullName) 
 
-                    parsedRenderInfos.Add(renderInfo)
-                    currentRenderInfo <- renderInfo
-                    currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
-                else 
-                    currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
-                    currentRenderInfo <- null
+                    if filter renderInfo then
+                        renderInfo.PreserveGraphicsState()
+
+                        parsedRenderInfos.Add(renderInfo)
+                        currentRenderInfo <- renderInfo
+                        currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
+                    else 
+                        currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
+                        currentRenderInfo <- null
 
             member this.GetSupportedEvents() = 
                 List supportedEvents :> ICollection<_>
@@ -120,8 +144,8 @@ module internal Listeners =
 
 [<RequireQualifiedAccess>]
 type RenderInfoSelector = 
-    | Path of (PathRenderInfo -> bool)
-    | Text of (TextRenderInfo -> bool)
+    | Path of (PathRenderInfoEx -> bool)
+    | Text of (TextRenderInfoEx -> bool)
     | Dummy
     | AND of RenderInfoSelector list
     | OR of RenderInfoSelector list
@@ -131,8 +155,8 @@ module RenderInfoSelector =
     let toEventTypes selector =
         let rec loop selector =
             match selector with 
-            | RenderInfoSelector.Path _ -> [EventType.RENDER_PATH]
-            | RenderInfoSelector.Text _ -> [EventType.RENDER_TEXT]
+            | RenderInfoSelector.Path _ -> [EventType.RENDER_PATH; EventType.CLIP_PATH_CHANGED]
+            | RenderInfoSelector.Text _ -> [EventType.RENDER_TEXT; EventType.CLIP_PATH_CHANGED]
             | RenderInfoSelector.Dummy -> []
             | RenderInfoSelector.AND selectors ->
                 selectors
@@ -151,14 +175,14 @@ module RenderInfoSelector =
             | RenderInfoSelector.Path prediate -> 
                 fun (renderInfo: AbstractRenderInfo) ->
                     match renderInfo with 
-                    | :? PathRenderInfo as pathRenderInfo ->
+                    | :? PathRenderInfoEx as pathRenderInfo ->
                         prediate pathRenderInfo
                     | _ -> false
 
             | RenderInfoSelector.Text prediate -> 
                 fun (renderInfo: AbstractRenderInfo) ->
                     match renderInfo with 
-                    | :? TextRenderInfo as textRenderInfo ->
+                    | :? TextRenderInfoEx as textRenderInfo ->
                         prediate textRenderInfo
                     | _ -> false
 

@@ -523,8 +523,10 @@ module Extensions =
                 Point(rect.GetXF(), rect.GetTopF())
 
 
-            let getIntersection (rect1: Rectangle) (rect2: Rectangle) =
-                rect1.GetIntersection(rect2)
+            let tryGetIntersection (rect1: Rectangle) (rect2: Rectangle) =
+                match rect1.GetIntersection(rect2) with 
+                | null -> None
+                | rect -> Some rect
 
             let equal (rect1: Rectangle) (rect2: Rectangle) =
                 rect1.GetXF() @= rect2.GetXF()
@@ -760,7 +762,7 @@ module Extensions =
                 |> List.ofSeq
                 |> List.collect (Subpath.toActualPoints ctm)
 
-            let isStrokeVisible (info: PathRenderInfo) =             
+            let hasStroke (info: PathRenderInfo) =             
                 info.GetPath().GetSubpaths().Count <> 0
                 && 
                     match info.GetOperation() with 
@@ -768,10 +770,7 @@ module Extensions =
                     | FILLANDSTROKE -> true
                     | _ -> false
 
-            let isFillVisible (info: PathRenderInfo) =
-                let m = info.GetGraphicsState() :?> ParserGraphicsState
-                let path = m.GetClippingPath()
-                let k = path.GetSubpaths()
+            let hasFill (info: PathRenderInfo) =
                 info.GetPath().GetSubpaths().Count <> 0
                 &&
                     match info.GetOperation() with 
@@ -779,11 +778,11 @@ module Extensions =
                     | FILLANDSTROKE -> true
                     | _ -> false
 
-            let isVisible (info: PathRenderInfo) =
-                isFillVisible info || isStrokeVisible info
+            let hasFillOrStroke (info: PathRenderInfo) =
+                hasFill info || hasStroke info
 
-            let getVisibleColors (info: PathRenderInfo) =
-                if isVisible info 
+            let getColors (info: PathRenderInfo) =
+                if hasFillOrStroke info 
                 then
                     let fillColor = info.GetFillColor()
                     let strokeColor = info.GetStrokeColor()
@@ -800,7 +799,7 @@ module Extensions =
                 match boundGettingOptions with 
                 | BoundGettingOptions.WithoutStrokeWidth -> boundWithoutWidth
                 | BoundGettingOptions.WithStrokeWidth ->
-                    if isStrokeVisible info then
+                    if hasStroke info then
                         let grahpicsState = info.GetGraphicsState()
                         let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
                         Rectangle.applyMargin widthMargin boundWithoutWidth
@@ -836,21 +835,17 @@ module Extensions =
                 let descent = info.GetDescentLine()
                 descent.GetStartPoint().Get(0)
 
-
-
-
-
             let getText (info:TextRenderInfo) =
                 info.GetText()
 
-            let isFillVisible (info: TextRenderInfo) =             
+            let hasFill (info: TextRenderInfo) =             
                 let md = info.GetTextRenderMode()
                 match md with 
                 | PdfCanvasConstants.TextRenderingMode.FILL 
                 | PdfCanvasConstants.TextRenderingMode.FILL_STROKE -> true
                 | _ -> false
 
-            let isStrokeVisible (info: TextRenderInfo) =             
+            let hasStroke (info: TextRenderInfo) =             
                 let md = info.GetTextRenderMode()
                 match md with 
                 | PdfCanvasConstants.TextRenderingMode.STROKE
@@ -868,19 +863,15 @@ module Extensions =
                 match boundGettingOptions with 
                 | BoundGettingOptions.WithoutStrokeWidth -> boundWithoutWidth
                 | BoundGettingOptions.WithStrokeWidth ->
-                    if isStrokeVisible info then 
+                    if hasStroke info then 
                         let grahpicsState = info.GetGraphicsState()
                         let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
                         Rectangle.applyMargin widthMargin boundWithoutWidth
                     else boundWithoutWidth
                 | _ -> failwith "Invalid token"
-
             
-            let isVisible (info: TextRenderInfo) =
-                isFillVisible info || isStrokeVisible info
 
-
-            let getVisibleColors (info: TextRenderInfo) =
+            let getColors (info: TextRenderInfo) =
                 let fillColor = info.GetFillColor()
                 let strokeColor = info.GetStrokeColor()
                 match info.GetTextRenderMode() with
@@ -916,7 +907,7 @@ module Extensions =
 
             let getBound boundGettingOptions info = cata (TextRenderInfo.getBound boundGettingOptions) (PathRenderInfo.getBound boundGettingOptions) info
             
-            let getVisibleColors (info: AbstractRenderInfo) = cata TextRenderInfo.getVisibleColors PathRenderInfo.getVisibleColors info
+            let getColors (info: AbstractRenderInfo) = cata TextRenderInfo.getColors PathRenderInfo.getColors info
 
             let isTextRenderInfo (info: AbstractRenderInfo) = cata (fun _ -> true) (fun _ -> false) info
 
@@ -926,11 +917,11 @@ module Extensions =
 
             let asPathRenderInfo (info: AbstractRenderInfo) = cata (fun _ -> None) (fun prInfo -> Some prInfo) info
 
-            let isFillVisible (info: AbstractRenderInfo) = cata TextRenderInfo.isFillVisible PathRenderInfo.isFillVisible info
+            let hasFill (info: AbstractRenderInfo) = cata TextRenderInfo.hasFill PathRenderInfo.hasFill info
 
-            let isStrokeVisible (info: AbstractRenderInfo) = cata TextRenderInfo.isStrokeVisible PathRenderInfo.isStrokeVisible info
+            let hasStroke (info: AbstractRenderInfo) = cata TextRenderInfo.hasStroke PathRenderInfo.hasStroke info
 
-            let isVisible (info: AbstractRenderInfo) = cata TextRenderInfo.isVisible PathRenderInfo.isVisible info
+            let hasStrokeOrFill (info: AbstractRenderInfo) = hasFill info || hasStroke info
 
 
 
@@ -1205,7 +1196,9 @@ module Extensions =
             member this.GetActualBox() = 
                 let crop = this.GetCropBox()
                 let media = this.GetMediaBox()
-                Rectangle.getIntersection crop media
+                match Rectangle.tryGetIntersection crop media with 
+                | Some rect -> rect
+                | None -> failwithf "crop box %O doesn't has Intersection to media box %O" crop media
 
             member this.GetActualHeight() = this.GetActualBox().GetHeight() |> float
 

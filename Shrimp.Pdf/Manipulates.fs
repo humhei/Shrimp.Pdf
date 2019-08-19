@@ -81,8 +81,8 @@ module Manipulates =
             pageSelector
             (fun _ -> 
                 RenderInfoSelector.OR 
-                    [ RenderInfoSelector.Path PathRenderInfo.isVisible
-                      RenderInfoSelector.Text TextRenderInfo.isVisible ]
+                    [ RenderInfoSelector.Path PathRenderInfoEx.isVisible
+                      RenderInfoSelector.Text TextRenderInfoEx.isVisible ]
             )
             (fun args renderInfos ->
                 let bound = 

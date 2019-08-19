@@ -21,7 +21,7 @@ let realSamplesTests =
                 (fun args ->
                     (RenderInfoSelector.Path (fun pathRenderInfo ->
                         pathRenderInfo.GetStrokeColor() = DeviceRgb.BLUE
-                        && PathRenderInfo.isStrokeVisible pathRenderInfo
+                        && PathRenderInfo.hasStroke pathRenderInfo
                         && (PathRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth pathRenderInfo).IsInsideOf(args.Page.GetActualBox())
                     ))
                 )
@@ -41,7 +41,7 @@ let realSamplesTests =
                 (fun args ->
                     (RenderInfoSelector.Text (fun textRenderInfo ->
                         textRenderInfo.GetFillColor() = DeviceRgb.RED
-                        && TextRenderInfo.isFillVisible textRenderInfo
+                        && TextRenderInfo.hasFill textRenderInfo
                         && (TextRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth textRenderInfo).IsOutsideOf(args.UserState.[0])
                     ))
                 )
