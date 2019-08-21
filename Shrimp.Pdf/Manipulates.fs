@@ -7,14 +7,14 @@ open iText.Kernel.Pdf
 
 
 [<RequireQualifiedAccess>]
-module IntegralDocument =
-    let addNew (pageSelector: PageSelector) (pageBoxKind: PageBoxKind) (canvasActions: list<Canvas -> Canvas>) (document: IntegralDocument) =
+module IntegratedDocument =
+    let addNew (pageSelector: PageSelector) (pageBoxKind: PageBoxKind) (canvasActionsFactory: (int * PdfPage) -> list<Canvas -> Canvas>) (document: IntegratedDocument) =
 
         let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
         for i = 1 to document.Value.GetNumberOfPages() do
             if List.contains i selectedPageNumbers then
                 let page = document.Value.GetPage(i)
-
+                let canvasActions = canvasActionsFactory(i, page)
                 let canvas = new Canvas(page, page.GetPageBox(pageBoxKind))
                 (canvas, canvasActions)
                 ||> List.fold(fun pdfCanvas canvasAction ->
@@ -23,34 +23,52 @@ module IntegralDocument =
                 |> ignore
 
 
-
-
-
 module Manipulates =
-
-    let modify (pageSelector: PageSelector) (operators: list<(PdfPage -> RenderInfoSelector) * SelectionModifier>)   =
-        fun flowModel (document: IntegralDocument) ->
-            operators
-            |> List.iter (fun (renderInfoSelectorFactory, modifier) ->
-                IntegralDocument.modify (pageSelector) renderInfoSelectorFactory modifier document
-            ) 
-            flowModel.UserState
-        |> Manipulate
-
-    let addNew (pageSelector: PageSelector) (pageBoxKind: PageBoxKind) canvasActionsFactory =
-        fun flowModel (document: IntegralDocument) ->
-            let canvasActions = canvasActionsFactory flowModel.UserState
-            IntegralDocument.addNew pageSelector pageBoxKind canvasActions document
-            flowModel.UserState
-        |> Manipulate
 
     type PageModifingArguments<'userState> =
         { UserState: 'userState
           Page: PdfPage
           PageNum: int }
 
+    let modify (pageSelector: PageSelector) (operators: list<(PageModifingArguments<_> -> RenderInfoSelector) * SelectionModifier>)   =
+        fun (flowModel: FlowModel<_>) (document: IntegratedDocument) ->
+            operators
+            |> List.iter (fun (renderInfoSelectorFactory, modifier) ->
+                IntegratedDocument.modify 
+                    pageSelector
+                    (fun (pageNum, page) ->
+                        { UserState = flowModel.UserState 
+                          PageNum = pageNum 
+                          Page = page } 
+                        |> renderInfoSelectorFactory 
+                    ) 
+                    modifier
+                    document
+            ) 
+            flowModel.UserState
+        |> Manipulate
+
+    let addNew (pageSelector: PageSelector) (pageBoxKind: PageBoxKind) canvasActionsFactory =
+        fun (flowModel: FlowModel<_>) (document: IntegratedDocument) ->
+            
+            IntegratedDocument.addNew 
+                pageSelector 
+                pageBoxKind 
+                (fun (pageNum, pdfPage) -> 
+                    { PageNum = pageNum 
+                      Page = pdfPage 
+                      UserState = flowModel.UserState }
+                    |> canvasActionsFactory
+                ) 
+                document
+
+            flowModel.UserState
+        |> Manipulate
+
+
+
     let modifyPage (pageSelector: PageSelector) (renderInfoSelectorFactory: PageModifingArguments<_> -> RenderInfoSelector) operator  = 
-        fun (flowModel: FlowModel<_>) (document: IntegralDocument) ->
+        fun (flowModel: FlowModel<_>) (document: IntegratedDocument) ->
             let document = document.Value
             let parser = new PdfDocumentContentParser(document)
             let selectedPageNumbers = document.GetPageNumbers(pageSelector) 
@@ -76,20 +94,21 @@ module Manipulates =
             )
         |> Manipulate
 
-    let trimToVisible pageSelector =
+
+    let trimToVisible (margin: Margin) pageSelector =
         modifyPage 
             pageSelector
             (fun _ -> 
                 RenderInfoSelector.OR 
-                    [ RenderInfoSelector.Path PathRenderInfoEx.isVisible
-                      RenderInfoSelector.Text TextRenderInfoEx.isVisible ]
+                    [ RenderInfoSelector.PathIntegrated IntegratedRenderInfo.isVisible
+                      RenderInfoSelector.TextIntegrated IntegratedRenderInfo.isVisible ]
             )
             (fun args renderInfos ->
                 let bound = 
                     renderInfos
-                    |> Seq.map (AbstractRenderInfo.getBound BoundGettingOptions.WithStrokeWidth)
+                    |> Seq.choose (IntegratedRenderInfo.tryGetVisibleBound BoundGettingOptions.WithStrokeWidth)
                     |> Rectangle.ofRectangles
-                args.Page.SetActualBox(bound)
+                args.Page.SetActualBox(bound |> Rectangle.applyMargin margin)
                 |> ignore
                 None
             ) ||>> ignore

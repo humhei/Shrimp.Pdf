@@ -100,13 +100,12 @@ module Reuses =
                 let selector = renderInfoSelectorFactory readerPage
                 let infos = PdfDocumentContentParser.parse i selector parser
                 for info in infos do
-                    let bound = AbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth info
+                    let bound = AbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth info.RenderInfo
                     let writer = splitDocument.Writer
                     let writerPageResource = readerPage.CopyTo(writer)
                     PdfPage.setPageBox PageBoxKind.AllBox bound writerPageResource |> ignore
                     writer.AddPage(writerPageResource)
                     |> ignore
-
             flowModel.UserState
         |> Reuse
 

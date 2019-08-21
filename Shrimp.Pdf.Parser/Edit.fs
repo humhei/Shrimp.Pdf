@@ -168,17 +168,21 @@ type SelectionModifier =
     | Modify of (_SelectionModifierModifyArguments -> list<PdfCanvas -> PdfCanvas>)
 
 
-type internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionModifier) =
+
+and internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionModifier, document: PdfDocument) =
     inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(RenderInfoSelector.toEventTypes selector, RenderInfoSelector.toRenderInfoPredication selector))
     
     let eventTypes = RenderInfoSelector.toEventTypes selector
     
-    let mutable currentPdfCanvas = null
     let mutable eventListener: FilteredEventListenerEx = null
+    let pdfCanvasStack = new Stack<PdfCanvas>()
+    let resourcesStack = new Stack<PdfResources>()
 
 
 
     override this.InvokeOperatorRange (operatorRange: OperatorRange) =
+        let currentPdfCanvas = pdfCanvasStack.Peek()
+
         let operatorName = operatorRange.Operator.ToString()
         let (|Path|_|) operatorName =
             match operatorName with 
@@ -188,8 +192,7 @@ type internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionM
 
         let (|Text|_|) operatorName =
             match operatorName with 
-            | "Tj" | "TJ" when List.contains EventType.RENDER_TEXT eventTypes ->
-                Some ()
+            | "Tj" | "TJ" when List.contains EventType.RENDER_TEXT eventTypes -> Some ()
             | _ -> None
 
         let (|PathOrText|_|) operatorName =
@@ -199,6 +202,36 @@ type internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionM
             | _ -> None
 
         match operatorName with 
+        | "Do" ->
+            let (|Form|Image|Others|) pdfName = 
+                if pdfName = PdfName.Form 
+                then Form
+                elif pdfName = PdfName.Image
+                then Image
+                else Others
+
+            let resources = resourcesStack.Peek()
+            let name = operatorRange.Operands.[0] :?> PdfName
+
+            let container = resources.GetResource(PdfName.XObject)
+            let xobjectStream = container.Get(name) :?> PdfStream
+            let subType = xobjectStream.GetAsName(PdfName.Subtype)
+            match subType with 
+            | Form ->
+                let xobjectResources = 
+                    let subResources = xobjectStream.GetAsDictionary(PdfName.Resources)
+                    match subResources with 
+                    | null -> resources
+                    | _ -> PdfResources subResources
+                let fixedStream: PdfStream = this.EditContent(xobjectResources, xobjectStream)
+                container.Put(name, fixedStream) |> ignore
+            | Image -> ()
+            | Others -> ()
+
+            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+            |> ignore
+
+
         | PathOrText ->
             match eventListener.CurrentRenderInfoStatus with 
             | CurrentRenderInfoStatus.Skiped -> 
@@ -246,7 +279,7 @@ type internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionM
                         | SelectionModifier.AddNew addNew -> 
                             PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas |> ignore
                             PdfCanvas.useCanvas currentPdfCanvas (fun canvas ->
-                                let pdfCanvasActions = addNew { CurrentRenderInfo = eventListener.CurrentRenderInfo }
+                                let pdfCanvasActions = addNew { CurrentRenderInfo = eventListener.CurrentRenderInfo.RenderInfo }
                                 (canvas, (pdfCanvasActions))
                                 ||> List.fold(fun canvas action ->
                                     action canvas 
@@ -263,72 +296,75 @@ type internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionM
             PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
             |> ignore
 
-    member this.EditContent(pdfCanvas: PdfCanvas, contentBytes: byte [], resources: PdfResources) =
-        eventListener <- this.GetEventListener() :?> FilteredEventListenerEx
-        currentPdfCanvas <- pdfCanvas
 
-        base.ProcessContent(contentBytes, resources)
+    member this.EditContent (resources: PdfResources, pdfObject: PdfObject) =
+        match eventListener with 
+        | null -> eventListener <- this.GetEventListener() :?> FilteredEventListenerEx
+        | _ -> ()
 
-        currentPdfCanvas.GetContentStream()
+        match pdfObject with 
+        | :? PdfStream as stream -> 
+            let pdfCanvas = new PdfCanvas(new PdfStream(), resources, document)
 
+            let bytes = stream.GetBytes()
+            pdfCanvasStack.Push(pdfCanvas)
+            resourcesStack.Push(resources)
+            base.ProcessContent(bytes, resources)
+            let pdfCanvas = pdfCanvasStack.Pop()
+            resourcesStack.Pop()|> ignore
+            let clonedStream = stream.Clone() :?> PdfStream
+            clonedStream.SetData(pdfCanvas.GetContentStream().GetBytes()) |> ignore
+            clonedStream
+
+        | :? PdfArray as array ->
+            if array |> Seq.forall (fun o -> o :? PdfStream) && Seq.length array > 1 then 
+                let stream = new PdfStream()
+                array |> Seq.cast<PdfStream> |> Seq.iter (fun s1 ->
+                    stream.GetOutputStream().WriteBytes(s1.GetBytes()) |> ignore
+                )
+                this.EditContent (resources, stream)
+            else
+                failwith "Not implemented"
+
+        | :? PdfDictionary as map ->
+            failwith "Not implemented"
+        | _ -> failwith "Not implemented"
 
 
 
 [<RequireQualifiedAccess>]
 module internal PdfPage =
     let modify (renderInfoSelector: RenderInfoSelector) (modifier: SelectionModifier) (page: PdfPage) =
-        let editor = new PdfCanvasEditor(renderInfoSelector, modifier)
-
-        let rec loop (resources: PdfResources) (pdfObject: PdfObject) =
-            match pdfObject with 
-            | :? PdfStream as stream -> 
-                let pdfCanvas = new PdfCanvas(new PdfStream(), resources, page.GetDocument())
-                let bytes = stream.GetBytes()
-                let fixedStream = editor.EditContent(pdfCanvas, bytes, resources)
-                fixedStream
-
-            | :? PdfArray as array ->
-                if array |> Seq.forall (fun o -> o :? PdfStream) && Seq.length array > 1 then 
-                    let s = new PdfStream()
-                    array |> Seq.cast<PdfStream> |> Seq.iter (fun s1 ->
-                        s.GetOutputStream().WriteBytes(s1.GetBytes()) |> ignore
-                    )
-                    loop resources s
-                else
-                    failwith "Not implemented"
-
-            | :? PdfDictionary as map ->
-                failwith "Not implemented"
-            | _ -> failwith "Not implemented"
-
+        let document = page.GetDocument()
+        let editor = new PdfCanvasEditor(renderInfoSelector, modifier, document)
         let pageContents = page.GetPdfObject().Get(PdfName.Contents)
 
         match pageContents with 
         | null -> ()
         | _ ->
             let resources = page.GetResources()
-            let fixedStream = loop resources pageContents
+            let fixedStream = editor.EditContent(resources, pageContents)
             page.Put(PdfName.Contents, fixedStream)
             |> ignore
 
 
-type IntegralDocument private (reader: string, writer: string) =
+type IntegratedDocument private (reader: string, writer: string) =
 
     let pdfDocument = new PdfDocumentWithCachedResources(reader, writer)
 
     member x.Value = pdfDocument
 
-    static member Create(reader, writer) = new IntegralDocument(reader, writer)
+    static member Create(reader, writer) = new IntegratedDocument(reader, writer)
 
 
 [<RequireQualifiedAccess>]
-module IntegralDocument =
-    let modify (pageSelector: PageSelector) (renderInfoSelectorFactory: PdfPage -> RenderInfoSelector) (selectionModifier: SelectionModifier) (document: IntegralDocument) =
+module IntegratedDocument =
+    let modify (pageSelector: PageSelector) (renderInfoSelectorFactory: (int * PdfPage) -> RenderInfoSelector) (selectionModifier: SelectionModifier) (document: IntegratedDocument) =
         let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
         for i = 1 to document.Value.GetNumberOfPages() do
             if List.contains i selectedPageNumbers then
                 let page = document.Value.GetPage(i)
-                let renderInfoSelector = renderInfoSelectorFactory page
+                let renderInfoSelector = renderInfoSelectorFactory (i, page)
                 PdfPage.modify renderInfoSelector selectionModifier page
 
 

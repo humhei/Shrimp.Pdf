@@ -13,6 +13,30 @@ open iText.Layout.Properties
 open System.Collections.Concurrent
 open iText.Kernel.Pdf
 
+type PageEdge =
+    { LeftMiddle: Rectangle 
+      LeftBottom: Rectangle 
+      LeftTop: Rectangle 
+      TopMiddle: Rectangle 
+      TopRight: Rectangle 
+      RightMiddle: Rectangle 
+      RightBottom: Rectangle 
+      BottomMiddle: Rectangle }
+
+
+[<RequireQualifiedAccess>]
+module PageEdge =
+    let getAreas pageEdge =
+        [ pageEdge.LeftMiddle
+          pageEdge.LeftTop
+          pageEdge.LeftBottom
+          pageEdge.TopMiddle
+          pageEdge.TopRight
+          pageEdge.RightMiddle
+          pageEdge.RightBottom
+          pageEdge.BottomMiddle
+        ]
+
 type Margin = 
     { Left: float
       Top: float
@@ -185,13 +209,12 @@ type Position =
 
 
 type DashPattern =
-    { DashArray: float list 
+    { DashArray: float []
       Phase: float }
 
 with 
     member x.DashArrayF32 =
         x.DashArray
-        |> Array.ofList
         |> Array.map float32
 
     member x.PhaseF32 =
@@ -468,7 +491,7 @@ module Extensions =
                 let y = List.min ys
                 let width = List.max xs - x 
                 let height = List.max ys - y
-                create x y width height
+                (create x y width height)
 
 
             /// <param name="rects" at least one rectange></param>
@@ -730,7 +753,6 @@ module Extensions =
             let toActualPoints (ctm: Matrix) subpath =
                 toRawPoints subpath
                 |> Seq.map (fun pt -> (AffineTransform.ofMatrix ctm).Tranform(pt))
-                |> List.ofSeq
 
             let getActualBound ctm (subpath: Subpath) =
                 toActualPoints ctm subpath
@@ -744,6 +766,7 @@ module Extensions =
         type BoundGettingOptions =
             | WithStrokeWidth = 0
             | WithoutStrokeWidth = 1
+
 
         [<RequireQualifiedAccess>]
         module PathRenderInfo =
@@ -759,11 +782,10 @@ module Extensions =
             let toActualPoints (prInfo: PathRenderInfo) =
                 let ctm = prInfo.GetCtm()
                 prInfo.GetPath().GetSubpaths()
-                |> List.ofSeq
-                |> List.collect (Subpath.toActualPoints ctm)
+                |> Seq.collect (Subpath.toActualPoints ctm)
 
             let hasStroke (info: PathRenderInfo) =             
-                info.GetPath().GetSubpaths().Count <> 0
+                info.GetPath().GetSubpaths().Count > 0
                 && 
                     match info.GetOperation() with 
                     | PathRenderInfo.STROKE
@@ -771,7 +793,7 @@ module Extensions =
                     | _ -> false
 
             let hasFill (info: PathRenderInfo) =
-                info.GetPath().GetSubpaths().Count <> 0
+                info.GetPath().GetSubpaths().Count > 0
                 &&
                     match info.GetOperation() with 
                     | PathRenderInfo.FILL 
@@ -794,7 +816,7 @@ module Extensions =
                         failwithf "unSupported path render operation %d" others
                 else []
 
-            let getBound (boundGettingOptions: BoundGettingOptions) (info: PathRenderInfo) =     
+            let getBound (boundGettingOptions: BoundGettingOptions) (info: PathRenderInfo) = 
                 let boundWithoutWidth = info |> toActualPoints |> Rectangle.ofPoints
                 match boundGettingOptions with 
                 | BoundGettingOptions.WithoutStrokeWidth -> boundWithoutWidth
@@ -804,8 +826,8 @@ module Extensions =
                         let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
                         Rectangle.applyMargin widthMargin boundWithoutWidth
                     else boundWithoutWidth
-                | _ -> failwith "Invalid token"
 
+                | _ -> failwith "Invalid token"
 
         [<RequireQualifiedAccess>]
         module TextRenderInfo =
@@ -929,14 +951,14 @@ module Extensions =
         module CanvasGraphicsState =
             let getDashPattern (gs: CanvasGraphicsState) =
                 let dashPattern = gs.GetDashPattern()
-                let values = dashPattern |> List.ofSeq
-                let l = values |> List.length
+                let values = dashPattern |> Array.ofSeq
+                let l = values.Length
                 let dashArray = 
                     values.[0..l-2] 
-                    |> List.collect (fun dashArray -> 
+                    |> Array.collect (fun dashArray -> 
                         dashArray :?> PdfArray 
-                        |> List.ofSeq 
-                        |> List.map (fun dashValue -> 
+                        |> Array.ofSeq 
+                        |> Array.map (fun dashValue -> 
                             let number = dashValue :?> PdfNumber
                             number.GetValue()
                         ))
@@ -1285,6 +1307,78 @@ module Extensions =
 
             let getActualBox (page: PdfPage) =
                 page.GetActualBox()
+
+            let getEdge (innerBox: Rectangle) pageBoxKind (page: PdfPage) =
+                let pageBox = page.GetPageBox(pageBoxKind)
+
+                if innerBox.IsInsideOf(pageBox) 
+                then 
+                    let leftBottom =
+                        Rectangle.create 
+                        <| pageBox.GetXF()
+                        <| pageBox.GetYF()
+                        <| innerBox.GetXF() - pageBox.GetXF() 
+                        <| innerBox.GetYF() - pageBox.GetYF()   
+
+                    let leftMiddle =
+                        Rectangle.create 
+                        <| pageBox.GetXF()
+                        <| leftBottom.GetTopF()
+                        <| leftBottom.GetWidthF()
+                        <| innerBox.GetHeightF()
+
+                    let leftTop =
+                        Rectangle.create 
+                        <| pageBox.GetXF()
+                        <| leftMiddle.GetTopF()
+                        <| leftMiddle.GetWidthF()
+                        <| pageBox.GetTopF() - innerBox.GetTopF()
+
+                    let topMiddle =
+                        Rectangle.create 
+                        <| pageBox.GetXF() + leftTop.GetWidthF()
+                        <| leftTop.GetYF()
+                        <| innerBox.GetWidthF()
+                        <| leftTop.GetHeightF()
+
+                    let topRight =
+                        Rectangle.create 
+                        <| topMiddle.GetRightF()
+                        <| topMiddle.GetYF()
+                        <| pageBox.GetRightF() - innerBox.GetRightF()
+                        <| topMiddle.GetHeightF()
+
+                    let rightMiddle =
+                        Rectangle.create 
+                        <| topRight.GetXF()
+                        <| leftMiddle.GetYF()
+                        <| topRight.GetWidthF()
+                        <| leftMiddle.GetHeightF()
+
+                    let rightBottom =
+                        Rectangle.create 
+                        <| rightMiddle.GetXF()
+                        <| leftBottom.GetYF()
+                        <| rightMiddle.GetWidthF()
+                        <| leftBottom.GetHeightF()
+
+                    let bottomMiddle =
+                        Rectangle.create 
+                        <| topMiddle.GetXF()
+                        <| leftBottom.GetYF()
+                        <| topMiddle.GetWidthF()
+                        <| leftBottom.GetHeightF()
+
+                    { LeftBottom = leftBottom
+                      LeftMiddle = leftMiddle
+                      LeftTop = leftTop
+                      TopMiddle = topMiddle
+                      TopRight = topRight
+                      RightMiddle = rightMiddle
+                      RightBottom = rightBottom
+                      BottomMiddle = bottomMiddle }
+
+                else failwithf "innerBox %O is not inside pageBox %O" innerBox pageBox
 
         [<RequireQualifiedAccess>]
         module PdfDocument =

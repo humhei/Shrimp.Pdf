@@ -43,7 +43,7 @@ module Operators =
 
     /// approximately equal to 
     /// benchmark by (CONFIG: shrimp.pdf.tolerance (default is 0.1))
-    let inline internal  (@=) a b =
+    let inline (@=) a b =
         float (abs (a - b)) < tolerance
 
     /// mm to px

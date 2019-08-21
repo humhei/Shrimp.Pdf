@@ -704,3 +704,5 @@ module Imposing =
             let producedSheets = produceSheets readerPages []
 
             sheets.AddRange(List.rev producedSheets)
+
+        member x.GetFirstCell() = sheets.[0].Rows.[0].Cells.[0]

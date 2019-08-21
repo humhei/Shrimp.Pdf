@@ -4,36 +4,43 @@ open iText.Kernel.Pdf.Canvas.Parser.Listener
 open System.Collections.Generic
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf.Extensions
-open iText.Kernel.Geom
-open iText.Kernel.Pdf.Canvas
-open System.Reflection
-
+open Shrimp.Pdf
 
 [<RequireQualifiedAccess>]
-module private AbstractRenderInfo =
-    type VisibleGettingOptions =
-        | Stroke = 0
-        | Fill = 1
+module ClippingPathInfo =
+    let tryGetClippingPath (info: ClippingPathInfo) = 
+        match info.GetClippingPath() with 
+        | null -> None
+        | path -> 
+            if path.GetSubpaths() |> Seq.forall(fun subPath -> subPath.GetPiecewiseLinearApproximation().Count = 0) then None
+            else Some path
 
-    let getParserGraphicsStatePreservation (info: AbstractRenderInfo) =
-        match info with 
-        | :? PathRenderInfoEx as info ->info.GetParserGraphicsStatePreservation()
-        | :? TextRenderInfoEx as info -> info.GetParserGraphicsStatePreservation()
-        | _ -> failwith "renderInfo should be either pathRenderInfoEx or TextRenderInfoEx"
+    let tryGetActualClippingArea (info) =
+        tryGetClippingPath info
+        |> Option.map (fun clippingPath ->
+            clippingPath.GetSubpaths()
+            |> Seq.collect(Subpath.toActualPoints (info.GetGraphicsState().GetCtm()))
+            |> Rectangle.ofPoints
+        )
 
-    let isVisible (options: VisibleGettingOptions) (info: AbstractRenderInfo) =
-        let parserGraphicsStatePreservation = getParserGraphicsStatePreservation info
+type FillOrStrokeOptions =
+    | Stroke = 0
+    | Fill = 1
 
-        match options with 
-        | VisibleGettingOptions.Fill -> AbstractRenderInfo.hasFill info
-        | VisibleGettingOptions.Stroke -> AbstractRenderInfo.hasStroke info
+[<RequireQualifiedAccess>]
+module internal AbstractRenderInfo =
+    let isVisible (fillOrStrokeOptions: FillOrStrokeOptions) (clippingPathInfo) (info: AbstractRenderInfo) =
+
+        match fillOrStrokeOptions with 
+        | FillOrStrokeOptions.Fill -> AbstractRenderInfo.hasFill info
+        | FillOrStrokeOptions.Stroke -> AbstractRenderInfo.hasStroke info
         | _ -> failwith "Invalid token"
         &&
             match info with 
-            | :? PathRenderInfoEx as info -> not (info.IsPathModifiesClippingPath())
+            | :? PathRenderInfo as info -> not (info.IsPathModifiesClippingPath())
             | _ -> true
         && 
-            match parserGraphicsStatePreservation.TryGetClippingArea() with 
+            match ClippingPathInfo.tryGetActualClippingArea clippingPathInfo with 
                 | Some clippingBound ->
                     let bound = AbstractRenderInfo.getBound BoundGettingOptions.WithStrokeWidth info
                     match Rectangle.tryGetIntersection bound clippingBound with 
@@ -41,44 +48,53 @@ module private AbstractRenderInfo =
                     | None -> false
                 | None -> true
 
-    let isStrokeVisible info = isVisible VisibleGettingOptions.Stroke info
-
-    let isFillVisible info = isVisible VisibleGettingOptions.Fill info
-
-    let tryGetVisibleBound  (info: AbstractRenderInfo)=
-        match isStrokeVisible info, isFillVisible info with 
-        | true, _ 
-        | false, true ->
-            let bound = AbstractRenderInfo.getBound BoundGettingOptions.WithStrokeWidth info
-            match (getParserGraphicsStatePreservation info).TryGetClippingArea() with 
+    let tryGetVisibleBound boundGettingOptions (clippingPathInfo) (info: AbstractRenderInfo) =
+        if isVisible (FillOrStrokeOptions.Stroke) clippingPathInfo info || isVisible (FillOrStrokeOptions.Fill) clippingPathInfo info 
+        then
+            let bound = AbstractRenderInfo.getBound boundGettingOptions info
+            match ClippingPathInfo.tryGetActualClippingArea clippingPathInfo with 
             | Some clippingBound -> Rectangle.tryGetIntersection bound clippingBound 
-            | None -> Some bound
-        | _ -> None
-
-[<RequireQualifiedAccess>]
-module PathRenderInfoEx =
-
-    let isStrokeVisible (info: PathRenderInfoEx) =             
-        AbstractRenderInfo.isStrokeVisible info
-
-    let isFillVisible (info: PathRenderInfoEx) = AbstractRenderInfo.isFillVisible info         
-        
-    let isVisible (info: PathRenderInfoEx) = isFillVisible info || isStrokeVisible info
-
-    let tryGetVisibleBound (info: PathRenderInfoEx) = AbstractRenderInfo.tryGetVisibleBound info
+            | None -> 
+                if bound.GetWidthF() @= 0. || bound.GetHeightF() @= 0. then None
+                else
+                    Some bound
+        else None
 
 
 [<RequireQualifiedAccess>]
-module TextRenderInfoEx =
-    let isStrokeVisible (info: TextRenderInfoEx) =             
-        AbstractRenderInfo.isStrokeVisible info
+type IntegratedRenderInfoKind =
+    | Path = 0
+    | Text  = 1
 
-    let isFillVisible (info: TextRenderInfoEx) = AbstractRenderInfo.isFillVisible info         
-        
-    let isVisible (info: TextRenderInfoEx) = isFillVisible info || isStrokeVisible info
+type IntegratedRenderInfo =
+    { RenderInfo: AbstractRenderInfo 
+      ClippingPathInfo: ClippingPathInfo
+      Kind: IntegratedRenderInfoKind }
 
-    let tryGetVisibleBound (info: TextRenderInfoEx) = AbstractRenderInfo.tryGetVisibleBound info
+[<RequireQualifiedAccess>]
+module IntegratedRenderInfo =
 
+    let asPathRenderInfo (info: IntegratedRenderInfo) = 
+        match info.Kind with
+        | IntegratedRenderInfoKind.Path -> Some (info.RenderInfo :?> PathRenderInfo)
+        | _ -> None 
+
+    let asTextRenderInfo (info: IntegratedRenderInfo) =
+        match info.Kind with
+        | IntegratedRenderInfoKind.Text -> Some (info.RenderInfo :?> TextRenderInfo)
+        | _ -> None 
+
+    let isStrokeVisible (info: IntegratedRenderInfo) = 
+        AbstractRenderInfo.isVisible FillOrStrokeOptions.Stroke info.ClippingPathInfo info.RenderInfo
+
+    let isFillVisible (info: IntegratedRenderInfo) = 
+        AbstractRenderInfo.isVisible FillOrStrokeOptions.Fill info.ClippingPathInfo info.RenderInfo
+
+    let tryGetVisibleBound boundGettingOptions (info: IntegratedRenderInfo) =
+        AbstractRenderInfo.tryGetVisibleBound boundGettingOptions info.ClippingPathInfo info.RenderInfo
+
+    let isVisible (info: IntegratedRenderInfo) =
+        isFillVisible info || isStrokeVisible info
 
 
 module internal Listeners =
@@ -89,20 +105,18 @@ module internal Listeners =
 
     [<AllowNullLiteral>]
     /// a type named FilteredEventListener is already defined in itext7
-    type FilteredEventListenerEx(supportedEvents: EventType list, filter: AbstractRenderInfo -> bool) =
-        let mutable currentRenderInfo = null
+    type FilteredEventListenerEx(supportedEvents: EventType list, filter: IntegratedRenderInfo -> bool) =
+        let mutable currentRenderInfo: IntegratedRenderInfo option = None
         let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Selected
-        let mutable currentClippingPathCtm = null
         let mutable currentClippingPathInfo = null
 
-        let parsedRenderInfos = List<AbstractRenderInfo>()
+        let parsedRenderInfos = List<IntegratedRenderInfo>()
 
-
-        member this.CurrentRenderInfo = currentRenderInfo
+        member this.CurrentRenderInfo = currentRenderInfo.Value
 
         member this.CurrentRenderInfoStatus = currentRenderInfoStatus
 
-        member this.ParsedRenderInfos = parsedRenderInfos :> seq<AbstractRenderInfo>
+        member this.ParsedRenderInfos = parsedRenderInfos :> seq<IntegratedRenderInfo>
 
 
         interface IEventListener with 
@@ -116,21 +130,25 @@ module internal Listeners =
                     let renderInfo = 
                         match data with 
                         | :? PathRenderInfo as pathRenderInfo ->
-                            new PathRenderInfoEx(pathRenderInfo, currentClippingPathInfo) :> AbstractRenderInfo
-
+                            { ClippingPathInfo  = currentClippingPathInfo 
+                              RenderInfo = pathRenderInfo
+                              Kind = IntegratedRenderInfoKind.Path }
                         | :? TextRenderInfo as textRenderInfo ->
-                            new TextRenderInfoEx(textRenderInfo, currentClippingPathInfo) :> AbstractRenderInfo
-                        | _ -> failwithf "Unspported renderinfo type %s" (data.GetType().FullName) 
+                            { ClippingPathInfo  = currentClippingPathInfo 
+                              RenderInfo = textRenderInfo 
+                              Kind = IntegratedRenderInfoKind.Text }
+                        |_ -> failwith "Not implemented"
+                       
 
                     if filter renderInfo then
-                        renderInfo.PreserveGraphicsState()
+                        renderInfo.RenderInfo.PreserveGraphicsState()
 
                         parsedRenderInfos.Add(renderInfo)
-                        currentRenderInfo <- renderInfo
+                        currentRenderInfo <- Some renderInfo
                         currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
                     else 
                         currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
-                        currentRenderInfo <- null
+                        currentRenderInfo <- None
 
             member this.GetSupportedEvents() = 
                 List supportedEvents :> ICollection<_>
@@ -144,8 +162,11 @@ module internal Listeners =
 
 [<RequireQualifiedAccess>]
 type RenderInfoSelector = 
-    | Path of (PathRenderInfoEx -> bool)
-    | Text of (TextRenderInfoEx -> bool)
+    | Path of (PathRenderInfo -> bool)
+    | Text of (TextRenderInfo -> bool)
+    | PathOrText of (AbstractRenderInfo -> bool)
+    | PathIntegrated of (IntegratedRenderInfo -> bool)
+    | TextIntegrated of (IntegratedRenderInfo -> bool)
     | Dummy
     | AND of RenderInfoSelector list
     | OR of RenderInfoSelector list
@@ -157,6 +178,9 @@ module RenderInfoSelector =
             match selector with 
             | RenderInfoSelector.Path _ -> [EventType.RENDER_PATH; EventType.CLIP_PATH_CHANGED]
             | RenderInfoSelector.Text _ -> [EventType.RENDER_TEXT; EventType.CLIP_PATH_CHANGED]
+            | RenderInfoSelector.PathOrText _ -> [EventType.RENDER_TEXT; EventType.RENDER_PATH; EventType.CLIP_PATH_CHANGED]
+            | RenderInfoSelector.PathIntegrated _ -> [EventType.RENDER_PATH; EventType.CLIP_PATH_CHANGED]
+            | RenderInfoSelector.TextIntegrated _ -> [EventType.RENDER_TEXT; EventType.CLIP_PATH_CHANGED]
             | RenderInfoSelector.Dummy -> []
             | RenderInfoSelector.AND selectors ->
                 selectors
@@ -173,28 +197,44 @@ module RenderInfoSelector =
         let rec loop selector =
             match selector with 
             | RenderInfoSelector.Path prediate -> 
-                fun (renderInfo: AbstractRenderInfo) ->
-                    match renderInfo with 
-                    | :? PathRenderInfoEx as pathRenderInfo ->
-                        prediate pathRenderInfo
+                fun (renderInfo: IntegratedRenderInfo) ->
+                    match renderInfo.RenderInfo with 
+                    | :? PathRenderInfo as pathRenderInfo -> prediate pathRenderInfo
                     | _ -> false
 
+            | RenderInfoSelector.PathIntegrated prediate ->
+                fun (renderInfo: IntegratedRenderInfo) -> 
+                    match renderInfo.Kind with 
+                    | IntegratedRenderInfoKind.Text -> false
+                    | IntegratedRenderInfoKind.Path -> prediate renderInfo
+                    | _ -> failwith "Invalid token"
+
             | RenderInfoSelector.Text prediate -> 
-                fun (renderInfo: AbstractRenderInfo) ->
-                    match renderInfo with 
-                    | :? TextRenderInfoEx as textRenderInfo ->
-                        prediate textRenderInfo
+                fun (renderInfo: IntegratedRenderInfo) ->
+                    match renderInfo.RenderInfo with 
+                    | :? TextRenderInfo as textRenderInfo -> prediate textRenderInfo
                     | _ -> false
+
+            | RenderInfoSelector.PathOrText prediate -> 
+                fun (renderInfo: IntegratedRenderInfo) ->
+                    prediate renderInfo.RenderInfo
+
+            | RenderInfoSelector.TextIntegrated prediate ->
+                fun (renderInfo: IntegratedRenderInfo) ->
+                    match renderInfo.Kind with 
+                    | IntegratedRenderInfoKind.Text -> prediate renderInfo
+                    | IntegratedRenderInfoKind.Path -> false
+                    | _ -> failwith "Invalid token"
 
             | RenderInfoSelector.Dummy _ -> fun _ -> false
 
+
             | RenderInfoSelector.AND selectors ->
-                fun (renderInfo: AbstractRenderInfo) ->
+                fun (renderInfo: IntegratedRenderInfo) ->
                     selectors |> List.forall (fun selector -> loop selector renderInfo)
-                
 
             | RenderInfoSelector.OR selectors ->
-                fun (renderInfo: AbstractRenderInfo) ->
+                fun (renderInfo: IntegratedRenderInfo) ->
                     selectors |> List.exists (fun selector -> loop selector renderInfo)
 
         loop selector
@@ -207,10 +247,10 @@ module PdfDocumentContentParser =
     let parse (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: PdfDocumentContentParser) =
         let et = RenderInfoSelector.toEventTypes renderInfoSelector
         let filter = RenderInfoSelector.toRenderInfoPredication renderInfoSelector
-        let listener = new FilteredEventListenerEx(et,filter)
+        let listener = new FilteredEventListenerEx(et, filter)
 
         match et with 
-        | [] -> [] :> seq<AbstractRenderInfo>
+        | [] -> [] :> seq<IntegratedRenderInfo>
         | _ ->
             parser.ProcessContent(pageNum, listener).ParsedRenderInfos
         

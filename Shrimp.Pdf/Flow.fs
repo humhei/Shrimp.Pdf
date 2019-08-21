@@ -23,7 +23,7 @@ with
         |> Reuse
 
 type Manipulate<'oldUserState, 'newUserState> = 
-    Manipulate of (FlowModel<'oldUserState> -> IntegralDocument -> 'newUserState)
+    Manipulate of (FlowModel<'oldUserState> -> IntegratedDocument -> 'newUserState)
 with 
     member x.Value =
         let (Manipulate value) = x
@@ -32,7 +32,7 @@ with
     /// internal use
     /// using <+> instead
     static member Bind (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
-        fun flowModel (document: IntegralDocument) ->
+        fun flowModel (document: IntegratedDocument) ->
             let middleUserState = manipulate1.Value flowModel document
             manipulate2.Value {File = flowModel.File; UserState = middleUserState} document
         |> Manipulate
@@ -40,7 +40,7 @@ with
     /// internal use
     /// using <++> instead
     static member Bind_TupleUserState (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
-        fun flowModel (document: IntegralDocument) ->
+        fun flowModel (document: IntegratedDocument) ->
             let middleUserState: 'middleUserState = manipulate1.Value flowModel document
             middleUserState, manipulate2.Value {File = flowModel.File; UserState = middleUserState} document
         |> Manipulate
@@ -48,7 +48,7 @@ with
     /// internal use
     /// using <.+> instead
     static member Bind_FstUserState (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
-        fun flowModel (document: IntegralDocument) ->
+        fun flowModel (document: IntegratedDocument) ->
             let middleUserState: 'middleUserState = manipulate1.Value flowModel document
             manipulate2.Value {File = flowModel.File; UserState = middleUserState} document |> ignore
             middleUserState
@@ -92,7 +92,7 @@ with
         match flow with 
         | Flow.Manipulate (manipulate) ->
 
-            let pdfDocument = IntegralDocument.Create(file, writerFile)
+            let pdfDocument = IntegratedDocument.Create(file, writerFile)
             let newUserState = manipulate.Value flowModel pdfDocument
             pdfDocument.Value.Close()
             draft()

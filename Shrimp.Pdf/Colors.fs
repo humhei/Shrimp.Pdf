@@ -81,7 +81,7 @@ module Colourful =
 
 
     converter.WhitePoint <- 
-        match config.GetString("").ToUpper() with
+        match config.GetString("shrimp.pdf.colourful.whitePoint").ToUpper() with
         |"A"    -> Illuminants.A
         |"B"    -> Illuminants.B
         |"C"    -> Illuminants.C
@@ -122,6 +122,9 @@ module DeviceRgb =
         let g = float32 rgb.G
         let b = float32 rgb.B
         DeviceRgb(r,g,b)
+
+    let MAGENTA = new DeviceRgb(1.f, 0.f, 1.f) :> Color
+        
 
 
 [<RequireQualifiedAccess>]

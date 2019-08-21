@@ -4,14 +4,6 @@ open iText.Kernel.Geom
 open Shrimp.Pdf.Extensions
 
 
-
-
-           
-
-
-
-
-
 type FsSize =
     { Width: float 
       Height: float }
@@ -82,6 +74,7 @@ type ContentResizeMode =
 
 [<RequireQualifiedAccess>]
 module PdfPage =
+
     let increaseHeight 
         (origin: Position)
         (pageboxKind: PageBoxKind)
@@ -96,7 +89,7 @@ module PdfPage =
             
         match contentResizeMode with 
         | ContentResizeMode.CropOrAdd ->
-            PdfPage.setPageBox PageBoxKind.AllBox newRect page 
+            PdfPage.setPageBox pageboxKind newRect page 
         | _ -> failwith "not implemented"
 
 

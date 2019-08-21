@@ -35,6 +35,26 @@ let manipulateTests =
         |> runWithBackup "datas/manipulate/change stroke color b255 to m100.pdf" 
         |> ignore
 
+    testCase "xobject_change stroke color b255 to m100" <| fun _ -> 
+        Flow.Manipulate (
+            modify 
+                (PageSelector.First)
+                [
+                    (
+                        (fun page ->
+                            RenderInfoSelector.Path (fun pathRenderInfo -> 
+                                pathRenderInfo.GetStrokeColor() = DeviceRgb.BLUE)
+                        ),
+                        SelectionModifier.Modify (fun args -> [
+                            PdfCanvas.setStrokeColor (PdfCanvasColor.Specific DeviceCmyk.MAGENTA)
+                            PdfCanvas.writeOperatorRange args.Close
+                        ])
+                    )
+                ]
+        )
+        |> runWithBackup "datas/manipulate/xobject_change stroke color b255 to m100.pdf" 
+        |> ignore
+
     testCase "add bound to text" <| fun _ -> 
         Flow.Manipulate (
             modify 
@@ -102,9 +122,9 @@ let manipulateTests =
         |> runWithBackup "datas/manipulate/add page-scaling text.pdf" 
         |> ignore
 
-    ftestCase "trim to visible test" <| fun _ -> 
+    testCase "trim to visible test" <| fun _ -> 
         Flow.Manipulate(
-            trimToVisible PageSelector.All
+            trimToVisible (Margin.Create(mm 6)) PageSelector.All
         )
         |> runWithBackup "datas/manipulate/trim to visible.pdf" 
         |> ignore

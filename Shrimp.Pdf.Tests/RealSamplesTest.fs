@@ -11,28 +11,48 @@ open Shrimp.Pdf.Manipulates
 open FParsec
 open FParsec.CharParsers
 open iText.Kernel.Geom
+open Shrimp.Pdf.Parser
+open iText.Kernel.Pdf.Canvas.Parser.Data
+open Shrimp.Pdf.Colors
+type Page = PageSelector
+type Selector = RenderInfoSelector 
+
 
 let realSamplesTests =
   testList "real samples tests" [
-    testCase "Layout Confirm___trim to b255_N-UP_remove left top R255B255_change left top r255 to k100 tests" <| fun _ -> 
+    ftestCase "Layout Confirm___trim to b255_N-UP_remove left top R255B255_change left top r255 to k100 tests" <| fun _ -> 
         let readB255Bound() =
             modifyPage 
-                PageSelector.All
+                Page.All
                 (fun args ->
-                    (RenderInfoSelector.Path (fun pathRenderInfo ->
+                    (Selector.PathIntegrated (fun pathIntegratedRenderInfo ->
+                        let pathRenderInfo = pathIntegratedRenderInfo.RenderInfo
                         pathRenderInfo.GetStrokeColor() = DeviceRgb.BLUE
-                        && PathRenderInfo.hasStroke pathRenderInfo
-                        && (PathRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth pathRenderInfo).IsInsideOf(args.Page.GetActualBox())
+                        && IntegratedRenderInfo.isStrokeVisible pathIntegratedRenderInfo
+                        && (AbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth pathRenderInfo).IsInsideOf(args.Page.GetActualBox())
                     ))
                 )
                 (fun args renderInfos ->
                     let trimedBox = 
                         renderInfos
-                        |> Seq.map (AbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth)
+                        |> Seq.choose (IntegratedRenderInfo.asPathRenderInfo)
+                        |> Seq.map (PathRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth)
                         |> Rectangle.ofRectangles
                     Some trimedBox
-                ) 
+                )
         
+        let (<@>) (a: #AbstractRenderInfo -> bool) (b: #AbstractRenderInfo -> bool) =
+            fun renderInfo ->
+                a renderInfo
+                && b renderInfo
+        let m = 
+            RenderInfoSelector.Text(
+                AbstractRenderInfo.hasFill
+                <@>
+                TextRenderInfo.hasFill
+            )
+
+
         let readSize() = 
             readB255Bound()
             <+> 
@@ -48,7 +68,7 @@ let realSamplesTests =
                 (fun args renderInfos ->
                     let textRenderInfos = 
                         renderInfos 
-                        |> Seq.choose AbstractRenderInfo.asTextRenderInfo
+                        |> Seq.choose IntegratedRenderInfo.asTextRenderInfo
                         |> Seq.pick (fun renderInfo ->
                             let text = TextRenderInfo.getText renderInfo
                             let parser = 
@@ -77,6 +97,10 @@ let realSamplesTests =
                 ) ||>> ignore
 
 
+       
+
+
+
         Flow.Manipulate (
             setTrimBoxToStrokeB255()
         )
@@ -97,18 +121,75 @@ let realSamplesTests =
         <+> 
         Flow.Manipulate (
             Manipulate.dummy
-            <.+> trimToVisible PageSelector.All
-            <++> readB255Bound()
-            <+> 
-            modifyPage 
+            <.+> trimToVisible (Margin.Create(mm 2.)) PageSelector.All
+            <++> 
+            (
+                readB255Bound()
+                <+>
+                modifyPage
+                    PageSelector.All
+                    (fun args -> RenderInfoSelector.Dummy )
+                    (fun args renderInfos ->
+                        let b255Bound = args.UserState.[args.PageNum - 1]
+                        let bound = PdfPage.getEdge b255Bound (PageBoxKind.ActualBox) args.Page
+                        Some bound
+                    )
+            )
+            <+>
+            //modify
+            //    PageSelector.All
+            //    [
+            //        (
+            //            (fun args->
+            //                let (_,_), pageEdges = args.UserState
+            //                let pageEdge = pageEdges.[args.PageNum - 1]
+            //                RenderInfoSelector.PathOrText (fun renderInfo ->
+            //                    (AbstractRenderInfo.hasFill renderInfo
+            //                    && (renderInfo.GetFillColor() = DeviceRgb.MAGENTA)
+            //                    && (AbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth renderInfo).IsInsideOf(pageEdge.LeftMiddle))
+            //                    |> not
+            //                )                    
+            //            ),
+            //            (SelectionModifier.DropColor)
+            //        )
+            //    ]
+            //<+>
+            modify
                 PageSelector.All
-                (fun args ->
-                    args.UserState
-                    failwith ""
-                )
-                (fun _ _ -> 
-                    None
-                )
+                [
+                    (
+                        (fun args->
+                            let (_, doc), pageEdges = args.UserState
+                            let firstCellWidth = doc.GetFirstCell().Size.Width
+                            let pageEdge = pageEdges.[args.PageNum - 1]
+                            let titleArea = 
+                                Rectangle.create 
+                                <| pageEdge.TopMiddle.GetXF()
+                                <| pageEdge.TopMiddle.GetYF()
+                                <| firstCellWidth
+                                <| pageEdge.TopMiddle.GetHeightF()
+
+                            RenderInfoSelector.PathOrText (fun renderInfo ->
+                                (
+                                    (AbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth renderInfo).IsInsideOf(pageEdge.TopMiddle)
+                                    &&
+                                    (not <| (AbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth renderInfo).IsInsideOf(titleArea))
+                                )
+                                ||
+                                (
+                                    (AbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth renderInfo).IsInsideOf(titleArea)
+                                    &&
+                                    (
+                                        not 
+                                            (AbstractRenderInfo.hasFill renderInfo
+                                            && (renderInfo.GetFillColor() = DeviceRgb.RED))
+                                    )
+                                )
+                            )                    
+                        ),
+                        (SelectionModifier.DropColor)
+                    )
+                ]
           )
         //<+>
           //Flow.Manipulate (
