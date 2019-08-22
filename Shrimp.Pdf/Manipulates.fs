@@ -4,17 +4,19 @@ open iText.Layout
 open Shrimp.Pdf.Extensions
 open iText.Kernel.Pdf.Canvas.Parser
 open iText.Kernel.Pdf
+open System.Runtime.CompilerServices
 
 
 [<RequireQualifiedAccess>]
 module IntegratedDocument =
-    let addNew (pageSelector: PageSelector) (pageBoxKind: PageBoxKind) (canvasActionsFactory: (int * PdfPage) -> list<Canvas -> Canvas>) (document: IntegratedDocument) =
+    let addNew (pageSelector: PageSelector) (pageBoxKind: PageBoxKind) (canvasActionsFactory: (PageNumber * PdfPage) -> list<Canvas -> Canvas>) (document: IntegratedDocument) =
 
         let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
-        for i = 1 to document.Value.GetNumberOfPages() do
+        let totalNumberOfPages = document.Value.GetNumberOfPages()
+        for i = 1 to totalNumberOfPages do
             if List.contains i selectedPageNumbers then
                 let page = document.Value.GetPage(i)
-                let canvasActions = canvasActionsFactory(i, page)
+                let canvasActions = canvasActionsFactory(PageNumber i, page)
                 let canvas = new Canvas(page, page.GetPageBox(pageBoxKind))
                 (canvas, canvasActions)
                 ||> List.fold(fun pdfCanvas canvasAction ->
@@ -28,7 +30,16 @@ module Manipulates =
     type PageModifingArguments<'userState> =
         { UserState: 'userState
           Page: PdfPage
+          TotalNumberOfPages: int
           PageNum: int }
+
+    [<Extension>]
+    type PageModifingArgumentsExtensions() =
+        [<Extension>]
+        static member PageUserState(xs: PageModifingArguments<'T list>) = 
+            if xs.UserState.Length = xs.TotalNumberOfPages then
+                xs.UserState.[xs.PageNum - 1]
+            else failwithf "Cannot get current userState because states length %d is not equal to totalNumberOfPages %d" xs.UserState.Length xs.TotalNumberOfPages 
 
     let modify (pageSelector: PageSelector) (operators: list<(PageModifingArguments<_> -> RenderInfoSelector) * SelectionModifier>)   =
         fun (flowModel: FlowModel<_>) (document: IntegratedDocument) ->
@@ -36,9 +47,10 @@ module Manipulates =
             |> List.iter (fun (renderInfoSelectorFactory, modifier) ->
                 IntegratedDocument.modify 
                     pageSelector
-                    (fun (pageNum, page) ->
+                    (fun (PageNumber pageNum, page) ->
                         { UserState = flowModel.UserState 
                           PageNum = pageNum 
+                          TotalNumberOfPages = document.Value.GetNumberOfPages()
                           Page = page } 
                         |> renderInfoSelectorFactory 
                     ) 
@@ -54,9 +66,10 @@ module Manipulates =
             IntegratedDocument.addNew 
                 pageSelector 
                 pageBoxKind 
-                (fun (pageNum, pdfPage) -> 
+                (fun (PageNumber pageNum, pdfPage) -> 
                     { PageNum = pageNum 
                       Page = pdfPage 
+                      TotalNumberOfPages = document.Value.GetNumberOfPages()
                       UserState = flowModel.UserState }
                     |> canvasActionsFactory
                 ) 
@@ -79,17 +92,17 @@ module Manipulates =
             |> List.choose(fun (i, page) ->
                 let pageNum = (i + 1)
                 if List.contains pageNum selectedPageNumbers then
-                    let renderInfoSelector = 
-                        renderInfoSelectorFactory 
-                            { UserState = flowModel.UserState;
-                              Page = page
-                              PageNum = pageNum }
-                    let infos = PdfDocumentContentParser.parse pageNum renderInfoSelector parser
-                    operator 
+                    let args = 
                         { UserState = flowModel.UserState;
                           Page = page
+                          TotalNumberOfPages = document.GetNumberOfPages()
                           PageNum = pageNum }
-                        infos 
+
+                    let renderInfoSelector = renderInfoSelectorFactory args
+                          
+                    let infos = PdfDocumentContentParser.parse pageNum renderInfoSelector parser
+
+                    operator args infos 
                 else None
             )
         |> Manipulate
@@ -100,13 +113,13 @@ module Manipulates =
             pageSelector
             (fun _ -> 
                 RenderInfoSelector.OR 
-                    [ RenderInfoSelector.PathIntegrated IntegratedRenderInfo.isVisible
-                      RenderInfoSelector.TextIntegrated IntegratedRenderInfo.isVisible ]
+                    [ RenderInfoSelector.Path IIntegratedRenderInfo.isVisible
+                      RenderInfoSelector.Text IIntegratedRenderInfo.isVisible ]
             )
             (fun args renderInfos ->
                 let bound = 
                     renderInfos
-                    |> Seq.choose (IntegratedRenderInfo.tryGetVisibleBound BoundGettingOptions.WithStrokeWidth)
+                    |> Seq.choose (IIntegratedRenderInfo.tryGetVisibleBound BoundGettingOptions.WithStrokeWidth)
                     |> Rectangle.ofRectangles
                 args.Page.SetActualBox(bound |> Rectangle.applyMargin margin)
                 |> ignore

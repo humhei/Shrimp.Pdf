@@ -84,10 +84,10 @@ module Resources =
 
                     let paths = 
                         PdfDocumentContentParser.parse 2 (RenderInfoSelector.Path (fun _ -> true)) parser
-                        |> Seq.choose IntegratedRenderInfo.asPathRenderInfo
+                        |> Seq.choose IIntegratedRenderInfo.asIPathRenderInfo
                     let path = paths |> Seq.exactlyOne
 
-                    path.GetFillColor()
+                    path.PathRenderInfo.GetFillColor()
 
                 match color with 
                 | :? Separation -> 

@@ -51,6 +51,7 @@
     <Compile Include="Reuses.fs" />
     <Compile Include="FileOperations.fs" />
     <Compile Include="Manipulates.fs" />
+    <Compile Include="DSL.fs" />
 
   </ItemGroup>
 

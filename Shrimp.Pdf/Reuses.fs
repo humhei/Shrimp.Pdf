@@ -25,9 +25,9 @@ module PageNumSequence =
 
 
 module Reuses =
-    let impose (imposingArgumentsFactory) =
+    let impose (fArgs) =
         fun flowModel (splitDocument: SplitDocument) ->
-            let imposingArguments = imposingArgumentsFactory flowModel.UserState
+            let imposingArguments = ImposingArguments.Create fArgs
             let imposingDocument = new ImposingDocument(splitDocument, imposingArguments)
             imposingDocument.Build()
 
@@ -100,7 +100,7 @@ module Reuses =
                 let selector = renderInfoSelectorFactory readerPage
                 let infos = PdfDocumentContentParser.parse i selector parser
                 for info in infos do
-                    let bound = AbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth info.RenderInfo
+                    let bound = IAbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth info
                     let writer = splitDocument.Writer
                     let writerPageResource = readerPage.CopyTo(writer)
                     PdfPage.setPageBox PageBoxKind.AllBox bound writerPageResource |> ignore

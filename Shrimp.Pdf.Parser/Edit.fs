@@ -147,7 +147,8 @@ module Extensions =
             match pageSelector with 
             | PageSelector.First -> [1]
             | PageSelector.Last -> [numberOfPages]
-            | PageSelector.Expr expr -> pdfDocument.GetPageNumbers(expr)
+            | PageSelector.Expr expr -> 
+                pdfDocument.GetPageNumbers(expr)
             | PageSelector.All -> [1..numberOfPages]
 
 
@@ -155,18 +156,18 @@ module Extensions =
 
 [<Struct>]
 type _SelectionModifierAddNewArguments =
-    { CurrentRenderInfo: AbstractRenderInfo }
+    { CurrentRenderInfo: IIntegratedRenderInfo }
 
 [<Struct>]
-type _SelectionModifierModifyArguments =
+type _SelectionModifierFixmentArguments =
     { Close: OperatorRange }
+
 
 [<RequireQualifiedAccess>]
 type SelectionModifier =
     | DropColor
     | AddNew of (_SelectionModifierAddNewArguments -> list<PdfCanvas -> PdfCanvas>)
-    | Modify of (_SelectionModifierModifyArguments -> list<PdfCanvas -> PdfCanvas>)
-
+    | Fix of (_SelectionModifierFixmentArguments -> list<PdfCanvas -> PdfCanvas>)
 
 
 and internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionModifier, document: PdfDocument) =
@@ -268,9 +269,9 @@ and internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionMo
                 match operatorName with 
                 | PathOrText ->
                     match modifier with
-                        | SelectionModifier.Modify (modify) ->
+                        | SelectionModifier.Fix (fix) ->
                             PdfCanvas.useCanvas currentPdfCanvas (fun canvas ->
-                                let pdfCanvasActions = modify { Close = operatorRange }
+                                let pdfCanvasActions = fix { Close = operatorRange }
                                 (canvas, pdfCanvasActions)
                                 ||> List.fold(fun canvas action ->
                                     action canvas 
@@ -279,7 +280,7 @@ and internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionMo
                         | SelectionModifier.AddNew addNew -> 
                             PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas |> ignore
                             PdfCanvas.useCanvas currentPdfCanvas (fun canvas ->
-                                let pdfCanvasActions = addNew { CurrentRenderInfo = eventListener.CurrentRenderInfo.RenderInfo }
+                                let pdfCanvasActions = addNew { CurrentRenderInfo = eventListener.CurrentRenderInfo }
                                 (canvas, (pdfCanvasActions))
                                 ||> List.fold(fun canvas action ->
                                     action canvas 
@@ -309,7 +310,9 @@ and internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionMo
             let bytes = stream.GetBytes()
             pdfCanvasStack.Push(pdfCanvas)
             resourcesStack.Push(resources)
+
             base.ProcessContent(bytes, resources)
+
             let pdfCanvas = pdfCanvasStack.Pop()
             resourcesStack.Pop()|> ignore
             let clonedStream = stream.Clone() :?> PdfStream
@@ -359,12 +362,13 @@ type IntegratedDocument private (reader: string, writer: string) =
 
 [<RequireQualifiedAccess>]
 module IntegratedDocument =
-    let modify (pageSelector: PageSelector) (renderInfoSelectorFactory: (int * PdfPage) -> RenderInfoSelector) (selectionModifier: SelectionModifier) (document: IntegratedDocument) =
+    let modify (pageSelector: PageSelector) (renderInfoSelectorFactory: (PageNumber * PdfPage) -> RenderInfoSelector) (selectionModifier: SelectionModifier) (document: IntegratedDocument) =
         let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
-        for i = 1 to document.Value.GetNumberOfPages() do
+        let totalNumberOfPages = document.Value.GetNumberOfPages()
+        for i = 1 to totalNumberOfPages do
             if List.contains i selectedPageNumbers then
                 let page = document.Value.GetPage(i)
-                let renderInfoSelector = renderInfoSelectorFactory (i, page)
+                let renderInfoSelector = renderInfoSelectorFactory (PageNumber i, page)
                 PdfPage.modify renderInfoSelector selectionModifier page
 
 

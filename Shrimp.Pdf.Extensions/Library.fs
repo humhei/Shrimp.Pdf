@@ -12,6 +12,26 @@ open iText.Kernel.Colors
 open iText.Layout.Properties
 open System.Collections.Concurrent
 open iText.Kernel.Pdf
+open Akka
+open iText.Kernel.Pdf.Canvas.Parser
+open iText.Kernel.Pdf.Canvas.Parser.Data
+open iText.Kernel.Pdf
+open iText.Kernel.Pdf.Canvas
+open iText.Kernel.Pdf.Xobject
+
+
+type PageNumber = PageNumber of int
+
+type IAbstractRenderInfo =
+    abstract member Value: AbstractRenderInfo
+
+type IPathRenderInfo =
+    inherit IAbstractRenderInfo
+    abstract member Value: PathRenderInfo
+            
+type ITextRenderInfo =
+    inherit IAbstractRenderInfo
+    abstract member Value: TextRenderInfo
 
 type PageEdge =
     { LeftMiddle: Rectangle 
@@ -119,8 +139,7 @@ module FontExtensions =
 
 
 open FontExtensions
-open Akka
-open iText.Kernel.Pdf.Canvas.Parser
+
 
 /// StandardFonts: See iText.IO.Font.Constants.StandardFonts
 [<RequireQualifiedAccess>]
@@ -322,10 +341,7 @@ module Extensions =
 
     [<AutoOpen>]
     module iText = 
-        open iText.Kernel.Pdf.Canvas.Parser.Data
-        open iText.Kernel.Pdf
-        open iText.Kernel.Pdf.Canvas
-        open iText.Kernel.Pdf.Xobject
+
 
         [<RequireQualifiedAccess>]
         module GlyphLine =
@@ -471,6 +487,15 @@ module Extensions =
 
         [<RequireQualifiedAccess>]
         module Rectangle = 
+
+            let isInsideOf (paramRect) (rect: Rectangle) =
+                rect.IsInsideOf(paramRect)
+
+            let isOutsideOf (paramRect) (rect: Rectangle) =
+                rect.IsOutsideOf(paramRect)
+
+            let isCrossOf (paramRect) (rect: Rectangle) =
+                rect.IsCrossOf(paramRect)
 
             let inline create x y width height =
                 let x = float32 x
@@ -768,23 +793,28 @@ module Extensions =
             | WithoutStrokeWidth = 1
 
 
+
+
         [<RequireQualifiedAccess>]
-        module PathRenderInfo =
+        module IPathRenderInfo =
 
             let [<Literal>] FILLANDSTROKE = PathRenderInfo.FILL ||| PathRenderInfo.STROKE
 
             /// without ctm applied
-            let toRawPoints (prInfo: PathRenderInfo) =
-                let subpaths = prInfo.GetPath().GetSubpaths()
+            let toRawPoints (info: IPathRenderInfo) =
+                let info = info.Value
+                let subpaths = info.GetPath().GetSubpaths()
                 subpaths |> Seq.collect Subpath.toRawPoints
 
             /// with ctm applied
-            let toActualPoints (prInfo: PathRenderInfo) =
-                let ctm = prInfo.GetCtm()
-                prInfo.GetPath().GetSubpaths()
+            let toActualPoints (info: IPathRenderInfo) =
+                let info = info.Value
+                let ctm = info.GetCtm()
+                info.GetPath().GetSubpaths()
                 |> Seq.collect (Subpath.toActualPoints ctm)
 
-            let hasStroke (info: PathRenderInfo) =             
+            let hasStroke (info: IPathRenderInfo) =             
+                let info = info.Value
                 info.GetPath().GetSubpaths().Count > 0
                 && 
                     match info.GetOperation() with 
@@ -792,7 +822,8 @@ module Extensions =
                     | FILLANDSTROKE -> true
                     | _ -> false
 
-            let hasFill (info: PathRenderInfo) =
+            let hasFill (info: IPathRenderInfo) =
+                let info = info.Value
                 info.GetPath().GetSubpaths().Count > 0
                 &&
                     match info.GetOperation() with 
@@ -800,12 +831,13 @@ module Extensions =
                     | FILLANDSTROKE -> true
                     | _ -> false
 
-            let hasFillOrStroke (info: PathRenderInfo) =
+            let hasFillOrStroke (info: IPathRenderInfo) =
                 hasFill info || hasStroke info
 
-            let getColors (info: PathRenderInfo) =
+            let getColors (info: IPathRenderInfo) =
                 if hasFillOrStroke info 
                 then
+                    let info = info.Value
                     let fillColor = info.GetFillColor()
                     let strokeColor = info.GetStrokeColor()
                     match info.GetOperation() with 
@@ -816,13 +848,13 @@ module Extensions =
                         failwithf "unSupported path render operation %d" others
                 else []
 
-            let getBound (boundGettingOptions: BoundGettingOptions) (info: PathRenderInfo) = 
+            let getBound (boundGettingOptions: BoundGettingOptions) (info: IPathRenderInfo) = 
                 let boundWithoutWidth = info |> toActualPoints |> Rectangle.ofPoints
                 match boundGettingOptions with 
                 | BoundGettingOptions.WithoutStrokeWidth -> boundWithoutWidth
                 | BoundGettingOptions.WithStrokeWidth ->
                     if hasStroke info then
-                        let grahpicsState = info.GetGraphicsState()
+                        let grahpicsState = info.Value.GetGraphicsState()
                         let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
                         Rectangle.applyMargin widthMargin boundWithoutWidth
                     else boundWithoutWidth
@@ -830,52 +862,57 @@ module Extensions =
                 | _ -> failwith "Invalid token"
 
         [<RequireQualifiedAccess>]
-        module TextRenderInfo =
+        module ITextRenderInfo =
 
             /// GetFontSize() * ctm.m00
-            let getActualFontSize (info: TextRenderInfo) =
+            let getActualFontSize (info: ITextRenderInfo) =
+                let info = info.Value
                 let matrix = info.GetTextMatrix()
                 info.GetFontSize() * matrix.Get(0) |> float
 
-            let getHeight (info: TextRenderInfo) =
+            let getHeight (info: ITextRenderInfo) =
+                let info = info.Value
                 let ascent = info.GetAscentLine()
                 let descent = info.GetDescentLine()
                 ascent.GetStartPoint().Get(1) - descent.GetStartPoint().Get(1)
                 |> float
 
-            let getWidth (info: TextRenderInfo) =
+            let getWidth (info: ITextRenderInfo) =
+                let info = info.Value
                 let ascent = info.GetAscentLine()
                 ascent.GetEndPoint().Get(0) - ascent.GetStartPoint().Get(0)
                 |> float
 
-            let getY (info: TextRenderInfo) =
+            let getY (info: ITextRenderInfo) =
+                let info = info.Value
                 let descent = info.GetDescentLine()
                 descent.GetStartPoint().Get(1)
                 |> float
 
-            let getX (info: TextRenderInfo) =
+            let getX (info: ITextRenderInfo) =
+                let info = info.Value
                 let descent = info.GetDescentLine()
                 descent.GetStartPoint().Get(0)
 
-            let getText (info:TextRenderInfo) =
-                info.GetText()
+            let getText (info: ITextRenderInfo) =
+                info.Value.GetText()
 
-            let hasFill (info: TextRenderInfo) =             
-                let md = info.GetTextRenderMode()
+            let hasFill (info: ITextRenderInfo) =             
+                let md = info.Value.GetTextRenderMode()
                 match md with 
                 | PdfCanvasConstants.TextRenderingMode.FILL 
                 | PdfCanvasConstants.TextRenderingMode.FILL_STROKE -> true
                 | _ -> false
 
-            let hasStroke (info: TextRenderInfo) =             
-                let md = info.GetTextRenderMode()
+            let hasStroke (info: ITextRenderInfo) =             
+                let md = info.Value.GetTextRenderMode()
                 match md with 
                 | PdfCanvasConstants.TextRenderingMode.STROKE
                 | PdfCanvasConstants.TextRenderingMode.FILL_STROKE  
                 | PdfCanvasConstants.TextRenderingMode.STROKE_CLIP -> true
                 |  _ -> false
 
-            let getBound (boundGettingOptions: BoundGettingOptions) (info: TextRenderInfo) =
+            let getBound (boundGettingOptions: BoundGettingOptions) (info: ITextRenderInfo) =
                 let width = getWidth info
                 let height = getHeight info
                 let x = getX info
@@ -886,17 +923,17 @@ module Extensions =
                 | BoundGettingOptions.WithoutStrokeWidth -> boundWithoutWidth
                 | BoundGettingOptions.WithStrokeWidth ->
                     if hasStroke info then 
-                        let grahpicsState = info.GetGraphicsState()
+                        let grahpicsState = info.Value.GetGraphicsState()
                         let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
                         Rectangle.applyMargin widthMargin boundWithoutWidth
                     else boundWithoutWidth
                 | _ -> failwith "Invalid token"
             
 
-            let getColors (info: TextRenderInfo) =
-                let fillColor = info.GetFillColor()
-                let strokeColor = info.GetStrokeColor()
-                match info.GetTextRenderMode() with
+            let getColors (info: ITextRenderInfo) =
+                let fillColor = info.Value.GetFillColor()
+                let strokeColor = info.Value.GetStrokeColor()
+                match info.Value.GetTextRenderMode() with
                 | TextRenderingMode.FILL_STROKE ->
                     [
                         fillColor
@@ -918,33 +955,34 @@ module Extensions =
                     []
 
 
-    
         [<RequireQualifiedAccess>]
-        module AbstractRenderInfo = 
-            let cata (fTextRenderInfo) (fPathRenderInfo) (info: AbstractRenderInfo) = 
+        module IAbstractRenderInfo = 
+            let cata (fTextRenderInfo) (fPathRenderInfo) (info: IAbstractRenderInfo) = 
                 match info with 
-                | :? TextRenderInfo as trInfo -> fTextRenderInfo trInfo
-                | :? PathRenderInfo as prInfo -> fPathRenderInfo prInfo 
+                | :? ITextRenderInfo as trInfo -> fTextRenderInfo trInfo
+                | :? IPathRenderInfo as prInfo -> fPathRenderInfo prInfo 
                 | _ -> failwith "Invaid token"
 
-            let getBound boundGettingOptions info = cata (TextRenderInfo.getBound boundGettingOptions) (PathRenderInfo.getBound boundGettingOptions) info
+            let getBound boundGettingOptions info = cata (ITextRenderInfo.getBound boundGettingOptions) (IPathRenderInfo.getBound boundGettingOptions) info
             
-            let getColors (info: AbstractRenderInfo) = cata TextRenderInfo.getColors PathRenderInfo.getColors info
+            let getColors (info: IAbstractRenderInfo) = cata ITextRenderInfo.getColors IPathRenderInfo.getColors info
 
-            let isTextRenderInfo (info: AbstractRenderInfo) = cata (fun _ -> true) (fun _ -> false) info
+            let isTextRenderInfo (info: IAbstractRenderInfo) = cata (fun _ -> true) (fun _ -> false) info
 
-            let isPathRenderInfo (info: AbstractRenderInfo) = cata (fun _ -> false) (fun _ -> true) info
+            let isPathRenderInfo (info: IAbstractRenderInfo) = cata (fun _ -> false) (fun _ -> true) info
 
-            let asTextRenderInfo (info: AbstractRenderInfo) = cata (fun trInfo -> Some trInfo) (fun _ -> None) info
+            let asTextRenderInfo (info: IAbstractRenderInfo) = cata (fun trInfo -> Some trInfo) (fun _ -> None) info
 
-            let asPathRenderInfo (info: AbstractRenderInfo) = cata (fun _ -> None) (fun prInfo -> Some prInfo) info
+            let asPathRenderInfo (info: IAbstractRenderInfo) = cata (fun _ -> None) (fun prInfo -> Some prInfo) info
 
-            let hasFill (info: AbstractRenderInfo) = cata TextRenderInfo.hasFill PathRenderInfo.hasFill info
+            let hasFill (info: IAbstractRenderInfo) = cata ITextRenderInfo.hasFill IPathRenderInfo.hasFill info
 
-            let hasStroke (info: AbstractRenderInfo) = cata TextRenderInfo.hasStroke PathRenderInfo.hasStroke info
+            let hasStroke (info: IAbstractRenderInfo) = cata ITextRenderInfo.hasStroke IPathRenderInfo.hasStroke info
 
-            let hasStrokeOrFill (info: AbstractRenderInfo) = hasFill info || hasStroke info
+            let hasStrokeOrFill (info: IAbstractRenderInfo) = hasFill info || hasStroke info
 
+            let boundIsInsideOf  boundGettingOptions rect (info: IAbstractRenderInfo) =
+                (getBound boundGettingOptions info).IsInsideOf(rect)
 
 
         [<RequireQualifiedAccess>]
@@ -1212,6 +1250,9 @@ module Extensions =
                         .SetFontColor(fontColor)
                         .SetFontSize(float32 fontSize)
                         .ShowTextAligned(text,float32 point.x,float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getAngle fontRotation))
+
+            let addRectangle rect (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: Canvas) =
+                PdfCanvas.addRectangle rect mapping (canvas.GetPdfCanvas())
 
                 
         type PdfPage with
