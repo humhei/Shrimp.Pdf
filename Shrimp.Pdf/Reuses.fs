@@ -28,6 +28,7 @@ module Reuses =
     let impose (fArgs) =
         fun flowModel (splitDocument: SplitDocument) ->
             let imposingArguments = ImposingArguments.Create fArgs
+            Logger.info (sprintf "IMPOSE %A" imposingArguments)
             let imposingDocument = new ImposingDocument(splitDocument, imposingArguments)
             imposingDocument.Build()
 
@@ -39,6 +40,8 @@ module Reuses =
     /// e.g. [1; 3; 5] will pick page1, page3, page5
     let sequencePages (pageNumSequence: PageNumSequence) =
         fun flowModel (splitDocument: SplitDocument) ->
+            Logger.info (sprintf "SEQUENCEPAGES %A" pageNumSequence)
+
             let duplicatedReaderPages = 
                 splitDocument.Reader
                 |> PdfDocument.getPages
@@ -60,6 +63,8 @@ module Reuses =
         if copiedNumber <= 0 then failwithf "copied number %d should be bigger than 0" copiedNumber
 
         fun flowModel (splitDocument: SplitDocument) ->
+            Logger.info (sprintf "DUPLICATEPAGES %d" copiedNumber)
+
             let pageNumSequence = 
                 splitDocument.Reader.GetPageNumbers(pageSelector)
                 |> List.collect (fun pageNum ->
@@ -76,6 +81,7 @@ module Reuses =
         let rowNum = tileTable.RowNum
 
         fun flowModel (splitDocument: SplitDocument) ->
+            Logger.info (sprintf "TILEPAGES %d*%d" tileTable.ColNum tileTable.RowNum)
             let userState = (duplicatePages (PageSelector.All) (colNum * rowNum)).Value flowModel splitDocument
             let tileTable = TileTable.create colNum rowNum
             let writer = splitDocument.Writer
@@ -91,23 +97,6 @@ module Reuses =
         |> Reuse
 
 
-    let tilePagesByRenderInfoSelectorFactory (renderInfoSelectorFactory: PdfPage -> RenderInfoSelector) =
-        fun flowModel (splitDocument: SplitDocument) ->
-            let reader = splitDocument.Reader
-            let parser = new PdfDocumentContentParser(reader)
-            for i = 1 to reader.GetNumberOfPages() do
-                let readerPage = reader.GetPage(i)
-                let selector = renderInfoSelectorFactory readerPage
-                let infos = PdfDocumentContentParser.parse i selector parser
-                for info in infos do
-                    let bound = IAbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth info
-                    let writer = splitDocument.Writer
-                    let writerPageResource = readerPage.CopyTo(writer)
-                    PdfPage.setPageBox PageBoxKind.AllBox bound writerPageResource |> ignore
-                    writer.AddPage(writerPageResource)
-                    |> ignore
-            flowModel.UserState
-        |> Reuse
 
 
 

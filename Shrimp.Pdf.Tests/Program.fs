@@ -13,9 +13,9 @@ let testConfig =
 let allTests =
     testList "All Tests"
         [
-            //ReuseTests.reuseTests
+            ReuseTests.reuseTests
             FileOperationTests.fileOperationTests
-            //ManipulateTests.manipulateTests
+            ManipulateTests.manipulateTests
             RealSampleTests.realSamplesTests
         ]
 

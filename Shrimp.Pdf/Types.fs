@@ -66,6 +66,7 @@ module FsSize =
 
     let A4 = ofPageSize PageSize.A4
 
+    let MAXIMUN = { Width = mm 5080; Height = mm 5080 }
 
 type ContentResizeMode =
     | CropOrAdd = 0
@@ -100,11 +101,13 @@ type ReaderDocument (reader: string) =
 
 
 type SplitDocument (reader: string, writer: string) =
-    let reader = new PdfDocument(new PdfReader(reader))
+    let readerDocument = new PdfDocument(new PdfReader(reader))
 
     let writer = new PdfDocumentWithCachedResources(writer)
 
-    member x.Reader = reader
+    member x.ReaderName = reader
+
+    member x.Reader = readerDocument
 
     member x.Writer = writer
         

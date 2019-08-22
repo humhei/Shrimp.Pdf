@@ -1066,11 +1066,10 @@ module Extensions =
                     | None -> getBBox xobject
                 | None ->getBBox xobject
 
-
         [<RequireQualifiedAccess>]
-        type PdfCanvasColor =
+        type PdfCanvasColor = 
             | N
-            | Specific of Color 
+            | Specific of Color
 
 
         type PdfCanvasAddRectangleArguments =
@@ -1080,7 +1079,7 @@ module Extensions =
         with 
             static member DefaultValue =
                 { LineWidth = mm 0.1 
-                  StrokeColor = PdfCanvasColor.Specific DeviceGray.BLACK 
+                  StrokeColor = PdfCanvasColor.Specific (DeviceGray.BLACK :> Color)
                   FillColor = PdfCanvasColor.N }
 
         type PdfCanvas with 
@@ -1094,15 +1093,6 @@ module Extensions =
                       float32 affineTransformRecord.m02,
                       float32 affineTransformRecord.m12 )
 
-            member x.SetStrokeColor(pdfCanvasColor: PdfCanvasColor) =
-                match pdfCanvasColor with 
-                | PdfCanvasColor.N -> x
-                | PdfCanvasColor.Specific color -> x.SetStrokeColor(color)
-
-            member x.SetFillColor(pdfCanvasColor: PdfCanvasColor) =
-                match pdfCanvasColor with 
-                | PdfCanvasColor.N -> x
-                | PdfCanvasColor.Specific color -> x.SetFillColor(color)
 
 
         [<RequireQualifiedAccess>]
@@ -1119,13 +1109,13 @@ module Extensions =
             let setDashpattern (dashPattern: DashPattern) (canvas:PdfCanvas) =
                 canvas.SetLineDash(dashPattern.DashArrayF32, dashPattern.PhaseF32)
 
-            let setStrokeColor (color: PdfCanvasColor) (canvas:PdfCanvas) =
+            let setStrokeColor (color: Color) (canvas:PdfCanvas) =
                 canvas.SetStrokeColor(color)
 
             let setLineWidth (width: float) (canvas: PdfCanvas) =
                 canvas.SetLineWidth(float32 width)
 
-            let setFillColor (color: PdfCanvasColor) (canvas:PdfCanvas) =
+            let setFillColor (color: Color) (canvas:PdfCanvas) =
                 canvas.SetFillColor(color)
 
             let fill (canvas:PdfCanvas) =
@@ -1167,8 +1157,20 @@ module Extensions =
                     | PdfCanvasColor.N , PdfCanvasColor.Specific _ -> stroke
                     | PdfCanvasColor.Specific _, PdfCanvasColor.Specific _ -> fillStroke
 
+                let setStrokeColor strokeColor (canvas: PdfCanvas) =
+                    match strokeColor with 
+                    | PdfCanvasColor.Specific color -> canvas.SetStrokeColor(color)
+                    | PdfCanvasColor.N -> canvas
+
+                let setFillColor fillColor (canvas: PdfCanvas) =
+                    match fillColor with 
+                    | PdfCanvasColor.Specific color -> canvas.SetFillColor(color)
+                    | PdfCanvasColor.N -> canvas
+
+
                 canvas
                 |> setStrokeColor args.StrokeColor
+                |> setFillColor args.FillColor
                 |> setLineWidth args.LineWidth
                 |> rectangle rect
                 |> close

@@ -4,6 +4,7 @@ open Shrimp.Pdf.Parser
 open Fake.IO
 open System.IO
 open iText.Layout
+open System.Diagnostics
 
 
 type FlowModel<'userState> =
@@ -26,8 +27,9 @@ type Manipulate<'oldUserState, 'newUserState> =
     Manipulate of (FlowModel<'oldUserState> -> IntegratedDocument -> 'newUserState)
 with 
     member x.Value =
-        let (Manipulate value) = x
+        let (Manipulate (value)) = x
         value
+
 
     /// internal use
     /// using <+> instead
@@ -180,8 +182,10 @@ with
 [<AutoOpen>]
 module Operators =
 
-
-    let run flowModel flow = Flow<_, _>.Run(flowModel, flow)
+    let run flowModel flow = 
+        Logger.infoWithStopWatch(sprintf "RUN: %s" flowModel.File) (fun _ ->
+            Flow<_, _>.Run(flowModel, flow)
+        )
 
     let inline (||>>) (flow : ^a) (mapping: ^b) =
         (^a: (member TransformUserState : ^b -> ^c) (flow, mapping))

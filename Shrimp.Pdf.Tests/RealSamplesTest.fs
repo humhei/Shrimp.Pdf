@@ -14,17 +14,17 @@ open iText.Kernel.Geom
 open Shrimp.Pdf.Parser
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf.Colors
-type Page = PageSelector
 open Shrimp.Pdf.DSL
 
 
 let realSamplesTests =
   testList "real samples tests" [
-    ftestCase "Layout Confirm___trim to b255_N-UP_remove left top R255B255_change left top r255 to k100 tests" <| fun _ -> 
+    testCase "Layout Confirm___trim to b255_N-UP_remove left top R255B255_change left top r255 to k100 tests" <| fun _ -> 
 
         let readB255Bound() =
-            modifyPage( 
-                Page.All,
+            modifyPage ( 
+                "read b255 bound",
+                PageSelector.All,
                 Path (
                     Info.StrokeColoris DeviceRgb.BLUE
                     <&> Info.BoundIsInsideOfPageBox()
@@ -36,6 +36,7 @@ let realSamplesTests =
             readB255Bound()
             <+>
             modifyPage (
+                "read sizes",
                 PageSelector.All,
                 Text (
                     Info.FillColoris DeviceRgb.RED
@@ -51,6 +52,7 @@ let realSamplesTests =
             readB255Bound()
             <+> 
             modifyPage( 
+                "setTrimBoxToStrokeB255",
                 PageSelector.All,
                 Dummy,
                 (fun args -> Operator.SetPageBox(args.PageUserState(), PageBoxKind.TrimBox) args)
@@ -64,7 +66,7 @@ let realSamplesTests =
                     ColNums = [6]
                     RowNum = 3
                     Margin = Margin.Create(mm 6)
-                    Background = Background.Size FsSize.A0
+                    Background = Background.Size FsSize.MAXIMUN
                     UseBleed = true
                 }
             )
@@ -79,6 +81,7 @@ let realSamplesTests =
                 readB255Bound()
                 <+>
                 modifyPage(
+                    "getPageEdge",
                     PageSelector.All,
                     Dummy,
                     (fun args -> Operator.GetPageEdge(args.PageUserState(), PageBoxKind.ActualBox) args)
@@ -97,7 +100,8 @@ let realSamplesTests =
                     pageEdge, titleArea
                 ))
             <+> 
-            modify(
+            modify (
+                "retain title red info",
                 PageSelector.All,
                 [
                     { Selector =
@@ -114,22 +118,23 @@ let realSamplesTests =
                                 )
                             ]
                         )
-                      Modifier = SelectionModifier.DropColor
+                      Modifier = Modifier.DropColor
                     }
                 ]
             )
             <+>
-            modify(
+            modify (
+                "retain navigation MEGENTA info",
                 PageSelector.All,
                 [
                     { Selector =
                         PathOrText (fun args ->
-                            let pageEdge, _ = args.UserState.[args.PageNum - 1]
+                            let pageEdge, _ = args.PageUserState()
                             ( Info.BoundIsInsideOf(pageEdge.LeftMiddle)
                                 <&> (!!(Info.FillColoris DeviceRgb.MAGENTA)) 
                             ) args
                         )
-                      Modifier = SelectionModifier.DropColor
+                      Modifier = Modifier.DropColor
                     }
                 ]
             )

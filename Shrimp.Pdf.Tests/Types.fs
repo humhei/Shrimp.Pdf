@@ -12,8 +12,9 @@ open Fake.IO
 open System.IO
 
 
-let runWithBackup path =
+let runWithBackup path flow =
     let newPath = Path.changeExtension ".tests.pdf" path
     File.Copy(path, newPath, true)
-    run { UserState = (); File = newPath }
+    run { UserState = (); File = newPath } flow
+
 

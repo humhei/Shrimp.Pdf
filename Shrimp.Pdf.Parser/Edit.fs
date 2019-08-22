@@ -14,6 +14,7 @@ open Shrimp.Pdf.Extensions
 open iText.Layout
 open Shrimp.Pdf
 open Listeners
+open System.Diagnostics
 
 type OperatorRange =
     { Operator: PdfLiteral 
@@ -355,6 +356,8 @@ type IntegratedDocument private (reader: string, writer: string) =
 
     let pdfDocument = new PdfDocumentWithCachedResources(reader, writer)
 
+    member x.ReaderName = reader
+
     member x.Value = pdfDocument
 
     static member Create(reader, writer) = new IntegratedDocument(reader, writer)
@@ -362,13 +365,16 @@ type IntegratedDocument private (reader: string, writer: string) =
 
 [<RequireQualifiedAccess>]
 module IntegratedDocument =
-    let modify (pageSelector: PageSelector) (renderInfoSelectorFactory: (PageNumber * PdfPage) -> RenderInfoSelector) (selectionModifier: SelectionModifier) (document: IntegratedDocument) =
+    let modify name (pageSelector: PageSelector) (renderInfoSelectorFactory: (PageNumber * PdfPage) -> RenderInfoSelector) (selectionModifierFactory: (PageNumber * PdfPage) -> SelectionModifier) (document: IntegratedDocument) =
         let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
         let totalNumberOfPages = document.Value.GetNumberOfPages()
+        Logger.info (sprintf "MODIFY: %s" name) 
+
         for i = 1 to totalNumberOfPages do
             if List.contains i selectedPageNumbers then
                 let page = document.Value.GetPage(i)
                 let renderInfoSelector = renderInfoSelectorFactory (PageNumber i, page)
+                let selectionModifier = selectionModifierFactory (PageNumber i, page)
                 PdfPage.modify renderInfoSelector selectionModifier page
 
 

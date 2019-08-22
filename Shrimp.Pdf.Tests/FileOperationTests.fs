@@ -13,10 +13,10 @@ let fileOperationTests =
   testList "FileOperation Tests" [
     testCase "split document" <| fun _ -> 
         Flow.FileOperation (
-            (splitDocumentToMany (fun args ->
+            splitDocumentToMany (fun args ->
                 { args with 
                     PageNumPerDocument = 2 }
-            ))
+            )
         )
         |> runWithBackup "datas/file operation/split document.pdf" 
         |> ignore
