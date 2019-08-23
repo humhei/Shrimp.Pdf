@@ -1,10 +1,6 @@
 ﻿namespace Shrimp.Pdf
-open Imposing
-open System
 open Fake.IO
-open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Extensions
-open iText.Kernel.Pdf.Canvas.Parser
 open iText.Kernel.Pdf
 open System.IO
 

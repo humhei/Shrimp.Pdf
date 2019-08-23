@@ -1,12 +1,9 @@
 ﻿namespace Shrimp.Pdf
 open Imposing
-open System
-open Fake.IO
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Extensions
 open iText.Kernel.Pdf.Canvas.Parser
-open iText.Kernel.Pdf
-open System.IO
+open Shrimp.Pdf.DSL
 
 type PageNumSequence = private PageNumSequence of int list
 with 
@@ -21,7 +18,6 @@ module PageNumSequence =
         if sequence.IsEmpty then failwith "page sequence cannot be empty"
         elif List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in page sequence %A must be bigger than 0" sequence
         PageNumSequence sequence
-
 
 
 module Reuses =
@@ -39,7 +35,7 @@ module Reuses =
 
     /// e.g. [1; 3; 5] will pick page1, page3, page5
     let sequencePages (pageNumSequence: PageNumSequence) =
-        fun flowModel (splitDocument: SplitDocument) ->
+        fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
             Logger.info (sprintf "SEQUENCEPAGES %A" pageNumSequence)
 
             let duplicatedReaderPages = 
@@ -96,6 +92,32 @@ module Reuses =
             userState
         |> Reuse
 
+    let tilePagesByRenderInfoSelectorFactory (selector: Selector<'userState>) =
+        fun (flowModel: FlowModel<'userState>) (splitDocument: SplitDocument) ->
+            Logger.info (sprintf "TILEPAGESBYSELECTORFACTORY")
+
+            let reader = splitDocument.Reader
+            let parser = new PdfDocumentContentParser(reader)
+            for i = 1 to reader.GetNumberOfPages() do
+                let readerPage = reader.GetPage(i)
+                let args =
+                    { Page = readerPage
+                      UserState = flowModel.UserState 
+                      TotalNumberOfPages = splitDocument.Reader.GetNumberOfPages() 
+                      PageNum = i }
+                    
+                let selector = (Selector.toRenderInfoSelector args selector)
+                let infos = PdfDocumentContentParser.parse i selector parser
+                for info in infos do
+                    let bound = IAbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth info
+                    let writer = splitDocument.Writer
+                    let writerPageResource = readerPage.CopyTo(writer)
+                    PdfPage.setPageBox PageBoxKind.AllBox bound writerPageResource |> ignore
+                    writer.AddPage(writerPageResource)
+                    |> ignore
+
+            flowModel.UserState
+        |> Reuse
 
 
 

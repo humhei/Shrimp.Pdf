@@ -1,8 +1,5 @@
 ﻿namespace Shrimp.Pdf
 open iText.Kernel.Geom
-open iText.IO.Font
-open iText.IO.Font.Otf
-open iText.Kernel.Font
 open Akka.Configuration
 open System.Reflection
 open System.IO

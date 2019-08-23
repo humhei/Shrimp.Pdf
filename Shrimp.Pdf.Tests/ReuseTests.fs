@@ -46,8 +46,6 @@ let reuseTests =
                 }
             )
         )
-                
-
         |> runWithBackup "datas/reuse/imposing stepAndRepeat.pdf" 
         |> ignore
 
@@ -89,7 +87,7 @@ let reuseTests =
     testCase "tile pages by selector tests" <| fun _ -> 
         Flow.Reuse (
             tilePagesByRenderInfoSelectorFactory 
-                (Path(Info.StrokeColoris DeviceRgb.BLUE <&> Info.BoundIsInsideOfPageBox()))
+                (Path(Info.StrokeColorIs DeviceRgb.BLUE <&> Info.BoundIsInsideOfPageBox()))
         )
         |> runWithBackup "datas/reuse/tile pages by selector.pdf" 
         |> ignore

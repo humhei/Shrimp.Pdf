@@ -1,7 +1,6 @@
 ﻿namespace Shrimp.Pdf
 
 open iText.Kernel.Pdf
-open iText.Kernel.Pdf.Xobject
 open System.Reflection
 open System.IO
 open System.Text
@@ -11,7 +10,6 @@ open iText.Kernel.Pdf.Canvas.Parser
 open Shrimp.Pdf.Parser
 open iText.Kernel.Colors
 open iText.Kernel.Pdf.Colorspace
-open Extensions
 
 
 //open Shrimp.Pdf.Parser

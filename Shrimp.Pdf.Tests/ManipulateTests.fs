@@ -19,10 +19,11 @@ let manipulateTests =
     testCase "change stroke color b255 to m100" <| fun _ -> 
         Flow.Manipulate (
             modify(
-                "change stroke color b255 to m100",
+                
                 PageSelector.First,
                 [
-                    { Selector = Path(Info.StrokeColoris DeviceRgb.BLUE)
+                    { Name = "change stroke color b255 to m100"
+                      Selector = Path(Info.StrokeColorIs DeviceRgb.BLUE)
                       Modifier = Fix [Modify.SetStrokeColor(DeviceCmyk.MAGENTA)]
                     }
                 ]
@@ -34,10 +35,10 @@ let manipulateTests =
     testCase "xobject_change stroke color b255 to m100" <| fun _ -> 
         Flow.Manipulate (
             modify (
-                "xobject_change stroke color b255 to m100",
                 PageSelector.First,
                 [
-                    { Selector = Path(Info.StrokeColoris DeviceRgb.BLUE)
+                    { Name = "xobject_change stroke color b255 to m100"
+                      Selector = Path(Info.StrokeColorIs DeviceRgb.BLUE)
                       Modifier = Fix [Modify.SetStrokeColor(DeviceCmyk.MAGENTA)] }
                 ]
             )
@@ -48,10 +49,10 @@ let manipulateTests =
     testCase "add bound to text" <| fun _ -> 
         Flow.Manipulate (
             modify(
-                "add bound to text",
                 PageSelector.All,
                 [
-                    { Selector = Text(fun _ _ -> true) 
+                    { Name = "add bound to text"
+                      Selector = Text(fun _ _ -> true) 
                       Modifier = AddNew[
                         Modify.AddRectangleToBound(fun args -> 
                             { args with StrokeColor = PdfCanvasColor.Specific DeviceCmyk.MAGENTA}

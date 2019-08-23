@@ -1,9 +1,6 @@
 ﻿namespace Shrimp.Pdf
 
 open iText.IO.Font
-open iText.Kernel.Font
-open System.Collections.Concurrent
-open System.Collections.Concurrent
 open System.IO
 
 

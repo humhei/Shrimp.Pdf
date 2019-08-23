@@ -4,18 +4,13 @@ open iText.IO.Font
 open iText.IO.Font.Otf
 open iText.Kernel.Font
 open Akka.Configuration
-open System.Reflection
-open System.IO
 open System
 open iText.Layout
 open iText.Kernel.Colors
 open iText.Layout.Properties
 open System.Collections.Concurrent
 open iText.Kernel.Pdf
-open Akka
-open iText.Kernel.Pdf.Canvas.Parser
 open iText.Kernel.Pdf.Canvas.Parser.Data
-open iText.Kernel.Pdf
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf.Xobject
 
@@ -54,8 +49,7 @@ module PageEdge =
           pageEdge.TopRight
           pageEdge.RightMiddle
           pageEdge.RightBottom
-          pageEdge.BottomMiddle
-        ]
+          pageEdge.BottomMiddle ]
 
 type Margin = 
     { Left: float

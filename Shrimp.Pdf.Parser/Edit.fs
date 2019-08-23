@@ -6,15 +6,10 @@ open Shrimp.Pdf.Extensions
 open System.Collections.Generic
 open FParsec.CharParsers
 open FParsec
-open iText.Kernel.Pdf
-open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf.Canvas.Parser
-open iText.Kernel.Pdf.Canvas.Parser.Data
-open Shrimp.Pdf.Extensions
 open iText.Layout
 open Shrimp.Pdf
 open Listeners
-open System.Diagnostics
 
 type OperatorRange =
     { Operator: PdfLiteral 
@@ -92,6 +87,7 @@ type internal CallbackableContentOperator (originalOperator) =
 
     interface IContentOperator with 
         member this.Invoke(processor,operator,operands) =
+            
             let processor = processor :?> OperatorRangeCallbackablePdfCanvasProcessor
             let operatorName = operator.ToString()
             if operatorName <> "Do" then 
@@ -171,46 +167,55 @@ type SelectionModifier =
     | Fix of (_SelectionModifierFixmentArguments -> list<PdfCanvas -> PdfCanvas>)
 
 
-and internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionModifier, document: PdfDocument) =
-    inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(RenderInfoSelector.toEventTypes selector, RenderInfoSelector.toRenderInfoPredication selector))
+
+and internal PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * SelectionModifier>, document: PdfDocument) =
+    inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(Map.map (fun _ -> fst) selectorModifierMapping))
     
-    let eventTypes = RenderInfoSelector.toEventTypes selector
+    let eventTypes = 
+        selectorModifierMapping
+        |> Map.map (fun _ -> fst)
+        |> Map.toList
+        |> List.map snd
+        |> RenderInfoSelector.OR
+        |> RenderInfoSelector.toEventTypes
     
     let mutable eventListener: FilteredEventListenerEx = null
     let pdfCanvasStack = new Stack<PdfCanvas>()
     let resourcesStack = new Stack<PdfResources>()
 
+    let (|Path|_|) operatorName =
+        match operatorName with 
+        | "f" | "F" | "f*" | "S" | "s" | "B" | "B*" | "b" | "b*" 
+            when List.contains EventType.RENDER_PATH eventTypes-> Some ()
+        | _ -> None
 
+    let (|Text|_|) operatorName =
+        match operatorName with 
+        | "Tj" | "TJ" when List.contains EventType.RENDER_TEXT eventTypes -> Some ()
+        | _ -> None
+
+    let (|PathOrText|_|) operatorName =
+        match operatorName with 
+        | Path _ -> Some ()
+        | Text _ -> Some ()
+        | _ -> None
+
+    let (|Form|Image|Others|) pdfName = 
+        if pdfName = PdfName.Form 
+        then Form
+        elif pdfName = PdfName.Image
+        then Image
+        else Others
 
     override this.InvokeOperatorRange (operatorRange: OperatorRange) =
+        
         let currentPdfCanvas = pdfCanvasStack.Peek()
 
         let operatorName = operatorRange.Operator.ToString()
-        let (|Path|_|) operatorName =
-            match operatorName with 
-            | "f" | "F" | "f*" | "S" | "s" | "B" | "B*" | "b" | "b*" 
-                when List.contains EventType.RENDER_PATH eventTypes-> Some ()
-            | _ -> None
 
-        let (|Text|_|) operatorName =
-            match operatorName with 
-            | "Tj" | "TJ" when List.contains EventType.RENDER_TEXT eventTypes -> Some ()
-            | _ -> None
-
-        let (|PathOrText|_|) operatorName =
-            match operatorName with 
-            | Path _ -> Some ()
-            | Text _ -> Some ()
-            | _ -> None
 
         match operatorName with 
         | "Do" ->
-            let (|Form|Image|Others|) pdfName = 
-                if pdfName = PdfName.Form 
-                then Form
-                elif pdfName = PdfName.Image
-                then Image
-                else Others
 
             let resources = resourcesStack.Peek()
             let name = operatorRange.Operands.[0] :?> PdfName
@@ -225,8 +230,10 @@ and internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionMo
                     match subResources with 
                     | null -> resources
                     | _ -> PdfResources subResources
+
                 let fixedStream: PdfStream = this.EditContent(xobjectResources, xobjectStream)
                 container.Put(name, fixedStream) |> ignore
+
             | Image -> ()
             | Others -> ()
 
@@ -235,12 +242,15 @@ and internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionMo
 
 
         | PathOrText ->
+
             match eventListener.CurrentRenderInfoStatus with 
             | CurrentRenderInfoStatus.Skiped -> 
                 PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
                 |> ignore
 
             | CurrentRenderInfoStatus.Selected ->
+                let modifier = snd selectorModifierMapping.[eventListener.CurrentRenderInfoToken.Value]
+
                 match operatorName with 
                 | Path ->
                     match modifier with
@@ -338,9 +348,9 @@ and internal PdfCanvasEditor(selector: RenderInfoSelector, modifier: SelectionMo
 
 [<RequireQualifiedAccess>]
 module internal PdfPage =
-    let modify (renderInfoSelector: RenderInfoSelector) (modifier: SelectionModifier) (page: PdfPage) =
+    let modify (selectorModifierMapping) (page: PdfPage) =
         let document = page.GetDocument()
-        let editor = new PdfCanvasEditor(renderInfoSelector, modifier, document)
+        let editor = new PdfCanvasEditor(selectorModifierMapping, document)
         let pageContents = page.GetPdfObject().Get(PdfName.Contents)
 
         match pageContents with 
@@ -365,16 +375,32 @@ type IntegratedDocument private (reader: string, writer: string) =
 
 [<RequireQualifiedAccess>]
 module IntegratedDocument =
-    let modify name (pageSelector: PageSelector) (renderInfoSelectorFactory: (PageNumber * PdfPage) -> RenderInfoSelector) (selectionModifierFactory: (PageNumber * PdfPage) -> SelectionModifier) (document: IntegratedDocument) =
+
+    let addNew (pageSelector: PageSelector) (pageBoxKind: PageBoxKind) (canvasActionsFactory: (PageNumber * PdfPage) -> list<Canvas -> Canvas>) (document: IntegratedDocument) =
         let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
         let totalNumberOfPages = document.Value.GetNumberOfPages()
-        Logger.info (sprintf "MODIFY: %s" name) 
-
         for i = 1 to totalNumberOfPages do
             if List.contains i selectedPageNumbers then
                 let page = document.Value.GetPage(i)
-                let renderInfoSelector = renderInfoSelectorFactory (PageNumber i, page)
-                let selectionModifier = selectionModifierFactory (PageNumber i, page)
-                PdfPage.modify renderInfoSelector selectionModifier page
+                let canvasActions = canvasActionsFactory(PageNumber i, page)
+                let canvas = new Canvas(page, page.GetPageBox(pageBoxKind))
+                (canvas, canvasActions)
+                ||> List.fold(fun pdfCanvas canvasAction ->
+                    canvasAction pdfCanvas
+                ) 
+                |> ignore
+
+    let modify (name) (pageSelector: PageSelector) (selectorModifierMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * SelectionModifier>) (document: IntegratedDocument) =
+        let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
+        let totalNumberOfPages = document.Value.GetNumberOfPages()
+        Logger.infoWithStopWatch (sprintf "MODIFY: \n%s" name) (fun _ ->
+            for i = 1 to totalNumberOfPages do
+                if List.contains i selectedPageNumbers then
+                    let page = document.Value.GetPage(i)
+                    let selectorModifierMapping = selectorModifierMappingFactory (PageNumber i, page)
+                    PdfPage.modify selectorModifierMapping page
+        )
+
+
 
 

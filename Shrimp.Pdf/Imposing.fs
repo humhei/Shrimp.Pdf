@@ -5,7 +5,6 @@ open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf.Extensions
 open System.Linq
-open System
 
 module Imposing =
 

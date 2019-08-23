@@ -5,7 +5,6 @@ open System.Collections.Generic
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf
-open Akka.Event
 
 [<RequireQualifiedAccess>]
 module ClippingPathInfo =
@@ -60,7 +59,6 @@ module internal IAbstractRenderInfo =
                 else
                     Some bound
         else None
-
 
 
 
@@ -142,70 +140,6 @@ module IIntegratedRenderInfo =
         isFillVisible info || isStrokeVisible info
 
 
-module internal Listeners =
-
-    type CurrentRenderInfoStatus =
-        | Skiped = 0
-        | Selected = 1
-
-    [<AllowNullLiteral>]
-    /// a type named FilteredEventListener is already defined in itext7
-    type FilteredEventListenerEx(supportedEvents: EventType list, filter: IIntegratedRenderInfo -> bool) =
-        let mutable currentRenderInfo: IIntegratedRenderInfo option = None
-        let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Selected
-        let mutable currentClippingPathInfo = null
-
-        let parsedRenderInfos = List<IIntegratedRenderInfo>()
-
-        member this.CurrentRenderInfo = currentRenderInfo.Value
-
-        member this.CurrentRenderInfoStatus = currentRenderInfoStatus
-
-        member this.ParsedRenderInfos = parsedRenderInfos :> seq<IIntegratedRenderInfo>
-
-
-        interface IEventListener with 
-            member this.EventOccurred(data, tp) = 
-                match tp with 
-                | EventType.CLIP_PATH_CHANGED -> 
-                    currentClippingPathInfo <- (data :?> ClippingPathInfo)
-                    currentClippingPathInfo.PreserveGraphicsState()
-
-                | _ ->
-                    let renderInfo = 
-                        match data with 
-                        | :? PathRenderInfo as pathRenderInfo ->
-                            { ClippingPathInfo  = currentClippingPathInfo 
-                              PathRenderInfo = pathRenderInfo }
-                            :> IIntegratedRenderInfo
-
-                        | :? TextRenderInfo as textRenderInfo ->
-                            { ClippingPathInfo  = currentClippingPathInfo 
-                              TextRenderInfo = textRenderInfo }
-                            :> IIntegratedRenderInfo
-
-                        |_ -> failwith "Not implemented"
-                       
-
-                    if filter renderInfo then
-                        renderInfo.Value.RenderInfo.PreserveGraphicsState()
-
-                        parsedRenderInfos.Add(renderInfo)
-                        currentRenderInfo <- Some renderInfo
-                        currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
-                    else 
-                        currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
-                        currentRenderInfo <- None
-
-            member this.GetSupportedEvents() = 
-                List supportedEvents :> ICollection<_>
-
-    type DummyListener() =
-        interface IEventListener with
-            member this.EventOccurred(data,tp) = ()
-            member this.GetSupportedEvents() =
-                    List () :> ICollection<_>
-
 
 [<RequireQualifiedAccess>]
 type RenderInfoSelector = 
@@ -271,18 +205,106 @@ module RenderInfoSelector =
 
         loop selector
 
+type SelectorModiferToken = SelectorModiferToken of name: string
+
+module internal Listeners =
+
+    type CurrentRenderInfoStatus =
+        | Skiped = 0
+        | Selected = 1
+
+
+    [<AllowNullLiteral>]
+    /// a type named FilteredEventListener is already defined in itext7
+    /// OR Between selectors
+    type FilteredEventListenerEx(renderInfoSelectorMapping: Map<SelectorModiferToken, RenderInfoSelector>) =
+        let prediateMapping = 
+            renderInfoSelectorMapping
+            |> Map.map (fun token renderInfoSelector -> 
+                RenderInfoSelector.toRenderInfoPredication renderInfoSelector
+            )
+
+        let mutable currentRenderInfo: IIntegratedRenderInfo option = None
+        let mutable currentRenderInfoToken = None
+        let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Selected
+        let mutable currentClippingPathInfo = null
+
+        let parsedRenderInfos = List<IIntegratedRenderInfo>()
+
+        member this.CurrentRenderInfo = currentRenderInfo.Value
+
+        member this.CurrentRenderInfoStatus = currentRenderInfoStatus
+
+        member this.CurrentRenderInfoToken = currentRenderInfoToken
+
+        member this.ParsedRenderInfos = parsedRenderInfos :> seq<IIntegratedRenderInfo>
+
+
+        interface IEventListener with 
+            member this.EventOccurred(data, tp) = 
+
+                match tp with 
+                | EventType.CLIP_PATH_CHANGED -> 
+                    currentClippingPathInfo <- (data :?> ClippingPathInfo)
+                    currentClippingPathInfo.PreserveGraphicsState()
+
+                | _ ->
+                    let renderInfo = 
+                        match data with 
+                        | :? PathRenderInfo as pathRenderInfo ->
+                            { ClippingPathInfo  = currentClippingPathInfo 
+                              PathRenderInfo = pathRenderInfo }
+                            :> IIntegratedRenderInfo
+
+                        | :? TextRenderInfo as textRenderInfo ->
+                            { ClippingPathInfo  = currentClippingPathInfo 
+                              TextRenderInfo = textRenderInfo }
+                            :> IIntegratedRenderInfo
+
+                        |_ -> failwith "Not implemented"
+                       
+                    match Map.tryFindKey (fun token prediate -> prediate renderInfo) prediateMapping with 
+                    | Some token ->
+                        renderInfo.Value.RenderInfo.PreserveGraphicsState()
+
+                        parsedRenderInfos.Add(renderInfo)
+                        currentRenderInfoToken <- Some token
+                        currentRenderInfo <- Some renderInfo
+                        currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
+                    | None -> 
+                        currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
+                        currentRenderInfo <- None
+
+            member this.GetSupportedEvents() = 
+                let supportedEvents = 
+                    renderInfoSelectorMapping
+                    |> Map.toList
+                    |> List.map snd
+                    |> RenderInfoSelector.OR
+                    |> RenderInfoSelector.toEventTypes
+                  
+                List supportedEvents :> ICollection<_>
+
+    type DummyListener() =
+        interface IEventListener with
+            member this.EventOccurred(data,tp) = ()
+            member this.GetSupportedEvents() =
+                    List () :> ICollection<_>
+
+
 
 
 [<RequireQualifiedAccess>]
 module PdfDocumentContentParser =
     open Listeners
     let parse (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: PdfDocumentContentParser) =
+
         let et = RenderInfoSelector.toEventTypes renderInfoSelector
-        let filter = RenderInfoSelector.toRenderInfoPredication renderInfoSelector
-        let listener = new FilteredEventListenerEx(et, filter)
 
         match et with 
         | [] -> [] :> seq<IIntegratedRenderInfo>
         | _ ->
+            let renderInfoSelectorMapping = Map.ofList [SelectorModiferToken "Unknown", renderInfoSelector]
+            let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
             parser.ProcessContent(pageNum, listener).ParsedRenderInfos
         

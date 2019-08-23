@@ -48,10 +48,6 @@
     <Compile Include="Types.fs" />
     <Compile Include="Imposing.fs" />
     <Compile Include="Flow.fs" />
-    <Compile Include="Reuses.fs" />
-    <Compile Include="FileOperations.fs" />
-    <Compile Include="Manipulates.fs" />
-    <Compile Include="DSL.fs" />
 
   </ItemGroup>
 

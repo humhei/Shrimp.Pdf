@@ -1,15 +1,18 @@
 ﻿namespace Shrimp.Pdf
-open iText.Kernel.Pdf
 open Shrimp.Pdf.Parser
 open Fake.IO
 open System.IO
-open iText.Layout
-open System.Diagnostics
 
 
 type FlowModel<'userState> =
     { File: string
       UserState: 'userState }
+
+[<RequireQualifiedAccess>]
+module FlowModel =
+    let mapM mapping flowModel =
+        { File = flowModel.File 
+          UserState = mapping flowModel.UserState }
 
 type Reuse<'oldUserState, 'newUserState> = Reuse of (FlowModel<'oldUserState> -> SplitDocument -> 'newUserState)
 with 
@@ -29,7 +32,6 @@ with
     member x.Value =
         let (Manipulate (value)) = x
         value
-
 
     /// internal use
     /// using <+> instead
@@ -58,16 +60,29 @@ with
 
     /// internal use
     /// using ||>> instead
-    member x.TransformUserState (mapping) =
-        fun userState document ->
-            x.Value userState document
+    member x.TransformNewUserState (mapping) =
+        fun flowModel document ->
+            x.Value flowModel document
             |> mapping
+        |> Manipulate
+
+    /// internal use
+    /// using <<|| instead
+    member x.TransformOldUserStateBack (mapping) =
+        fun flowModel document ->
+            let flowModel = FlowModel.mapM mapping flowModel
+            x.Value flowModel document
         |> Manipulate
 
 [<RequireQualifiedAccess>]
 module Manipulate =
     /// followed by <++> or <.+> to rediscover userState
     let dummy = Manipulate(fun model doc -> model.UserState)
+
+    let constraintOf (manipulateFactory: 'oldUserState -> Manipulate<'oldUserState,'newUserState>) =
+        fun (flowModel: FlowModel<'oldUserState>) ->
+            (manipulateFactory flowModel.UserState).Value flowModel
+        |> Manipulate
 
 type FileOperation<'oldUserState, 'newUserState> = 
     FileOperation of (FlowModel<'oldUserState> -> ReaderDocument -> FlowModel<'newUserState> list)
@@ -171,12 +186,21 @@ with
 
     /// internal use
     /// using ||>> instead
-    member x.TransformUserState mapping  =
+    member x.TransformNewUserState mapping  =
         fun flowModel ->
             Flow<_, _>.Run(flowModel, x) 
             |> List.map (fun newFlowModel ->
-                { File = newFlowModel.File; UserState = mapping flowModel.UserState}
+                { File = newFlowModel.File; UserState = mapping newFlowModel.UserState}
             )
+        |> Flow.Transform 
+
+    /// internal use
+    /// using <<|| instead
+    member x.TransformOldUserStateBack mapping  =
+        fun flowModel ->
+            let flowModel = FlowModel.mapM mapping flowModel
+            Flow<_, _>.Run(flowModel, x) 
+         
         |> Flow.Transform 
 
 [<AutoOpen>]
@@ -188,7 +212,10 @@ module Operators =
         )
 
     let inline (||>>) (flow : ^a) (mapping: ^b) =
-        (^a: (member TransformUserState : ^b -> ^c) (flow, mapping))
+        (^a: (member TransformNewUserState : ^b -> ^c) (flow, mapping))
+
+    let inline (<<||) (mapping: ^b) (flow : ^a)  =
+        (^a: (member TransformOldUserStateBack : ^b -> ^c) (flow, mapping))
 
     let inline (<+>) (flow1: ^a) (flow2: ^b) = 
         ((^a or ^b): (static member Bind: ^a * ^b -> ^c) (flow1, flow2))
