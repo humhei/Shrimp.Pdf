@@ -11,6 +11,11 @@ module Logger =
         printfn "Unsupported text render mode %d \n %s" textRendingMode (stackTrace.ToString())
 
 
+    let warning (message: string) =
+        match logger with 
+        | Some (logger: NLog.Logger) -> logger.Warn message
+        | None -> printfn "WARNING: %s" message
+
     let info (message: string) =
         match logger with 
         | Some (logger: NLog.Logger) -> logger.Info message

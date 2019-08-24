@@ -16,6 +16,5 @@ module Manipulates =
                     |> Rectangle.ofRectangles
                 args.Page.SetActualBox(bound |> Rectangle.applyMargin margin)
                 |> ignore
-                None
             ) 
-        ) ||>> ignore
+        )  ||>> ignore

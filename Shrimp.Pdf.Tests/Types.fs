@@ -10,11 +10,11 @@ open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
 open Fake.IO
 open System.IO
+open System.Threading
 
 
 let runWithBackup path flow =
     let newPath = Path.changeExtension ".tests.pdf" path
     File.Copy(path, newPath, true)
     run { UserState = (); File = newPath } flow
-
 

@@ -38,7 +38,7 @@ let setTrimBoxToStrokeB255() =
 
 let retainTitleInfo color = 
     { Name = (sprintf "retain title info %O" color)
-      Selector =
+      Selector = 
           Factory(fun args ->
             let pageEdge, titleArea = args.PageUserState()
             OR [
@@ -104,7 +104,7 @@ let getPageEdgeAndTitleArea() =
                     <| pageEdge.TopMiddle.GetHeightF()
                 pageEdge, titleArea
             ))
-    |> Manipulate.constraintOf
+    |> Manipulate.ofConstraint
 
 let realSamplesTests =
   testList "real samples tests" [
@@ -126,7 +126,8 @@ let realSamplesTests =
         <+> 
         Flow.Manipulate (
             Manipulate.dummy
-            <.+> trimToVisible (Margin.Create(mm 2.)) PageSelector.All
+            <.+>
+            trimToVisible (Margin.Create(mm 2.)) PageSelector.All
             <+> (snd <<|| getPageEdgeAndTitleArea())
             <+> 
             modify( 

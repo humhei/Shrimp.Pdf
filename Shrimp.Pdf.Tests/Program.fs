@@ -3,6 +3,7 @@
 open System
 open Expecto
 open Expecto.Logging
+open System.Threading
 
 
 let testConfig =  
@@ -22,4 +23,5 @@ let allTests =
 [<EntryPoint>]
 let main argv =
     runTests testConfig allTests
+    Thread.Sleep(2000)
     Console.Read()

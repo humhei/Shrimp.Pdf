@@ -74,15 +74,19 @@ with
             x.Value flowModel document
         |> Manipulate
 
+
+
+
 [<RequireQualifiedAccess>]
 module Manipulate =
     /// followed by <++> or <.+> to rediscover userState
-    let dummy = Manipulate(fun model doc -> model.UserState)
+    let dummy = Manipulate(fun model _ -> model.UserState)
 
-    let constraintOf (manipulateFactory: 'oldUserState -> Manipulate<'oldUserState,'newUserState>) =
+    let ofConstraint (manipulateFactory: 'oldUserState -> Manipulate<'oldUserState,'newUserState>) =
         fun (flowModel: FlowModel<'oldUserState>) ->
             (manipulateFactory flowModel.UserState).Value flowModel
         |> Manipulate
+
 
 type FileOperation<'oldUserState, 'newUserState> = 
     FileOperation of (FlowModel<'oldUserState> -> ReaderDocument -> FlowModel<'newUserState> list)

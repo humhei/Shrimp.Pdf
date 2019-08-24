@@ -14,7 +14,7 @@ type Operator =
                 infos
                 |> Seq.map (IAbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth)
                 |> Rectangle.ofRectangles
-            Some trimedBox
+            trimedBox
 
     static member PickTexts(picker: Parser<_, _>) =
         fun (args: PageModifingArguments<_>) infos ->
@@ -23,20 +23,18 @@ type Operator =
             |> Seq.tryPick (fun renderInfo ->
                 let text = ITextRenderInfo.getText renderInfo
                 match run picker text with 
-                | Success (result, _ ,_ )-> Some result
-                | Failure (_, _ , _) -> None
+                | Success (result, _ ,_ )-> result
+                | Failure (msg, _ , _) -> failwithf "%s" msg
             )
 
     static member SetPageBox(rect: Rectangle, pageBoxKind: PageBoxKind) =
         fun (args: PageModifingArguments<_>) infos ->
             PdfPage.setPageBox pageBoxKind rect args.Page
             |> ignore
-            None
 
     static member GetPageEdge (innerBox: Rectangle, pageBoxKind: PageBoxKind) =
         fun (args: PageModifingArguments<_>) infos ->
             PdfPage.getEdge innerBox pageBoxKind args.Page
-            |> Some
 
     static member AddText(text, mapping)  =
         fun (args: PageModifingArguments<_>) ->
@@ -66,7 +64,7 @@ module ModifyPageOperators =
 
                         let renderInfoSelector = Selector.toRenderInfoSelector args selector
                         let infos = PdfDocumentContentParser.parse pageNum renderInfoSelector parser
-                        operator args infos 
+                        Some (operator args infos) 
                     else None
                 )
             )

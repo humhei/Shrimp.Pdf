@@ -433,6 +433,8 @@ module Imposing =
                   Y = sheet.Y
                   ImposingRow = this }
 
+            if newCell.Size.Width > this.PageSize.Width || newCell.Size.Height > this.PageSize.Height 
+            then failwithf "desired size is exceeded %A to sheet page size %A" newCell.Size this.PageSize
                   
             let addNewCell_UpdateState() =
                 x <- x + newCell.Size.Width + args.HSpaces.[cells.Count % args.HSpaces.Length]
@@ -501,6 +503,8 @@ module Imposing =
                 match Seq.tryLast rows with 
                 | None -> ()
                 | Some lastRow -> 
+                    if lastRow.Cells.Count = 0 then
+                        failwithf "Cannot push page to imposing sheet,please check your imposing arguments %A" x.ImposingArguments
                     y <- lastRow.Height + y + args.VSpaces.[(rows.Count - 1) % args.VSpaces.Length]
 
                 let newRow = new ImposingRow(x)

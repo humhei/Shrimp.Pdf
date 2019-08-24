@@ -66,10 +66,14 @@ module internal IAbstractRenderInfo =
 [<AutoOpen>]
 module rec ReadMutual = 
 
+    type IntegratedRenderInfoTag =
+        | Path = 0
+        | Text = 1
+
     type IIntegratedRenderInfo =
         inherit IAbstractRenderInfo
-        abstract member Value: IntegratedRenderInfo
-
+        abstract member Tag: IntegratedRenderInfoTag
+        abstract member ClippingPathInfo: ClippingPathInfo
 
     type IntegratedPathRenderInfo =
         { PathRenderInfo: PathRenderInfo 
@@ -82,7 +86,8 @@ module rec ReadMutual =
             member x.Value = x.PathRenderInfo :> AbstractRenderInfo
 
         interface IIntegratedRenderInfo with 
-            member x.Value = IntegratedRenderInfo.Path x
+            member x.Tag = IntegratedRenderInfoTag.Path
+            member x.ClippingPathInfo = x.ClippingPathInfo
 
     type IntegratedTextRenderInfo =
         { TextRenderInfo: TextRenderInfo 
@@ -96,7 +101,9 @@ module rec ReadMutual =
             member x.Value = x.TextRenderInfo :> AbstractRenderInfo
 
         interface IIntegratedRenderInfo with 
-            member x.Value = IntegratedRenderInfo.Text x
+            member x.Tag = IntegratedRenderInfoTag.Text
+
+            member x.ClippingPathInfo = x.ClippingPathInfo
 
     [<RequireQualifiedAccess>]
     type IntegratedRenderInfo =
@@ -116,25 +123,30 @@ module rec ReadMutual =
 
 [<RequireQualifiedAccess>]
 module IIntegratedRenderInfo =
+    let (|Text|Path|) (info: IIntegratedRenderInfo) = 
+        match info.Tag with 
+        | IntegratedRenderInfoTag.Path -> Path (info :?> IntegratedPathRenderInfo)
+        | IntegratedRenderInfoTag.Text -> Text (info :?> IntegratedTextRenderInfo)
+        | _ -> failwith "Invalid token"
 
     let asIPathRenderInfo (info: IIntegratedRenderInfo) = 
-        match info.Value with
-        | IntegratedRenderInfo.Path info -> Some (info)
+        match info with
+        | Path info -> Some (info)
         | _ -> None 
 
     let asITextRenderInfo (info: IIntegratedRenderInfo) =
-        match info.Value with
-        | IntegratedRenderInfo.Text info -> Some (info)
+        match info with
+        | Text info -> Some (info)
         | _ -> None 
 
     let isStrokeVisible (info: IIntegratedRenderInfo) = 
-        IAbstractRenderInfo.isVisible FillOrStrokeOptions.Stroke info.Value.ClippingPathInfo info
+        IAbstractRenderInfo.isVisible FillOrStrokeOptions.Stroke info.ClippingPathInfo info
 
     let isFillVisible (info: IIntegratedRenderInfo) = 
-        IAbstractRenderInfo.isVisible FillOrStrokeOptions.Fill info.Value.ClippingPathInfo info
+        IAbstractRenderInfo.isVisible FillOrStrokeOptions.Fill info.ClippingPathInfo info
 
     let tryGetVisibleBound boundGettingOptions (info: IIntegratedRenderInfo) =
-        IAbstractRenderInfo.tryGetVisibleBound boundGettingOptions info.Value.ClippingPathInfo info
+        IAbstractRenderInfo.tryGetVisibleBound boundGettingOptions info.ClippingPathInfo info
 
     let isVisible (info: IIntegratedRenderInfo) =
         isFillVisible info || isStrokeVisible info
@@ -178,9 +190,9 @@ module RenderInfoSelector =
 
             | RenderInfoSelector.Path prediate ->
                 fun (renderInfo: IIntegratedRenderInfo) -> 
-                    match renderInfo.Value with 
-                    | IntegratedRenderInfo.Text _ -> false
-                    | IntegratedRenderInfo.Path renderInfo -> prediate renderInfo
+                    match renderInfo with 
+                    | IIntegratedRenderInfo.Text _ -> false
+                    | IIntegratedRenderInfo.Path renderInfo -> prediate renderInfo
 
             | RenderInfoSelector.PathOrText prediate -> 
                 fun (renderInfo: IIntegratedRenderInfo) ->
@@ -188,9 +200,9 @@ module RenderInfoSelector =
 
             | RenderInfoSelector.Text prediate ->
                 fun (renderInfo: IIntegratedRenderInfo) ->
-                    match renderInfo.Value with 
-                    | IntegratedRenderInfo.Text renderInfo -> prediate renderInfo
-                    | IntegratedRenderInfo.Path _ -> false
+                    match renderInfo with 
+                    | IIntegratedRenderInfo.Text renderInfo -> prediate renderInfo
+                    | IIntegratedRenderInfo.Path _ -> false
 
             | RenderInfoSelector.Dummy _ -> fun _ -> false
 
@@ -206,6 +218,10 @@ module RenderInfoSelector =
         loop selector
 
 type SelectorModiferToken = SelectorModiferToken of name: string
+with 
+    member x.Value = 
+        let (SelectorModiferToken name) = x
+        name
 
 module internal Listeners =
 
@@ -229,6 +245,13 @@ module internal Listeners =
         let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Selected
         let mutable currentClippingPathInfo = null
 
+        let isPassed = 
+            let keys = 
+                renderInfoSelectorMapping
+                |> List.ofSeq
+                |> List.head
+            keys.Key.Value.StartsWith "retain title info" 
+
         let parsedRenderInfos = List<IIntegratedRenderInfo>()
 
         member this.CurrentRenderInfo = currentRenderInfo.Value
@@ -249,6 +272,7 @@ module internal Listeners =
                     currentClippingPathInfo.PreserveGraphicsState()
 
                 | _ ->
+
                     let renderInfo = 
                         match data with 
                         | :? PathRenderInfo as pathRenderInfo ->
@@ -262,15 +286,21 @@ module internal Listeners =
                             :> IIntegratedRenderInfo
 
                         |_ -> failwith "Not implemented"
-                       
-                    match Map.tryFindKey (fun token prediate -> prediate renderInfo) prediateMapping with 
+
+
+                    let predicate (SelectorModiferToken token) filter =
+                        filter renderInfo
+
+                    match Map.tryFindKey predicate prediateMapping with 
                     | Some token ->
-                        renderInfo.Value.RenderInfo.PreserveGraphicsState()
+
+                        renderInfo.Value.PreserveGraphicsState()
 
                         parsedRenderInfos.Add(renderInfo)
                         currentRenderInfoToken <- Some token
                         currentRenderInfo <- Some renderInfo
                         currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
+
                     | None -> 
                         currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
                         currentRenderInfo <- None
@@ -288,8 +318,7 @@ module internal Listeners =
     type DummyListener() =
         interface IEventListener with
             member this.EventOccurred(data,tp) = ()
-            member this.GetSupportedEvents() =
-                    List () :> ICollection<_>
+            member this.GetSupportedEvents() = List () :> ICollection<_>
 
 
 
