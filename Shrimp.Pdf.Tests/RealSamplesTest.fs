@@ -15,6 +15,8 @@ open Shrimp.Pdf.Parser
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf.Colors
 open Shrimp.Pdf.DSL
+open Shrimp.Pdf.icms2
+
 let readB255Bound() =
     modifyPage ( 
         "read b255 bound",
@@ -54,6 +56,21 @@ let retainTitleInfo color =
       Modifier = Modifier.DropColor
     }
 
+let blackAndWhiteTitleInfo() =
+    { Name = "black and white title info"
+      Selector = 
+        Factory (fun args ->
+            let pageEdge, titleArea = args.PageUserState()
+            PathOrText (
+                Info.BoundIsInsideOf(titleArea)
+            )
+        )
+      Modifier = 
+        Modifier.Fix [
+            Modify.BlackOrWhite()
+        ]
+    }
+
 let retainNavigationInfo color =
     { Name = (sprintf "retain navigation info %O" color)
       Selector =
@@ -72,6 +89,7 @@ let removeNavigationInfo() =
         PathOrText (fun args ->
             let pageEdge, _ = args.PageUserState()
             ( Info.BoundIsCrossOf(pageEdge.LeftMiddle)
+                <&> Info.FillColorIs DeviceRgb.MAGENTA
             ) args
         )
       Modifier = Modifier.DropColor
@@ -140,7 +158,7 @@ let realSamplesTests =
         |> runWithBackup "datas/real samples/Layout to Confirm.pdf" 
         |> ignore
 
-    ftestCase "printing out test" <| fun _ -> 
+    testCase "printing out test" <| fun _ -> 
 
         Flow.Manipulate (setTrimBoxToStrokeB255())
         <+> 
@@ -162,11 +180,14 @@ let realSamplesTests =
             Manipulate.dummy
             <+> (snd <<|| getPageEdgeAndTitleArea())
             <+> 
-            modify (
+            modifyAsync (
+                ModifyingAsyncWorker.Sync,
                 PageSelector.All,
                 [ retainTitleInfo DeviceRgb.MAGENTA
-                  removeNavigationInfo() ]
-                )
+                  removeNavigationInfo() 
+                  blackAndWhiteTitleInfo()
+                ]
+            )
         )
         
         |> runWithBackup "datas/real samples/printing out.pdf" 

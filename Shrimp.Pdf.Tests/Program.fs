@@ -8,8 +8,8 @@ open System.Threading
 
 let testConfig =  
     { Expecto.Tests.defaultConfig with 
-         parallelWorkers = 1
-         verbosity = LogLevel.Debug }
+         verbosity = LogLevel.Debug
+         parallelWorkers = 1 }
 
 let allTests =
     testList "All Tests"
@@ -23,5 +23,3 @@ let allTests =
 [<EntryPoint>]
 let main argv =
     runTests testConfig allTests
-    Thread.Sleep(2000)
-    Console.Read()

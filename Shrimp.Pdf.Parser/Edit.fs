@@ -10,6 +10,11 @@ open iText.Kernel.Pdf.Canvas.Parser
 open iText.Layout
 open Shrimp.Pdf
 open Listeners
+open System.Threading
+open iText.IO.Source
+open System.IO
+open Shrimp.Pdf.Parser.Helper
+
 
 type OperatorRange =
     { Operator: PdfLiteral 
@@ -157,7 +162,8 @@ type _SelectionModifierAddNewArguments =
 
 [<Struct>]
 type _SelectionModifierFixmentArguments =
-    { Close: OperatorRange }
+    { Close: OperatorRange
+      CurrentRenderInfo: IIntegratedRenderInfo }
 
 
 [<RequireQualifiedAccess>]
@@ -180,7 +186,7 @@ and internal PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, 
         |> RenderInfoSelector.toEventTypes
     
     let mutable eventListener: FilteredEventListenerEx = null
-    let pdfCanvasStack = new Stack<PdfCanvas>()
+    let pdfCanvasStack = new Stack<CanvasGraphicsStateSettablePdfCanvas>()
     let resourcesStack = new Stack<PdfResources>()
 
     let (|Path|_|) operatorName =
@@ -249,6 +255,8 @@ and internal PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, 
                 |> ignore
 
             | CurrentRenderInfoStatus.Selected ->
+                currentPdfCanvas.SetCanvasGraphicsState(this.GetGraphicsState())
+
                 let modifier = snd selectorModifierMapping.[eventListener.CurrentRenderInfoToken.Value]
 
                 match operatorName with 
@@ -281,8 +289,8 @@ and internal PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, 
                 | PathOrText ->
                     match modifier with
                         | SelectionModifier.Fix (fix) ->
-                            PdfCanvas.useCanvas currentPdfCanvas (fun canvas ->
-                                let pdfCanvasActions = fix { Close = operatorRange }
+                            PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
+                                let pdfCanvasActions = fix { Close = operatorRange; CurrentRenderInfo = eventListener.CurrentRenderInfo }
                                 (canvas, pdfCanvasActions)
                                 ||> List.fold(fun canvas action ->
                                     action canvas 
@@ -290,7 +298,7 @@ and internal PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, 
                             )
                         | SelectionModifier.AddNew addNew -> 
                             PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas |> ignore
-                            PdfCanvas.useCanvas currentPdfCanvas (fun canvas ->
+                            PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
                                 let pdfCanvasActions = addNew { CurrentRenderInfo = eventListener.CurrentRenderInfo }
                                 (canvas, (pdfCanvasActions))
                                 ||> List.fold(fun canvas action ->
@@ -316,7 +324,7 @@ and internal PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, 
 
         match pdfObject with 
         | :? PdfStream as stream -> 
-            let pdfCanvas = new PdfCanvas(new PdfStream(), resources, document)
+            let pdfCanvas = new CanvasGraphicsStateSettablePdfCanvas(new PdfStream(), resources, document)
 
             let bytes = stream.GetBytes()
             pdfCanvasStack.Push(pdfCanvas)
@@ -363,10 +371,11 @@ module internal PdfPage =
 
 
 type IntegratedDocument private (reader: string, writer: string) =
-
     let pdfDocument = new PdfDocumentWithCachedResources(reader, writer)
 
     member x.ReaderName = reader
+
+    member x.WriterName = writer
 
     member x.Value = pdfDocument
 
@@ -398,7 +407,9 @@ module IntegratedDocument =
                 if List.contains i selectedPageNumbers then
                     let page = document.Value.GetPage(i)
                     let selectorModifierMapping = selectorModifierMappingFactory (PageNumber i, page)
-                    PdfPage.modify selectorModifierMapping page
+                    for pair in selectorModifierMapping do
+                        PdfPage.modify (Map.ofList[pair.Key, pair.Value]) page
+                    
         )
 
 

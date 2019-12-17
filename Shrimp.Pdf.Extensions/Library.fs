@@ -16,6 +16,10 @@ open iText.Kernel.Pdf.Xobject
 
 
 type PageNumber = PageNumber of int
+with 
+    member x.Value =
+        let (PageNumber value) = x
+        value 
 
 type IAbstractRenderInfo =
     abstract member Value: AbstractRenderInfo
@@ -332,6 +336,7 @@ module Extensions =
 
         new (writer: string) = { inherit PdfDocument(new PdfWriter(writer)); fontsCache = new ConcurrentDictionary<_, _> () }
         new (reader: string, writer: string) =  { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); fontsCache = new ConcurrentDictionary<_, _> () }
+        new (reader: PdfReader, writer: PdfWriter) =  { inherit PdfDocument(reader, writer); fontsCache = new ConcurrentDictionary<_, _> () }
 
     [<AutoOpen>]
     module iText = 

@@ -75,6 +75,7 @@ module rec ReadMutual =
         abstract member Tag: IntegratedRenderInfoTag
         abstract member ClippingPathInfo: ClippingPathInfo
 
+    [<Struct>]
     type IntegratedPathRenderInfo =
         { PathRenderInfo: PathRenderInfo 
           ClippingPathInfo: ClippingPathInfo }
@@ -89,6 +90,7 @@ module rec ReadMutual =
             member x.Tag = IntegratedRenderInfoTag.Path
             member x.ClippingPathInfo = x.ClippingPathInfo
 
+    [<Struct>]
     type IntegratedTextRenderInfo =
         { TextRenderInfo: TextRenderInfo 
           ClippingPathInfo: ClippingPathInfo }
@@ -217,11 +219,11 @@ module RenderInfoSelector =
 
         loop selector
 
-type SelectorModiferToken = SelectorModiferToken of name: string
-with 
-    member x.Value = 
-        let (SelectorModiferToken name) = x
-        name
+
+[<Struct>]
+type SelectorModiferToken = 
+    { Index: int 
+      Name: string }
 
 module internal Listeners =
 
@@ -232,7 +234,7 @@ module internal Listeners =
 
     [<AllowNullLiteral>]
     /// a type named FilteredEventListener is already defined in itext7
-    /// OR Between selectors
+    /// OR Between selectors of renderInfoSelectorMapping
     type FilteredEventListenerEx(renderInfoSelectorMapping: Map<SelectorModiferToken, RenderInfoSelector>) =
         let prediateMapping = 
             renderInfoSelectorMapping
@@ -244,13 +246,6 @@ module internal Listeners =
         let mutable currentRenderInfoToken = None
         let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Selected
         let mutable currentClippingPathInfo = null
-
-        let isPassed = 
-            let keys = 
-                renderInfoSelectorMapping
-                |> List.ofSeq
-                |> List.head
-            keys.Key.Value.StartsWith "retain title info" 
 
         let parsedRenderInfos = List<IIntegratedRenderInfo>()
 
@@ -288,7 +283,7 @@ module internal Listeners =
                         |_ -> failwith "Not implemented"
 
 
-                    let predicate (SelectorModiferToken token) filter =
+                    let predicate _ filter =
                         filter renderInfo
 
                     match Map.tryFindKey predicate prediateMapping with 
@@ -333,7 +328,7 @@ module PdfDocumentContentParser =
         match et with 
         | [] -> [] :> seq<IIntegratedRenderInfo>
         | _ ->
-            let renderInfoSelectorMapping = Map.ofList [SelectorModiferToken "Unknown", renderInfoSelector]
+            let renderInfoSelectorMapping = Map.ofList [{Index = 0; Name= "Unknown"}, renderInfoSelector]
             let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
             parser.ProcessContent(pageNum, listener).ParsedRenderInfos
         

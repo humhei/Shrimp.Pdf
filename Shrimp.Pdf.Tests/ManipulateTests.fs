@@ -12,6 +12,7 @@ open iText.Kernel.Font
 open iText.IO.Font
 open Shrimp.Pdf.Manipulates
 open Shrimp.Pdf.DSL
+open Shrimp.Pdf.icms2
 
 
 let manipulateTests =
@@ -44,6 +45,20 @@ let manipulateTests =
             )
         )
         |> runWithBackup "datas/manipulate/xobject_change stroke color b255 to m100.pdf" 
+        |> ignore
+
+    testCase "black or white" <| fun _ -> 
+        Flow.Manipulate (
+            modify (
+                PageSelector.First,
+                [
+                    { Name = "black or white"
+                      Selector = PathOrText(fun _ _ -> true)
+                      Modifier = Fix [Modify.BlackOrWhite()] }
+                ]
+            )
+        )
+        |> runWithBackup "datas/manipulate/black or white.pdf" 
         |> ignore
 
     testCase "add bound to text" <| fun _ -> 

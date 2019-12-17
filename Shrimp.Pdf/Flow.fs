@@ -89,7 +89,7 @@ module Manipulate =
 
 
 type FileOperation<'oldUserState, 'newUserState> = 
-    FileOperation of (FlowModel<'oldUserState> -> ReaderDocument -> FlowModel<'newUserState> list)
+    FileOperation of (FlowModel<'oldUserState> list -> FlowModel<'newUserState> list)
 with 
     member x.Value =
         let (FileOperation value) = x
@@ -128,10 +128,7 @@ with
             draft()
             [{ File = file; UserState = newUserState }]
 
-        | Flow.FileOperation fileOperation ->
-            let readerDocument = new ReaderDocument(file)
-            let newModels = fileOperation.Value flowModel readerDocument
-            newModels
+        | Flow.FileOperation fileOperation -> fileOperation.Value [flowModel]
 
         | Flow.Transform transform ->
             transform flowModel
@@ -145,10 +142,14 @@ with
             let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModel, flow1) 
 
             let newFlowModels = 
-                middleFlowModels
-                |> List.collect (fun middleFlowModel ->
-                    Flow<'middleUserState, 'newUserState>.Run (middleFlowModel, flow2) 
-                )
+                match flow2 with 
+                | Flow.FileOperation fileOperation ->
+                    fileOperation.Value middleFlowModels
+                | _ ->
+                    middleFlowModels
+                    |> List.collect (fun middleFlowModel ->
+                        Flow<'middleUserState, 'newUserState>.Run (middleFlowModel, flow2) 
+                    )
             newFlowModels
         |> Flow.Transform
 
@@ -158,6 +159,10 @@ with
     static member Bind_TuplingUserState (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
         fun flowModel ->
             let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModel, flow1) 
+
+            match flow2 with 
+            | Flow.FileOperation _ -> failwith "file operation only support <+> only"
+            | _ -> ()
 
             let newFlowModels = 
                 middleFlowModels
@@ -176,6 +181,10 @@ with
     static member Bind_FstUserState (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
         fun flowModel ->
             let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModel, flow1) 
+
+            match flow2 with 
+            | Flow.FileOperation _ -> failwith "file operation only support <+> only"
+            | _ -> ()
 
             let newFlowModels = 
                 middleFlowModels
@@ -210,11 +219,6 @@ with
 [<AutoOpen>]
 module Operators =
 
-    let run flowModel flow = 
-        Logger.infoWithStopWatch(sprintf "RUN: %s" flowModel.File) (fun _ ->
-            Flow<_, _>.Run(flowModel, flow)
-        )
-
     let inline (||>>) (flow : ^a) (mapping: ^b) =
         (^a: (member TransformNewUserState : ^b -> ^c) (flow, mapping))
 
@@ -230,3 +234,16 @@ module Operators =
 
     let inline (<.+>) (flow1: ^a) (flow2: ^b) = 
         ((^a or ^b): (static member Bind_FstUserState: ^a * ^b -> ^c) (flow1, flow2))
+
+
+    let run flowModel flow = 
+        Logger.infoWithStopWatch(sprintf "RUN: %s" flowModel.File) (fun _ ->
+            Flow<_, _>.Run(flowModel, flow)
+        )
+
+    let runMany (flowModels: FlowModel<_> list) flow = 
+        ( Flow.Transform (fun _ -> flowModels)
+          <+>
+          flow )
+        |> run {File = ""; UserState = ()}
+

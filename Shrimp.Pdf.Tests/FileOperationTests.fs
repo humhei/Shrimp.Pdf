@@ -15,7 +15,7 @@ let fileOperationTests =
         Flow.FileOperation (
             splitDocumentToMany (fun args ->
                 { args with 
-                    PageNumPerDocument = 2 }
+                    ChunkSize = 2 }
             )
         )
         |> runWithBackup "datas/file operation/split document.pdf" 

@@ -21,14 +21,10 @@ module Logger =
         | Some (logger: NLog.Logger) -> logger.Info message
         | None -> printfn "%s" message
 
-    let writer = 
-        File.AppendText(@"C:\Users\Jia\Desktop\hello.txt.txt")
-
 
     let infoWithStopWatch message f =
         let stopWatch = Stopwatch.StartNew()
         let result = f()
         stopWatch.Stop()
-        //writer.WriteLine(sprintf "%s in %O " message stopWatch.Elapsed)
         info (sprintf "%s in %O " message stopWatch.Elapsed)
         result

@@ -9,6 +9,7 @@ open iText.Kernel
 open Extensions
 open System.Linq
 open System.Collections.Generic
+open iText.Kernel.Colors
 
 
 [<RequireQualifiedAccess>]
@@ -116,20 +117,13 @@ module LabColor =
 
 [<RequireQualifiedAccess>]
 module DeviceRgb =
-    let ofLab (lab: LabColor) =
-        let rgb = Colourful.converter.ToRGB(lab)
-        let r = float32 rgb.R
-        let g = float32 rgb.G
-        let b = float32 rgb.B
-        DeviceRgb(r,g,b)
 
     let MAGENTA = new DeviceRgb(1.f, 0.f, 1.f) :> Color
-        
-
 
 [<RequireQualifiedAccess>]
 module DeviceCmyk =
     let WHITE = DeviceCmyk(0,0,0,0)
+
 
 [<RequireQualifiedAccess>]
 module Separation =
