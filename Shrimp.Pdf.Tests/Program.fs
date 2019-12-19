@@ -4,6 +4,7 @@ open System
 open Expecto
 open Expecto.Logging
 open System.Threading
+open Shrimp.Pdf.icms2
 
 
 let testConfig =  
@@ -22,4 +23,5 @@ let allTests =
 
 [<EntryPoint>]
 let main argv =
+    SetClientContext()
     runTests testConfig allTests

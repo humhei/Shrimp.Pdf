@@ -43,6 +43,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Akka.Logger.NLog" Version="1.3.3" />
     <PackageReference Include="Fake.IO.FileSystem" Version="5.16.1" />
     <PackageReference Include="Giraffe" Version="3.6.0" />
     <PackageReference Include="Microsoft.AspNetCore.Hosting" Version="2.2.0" />
@@ -57,13 +58,12 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="2.2.0" />
     <PackageReference Include="NLog.Web.AspNetCore" Version="4.8.4" />
+    <PackageReference Include="Shrimp.Pdf.icms2" Version="0.0.5" />
     <PackageReference Include="TaskBuilder.fs" Version="2.1.0" />
 
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Shrimp.Pdf.icms2\Shrimp.Pdf.icms2.fsproj" />
-  </ItemGroup>
+
 
   <ItemGroup>
     <Reference Include="icms2-wrapper">

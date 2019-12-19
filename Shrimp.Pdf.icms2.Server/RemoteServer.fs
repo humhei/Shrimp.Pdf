@@ -37,35 +37,35 @@ module Icc =
         | Icc.Gray gray -> Format.TYPE_GRAY_FLT
         | Icc.Lab lab -> Format.TYPE_Lab_FLT
         | Icc.Rgb rgb -> Format.TYPE_RGB_FLT
-       
 
 
 let run() =
-    let handleMsg (ctx: Actor<_>) msg (customModel: Map<Icc * Icc * Indent, Icms>) =
+
+    Server.createAgent (fun ctx ->
         let logger = ctx.Log.Value
-        try 
-            match msg with   
+        let rec loop (model: Map<Icc * Icc * Indent, Icms>) = actor {
+            let! msg = ctx.Receive()
+            match msg with
             | ServerMsg.CalcColor (inputIcc, inputValues, outputIcc, indent) ->
                 let indent = enum<Indent> (int indent)
-                match Map.tryFind (inputIcc, outputIcc, indent) customModel with 
+                match Map.tryFind (inputIcc, outputIcc, indent) model with 
                 | Some icms2 -> 
-                    let outputValues = icms2.DoTransfrom(inputValues)
-                    logger.Info (sprintf "[SHRIMP SERVER Pdf ICMS2] Convert %O %A to %O %A" inputIcc inputValues outputIcc outputValues) 
-                    ctx.Sender() <! outputValues
-                    customModel
-                | None ->
-                    let icms2 = new Icms("Icc" </> Icc.fileName inputIcc, Icc.format inputIcc,"Icc" </> Icc.fileName outputIcc, Icc.format outputIcc, indent, 0u)
-                    let outputValues = icms2.DoTransfrom(inputValues)
-                    logger.Info (sprintf "[SHRIMP SERVER Pdf ICMS2] Convert %O %A to %O %A" inputIcc inputValues outputIcc outputValues) 
-                    ctx.Sender() <! outputValues
-                    customModel.Add ((inputIcc, outputIcc, indent), icms2)
+                    ctx.RespondSafely(fun _ ->
+                        let outputValues = icms2.DoTransfrom(inputValues)
+                        logger.Info (sprintf "[SHRIMP SERVER Pdf ICMS2] Convert %O %A to %O %A" inputIcc inputValues outputIcc outputValues) 
+                        box outputValues
+                    )
 
-        with ex ->
-            let exMsg = ex.ToString()
-            logger.Error("[SHRIMP SERVER Desktop] " + exMsg)
-            ctx.Sender() <! (ErrorResponse (exMsg))
-            customModel
-    Server.createAgent Routed.port Map.empty handleMsg
+                | None ->
+                    ctx.RespondSafely(fun _ ->
+                        let icms2 = new Icms("Icc" </> Icc.fileName inputIcc, Icc.format inputIcc,"Icc" </> Icc.fileName outputIcc, Icc.format outputIcc, indent, 0u)
+                        let outputValues = icms2.DoTransfrom(inputValues)
+                        logger.Info (sprintf "[SHRIMP SERVER Pdf ICMS2] Convert %O %A to %O %A" inputIcc inputValues outputIcc outputValues) 
+                        box outputValues 
+                    )
+        }
+        loop Map.empty
+    )
     |> ignore
 
 

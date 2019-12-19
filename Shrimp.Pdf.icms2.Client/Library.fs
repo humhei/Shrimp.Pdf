@@ -12,13 +12,23 @@ open Shrimp.Pdf
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Parser
 open System.Collections.Concurrent
+open Shrimp.Akkling.Cluster.Intergraction
 
 [<AutoOpen>]
 module Client =
 
     type private AssemblyFinder = AssemblyFinder
 
-    let client = Client.create()
+    [<AutoOpen>]
+    module ClientCluster =
+        let  mutable private client: option<Client<unit, ServerMsg>> = None
+        let SetClientContext() = client <- Some (Client.create())
+        let GetClient() = 
+            match client with
+            | Some client -> client
+            | None -> failwith "Please run SetClientContext() first to aceess icm server"
+
+
 
     let private referenceConfig = 
         ConfigurationFactory.FromResource<AssemblyFinder>("Shrimp.Pdf.icms2.Client.reference.conf")
@@ -50,6 +60,7 @@ module Client =
         getEnumFromConfig "shrimp.pdf.icms2.client.icc.intent"
 
     let private msgCache = new ConcurrentDictionary<ServerMsg, float32[]>()
+
 
     [<RequireQualifiedAccess>]
     type CmsColor =
@@ -85,7 +96,7 @@ module Client =
 
             return
                 msgCache.GetOrAdd(msg, fun msg ->
-                    client <? msg
+                    GetClient() <? msg
                     |> Async.RunSynchronously
                 )
         }
