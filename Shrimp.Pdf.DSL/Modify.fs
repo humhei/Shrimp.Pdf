@@ -1,4 +1,5 @@
 ﻿namespace Shrimp.Pdf.DSL
+#nowarn "0104"
 open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Parser
@@ -6,6 +7,7 @@ open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf
 open Shrimp.Pdf.FileOperations
 open System.IO
+open iText.Kernel.Pdf
 
 type _SelectionModifierAddNewArguments<'userState> =
     { CurrentRenderInfo: IIntegratedRenderInfo  
@@ -33,60 +35,58 @@ with
 
 
 
-type Modifier<'userState> =
-    | DropColor 
-    | AddNew of list<_SelectionModifierAddNewArguments<'userState> -> list<PdfCanvas -> PdfCanvas>>
-    | Fix of list<_SelectionModifierFixmentArguments<'userState> -> list<PdfCanvas -> PdfCanvas>>
-
+type Modifier<'userState> = _SelectionModifierFixmentArguments<'userState> -> list<PdfCanvas -> PdfCanvas>
  
-
 [<RequireQualifiedAccess>]
-module private Modifier =
-    let toSelectionModifier (pageModifingArguments: PageModifingArguments<_>) (modifier: Modifier<_>) =
-        match modifier with
-        | Modifier.AddNew factorys ->
-            fun (args: _SelectionModifierAddNewArguments) ->
-                let actions = 
-                    let args = 
-                        { CurrentRenderInfo = args.CurrentRenderInfo
-                          PageModifingArguments = pageModifingArguments }
+module private Modifiers =
+    let toSelectionModifier (pageModifingArguments: PageModifingArguments<_>) (modifiers: Modifier<_> list) =
+        fun (args: _SelectionModifierFixmentArguments) ->
+            let actions = 
+                let args  = 
+                    { Close = args.Close
+                      PageModifingArguments = pageModifingArguments
+                      CurrentRenderInfo = args.CurrentRenderInfo }
+                
+                modifiers
+                |> List.collect (fun factory -> factory args)
+                
+            actions
 
-                    factorys
-                    |> List.collect (fun factory -> factory args)
 
-                actions
-            |> SelectionModifier.AddNew
+type Modifier =
+    static member DropColor() : Modifier<'userState> =
+        fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
+            match args.CurrentRenderInfo.Tag with 
+            | IntegratedRenderInfoTag.Path ->
+                let newClose = 
+                    { args.Close with 
+                        Operator = new PdfLiteral("n")
+                        Operands = ResizeArray [new PdfLiteral("n") :> PdfObject]}
+                [
+                    PdfCanvas.writeOperatorRange newClose
+                ]
 
-        | Modifier.Fix factorys ->
-            fun (args: _SelectionModifierFixmentArguments) ->
-                let actions = 
-                    let args  = 
-                        { Close = args.Close
-                          PageModifingArguments = pageModifingArguments
-                          CurrentRenderInfo = args.CurrentRenderInfo }
-                    factorys
-                    |> List.collect (fun factory -> factory args)
-                actions
-            |> SelectionModifier.Fix
+            | IntegratedRenderInfoTag.Text ->
+                [
+                    PdfCanvas.setTextRenderingMode(TextRenderingMode.INVISIBLE) 
+                    PdfCanvas.writeOperatorRange args.Close
+                ]
 
-        | Modifier.DropColor -> SelectionModifier.DropColor
-
-type Modify =
-    static member SetStrokeColor(color: Color) =
+    static member SetStrokeColor(color: Color) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
             [
                 PdfCanvas.setStrokeColor (color)
                 PdfCanvas.writeOperatorRange args.Close
             ]
 
-    static member SetFillColor(color: Color) =
+    static member SetFillColor(color: Color) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
             [
                 PdfCanvas.setFillColor (color)
                 PdfCanvas.writeOperatorRange args.Close
             ]
 
-    static member SetFillAndStrokeColor(color: Color) =
+    static member SetFillAndStrokeColor(color: Color) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
             [
                 PdfCanvas.setFillColor (color)
@@ -94,16 +94,17 @@ type Modify =
                 PdfCanvas.writeOperatorRange args.Close
             ]
 
-    static member AddRectangleToBound(mapping) =
-        fun (args: _SelectionModifierAddNewArguments<'userState>)  ->
+    static member AddRectangleToBound(mapping) : Modifier<'userState> =
+        fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
             let border = IAbstractRenderInfo.getBound BoundGettingOptions.WithStrokeWidth args.CurrentRenderInfo
             [
+                PdfCanvas.writeOperatorRange args.Close
                 PdfCanvas.addRectangle border mapping
             ]
 
-type _SelectorAndModifier<'userState> =
+type _SelectorAndModifiers<'userState> =
     { Selector: Selector<'userState> 
-      Modifier: Modifier<'userState>
+      Modifiers: Modifier<'userState> list
       Name: string }
 
 
@@ -127,7 +128,7 @@ module ModifyOperators =
                 | ModifyingAsyncWorker.PageNumberEveryWorker i, _ when i < 1 -> failwith "Async worker number should bigger than 1"
                 | ModifyingAsyncWorker.PageNumberEveryWorker i, j when i > 0 && j > 1 ->
                     let splitedFlowModels = 
-                        run flowModel (Flow.FileOperation (splitDocumentToMany (fun args -> { args with Override = true; ChunkSize = i})))
+                        runWithReuseOldPdfDocumentCache flowModel (Flow.FileOperation (splitDocumentToMany (fun args -> { args with Override = true; ChunkSize = i})))
 
 
                     let flowModels = 
@@ -138,9 +139,9 @@ module ModifyOperators =
                                 return
                                     flowModels
                                     |> List.mapi (fun memberIndex flowModel ->
-                                            let pageNum = groupIndex * i + (memberIndex + 1)
-                                            let manipuate = (Manipulate (f totalNumberOfPages (fun _ -> PageNumber pageNum)))
-                                            run flowModel (Flow.Manipulate manipuate)
+                                        let pageNum = groupIndex * i + (memberIndex + 1)
+                                        let manipuate = (Manipulate (f totalNumberOfPages (fun _ -> PageNumber pageNum)))
+                                        runWithReuseOldPdfDocumentCache flowModel (Flow.Manipulate manipuate)
                                     )
                                     |> List.concat
                             }
@@ -154,7 +155,7 @@ module ModifyOperators =
                             (mergeDocumentsInternal flowModel.File (document.Value))
 
 
-                    runMany flowModels mergeFlow
+                    runManyWithReuseOldPdfDocumentCache flowModels mergeFlow
                     |> ignore
 
                     for flowModel in flowModels do
@@ -168,12 +169,13 @@ module ModifyOperators =
 
             |> Manipulate
 
-    let modifyAsync (modifyingAsyncWorker, pageSelector, (operators: list<_SelectorAndModifier<'userState>>)) =
+    /// async may doesn't make any sense for cpu bound computation?
+    let modifyAsync (modifyingAsyncWorker, pageSelector, (modifiers: list<_SelectorAndModifiers<'userState>>)) =
         let names = 
-            operators
+            modifiers
             |> List.map (fun selectorAndModifier -> selectorAndModifier.Name)
 
-        if names.Length <> (List.distinct names).Length then failwithf "Duplicated keys in SelectorAndModifiers %A" operators
+        if names.Length <> (List.distinct names).Length then failwithf "Duplicated keys in SelectorAndModifiers %A" modifiers
 
         let asyncManiputation = 
             fun (totalNumberOfPages) (transformPageNum: PageNumber -> PageNumber) (flowModel: FlowModel<_>) (document: IntegratedDocument) ->
@@ -182,7 +184,7 @@ module ModifyOperators =
                     pageSelector 
                     (
                         fun (pageNum, pdfPage) ->
-                            operators 
+                            modifiers 
                             |> List.mapi (fun i (selectAndModify) ->
                                 let pageModifingArguments =
                                     { PageNum = (transformPageNum pageNum).Value
@@ -191,7 +193,7 @@ module ModifyOperators =
                                       TotalNumberOfPages = totalNumberOfPages }
                                 ( {Index = i; Name = selectAndModify.Name }, 
                                     ( Selector.toRenderInfoSelector pageModifingArguments selectAndModify.Selector,
-                                        Modifier.toSelectionModifier pageModifingArguments selectAndModify.Modifier)
+                                        Modifiers.toSelectionModifier pageModifingArguments selectAndModify.Modifiers)
                                 )
                             )
                             |> Map.ofList
@@ -201,5 +203,5 @@ module ModifyOperators =
             
         Manipulate.runInAsync modifyingAsyncWorker asyncManiputation
 
-    let modify (pageSelector, (operators: list<_SelectorAndModifier<'userState>>)) =
-        modifyAsync (ModifyingAsyncWorker.Sync, pageSelector, operators)
+    let modify (pageSelector, (modifiers: list<_SelectorAndModifiers<'userState>>)) =
+        modifyAsync (ModifyingAsyncWorker.Sync, pageSelector, modifiers)

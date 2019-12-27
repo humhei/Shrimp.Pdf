@@ -29,7 +29,7 @@ type FillOrStrokeOptions =
 
 [<RequireQualifiedAccess>]
 module internal IAbstractRenderInfo =
-    let isVisible (fillOrStrokeOptions: FillOrStrokeOptions) (clippingPathInfo) (info: IAbstractRenderInfo) =
+    let isVisible (fillOrStrokeOptions: FillOrStrokeOptions) (clippingPathInfo: ClippingPathInfo option) (info: IAbstractRenderInfo) =
 
         match fillOrStrokeOptions with 
         | FillOrStrokeOptions.Fill -> IAbstractRenderInfo.hasFill info
@@ -40,24 +40,30 @@ module internal IAbstractRenderInfo =
             | :? PathRenderInfo as info -> not (info.IsPathModifiesClippingPath())
             | _ -> true
         && 
-            match ClippingPathInfo.tryGetActualClippingArea clippingPathInfo with 
-                | Some clippingBound ->
-                    let bound = IAbstractRenderInfo.getBound BoundGettingOptions.WithStrokeWidth info
-                    match Rectangle.tryGetIntersection bound clippingBound with 
-                    | Some _ -> true
-                    | None -> false
-                | None -> true
+            match clippingPathInfo with 
+            | Some clippingPathInfo ->
+                match ClippingPathInfo.tryGetActualClippingArea clippingPathInfo with 
+                    | Some clippingBound ->
+                        let bound = IAbstractRenderInfo.getBound BoundGettingOptions.WithStrokeWidth info
+                        match Rectangle.tryGetIntersection bound clippingBound with 
+                        | Some _ -> true
+                        | None -> false
+                    | None -> true
+            | None -> true
 
-    let tryGetVisibleBound boundGettingOptions (clippingPathInfo) (info: IAbstractRenderInfo) =
+    let tryGetVisibleBound boundGettingOptions (clippingPathInfo: ClippingPathInfo option) (info: IAbstractRenderInfo) =
         if isVisible (FillOrStrokeOptions.Stroke) clippingPathInfo info || isVisible (FillOrStrokeOptions.Fill) clippingPathInfo info 
         then
             let bound = IAbstractRenderInfo.getBound boundGettingOptions info
-            match ClippingPathInfo.tryGetActualClippingArea clippingPathInfo with 
-            | Some clippingBound -> Rectangle.tryGetIntersection bound clippingBound 
-            | None -> 
-                if bound.GetWidthF() @= 0. || bound.GetHeightF() @= 0. then None
-                else
-                    Some bound
+            match clippingPathInfo with 
+            | None -> Some bound 
+            | Some clippingPathInfo ->
+                match ClippingPathInfo.tryGetActualClippingArea clippingPathInfo with 
+                | Some clippingBound -> Rectangle.tryGetIntersection bound clippingBound 
+                | None -> 
+                    if bound.GetWidthF() @= 0. || bound.GetHeightF() @= 0. then None
+                    else
+                        Some bound
         else None
 
 
@@ -73,12 +79,12 @@ module rec ReadMutual =
     type IIntegratedRenderInfo =
         inherit IAbstractRenderInfo
         abstract member Tag: IntegratedRenderInfoTag
-        abstract member ClippingPathInfo: ClippingPathInfo
+        abstract member ClippingPathInfo: ClippingPathInfo option
 
     [<Struct>]
     type IntegratedPathRenderInfo =
         { PathRenderInfo: PathRenderInfo 
-          ClippingPathInfo: ClippingPathInfo }
+          ClippingPathInfo: ClippingPathInfo option }
     with 
         interface IPathRenderInfo with 
             member x.Value = x.PathRenderInfo
@@ -93,7 +99,7 @@ module rec ReadMutual =
     [<Struct>]
     type IntegratedTextRenderInfo =
         { TextRenderInfo: TextRenderInfo 
-          ClippingPathInfo: ClippingPathInfo }
+          ClippingPathInfo: ClippingPathInfo option }
 
     with 
         interface ITextRenderInfo with 
@@ -245,7 +251,7 @@ module internal Listeners =
         let mutable currentRenderInfo: IIntegratedRenderInfo option = None
         let mutable currentRenderInfoToken = None
         let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Selected
-        let mutable currentClippingPathInfo = null
+        let mutable currentClippingPathInfo = None
 
         let parsedRenderInfos = List<IIntegratedRenderInfo>()
 
@@ -263,8 +269,8 @@ module internal Listeners =
 
                 match tp with 
                 | EventType.CLIP_PATH_CHANGED -> 
-                    currentClippingPathInfo <- (data :?> ClippingPathInfo)
-                    currentClippingPathInfo.PreserveGraphicsState()
+                    currentClippingPathInfo <- Some (data :?> ClippingPathInfo)
+                    currentClippingPathInfo.Value.PreserveGraphicsState()
 
                 | _ ->
 
@@ -315,13 +321,25 @@ module internal Listeners =
             member this.EventOccurred(data,tp) = ()
             member this.GetSupportedEvents() = List () :> ICollection<_>
 
+type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener , additionalContentOperators) =
+    inherit PdfCanvasProcessor(listener, additionalContentOperators)
 
+    override this.ProcessPageContent(page) =
+        this.ProcessContent(page.GetContentBytes(), page.GetResources());
+
+
+type NonInitialClippingPathPdfDocumentContentParser(pdfDocument) =
+    inherit PdfDocumentContentParser(pdfDocument)
+    override this.ProcessContent(pageNumber, renderListener, additionalContentOperators) =
+            let processor = new NonInitialCallbackablePdfCanvasProcessor(renderListener, additionalContentOperators)
+            processor.ProcessPageContent(pdfDocument.GetPage(pageNumber));
+            renderListener
 
 
 [<RequireQualifiedAccess>]
-module PdfDocumentContentParser =
+module NonInitialClippingPathPdfDocumentContentParser =
     open Listeners
-    let parse (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: PdfDocumentContentParser) =
+    let parse (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: NonInitialClippingPathPdfDocumentContentParser) =
 
         let et = RenderInfoSelector.toEventTypes renderInfoSelector
 

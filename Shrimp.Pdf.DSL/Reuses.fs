@@ -97,7 +97,7 @@ module Reuses =
             Logger.info (sprintf "TILEPAGESBYSELECTORFACTORY")
 
             let reader = splitDocument.Reader
-            let parser = new PdfDocumentContentParser(reader)
+            let parser = new NonInitialClippingPathPdfDocumentContentParser(reader)
             for i = 1 to reader.GetNumberOfPages() do
                 let readerPage = reader.GetPage(i)
                 let args =
@@ -107,7 +107,7 @@ module Reuses =
                       PageNum = i }
                     
                 let selector = (Selector.toRenderInfoSelector args selector)
-                let infos = PdfDocumentContentParser.parse i selector parser
+                let infos = NonInitialClippingPathPdfDocumentContentParser.parse i selector parser
                 for info in infos do
                     let bound = IAbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth info
                     let writer = splitDocument.Writer

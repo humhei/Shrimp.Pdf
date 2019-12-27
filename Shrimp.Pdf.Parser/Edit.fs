@@ -123,6 +123,9 @@ and internal OperatorRangeCallbackablePdfCanvasProcessor(listener) =
         | :? CallbackableContentOperator as wrapper -> wrapper.OriginalOperator
         | _ -> formOperator
 
+    override this.ProcessPageContent(page) =
+        this.ProcessContent(page.GetContentBytes(), page.GetResources());
+
 
 
 [<AutoOpen>]
@@ -156,25 +159,17 @@ module Extensions =
 
 
 
-[<Struct>]
-type _SelectionModifierAddNewArguments =
-    { CurrentRenderInfo: IIntegratedRenderInfo }
 
 [<Struct>]
 type _SelectionModifierFixmentArguments =
     { Close: OperatorRange
       CurrentRenderInfo: IIntegratedRenderInfo }
 
-
-[<RequireQualifiedAccess>]
-type SelectionModifier =
-    | DropColor
-    | AddNew of (_SelectionModifierAddNewArguments -> list<PdfCanvas -> PdfCanvas>)
-    | Fix of (_SelectionModifierFixmentArguments -> list<PdfCanvas -> PdfCanvas>)
+type private Modifier = _SelectionModifierFixmentArguments -> list<PdfCanvas -> PdfCanvas>
 
 
 
-and internal PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * SelectionModifier>, document: PdfDocument) =
+and internal PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * Modifier>, document: PdfDocument) =
     inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(Map.map (fun _ -> fst) selectorModifierMapping))
     
     let eventTypes = 
@@ -257,57 +252,18 @@ and internal PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, 
             | CurrentRenderInfoStatus.Selected ->
                 currentPdfCanvas.SetCanvasGraphicsState(this.GetGraphicsState())
 
-                let modifier = snd selectorModifierMapping.[eventListener.CurrentRenderInfoToken.Value]
-
-                match operatorName with 
-                | Path ->
-                    match modifier with
-                    | SelectionModifier.DropColor ->
-                        let newOperatorRange = 
-                            { operatorRange with 
-                                Operator = new PdfLiteral("n")
-                                Operands = ResizeArray [new PdfLiteral("n") :> PdfObject]}
-
-                        PdfCanvas.writeOperatorRange newOperatorRange currentPdfCanvas
-                        |> ignore
-                    | _ -> ()
-
-                | Text ->
-                    match modifier with
-                    | SelectionModifier.DropColor ->
-                        PdfCanvas.useCanvas currentPdfCanvas (fun pdfCanvas ->
-                            pdfCanvas.SetTextRenderingMode(TextRenderingMode.INVISIBLE) |> ignore
-                            PdfCanvas.writeOperatorRange operatorRange pdfCanvas
-                        )
-                        |> ignore
-                    | _ -> ()
-
-                | _ -> ()
-
+                let fix = snd selectorModifierMapping.[eventListener.CurrentRenderInfoToken.Value]
 
                 match operatorName with 
                 | PathOrText ->
-                    match modifier with
-                        | SelectionModifier.Fix (fix) ->
-                            PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
-                                let pdfCanvasActions = fix { Close = operatorRange; CurrentRenderInfo = eventListener.CurrentRenderInfo }
-                                (canvas, pdfCanvasActions)
-                                ||> List.fold(fun canvas action ->
-                                    action canvas 
-                                )
-                            )
-                        | SelectionModifier.AddNew addNew -> 
-                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas |> ignore
-                            PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
-                                let pdfCanvasActions = addNew { CurrentRenderInfo = eventListener.CurrentRenderInfo }
-                                (canvas, (pdfCanvasActions))
-                                ||> List.fold(fun canvas action ->
-                                    action canvas 
-                                )
-                            )
-
-                            ()
-                        | _ -> ()
+                    PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
+                        let pdfCanvasActions = fix { Close = operatorRange; CurrentRenderInfo = eventListener.CurrentRenderInfo }
+                        (canvas, pdfCanvasActions)
+                        ||> List.fold(fun canvas action ->
+                            action canvas 
+                        )
+                    )
+                    
                 | _ -> 
                     PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
                     |> ignore
@@ -370,8 +326,8 @@ module internal PdfPage =
             |> ignore
 
 
-type IntegratedDocument private (reader: string, writer: string) =
-    let pdfDocument = new PdfDocumentWithCachedResources(reader, writer)
+type IntegratedDocument private (reader: string, writer: string, cache: PdfDocumentCache) =
+    let mutable pdfDocument = new PdfDocumentWithCachedResources(reader, writer, cache)
 
     member x.ReaderName = reader
 
@@ -379,27 +335,21 @@ type IntegratedDocument private (reader: string, writer: string) =
 
     member x.Value = pdfDocument
 
-    static member Create(reader, writer) = new IntegratedDocument(reader, writer)
+    member x.ReOpen() =
+        pdfDocument.Close()
+
+        File.Delete(reader)
+        File.Move(writer, reader)
+
+        pdfDocument <- new PdfDocumentWithCachedResources(reader, writer, pdfDocument)
+
+    static member Create(reader, writer, pdfDocumentCache) = new IntegratedDocument(reader, writer, pdfDocumentCache)
 
 
 [<RequireQualifiedAccess>]
 module IntegratedDocument =
 
-    let addNew (pageSelector: PageSelector) (pageBoxKind: PageBoxKind) (canvasActionsFactory: (PageNumber * PdfPage) -> list<Canvas -> Canvas>) (document: IntegratedDocument) =
-        let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
-        let totalNumberOfPages = document.Value.GetNumberOfPages()
-        for i = 1 to totalNumberOfPages do
-            if List.contains i selectedPageNumbers then
-                let page = document.Value.GetPage(i)
-                let canvasActions = canvasActionsFactory(PageNumber i, page)
-                let canvas = new Canvas(page, page.GetPageBox(pageBoxKind))
-                (canvas, canvasActions)
-                ||> List.fold(fun pdfCanvas canvasAction ->
-                    canvasAction pdfCanvas
-                ) 
-                |> ignore
-
-    let modify (name) (pageSelector: PageSelector) (selectorModifierMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * SelectionModifier>) (document: IntegratedDocument) =
+    let modify (name) (pageSelector: PageSelector) (selectorModifierMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier>) (document: IntegratedDocument) =
         let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
         let totalNumberOfPages = document.Value.GetNumberOfPages()
         Logger.infoWithStopWatch (sprintf "MODIFY: \n%s" name) (fun _ ->

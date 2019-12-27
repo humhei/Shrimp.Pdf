@@ -2,6 +2,7 @@
 open iText.Kernel.Pdf
 open iText.Kernel.Geom
 open Shrimp.Pdf.Extensions
+open System.IO
 
 
 type FsSize =
@@ -100,18 +101,28 @@ type ReaderDocument (reader: string) =
     member x.Reader = reader
 
 
-type SplitDocument (reader: string, writer: string) =
-    let readerDocument = new PdfDocument(new PdfReader(reader))
+type SplitDocument (reader: string, writer: string, pdfDocumentCache: PdfDocumentCache) =
+    let mutable readerDocument = new PdfDocument(new PdfReader(reader))
 
-    let writer = new PdfDocumentWithCachedResources(writer)
+    let mutable writerDocument = new PdfDocumentWithCachedResources(writer, pdfDocumentCache)
 
     member x.ReaderName = reader
 
     member x.Reader = readerDocument
 
-    member x.Writer = writer
-        
-    static member Create(reader, writer) = new SplitDocument(reader, writer)
+    member x.Writer = writerDocument
+
+    member x.ReOpen() =
+        readerDocument.Close()
+        writerDocument.Close()
+
+        File.Delete(reader)
+        File.Copy(writer, reader, true)
+
+        readerDocument <- new PdfDocument(new PdfReader(reader))
+        writerDocument <- new PdfDocumentWithCachedResources(writer, writerDocument)
+
+    static member Create(reader, writer, pdfDocumentCache) = new SplitDocument(reader, writer, pdfDocumentCache)
 
 
              

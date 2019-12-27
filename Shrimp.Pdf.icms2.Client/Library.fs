@@ -178,9 +178,9 @@ module Client =
         static member BlackOrWhite() =
             fun (args: _SelectionModifierFixmentArguments<'userState>) ->
                 match Info.FillColorIsNotWhite() args.PageModifingArguments args.CurrentRenderInfo,Info.StrokeColorIsNotWhite() args.PageModifingArguments args.CurrentRenderInfo with 
-                | true, true -> Modify.SetFillAndStrokeColor(DeviceGray.BLACK) args
-                | true, false -> Modify.SetFillColor(DeviceGray.BLACK) args
-                | false, true -> Modify.SetStrokeColor(DeviceGray.BLACK) args
+                | true, true -> Modifier.SetFillAndStrokeColor(DeviceGray.BLACK) args
+                | true, false -> Modifier.SetFillColor(DeviceGray.BLACK) args
+                | false, true -> Modifier.SetStrokeColor(DeviceGray.BLACK) args
                 | _ -> [PdfCanvas.writeOperatorRange args.Close]
         
 

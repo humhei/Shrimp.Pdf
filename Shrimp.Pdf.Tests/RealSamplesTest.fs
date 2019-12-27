@@ -4,15 +4,9 @@ open Shrimp.Pdf.Reuses
 open Shrimp.Pdf
 open Shrimp.Pdf.Imposing
 open Shrimp.Pdf.Parser
-open Reuses
 open Shrimp.Pdf.Extensions
 open iText.Kernel.Colors
 open Shrimp.Pdf.Manipulates
-open FParsec
-open FParsec.CharParsers
-open iText.Kernel.Geom
-open Shrimp.Pdf.Parser
-open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf.Colors
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.icms2
@@ -25,7 +19,7 @@ let readB255Bound() =
             Info.StrokeColorIs DeviceRgb.BLUE
             <&> Info.BoundIsInsideOfPageBox()
         ),
-        Operator.GetBound()
+        PageModifier.GetBound()
     )
 
 let setTrimBoxToStrokeB255() = 
@@ -35,7 +29,7 @@ let setTrimBoxToStrokeB255() =
         "setTrimBoxToStrokeB255",
         PageSelector.All,
         Dummy,
-        (fun args -> Operator.SetPageBox(args.PageUserState(), PageBoxKind.TrimBox) args)
+        (fun args -> PageModifier.SetPageBox(args.PageUserState(), PageBoxKind.TrimBox) args)
     ) ||>> ignore
 
 let retainTitleInfo color = 
@@ -53,7 +47,7 @@ let retainTitleInfo color =
                     <&> (!!(Info.FillColorIs color))
                 )
             ])
-      Modifier = Modifier.DropColor
+      Modifiers = [ Modifier.DropColor() ]
     }
 
 let blackAndWhiteTitleInfo() =
@@ -65,8 +59,8 @@ let blackAndWhiteTitleInfo() =
                 Info.BoundIsInsideOf(titleArea)
             )
         )
-      Modifier = 
-        Modifier.Fix [
+      Modifiers = 
+        [
             Modify.BlackOrWhite()
         ]
     }
@@ -80,7 +74,7 @@ let retainNavigationInfo color =
                 <&> (!!(Info.FillColorIs color)) 
             ) args
         )
-      Modifier = Modifier.DropColor
+      Modifiers = [ Modifier.DropColor() ]
     }
 
 let removeNavigationInfo() =
@@ -92,7 +86,7 @@ let removeNavigationInfo() =
                 <&> Info.FillColorIs DeviceRgb.MAGENTA
             ) args
         )
-      Modifier = Modifier.DropColor
+      Modifiers =[ Modifier.DropColor() ]
     }
 
 
@@ -106,7 +100,7 @@ let getPageEdgeAndTitleArea() =
                 "getPageEdge",
                 PageSelector.All,
                 Dummy,
-                (fun args -> Operator.GetPageEdge(args.PageUserState(), PageBoxKind.ActualBox) args)
+                (fun args -> PageModifier.GetPageEdge(args.PageUserState(), PageBoxKind.ActualBox) args)
             )
         ) ||>> (fun userState ->
             //let doc: ImposingDocument = flowModel.UserState
@@ -143,12 +137,10 @@ let realSamplesTests =
         )
         <+> 
         Flow.Manipulate (
-            Manipulate.dummy
-            <.+>
-            trimToVisible (Margin.Create(mm 2.)) PageSelector.All
+            (trimToVisible PageSelector.All (Margin.Create(mm 2.))  |> redirect fst)
             <+> (snd <<|| getPageEdgeAndTitleArea())
             <+> 
-            modify( 
+            modify(
                 PageSelector.All,
                 [ retainTitleInfo DeviceRgb.RED
                   retainNavigationInfo DeviceRgb.MAGENTA ]

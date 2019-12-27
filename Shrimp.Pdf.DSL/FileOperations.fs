@@ -46,7 +46,7 @@ module FileOperations =
 
                 readerDocument.Reader.Close()
 
-            [{ File = targetDocumentName; UserState = flowModels |> List.map (fun flowModel -> flowModel.UserState)}]
+            [{ File = targetDocumentName; UserState = flowModels |> List.map (fun flowModel -> flowModel.UserState); PdfDocumentCache = flowModels.[0].PdfDocumentCache}]
         |> FileOperation
 
     let mergeDocuments (f) =
@@ -104,7 +104,7 @@ module FileOperations =
                             let writerPageResource = page.CopyTo(writer)
                             writer.AddPage(writerPageResource) |> ignore
                         writer.Close()
-                        { File = fileFullPath; UserState = flowModel.UserState }
+                        { File = fileFullPath; UserState = flowModel.UserState; PdfDocumentCache = flowModel.PdfDocumentCache }
                     )
                 let newFiles = 
                     newModels

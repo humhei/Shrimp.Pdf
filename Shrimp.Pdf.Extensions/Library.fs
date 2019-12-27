@@ -130,7 +130,7 @@ module FontExtensions =
                 registerableFont
             ) |> ignore
 
-        static member internal CreateFont(registerableFont: RegisterableFont) =
+        static member CreateFont(registerableFont: RegisterableFont) =
             PdfFontFactory.Register(registerableFont)
 
             PdfFontFactory.CreateRegisteredFont(registerableFont.FontFamily, registerableFont.PdfEncodings)
@@ -141,7 +141,7 @@ open FontExtensions
 
 /// StandardFonts: See iText.IO.Font.Constants.StandardFonts
 [<RequireQualifiedAccess>]
-type PdfFontFactory =
+type FsPdfFontFactory =
     | Registerable of RegisterableFont
     | StandardFonts of string
 
@@ -318,25 +318,41 @@ module StraightLine =
                 )  // Py
 
 
+type PdfDocumentCache () =
+    let fontsCache = new ConcurrentDictionary<FsPdfFontFactory, PdfFont>()
+
+    member internal x.GetOrCreateFont(fontFactory: FsPdfFontFactory) =
+        fontsCache.GetOrAdd((fontFactory), fun (fontFactory) ->
+            match fontFactory with 
+            | FsPdfFontFactory.StandardFonts fontName -> PdfFontFactory.CreateFont(fontName)
+            | FsPdfFontFactory.Registerable registerableFont ->
+                PdfFontFactory.CreateFont(registerableFont)
+        )
+
+type PdfDocumentWithCachedResources =
+    inherit PdfDocument
+    val private cache: PdfDocumentCache
+    //let fontsCache = new ConcurrentDictionary<PdfFontFactory, PdfFont>()
+
+    member x.GetOrCreatePdfFont(fontFactory: FsPdfFontFactory) =
+        x.cache.GetOrCreateFont(fontFactory)
+
+    new (writer: string, pdfDocumentCache) = 
+        { inherit PdfDocument(new PdfWriter(writer)); cache = pdfDocumentCache }
+    
+    new (writer: string, oldDocument: PdfDocumentWithCachedResources) = 
+        { inherit PdfDocument(new PdfWriter(writer)); cache = oldDocument.cache }
+    
+    new (reader: string, writer: string, pdfDocumentCache: PdfDocumentCache ) =  
+        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = pdfDocumentCache }
+    
+
+    new (reader: string, writer: string, oldDocument: PdfDocumentWithCachedResources) =  
+        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = oldDocument.cache }
+    
 
 module Extensions =
 
-    type PdfDocumentWithCachedResources =
-        inherit PdfDocument
-        val private fontsCache: ConcurrentDictionary<PdfFontFactory, PdfFont>
-        //let fontsCache = new ConcurrentDictionary<PdfFontFactory, PdfFont>()
-
-        member x.GetOrCreatePdfFont(fontFactory: PdfFontFactory) =
-            x.fontsCache.GetOrAdd((fontFactory), fun (fontFactory) ->
-                match fontFactory with 
-                | PdfFontFactory.StandardFonts fontName -> PdfFontFactory.CreateFont(fontName)
-                | PdfFontFactory.Registerable registerableFont ->
-                    PdfFontFactory.CreateFont(registerableFont)
-            )
-
-        new (writer: string) = { inherit PdfDocument(new PdfWriter(writer)); fontsCache = new ConcurrentDictionary<_, _> () }
-        new (reader: string, writer: string) =  { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); fontsCache = new ConcurrentDictionary<_, _> () }
-        new (reader: PdfReader, writer: PdfWriter) =  { inherit PdfDocument(reader, writer); fontsCache = new ConcurrentDictionary<_, _> () }
 
     [<AutoOpen>]
     module iText = 
@@ -882,6 +898,7 @@ module Extensions =
                 ascent.GetEndPoint().Get(0) - ascent.GetStartPoint().Get(0)
                 |> float
 
+
             let getY (info: ITextRenderInfo) =
                 let info = info.Value
                 let descent = info.GetDescentLine()
@@ -1117,6 +1134,9 @@ module Extensions =
             let setFillColor (color: Color) (canvas:PdfCanvas) =
                 canvas.SetFillColor(color)
 
+            let setTextRenderingMode (textRenderingMode: int) (canvas:PdfCanvas) =
+                canvas.SetTextRenderingMode(textRenderingMode)
+
             let fill (canvas:PdfCanvas) =
                 canvas.Fill()
 
@@ -1176,7 +1196,7 @@ module Extensions =
 
 
         type CanvasAddTextArguments = 
-            { PdfFontFactory: PdfFontFactory 
+            { PdfFontFactory: FsPdfFontFactory 
               CanvasFontSize: CanvasFontSize 
               FontColor: Color
               FontRotation: Rotation 
@@ -1184,7 +1204,7 @@ module Extensions =
 
         with 
             static member DefaultValue =
-                { PdfFontFactory = PdfFontFactory.StandardFonts (iText.IO.Font.Constants.StandardFonts.HELVETICA_BOLD)
+                { PdfFontFactory = FsPdfFontFactory.StandardFonts (iText.IO.Font.Constants.StandardFonts.HELVETICA_BOLD)
                   CanvasFontSize = CanvasFontSize.Numeric 9.
                   FontColor = DeviceGray.BLACK 
                   FontRotation = Rotation.None
@@ -1245,12 +1265,14 @@ module Extensions =
                         | Position.Bottom (x, y) -> VerticalAlignment.BOTTOM
                         | _ -> failwith "Invalid token"
 
+                    let canvas =
+                        canvas
+                            .SetFont(pdfFont)
+                            .SetFontColor(fontColor)
+                            .SetFontSize(float32 fontSize)
+                            .ShowTextAligned(text,float32 point.x,float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getAngle fontRotation))
 
                     canvas
-                        .SetFont(pdfFont)
-                        .SetFontColor(fontColor)
-                        .SetFontSize(float32 fontSize)
-                        .ShowTextAligned(text,float32 point.x,float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getAngle fontRotation))
 
             let addRectangle rect (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: Canvas) =
                 PdfCanvas.addRectangle rect mapping (canvas.GetPdfCanvas())

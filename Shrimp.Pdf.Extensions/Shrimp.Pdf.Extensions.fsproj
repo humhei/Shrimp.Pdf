@@ -12,11 +12,15 @@
 
   <ItemGroup>
     <PackageReference Include="Akka" Version="1.4.1" />
-    <PackageReference Include="itext7" Version="7.1.7" />
-    <PackageReference Include="itext7.font-asian" Version="7.1.7" />
+    <PackageReference Include="itext7" Version="7.1.8" />
+    <PackageReference Include="itext7.font-asian" Version="7.1.8" />
   </ItemGroup>
 
   <ItemGroup>
+    <!--<ProjectReference Include="..\..\itext7-dotnet\itext\itext.font-asian\itext.font-asian.netstandard.csproj" />
+    <ProjectReference Include="..\..\itext7-dotnet\itext\itext.io\itext.io.netstandard.csproj" />
+    <ProjectReference Include="..\..\itext7-dotnet\itext\itext.kernel\itext.kernel.netstandard.csproj" />
+    <ProjectReference Include="..\..\itext7-dotnet\itext\itext.layout\itext.layout.netstandard.csproj" />-->
     <ProjectReference Include="..\Shrimp.Pdf.Logger\Shrimp.Pdf.Logger.fsproj" />
   </ItemGroup>
 

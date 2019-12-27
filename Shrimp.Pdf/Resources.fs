@@ -78,10 +78,10 @@ module Resources =
                 let doc = new PdfDocument(new PdfReader(file))
 
                 let color = 
-                    let parser = new PdfDocumentContentParser(doc)
+                    let parser = new NonInitialClippingPathPdfDocumentContentParser(doc)
 
                     let paths = 
-                        PdfDocumentContentParser.parse 2 (RenderInfoSelector.Path (fun _ -> true)) parser
+                        NonInitialClippingPathPdfDocumentContentParser.parse 2 (RenderInfoSelector.Path (fun _ -> true)) parser
                         |> Seq.choose IIntegratedRenderInfo.asIPathRenderInfo
                     let path = paths |> Seq.exactlyOne
 

@@ -4,7 +4,7 @@ open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
 
 module Manipulates =
-    let trimToVisible (margin: Margin) pageSelector =
+    let trimToVisible pageSelector (margin: Margin)  =
         modifyPage(
             "trim to visible",
             pageSelector,
