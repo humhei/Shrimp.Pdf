@@ -121,6 +121,62 @@ let manipulateTests =
         |> runWithBackup "datas/manipulate/add text to position.pdf" 
         |> ignore
 
+    testCase "add text to position with cached fonts" <| fun _ -> 
+        Flow.Manipulate (
+            modifyPage
+                ("add text to position with cached fonts1",
+                  PageSelector.All,
+                  Dummy,
+                  PageModifier.AddText(PageBoxKind.ActualBox, "你好", fun args ->
+                    { args with 
+                        PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                        CanvasFontSize = CanvasFontSize.Numeric 25. 
+                        FontColor = DeviceCmyk.MAGENTA 
+                        FontRotation = Rotation.None 
+                        Position = Position.LeftTop(0., 0.)}
+                  ) 
+                )
+        )
+        <+>
+        Flow.Manipulate (
+            modifyPage
+                ("add text to position with cached fonts2",
+                  PageSelector.All,
+                  Dummy,
+                  fun args ->
+                      PageModifier.AddText(PageBoxKind.ActualBox, "你好2", fun args ->
+                        { args with 
+                            PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                            CanvasFontSize = CanvasFontSize.Numeric 25. 
+                            FontColor = DeviceCmyk.MAGENTA 
+                            FontRotation = Rotation.None 
+                            Position = Position.LeftTop(mm 20, 0.)}
+                      ) args
+                )
+        )
+        <+>
+        Flow.Reuse (
+            Reuse.dummy
+        )
+        <+>
+        Flow.Manipulate (
+            modifyPage
+                ("add text to position with cached fonts3",
+                  PageSelector.All,
+                  Dummy,
+                  PageModifier.AddText(PageBoxKind.ActualBox, "你好3", fun args ->
+                    { args with 
+                        PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                        CanvasFontSize = CanvasFontSize.Numeric 25. 
+                        FontColor = DeviceCmyk.MAGENTA 
+                        FontRotation = Rotation.None 
+                        Position = Position.LeftTop(mm 40, 0.)}
+                  ) 
+                )
+        )
+        |> runWithBackup "datas/manipulate/add text to position with cached fonts.pdf" 
+        |> ignore
+
     testCase "add text to position and trimToVisible" <| fun _ -> 
         Flow.Manipulate (
             modifyPage
@@ -171,29 +227,96 @@ let manipulateTests =
                     FontColor = DeviceCmyk.MAGENTA 
                     FontRotation = Rotation.None 
                     Position = Position.Center(0., 0.)}
-                ) 
-            ) 
+                )
+            )
         )
         |> runWithBackup "datas/manipulate/add page-scaling text.pdf" 
         |> ignore
 
-    ftestCase "add page-scaling multiLines-text" <| fun _ -> 
+    testCase "rotate page and add text to top left" <| fun _ -> 
+        Flow.Reuse(
+            Reuses.Rotate(PageSelector.All, Rotation.Counterclockwise)
+        )
+        <+>
         Flow.Manipulate(
+            modifyPage(
+                "rotate page and add text to top left",
+                PageSelector.All,
+                Dummy,
+                PageModifier.AddText(PageBoxKind.ActualBox, "你好", fun args ->
+                { args with 
+                    PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                    CanvasFontSize = CanvasFontSize.Numeric 12.
+                    FontColor = DeviceCmyk.MAGENTA 
+                    FontRotation = Rotation.None 
+                    Position = Position.LeftTop(0., 0.)}
+                )
+            )
+        )
+        |> runWithBackup "datas/manipulate/rotate page and add text to top left.pdf" 
+        |> ignore
+
+    testCase "add page-scaling multiLines-text" <| fun _ -> 
+        Flow.Manipulate(
+            modifyPage(
+                "setPageBox",
+                PageSelector.All,
+                Dummy,
+                PageModifier.SetPageBox (PageBoxKind.AllBox, Rectangle.create 0 0 500 100)
+            )
+            <+>
             modifyPage(
                 "add page-scaling multiLines-text",
                 PageSelector.All,
                 Dummy,
-                PageModifier.AddText(PageBoxKind.ActualBox, "你好\n你好\n你好", fun args ->
-                { args with 
-                    PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
-                    CanvasFontSize = CanvasFontSize.OfRootArea 0.8 
-                    FontColor = DeviceCmyk.MAGENTA 
-                    FontRotation = Rotation.None 
-                    Position = Position.Center(0., 0.)}
-                ) 
+                fun args ->
+
+                    let pdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+
+                    let text = "你好你好\n你好\n你好"
+
+                    let canvasRootArea = 
+                        let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
+                        let pageBox = args.Page.GetPageBox(PageBoxKind.ActualBox)
+
+                        let height = pageBox.GetHeightF()
+
+                        let lineWidth =
+                            let pdfFont = doc.GetOrCreatePdfFont(pdfFontFactory)
+                            PdfFont.calcLineWidthWhenParagraphedHeightIs height text pdfFont
+
+                        let x = pageBox.GetRightF() - (lineWidth * 0.8)
+                        let y = pageBox.GetBottomF()
+
+                        Rectangle.create x y (lineWidth * 0.8) height
+
+                    PageModifier.AddText(
+                        canvasRootArea,
+                        text,
+                        fun args ->
+                            { args with 
+                                PdfFontFactory = pdfFontFactory
+                                CanvasFontSize = 
+                                    CanvasFontSize.OfRootArea 0.8
+                                FontColor = DeviceCmyk.MAGENTA 
+                                FontRotation = Rotation.None 
+                                Position = Position.LeftMiddle (0., 0.)}
+                    ) args
             ) 
         )
         |> runWithBackup "datas/manipulate/add page-scaling multiLines-text.pdf" 
+        |> ignore
+
+    testCase "add rect to area" <| fun _ -> 
+        Flow.Manipulate(
+            modifyPage(
+                "add rect to area",
+                PageSelector.All,
+                Dummy,
+                PageModifier.AddRectangleToCanvasRootArea(CanvasAreaOptions.PageBox PageBoxKind.ActualBox, fun args -> { args with FillColor = PdfCanvasColor.Specific DeviceRgb.BLACK})
+            ) 
+        )
+        |> runWithBackup "datas/manipulate/add rect to area.pdf" 
         |> ignore
 
     testCase "trim to visible test" <| fun _ -> 

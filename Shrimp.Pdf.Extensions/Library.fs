@@ -5,6 +5,7 @@ open iText.IO.Font.Otf
 open iText.Kernel.Font
 open Akka.Configuration
 open System
+open System.IO
 open iText.Layout
 open iText.Kernel.Colors
 open iText.Layout.Properties
@@ -132,7 +133,6 @@ module FontExtensions =
 
         static member CreateFont(registerableFont: RegisterableFont) =
             PdfFontFactory.Register(registerableFont)
-
             PdfFontFactory.CreateRegisteredFont(registerableFont.FontFamily, registerableFont.PdfEncodings)
 
 
@@ -144,7 +144,6 @@ open FontExtensions
 type FsPdfFontFactory =
     | Registerable of RegisterableFont
     | StandardFonts of string
-
 
 [<RequireQualifiedAccess>]
 type Rotation =
@@ -194,6 +193,7 @@ type PageBoxKind =
     | MediaBox = 4
     | ActualBox = 5
     | AllBox = 6
+
 
 [<RequireQualifiedAccess>]
 type CanvasFontSize =
@@ -326,8 +326,28 @@ type PdfDocumentCache () =
             match fontFactory with 
             | FsPdfFontFactory.StandardFonts fontName -> PdfFontFactory.CreateFont(fontName)
             | FsPdfFontFactory.Registerable registerableFont ->
-                PdfFontFactory.CreateFont(registerableFont)
+                if File.Exists(registerableFont.Path)
+                then PdfFontFactory.CreateFont(registerableFont)
+                else failwithf "Cannot find font %s" registerableFont.Path
         )
+
+    member internal x.GetFont(fontFactory: FsPdfFontFactory) =
+        fontsCache.[fontFactory]
+
+    member internal x.AddFont(fontFactory: FsPdfFontFactory, font: PdfFont) =
+        fontsCache.GetOrAdd((fontFactory), fun (fontFactory) ->
+            match fontFactory with 
+            | FsPdfFontFactory.StandardFonts fontName -> PdfFontFactory.CreateFont(fontName)
+            | FsPdfFontFactory.Registerable registerableFont ->
+                if File.Exists(registerableFont.Path)
+                then PdfFontFactory.CreateFont(registerableFont)
+                else failwithf "Cannot find font %s" registerableFont.Path
+        )
+
+    member internal x.ClearFontCache() = fontsCache.Clear()
+
+    member internal x.ContainsFont(fontFactory: FsPdfFontFactory) =
+        fontsCache.ContainsKey fontFactory
 
 type PdfDocumentWithCachedResources =
     inherit PdfDocument
@@ -335,18 +355,29 @@ type PdfDocumentWithCachedResources =
     //let fontsCache = new ConcurrentDictionary<PdfFontFactory, PdfFont>()
 
     member x.GetOrCreatePdfFont(fontFactory: FsPdfFontFactory) =
-        x.cache.GetOrCreateFont(fontFactory)
+        if x.cache.ContainsFont(fontFactory) then
+            x.cache.GetFont(fontFactory)
+        else
+            let fontFamily, fontPdfEncodings = 
+                match fontFactory with 
+                | FsPdfFontFactory.Registerable fontFactory ->
+                    fontFactory.FontFamily, fontFactory.PdfEncodings
+                | FsPdfFontFactory.StandardFonts fontFamily ->
+                    fontFamily,""
 
-    new (writer: string, pdfDocumentCache) = 
-        { inherit PdfDocument(new PdfWriter(writer)); cache = pdfDocumentCache }
-    
-    new (writer: string, oldDocument: PdfDocumentWithCachedResources) = 
-        { inherit PdfDocument(new PdfWriter(writer)); cache = oldDocument.cache }
-    
-    new (reader: string, writer: string, pdfDocumentCache: PdfDocumentCache ) =  
-        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = pdfDocumentCache }
-    
+            match x.FindFont(fontFamily, fontPdfEncodings) with
+            | null -> 
+                x.cache.GetOrCreateFont(fontFactory)
+            | pdfFont ->
+                x.cache.AddFont(fontFactory, pdfFont)
 
+
+    new (writer: string) = 
+        { inherit PdfDocument(new PdfWriter(writer)); cache = new PdfDocumentCache() }
+    
+    new (reader: string, writer: string) =  
+        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = new PdfDocumentCache() }
+    
     new (reader: string, writer: string, oldDocument: PdfDocumentWithCachedResources) =  
         { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = oldDocument.cache }
     
@@ -388,20 +419,52 @@ module Extensions =
                 
                 ascender,descender
 
-            /// float/pt
+            /// px/pt
             let calcLineHeightUnit (font: PdfFont) =
                 let (ascender, descender) = calcAscenderAndDescender font
                 float (ascender - descender) / TEXT_SPACE_COEFF
 
-            /// float/pt
-            let calcLineWidthUnit (text: string) (font: PdfFont) =
-                let line = font.CreateGlyphLine(text)
-                let unit =
-                    GlyphLine.getAllGlyphs line
-                    |> List.map (fun gl -> gl.GetWidth())
-                    |> List.sum
-                    |> float
-                unit / TEXT_SPACE_COEFF
+            /// px/pt
+            let calcLineWidthUnits (text: string) (font: PdfFont) =
+                let linesOfText = text.Split([|"\r\n"; "\n"|], StringSplitOptions.None)
+
+
+                linesOfText 
+                |> List.ofArray
+                |> List.map (fun line ->
+                    let line = font.CreateGlyphLine(line)
+                    let unit =
+                        GlyphLine.getAllGlyphs line
+                        |> List.map (fun gl -> gl.GetWidth())
+                        |> List.sum
+                        |> float
+                    unit / TEXT_SPACE_COEFF
+                )
+
+
+            let private verticalMaxSizeWhenParagraphedHeightIs height (text: string) font =
+                let heightUnit = calcLineHeightUnit font
+                let baseFontSize = height / heightUnit
+                let linesOfText = text.Split([|"\r\n"; "\n"|], StringSplitOptions.None)
+
+                baseFontSize / float linesOfText.Length 
+
+            let fontSizeOfArea (rect: Rectangle) (text: string) font =
+                let width = float (rect.GetWidth())
+                let height = float (rect.GetHeight())
+
+                let lineWidthUnits = calcLineWidthUnits text font
+                let horizonalMaxSize = width / List.max lineWidthUnits
+                let verticalMaxSize = 
+                    verticalMaxSizeWhenParagraphedHeightIs (height) text font
+                
+                min horizonalMaxSize verticalMaxSize
+
+            /// px/pt
+            let calcLineWidthWhenParagraphedHeightIs height (text: string) (font: PdfFont) =
+                let fontSize = verticalMaxSizeWhenParagraphedHeightIs height text font
+                let widthUnits = calcLineWidthUnits text font
+                List.max widthUnits * fontSize 
 
 
         type TextRenderingMode = PdfCanvasConstants.TextRenderingMode
@@ -731,7 +794,7 @@ module Extensions =
 
 
         type AffineTransform with 
-            member this.Tranform(p: Point) =
+            member this.Transform(p: Point) =
                 let p1 = new Point()
                 this.Transform(p,p1)
 
@@ -760,6 +823,7 @@ module Extensions =
 
             let toAffineTransform (record: AffineTransformRecord) =
                 AffineTransform.ofRecord record
+
 
             let ofMatrix (matrix: Matrix) =
                 AffineTransform.ofMatrix matrix
@@ -792,7 +856,7 @@ module Extensions =
 
             let toActualPoints (ctm: Matrix) subpath =
                 toRawPoints subpath
-                |> Seq.map (fun pt -> (AffineTransform.ofMatrix ctm).Tranform(pt))
+                |> Seq.map (fun pt -> (AffineTransform.ofMatrix ctm).Transform(pt))
 
             let getActualBound ctm (subpath: Subpath) =
                 toActualPoints ctm subpath
@@ -1109,6 +1173,11 @@ module Extensions =
                       float32 affineTransformRecord.m02,
                       float32 affineTransformRecord.m12 )
 
+            member x.AddXObject(xObject: PdfXObject, affineTransform: AffineTransform) =
+                x.AddXObject
+                    ( xObject,
+                      AffineTransformRecord.ofAffineTransform affineTransform )
+
 
 
         [<RequireQualifiedAccess>]
@@ -1204,7 +1273,7 @@ module Extensions =
 
         with 
             static member DefaultValue =
-                { PdfFontFactory = FsPdfFontFactory.StandardFonts (iText.IO.Font.Constants.StandardFonts.HELVETICA_BOLD)
+                { PdfFontFactory = FsPdfFontFactory.StandardFonts (iText.IO.Font.Constants.StandardFonts.HELVETICA)
                   CanvasFontSize = CanvasFontSize.Numeric 9.
                   FontColor = DeviceGray.BLACK 
                   FontRotation = Rotation.None
@@ -1226,25 +1295,15 @@ module Extensions =
                         pdfDocument.GetOrCreatePdfFont(pdfFontFactory)
 
                     let fontSize =
-                        let fontSizeOfArea (rect: Rectangle) = 
-                            let lineHeightUnit = PdfFont.calcLineHeightUnit (pdfFont)
-                            let lineWidthUnit = PdfFont.calcLineWidthUnit text pdfFont
-            
-                            let fontSize =
-                                let horizonalMaxSize = rect.GetWidthF() / lineWidthUnit
-                                let verticalMaxSize = rect.GetHeightF() / lineHeightUnit
-                                (min verticalMaxSize horizonalMaxSize)
-
-                            fontSize
-
                         match canvasFontSize with 
                         | CanvasFontSize.Numeric size -> size
                         | CanvasFontSize.OfRootArea (scale) ->
                             let area = canvas.GetRootArea()
-                            fontSizeOfArea area * scale
+                            PdfFont.fontSizeOfArea area text pdfFont * scale
 
                         | CanvasFontSize.OfArea (area) ->
-                            fontSizeOfArea area
+                            PdfFont.fontSizeOfArea area text pdfFont
+
 
                     let point =
                         let rootArea = canvas.GetRootArea()
@@ -1274,9 +1333,9 @@ module Extensions =
 
                     canvas
 
-            let addRectangle rect (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: Canvas) =
-                PdfCanvas.addRectangle rect mapping (canvas.GetPdfCanvas())
-
+            let addRectangleToRootArea (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: Canvas) =
+                PdfCanvas.addRectangle (canvas.GetRootArea()) mapping (canvas.GetPdfCanvas()) |> ignore
+                canvas
                 
         type PdfPage with
             member this.GetActualBox() = 

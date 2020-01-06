@@ -1,6 +1,5 @@
 ﻿module RealSampleTests
 open Expecto
-open Shrimp.Pdf.Reuses
 open Shrimp.Pdf
 open Shrimp.Pdf.Imposing
 open Shrimp.Pdf.Parser
@@ -19,7 +18,7 @@ let readB255Bound() =
             Info.StrokeColorIs DeviceRgb.BLUE
             <&> Info.BoundIsInsideOfPageBox()
         ),
-        PageModifier.GetBound()
+        PageModifier.GetBoundOfSelector()
     )
 
 let setTrimBoxToStrokeB255() = 
@@ -29,7 +28,7 @@ let setTrimBoxToStrokeB255() =
         "setTrimBoxToStrokeB255",
         PageSelector.All,
         Dummy,
-        (fun args -> PageModifier.SetPageBox(args.PageUserState(), PageBoxKind.TrimBox) args)
+        (fun args -> PageModifier.SetPageBox(PageBoxKind.TrimBox, args.PageUserState()) args)
     ) ||>> ignore
 
 let retainTitleInfo color = 
@@ -47,7 +46,7 @@ let retainTitleInfo color =
                     <&> (!!(Info.FillColorIs color))
                 )
             ])
-      Modifiers = [ Modifier.DropColor() ]
+      Modifiers = [ Modifier.CloseFillAndStroke() ]
     }
 
 let blackAndWhiteTitleInfo() =
@@ -74,7 +73,7 @@ let retainNavigationInfo color =
                 <&> (!!(Info.FillColorIs color)) 
             ) args
         )
-      Modifiers = [ Modifier.DropColor() ]
+      Modifiers = [ Modifier.CloseFillAndStroke() ]
     }
 
 let removeNavigationInfo() =
@@ -86,37 +85,36 @@ let removeNavigationInfo() =
                 <&> Info.FillColorIs DeviceRgb.MAGENTA
             ) args
         )
-      Modifiers =[ Modifier.DropColor() ]
+      Modifiers =[ Modifier.CloseFillAndStroke() ]
     }
 
 
 
-let getPageEdgeAndTitleArea() =
-    fun (doc: ImposingDocument) ->
-        (
-            readB255Bound()
-            <+>
-            modifyPage(
-                "getPageEdge",
-                PageSelector.All,
-                Dummy,
-                (fun args -> PageModifier.GetPageEdge(args.PageUserState(), PageBoxKind.ActualBox) args)
-            )
-        ) ||>> (fun userState ->
-            //let doc: ImposingDocument = flowModel.UserState
-            let pageEdges = userState
-            let firstCellWidth = doc.GetFirstCell().Size.Width
-            pageEdges
-            |> List.map (fun pageEdge ->
-                let titleArea = 
-                    Rectangle.create 
-                    <| pageEdge.TopMiddle.GetXF()
-                    <| pageEdge.TopMiddle.GetYF()
-                    <| firstCellWidth
-                    <| pageEdge.TopMiddle.GetHeightF()
-                pageEdge, titleArea
-            ))
-    |> Manipulate.ofConstraint
+let getPageEdgeAndTitleArea(): Manipulate<ImposingDocument, _> =
+    Manipulate.dummy
+    <++>
+    (
+        readB255Bound()
+        <+>
+        modifyPage(
+            "getPageEdge",
+            PageSelector.All,
+            Dummy,
+            (fun args -> PageModifier.GetPageEdge(PageBoxKind.ActualBox, args.PageUserState()) args)
+    )
+    ) ||>> (fun (doc, pageEdges) ->
+        let firstCellWidth = doc.GetFirstCell().Size.Width
+        pageEdges
+        |> List.map (fun pageEdge ->
+            let titleArea = 
+                Rectangle.create 
+                <| pageEdge.TopMiddle.GetXF()
+                <| pageEdge.TopMiddle.GetYF()
+                <| firstCellWidth
+                <| pageEdge.TopMiddle.GetHeightF()
+            pageEdge, titleArea
+        )
+    )
 
 let realSamplesTests =
   testList "real samples tests" [
@@ -125,7 +123,7 @@ let realSamplesTests =
         Flow.Manipulate (setTrimBoxToStrokeB255())
         <+> 
         Flow.Reuse (
-            impose (fun args ->
+            Reuses.Impose(fun args ->
                 { args with
                     ColNums = [6]
                     RowNum = 3
@@ -138,7 +136,7 @@ let realSamplesTests =
         <+> 
         Flow.Manipulate (
             (trimToVisible PageSelector.All (Margin.Create(mm 2.))  |> redirect fst)
-            <+> (snd <<|| getPageEdgeAndTitleArea())
+            <+> (getPageEdgeAndTitleArea())
             <+> 
             modify(
                 PageSelector.All,
@@ -155,7 +153,7 @@ let realSamplesTests =
         Flow.Manipulate (setTrimBoxToStrokeB255())
         <+> 
         Flow.Reuse (
-            impose (fun args ->
+            Reuses.Impose(fun args ->
                 { args with
                     ColNums = [0]
                     RowNum = 0
@@ -169,8 +167,7 @@ let realSamplesTests =
         )
         <+> 
         Flow.Manipulate (
-            Manipulate.dummy
-            <+> (snd <<|| getPageEdgeAndTitleArea())
+            (getPageEdgeAndTitleArea())
             <+> 
             modifyAsync (
                 ModifyingAsyncWorker.Sync,

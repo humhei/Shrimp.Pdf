@@ -1,7 +1,6 @@
 ﻿[<AutoOpen>]
 module Types
 open Expecto
-open Shrimp.Pdf.Reuses
 open Shrimp.Pdf
 open Shrimp.Pdf.Imposing
 open Shrimp.Pdf.Parser

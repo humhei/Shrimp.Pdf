@@ -101,10 +101,10 @@ type ReaderDocument (reader: string) =
     member x.Reader = reader
 
 
-type SplitDocument (reader: string, writer: string, pdfDocumentCache: PdfDocumentCache) =
+type SplitDocument (reader: string, writer: string) =
     let mutable readerDocument = new PdfDocument(new PdfReader(reader))
 
-    let mutable writerDocument = new PdfDocumentWithCachedResources(writer, pdfDocumentCache)
+    let mutable writerDocument = new PdfDocumentWithCachedResources(writer)
 
     member x.ReaderName = reader
 
@@ -115,14 +115,14 @@ type SplitDocument (reader: string, writer: string, pdfDocumentCache: PdfDocumen
     member x.ReOpen() =
         readerDocument.Close()
         writerDocument.Close()
-
         File.Delete(reader)
         File.Copy(writer, reader, true)
 
         readerDocument <- new PdfDocument(new PdfReader(reader))
-        writerDocument <- new PdfDocumentWithCachedResources(writer, writerDocument)
 
-    static member Create(reader, writer, pdfDocumentCache) = new SplitDocument(reader, writer, pdfDocumentCache)
+        writerDocument <- new PdfDocumentWithCachedResources(writer)
+
+    static member Create(reader, writer) = new SplitDocument(reader, writer)
 
 
              

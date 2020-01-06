@@ -8,26 +8,18 @@ open Shrimp.Pdf.FontExtensions
 
 
 
-type _FlowModel<'userState> =
+type FlowModel<'userState> =
     { File: string
       UserState: 'userState }
 
-type FlowModel<'userState> =
-    { File: string
-      UserState: 'userState
-      PdfDocumentCache: PdfDocumentCache }
 
 [<RequireQualifiedAccess>]
 module FlowModel =
-    let create (flowModel: _FlowModel<_>) =
-        { File = flowModel.File 
-          UserState = flowModel.UserState 
-          PdfDocumentCache = new PdfDocumentCache() }
 
-    let mapM mapping flowModel =
+    let mapM mapping (flowModel: FlowModel<_>) =
         { File = flowModel.File 
-          UserState = mapping flowModel.UserState
-          PdfDocumentCache = flowModel.PdfDocumentCache }
+          UserState = mapping flowModel.UserState }
+
 
 type Reuse<'oldUserState, 'newUserState> = Reuse of (FlowModel<'oldUserState> -> SplitDocument -> 'newUserState)
 with 
@@ -37,25 +29,14 @@ with
 
     member private x.InvokeAndReOpenDocument =
         fun flowModel (document: SplitDocument) ->
-            let userState = x.Value flowModel document
-            document.ReOpen()
-            userState
+            Logger.infoWithStopWatch (sprintf "%A" x) (fun _ ->
+                let userState = x.Value flowModel document
+                document.ReOpen()
+                userState
+            )
 
-    /// internal use
-    /// using ||>> instead
-    member x.TransformNewUserState (mapping) =
-        fun flowModel document ->
-            x.Value flowModel document
-            |> mapping
-        |> Reuse
 
-    /// internal use
-    /// using <<|| instead
-    member x.TransformOldUserStateBack (mapping) =
-        fun flowModel document ->
-            let flowModel = FlowModel.mapM mapping flowModel
-            x.Value flowModel document
-        |> Reuse
+
 
     member x.RedirectUserState (mapping) =
         fun flowModel document ->
@@ -63,36 +44,48 @@ with
             mapping (flowModel.UserState, newUserState)
         |> Reuse
 
+    static member (||>>) (reuse: Reuse<_, _>, mapping) =
+        fun flowModel document ->
+            reuse.Value flowModel document
+            |> mapping
+        |> Reuse
 
-    /// internal use
-    /// using <+> instead
-    static member Bind (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
+    static member (<<||) (mapping, reuse: Reuse<_, _>) =
+        fun flowModel document ->
+            let flowModel = FlowModel.mapM mapping flowModel
+            reuse.Value flowModel document
+        |> Reuse
+
+    static member (<+>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: SplitDocument) ->
             let middleUserState = reuse1.InvokeAndReOpenDocument flowModel document
             reuse2.InvokeAndReOpenDocument (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
         |> Reuse
 
-    /// internal use
-    /// using <++> instead
-    static member Bind_TupleUserState (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
+    static member (<++>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: SplitDocument) ->
             let middleUserState = reuse1.InvokeAndReOpenDocument flowModel document
             reuse2.InvokeAndReOpenDocument (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document |> ignore
             middleUserState
         |> Reuse
 
-    /// internal use
-    /// using <.+> instead
-    static member Bind_FstUserState (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
+    static member (<.+>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: SplitDocument) ->
             let middleUserState = reuse1.InvokeAndReOpenDocument flowModel document
             middleUserState, reuse2.InvokeAndReOpenDocument (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
         |> Reuse
 
+[<RequireQualifiedAccess>]
+module Reuse =
+    let dummy = 
+        Reuse(fun flowModel splitDocument -> 
+            splitDocument.Reader.CopyPagesTo(1, splitDocument.Reader.GetNumberOfPages(), splitDocument.Writer)
+            |> ignore
 
+            flowModel.UserState 
+        )
 
-type Manipulate<'oldUserState, 'newUserState> = 
-    Manipulate of (FlowModel<'oldUserState> -> IntegratedDocument -> 'newUserState)
+type Manipulate<'oldUserState, 'newUserState> = Manipulate of (FlowModel<'oldUserState> -> IntegratedDocument -> 'newUserState)
 with 
     member x.Value =
         let (Manipulate (value)) = x
@@ -105,20 +98,16 @@ with
             document.ReOpen()
             userState
 
-    /// internal use
-    /// using ||>> instead
-    member x.TransformNewUserState (mapping) =
+    static member (||>>) (manipulate: Manipulate<_, _>, mapping) =
         fun flowModel document ->
-            x.Value flowModel document
+            manipulate.Value flowModel document
             |> mapping
         |> Manipulate
 
-    /// internal use
-    /// using <<|| instead
-    member x.TransformOldUserStateBack (mapping) =
+    static member (<<||) (mapping, manipulate: Manipulate<_, _>) =
         fun flowModel document ->
             let flowModel = FlowModel.mapM mapping flowModel
-            x.Value flowModel document
+            manipulate.Value flowModel document
         |> Manipulate
 
     member x.RedirectUserState (mapping) =
@@ -127,32 +116,24 @@ with
             mapping (flowModel.UserState, newUserState)
         |> Manipulate
 
-    /// internal use
-    /// using <+> instead
-    static member Bind (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
+    static member (<+>) (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: IntegratedDocument) ->
             let middleUserState = manipulate1.InvokeAndReOpenDocument flowModel document
             manipulate2.InvokeAndReOpenDocument (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
         |> Manipulate
 
-    /// internal use
-    /// using <++> instead
-    static member Bind_TupleUserState (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
+    static member (<++>) (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: IntegratedDocument) ->
             let middleUserState: 'middleUserState = manipulate1.InvokeAndReOpenDocument flowModel document
             middleUserState, manipulate2.InvokeAndReOpenDocument (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
         |> Manipulate
 
-    /// internal use
-    /// using <.+> instead
-    static member Bind_FstUserState (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
+    static member (<.+>) (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: IntegratedDocument) ->
             let middleUserState: 'middleUserState = manipulate1.InvokeAndReOpenDocument flowModel document
             manipulate2.InvokeAndReOpenDocument (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document |> ignore
             middleUserState
         |> Manipulate
-
-
 
 [<RequireQualifiedAccess>]
 module Manipulate =
@@ -178,8 +159,9 @@ type Flow<'oldUserState, 'newUserState> =
     | Reuse of (Reuse<'oldUserState, 'newUserState>)
     | FileOperation of FileOperation<'oldUserState, 'newUserState>
     | Transform of (FlowModel<'oldUserState> -> FlowModel<'newUserState> list)
+    | Factory of (FlowModel<'oldUserState> -> Flow<'oldUserState, 'newUserState>)
 with 
-    static member internal Run(flowModel, flow) =
+    static member internal Run(flowModel: FlowModel<_>, flow) =
         let file = flowModel.File
         let writerFile = Path.changeExtension ".writer.pdf" file
 
@@ -189,26 +171,31 @@ with
 
         match flow with 
         | Flow.Manipulate (manipulate) ->
-            let pdfDocument = IntegratedDocument.Create(file, writerFile, flowModel.PdfDocumentCache)
+            let pdfDocument = IntegratedDocument.Create(file, writerFile)
             let newUserState = manipulate.Value flowModel pdfDocument
             pdfDocument.Value.Close()
             draft()
             [(flowModel |> FlowModel.mapM(fun _ -> newUserState))]
 
-        | Flow.Reuse (reuse) ->
 
-            let pdfDocument = SplitDocument.Create(file, writerFile, flowModel.PdfDocumentCache)
-            let newUserState = reuse.Value flowModel pdfDocument
-            pdfDocument.Reader.Close()
-            pdfDocument.Writer.Close()
-            draft()
-            [(flowModel |> FlowModel.mapM(fun _ -> newUserState))]
+        | Flow.Reuse (reuse) ->
+            Logger.infoWithStopWatch (sprintf "%A" reuse) (fun _ ->
+                let pdfDocument = SplitDocument.Create(file, writerFile)
+                let newUserState = reuse.Value flowModel pdfDocument
+                pdfDocument.Reader.Close()
+                pdfDocument.Writer.Close()
+                draft()
+                [ (flowModel |> FlowModel.mapM(fun _ -> newUserState)) ]
+            )
 
         | Flow.FileOperation fileOperation -> fileOperation.Value [flowModel]
 
         | Flow.Transform transform ->
             transform flowModel
 
+        | Flow.Factory (factory) ->
+            let flow = factory flowModel
+            Flow<_, _>.Run(flowModel, flow)
 
 
     static member (<+>) (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
@@ -229,8 +216,6 @@ with
         |> Flow.Transform
 
 
-    /// internal use
-    /// using <++> instead
     static member (<++>) (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
         fun flowModel ->
             let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModel, flow1) 
@@ -249,9 +234,7 @@ with
         |> Flow.Transform
 
 
-    /// internal use
-    /// using <.+> instead
-    static member Bind_FstUserState (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
+    static member (<.+>) (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
         fun flowModel ->
             let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModel, flow1) 
 
@@ -267,21 +250,21 @@ with
                 newFlowModels
         |> Flow.Transform
 
-    /// internal use
-    /// using ||>> instead
-    member x.TransformNewUserState mapping  =
-        fun flowModel ->
-            Flow<_, _>.Run(flowModel, x) 
-            |> List.map (FlowModel.mapM mapping)
-        |> Flow.Transform 
-
-    /// internal use
-    /// using <<|| instead
-    member x.TransformOldUserStateBack mapping  =
+    static member (<<||) (mapping, flow: Flow<_, _>) =
         fun flowModel ->
             let flowModel = FlowModel.mapM mapping flowModel
-            Flow<_, _>.Run(flowModel, x) 
+            Flow<_, _>.Run(flowModel, flow) 
          
+        |> Flow.Transform 
+
+
+
+    /// internal use
+    /// using ||>> instead
+    static member (||>>) (flow, mapping)  =
+        fun flowModel ->
+            Flow<_, _>.Run(flowModel, flow) 
+            |> List.map (FlowModel.mapM mapping)
         |> Flow.Transform 
 
     member x.RedirectUserState (mapping) =
@@ -291,54 +274,27 @@ with
             |> List.map (FlowModel.mapM (fun newUserState -> mapping (flowModel.UserState, newUserState)))
        
         |> Flow.Transform
-       
+    
+[<RequireQualifiedAccess>]
+module Flow =
+    let dummy = Flow.Transform (fun flowModel -> [flowModel] )
+
 
 [<AutoOpen>]
 module Operators =
 
-    let inline (||>>) (flow : ^a) (mapping: ^b) =
-        (^a: (member TransformNewUserState : ^b -> ^c) (flow, mapping))
-
-    let inline (<<||) (mapping: ^b) (flow : ^a)  =
-        (^a: (member TransformOldUserStateBack : ^b -> ^c) (flow, mapping))
-
-    let inline (<+>) (flow1: ^a) (flow2: ^b) = 
-        ((^a or ^b): (static member Bind: ^a * ^b -> ^c) (flow1, flow2))
-
-
-    let inline (<++>) (flow1: ^a) (flow2: ^b) = 
-        ((^a or ^b): (static member Bind_TupleUserState: ^a * ^b -> ^c) (flow1, flow2))
-
-    let inline (<.+>) (flow1: ^a) (flow2: ^b) = 
-        ((^a or ^b): (static member Bind_FstUserState: ^a * ^b -> ^c) (flow1, flow2))
-
-
     let inline redirect (mapping : ^b) (flow: ^a) =
         (^a: (member RedirectUserState : ^b -> ^c) (flow, mapping))
 
-
-    let runWithReuseOldPdfDocumentCache (flowModel: FlowModel<'userState>) flow = 
+    let run (flowModel: FlowModel<'userState>) flow = 
         Logger.infoWithStopWatch(sprintf "RUN: %s" flowModel.File) (fun _ ->
             Flow<_, _>.Run(flowModel, flow)
         )
-
-    let run (flowModel: _FlowModel<'userState>) flow = 
-        runWithReuseOldPdfDocumentCache (FlowModel.create flowModel) flow
-
-    let runManyWithReuseOldPdfDocumentCache (flowModels: FlowModel<_> list) flow = 
+ 
+    let runMany (flowModels: FlowModel<_> list) flow = 
         ( Flow.Transform (fun _ -> flowModels )
           <+>
           flow )
         |> run {File = ""; UserState = ()}
 
-
-
-    let runMany (flowModels: _FlowModel<_> list) flow = 
-        ( Flow.Transform (fun flowModel -> flowModels |> List.map (fun m ->
-            { File = m.File 
-              UserState = m.UserState 
-              PdfDocumentCache = flowModel.PdfDocumentCache } ))
-          <+>
-          flow )
-        |> run {File = ""; UserState = ()}
 

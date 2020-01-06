@@ -19,6 +19,7 @@ let allTests =
             FileOperationTests.fileOperationTests
             ManipulateTests.manipulateTests
             RealSampleTests.realSamplesTests
+            FunctionTests.functionTests
         ]
 
 [<EntryPoint>]

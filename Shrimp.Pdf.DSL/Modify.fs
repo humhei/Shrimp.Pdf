@@ -54,7 +54,7 @@ module private Modifiers =
 
 
 type Modifier =
-    static member DropColor() : Modifier<'userState> =
+    static member CloseFillAndStroke() : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
             match args.CurrentRenderInfo.Tag with 
             | IntegratedRenderInfoTag.Path ->
@@ -128,7 +128,7 @@ module ModifyOperators =
                 | ModifyingAsyncWorker.PageNumberEveryWorker i, _ when i < 1 -> failwith "Async worker number should bigger than 1"
                 | ModifyingAsyncWorker.PageNumberEveryWorker i, j when i > 0 && j > 1 ->
                     let splitedFlowModels = 
-                        runWithReuseOldPdfDocumentCache flowModel (Flow.FileOperation (splitDocumentToMany (fun args -> { args with Override = true; ChunkSize = i})))
+                        run flowModel (Flow.FileOperation (splitDocumentToMany (fun args -> { args with Override = true; ChunkSize = i})))
 
 
                     let flowModels = 
@@ -141,7 +141,7 @@ module ModifyOperators =
                                     |> List.mapi (fun memberIndex flowModel ->
                                         let pageNum = groupIndex * i + (memberIndex + 1)
                                         let manipuate = (Manipulate (f totalNumberOfPages (fun _ -> PageNumber pageNum)))
-                                        runWithReuseOldPdfDocumentCache flowModel (Flow.Manipulate manipuate)
+                                        run flowModel (Flow.Manipulate manipuate)
                                     )
                                     |> List.concat
                             }
@@ -155,7 +155,7 @@ module ModifyOperators =
                             (mergeDocumentsInternal flowModel.File (document.Value))
 
 
-                    runManyWithReuseOldPdfDocumentCache flowModels mergeFlow
+                    runMany flowModels mergeFlow
                     |> ignore
 
                     for flowModel in flowModels do
@@ -199,7 +199,7 @@ module ModifyOperators =
                             |> Map.ofList
                     ) document
 
-                flowModel.UserState
+                
             
         Manipulate.runInAsync modifyingAsyncWorker asyncManiputation
 

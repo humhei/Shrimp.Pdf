@@ -49,32 +49,42 @@ type PageSelectorExprSinglePage =
 [<RequireQualifiedAccess>]
 type PageSelectorExpr = 
     | SinglePage of PageSelectorExprSinglePage
-    | Between of Begin * End
+    | Between of PageSelectorExprSinglePage * PageSelectorExprSinglePage
     | Compose of PageSelectorExpr list
 
 [<RequireQualifiedAccess>]
 module PageSelectorExpr = 
     let private parser = 
-        let pBegin = 
-            pint32 |>> Begin
-
-        let pEnd = 
-            (pstringCI "R") >>. pint32 |>> End
-
-        let pBetween = 
-            (pBegin .>> pchar '-' .>>. pEnd)
-            |>> PageSelectorExpr.Between
 
         let pSinglePage = 
-            (pBegin |>> (PageSelectorExprSinglePage.Begin >> PageSelectorExpr.SinglePage))
-            <|> 
-                (pEnd |>> (PageSelectorExprSinglePage.End >> PageSelectorExpr.SinglePage))
+            let pBegin = 
+                pint32 |>> (fun i -> 
+                    if i > 0 then Begin i
+                    else failwithf "page num %d should be bigger than 0" i
+                )
 
-        sepBy1 (pBetween <|> pSinglePage) (pchar ',')
+            let pEnd = 
+                (pstringCI "R") >>. pint32 |>> (fun i ->
+                    if i > 0 then End i
+                    else failwithf "page num %d should be bigger than 0" i
+                )
+
+            (pEnd |>> (PageSelectorExprSinglePage.End))
+            <|> (pBegin |>> (PageSelectorExprSinglePage.Begin))
+
+        let pBetween = 
+            (pSinglePage .>>? pchar '-' .>>. pSinglePage )
+            |>> PageSelectorExpr.Between
+
+        sepBy1 ((pBetween <|> (pSinglePage |>> PageSelectorExpr.SinglePage)) .>> spaces) (pchar ',')
 
     let create (exprText: string) =
         match run parser exprText with 
-        | Success (result, _, _) -> result
+        | Success (result, _, _) -> 
+            match result with 
+            | [expr] -> expr
+            | _ -> PageSelectorExpr.Compose result
+
         | Failure (errorMsg, _, _) -> failwithf "%s" errorMsg
 
 [<RequireQualifiedAccess>]
@@ -127,20 +137,21 @@ and internal OperatorRangeCallbackablePdfCanvasProcessor(listener) =
         this.ProcessContent(page.GetContentBytes(), page.GetResources());
 
 
-
 [<AutoOpen>]
 module Extensions =
 
     type PdfDocument with
         member pdfDocument.GetPageNumbers(pageSelectorExpr: PageSelectorExpr) =
-            match pageSelectorExpr with 
-            | PageSelectorExpr.SinglePage singlePage ->
-                match singlePage with 
-                | PageSelectorExprSinglePage.Begin (Begin i) -> [i]
-                | PageSelectorExprSinglePage.End (End i) -> [i]
+            let totalPageNum = pdfDocument.GetNumberOfPages()
+            let getPageNumOfSinglePage = function
+                | PageSelectorExprSinglePage.Begin (Begin i) -> i
+                | PageSelectorExprSinglePage.End (End i) -> totalPageNum - i
 
-            | PageSelectorExpr.Between (Begin m, End n) ->
-                [m..n]
+            match pageSelectorExpr with 
+            | PageSelectorExpr.SinglePage singlePage -> [getPageNumOfSinglePage singlePage]
+
+            | PageSelectorExpr.Between (beginExpr, endExpr) ->
+                [getPageNumOfSinglePage beginExpr .. getPageNumOfSinglePage endExpr]
 
             | PageSelectorExpr.Compose compose ->
                 compose
@@ -326,8 +337,8 @@ module internal PdfPage =
             |> ignore
 
 
-type IntegratedDocument private (reader: string, writer: string, cache: PdfDocumentCache) =
-    let mutable pdfDocument = new PdfDocumentWithCachedResources(reader, writer, cache)
+type IntegratedDocument private (reader: string, writer: string) =
+    let mutable pdfDocument = new PdfDocumentWithCachedResources(reader, writer)
 
     member x.ReaderName = reader
 
@@ -343,7 +354,7 @@ type IntegratedDocument private (reader: string, writer: string, cache: PdfDocum
 
         pdfDocument <- new PdfDocumentWithCachedResources(reader, writer, pdfDocument)
 
-    static member Create(reader, writer, pdfDocumentCache) = new IntegratedDocument(reader, writer, pdfDocumentCache)
+    static member Create(reader, writer) = new IntegratedDocument(reader, writer)
 
 
 [<RequireQualifiedAccess>]

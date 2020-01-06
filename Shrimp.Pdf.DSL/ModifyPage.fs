@@ -13,9 +13,11 @@ type CanvasAreaOptions =
     | Specfic of Rectangle
 
 type PageModifier<'userState, 'newUserState> = PageModifingArguments<'userState> -> seq<IIntegratedRenderInfo> -> 'newUserState
+
 type PageModifier =
+
     static member private AddNew canvasAreaOptions canvasActionsBuilder : PageModifier<_, _> =
-        fun (args: PageModifingArguments<_>) infos  ->
+        fun (args: PageModifingArguments<_>) infos ->
             let page = args.Page
             let canvas = 
                 let rootArea =
@@ -24,6 +26,7 @@ type PageModifier =
                     | CanvasAreaOptions.Specfic rect -> rect
 
                 new Canvas(page, rootArea)
+
             let canvasActions = canvasActionsBuilder args
 
             (canvas, canvasActions)
@@ -33,7 +36,7 @@ type PageModifier =
             |> ignore
 
 
-    static member GetBound() : PageModifier<_, _> =
+    static member GetBoundOfSelector() : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             let trimedBox = 
                 infos
@@ -53,12 +56,12 @@ type PageModifier =
                 | Failure (msg, _ , _) -> None
             )
 
-    static member SetPageBox(rect: Rectangle, pageBoxKind: PageBoxKind) : PageModifier<_, _> =
+    static member SetPageBox(pageBoxKind: PageBoxKind, rect: Rectangle) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             PdfPage.setPageBox pageBoxKind rect args.Page
             |> ignore
 
-    static member GetPageEdge (innerBox: Rectangle, pageBoxKind: PageBoxKind) : PageModifier<_, _> =
+    static member GetPageEdge (pageBoxKind: PageBoxKind, innerBox: Rectangle) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             PdfPage.getEdge innerBox pageBoxKind args.Page
 
@@ -70,9 +73,26 @@ type PageModifier =
     static member AddText(pageBoxKind, text, mapping) : PageModifier<_, _> =
         PageModifier.AddText(CanvasAreaOptions.PageBox pageBoxKind, text, mapping)
 
+    static member AddText(canvasRootArea: Rectangle, text, mapping) : PageModifier<_, _> =
+        PageModifier.AddText(CanvasAreaOptions.Specfic canvasRootArea, text, mapping)
+
+
+    static member AddRectangleToCanvasRootArea(canvasAreaOptions, mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) : PageModifier<_, _> =
+        PageModifier.AddNew canvasAreaOptions (fun args ->
+            [ Canvas.addRectangleToRootArea mapping ]
+        )
+
+    static member Batch(pageModifiers: PageModifier<_, _> list) : PageModifier<_, _> =
+        fun (args: PageModifingArguments<_>) infos ->
+            pageModifiers
+            |> List.map(fun pageModifier ->
+                pageModifier args infos
+            )
+
 
 [<AutoOpen>]
 module ModifyPageOperators =
+
     let modifyPageCurried name (pageSelector: PageSelector) (selector: Selector<_>) (pageModifier: PageModifier<_, _>)  = 
         fun (flowModel: FlowModel<_>) (integratedDocument: IntegratedDocument) ->
             let document = integratedDocument.Value
@@ -97,6 +117,7 @@ module ModifyPageOperators =
                             Some (pageModifier args infos) 
                         else None
                     )
+
                 newUserState
             )
         |> Manipulate
