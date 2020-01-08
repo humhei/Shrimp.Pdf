@@ -1,5 +1,6 @@
 ﻿module ManipulateTests
 open Expecto
+open iText.Kernel.Geom
 open Shrimp.Pdf
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Colors
@@ -100,6 +101,25 @@ let manipulateTests =
             )
         )
         |> runWithBackup "datas/manipulate/add bound to text.pdf" 
+        |> ignore
+
+    ftestCase "add line to position" <| fun _ -> 
+        Flow.Manipulate (
+            modifyPage
+                ("add line to position",
+                  PageSelector.All,
+                  Dummy,
+                  PageModifier.AddLine(
+                    CanvasAreaOptions.PageBox PageBoxKind.ActualBox,
+                    Position.Center (mm -5, 0.),
+                    Position.Center (mm 5, 0.),
+                    (fun args ->
+                        { args with StrokeColor = PdfCanvasColor.}
+                    )
+                  ) 
+                )
+        )
+        |> runWithBackup "datas/manipulate/add line to position.pdf" 
         |> ignore
 
     testCase "add text to position" <| fun _ -> 

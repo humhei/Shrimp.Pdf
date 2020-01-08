@@ -54,7 +54,7 @@ module private Modifiers =
 
 
 type Modifier =
-    static member CloseFillAndStroke() : Modifier<'userState> =
+    static member CancelFillAndStroke() : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
             match args.CurrentRenderInfo.Tag with 
             | IntegratedRenderInfoTag.Path ->

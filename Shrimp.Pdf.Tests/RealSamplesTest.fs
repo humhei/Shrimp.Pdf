@@ -46,7 +46,7 @@ let retainTitleInfo color =
                     <&> (!!(Info.FillColorIs color))
                 )
             ])
-      Modifiers = [ Modifier.CloseFillAndStroke() ]
+      Modifiers = [ Modifier.CancelFillAndStroke() ]
     }
 
 let blackAndWhiteTitleInfo() =
@@ -73,7 +73,7 @@ let retainNavigationInfo color =
                 <&> (!!(Info.FillColorIs color)) 
             ) args
         )
-      Modifiers = [ Modifier.CloseFillAndStroke() ]
+      Modifiers = [ Modifier.CancelFillAndStroke() ]
     }
 
 let removeNavigationInfo() =
@@ -85,7 +85,7 @@ let removeNavigationInfo() =
                 <&> Info.FillColorIs DeviceRgb.MAGENTA
             ) args
         )
-      Modifiers =[ Modifier.CloseFillAndStroke() ]
+      Modifiers =[ Modifier.CancelFillAndStroke() ]
     }
 
 

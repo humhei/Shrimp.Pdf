@@ -1151,7 +1151,6 @@ module Extensions =
             | N
             | Specific of Color
 
-
         type PdfCanvasAddRectangleArguments =
             { LineWidth: float 
               StrokeColor: PdfCanvasColor
@@ -1161,6 +1160,16 @@ module Extensions =
                 { LineWidth = mm 0.1 
                   StrokeColor = PdfCanvasColor.Specific (DeviceGray.BLACK :> Color)
                   FillColor = PdfCanvasColor.N }
+
+
+        type PdfCanvasAddLineArguments =
+            { LineWidth: float 
+              StrokeColor: PdfCanvasColor }
+        with 
+            static member DefaultValue =
+                { LineWidth = mm 0.1 
+                  StrokeColor = PdfCanvasColor.Specific (DeviceGray.BLACK :> Color) }
+
 
         type PdfCanvas with 
             member x.AddXObject(xObject: PdfXObject, affineTransformRecord: AffineTransformRecord) =
@@ -1179,6 +1188,18 @@ module Extensions =
                       AffineTransformRecord.ofAffineTransform affineTransform )
 
 
+
+            static member SetStrokeColor(strokeColor: PdfCanvasColor) =
+                fun (canvas: PdfCanvas) ->
+                    match strokeColor with 
+                    | PdfCanvasColor.Specific color -> canvas.SetStrokeColor(color)
+                    | PdfCanvasColor.N -> canvas
+
+            static member SetFillColor(fillColor: PdfCanvasColor) =
+                fun (canvas: PdfCanvas) ->
+                    match fillColor with 
+                    | PdfCanvasColor.Specific color -> canvas.SetFillColor(color)
+                    | PdfCanvasColor.N -> canvas
 
         [<RequireQualifiedAccess>]
         module PdfCanvas = 
@@ -1218,6 +1239,12 @@ module Extensions =
             let endPath (canvas: PdfCanvas) =
                 canvas.EndPath()
 
+            let moveTo (point: Point) (canvas: PdfCanvas) =
+                canvas.MoveTo(point.GetX(), point.GetY())
+
+            let lineTo(point: Point) (canvas: PdfCanvas) =
+                canvas.LineTo(point.GetX(), point.GetY())
+
             let showText (text: string) (canvas:PdfCanvas)=
                 canvas.ShowText(text)
 
@@ -1236,6 +1263,22 @@ module Extensions =
             let endText (canvas: PdfCanvas) =
                 canvas.EndText()
 
+            let addLine (line: StraightLine) (mapping: PdfCanvasAddLineArguments -> PdfCanvasAddLineArguments) (canvas: PdfCanvas) =
+                let args = mapping PdfCanvasAddLineArguments.DefaultValue
+                let close =
+                    match args.StrokeColor with 
+                    | PdfCanvasColor.N -> endPath
+                    | PdfCanvasColor.Specific _ -> stroke
+                
+                canvas
+                |> PdfCanvas.SetStrokeColor(args.StrokeColor)
+                |> setLineWidth args.LineWidth
+                |> moveTo line.Start
+                |> lineTo line.End
+                |> close
+
+
+
             let addRectangle rect (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
                 let args = mapping PdfCanvasAddRectangleArguments.DefaultValue
                 let close =
@@ -1245,20 +1288,9 @@ module Extensions =
                     | PdfCanvasColor.N , PdfCanvasColor.Specific _ -> stroke
                     | PdfCanvasColor.Specific _, PdfCanvasColor.Specific _ -> fillStroke
 
-                let setStrokeColor strokeColor (canvas: PdfCanvas) =
-                    match strokeColor with 
-                    | PdfCanvasColor.Specific color -> canvas.SetStrokeColor(color)
-                    | PdfCanvasColor.N -> canvas
-
-                let setFillColor fillColor (canvas: PdfCanvas) =
-                    match fillColor with 
-                    | PdfCanvasColor.Specific color -> canvas.SetFillColor(color)
-                    | PdfCanvasColor.N -> canvas
-
-
                 canvas
-                |> setStrokeColor args.StrokeColor
-                |> setFillColor args.FillColor
+                |> PdfCanvas.SetStrokeColor args.StrokeColor
+                |> PdfCanvas.SetFillColor args.FillColor
                 |> setLineWidth args.LineWidth
                 |> rectangle rect
                 |> close
@@ -1332,6 +1364,7 @@ module Extensions =
                             .ShowTextAligned(text,float32 point.x,float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getAngle fontRotation))
 
                     canvas
+
 
             let addRectangleToRootArea (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: Canvas) =
                 PdfCanvas.addRectangle (canvas.GetRootArea()) mapping (canvas.GetPdfCanvas()) |> ignore
@@ -1431,7 +1464,7 @@ module Extensions =
             let getActualBox (page: PdfPage) =
                 page.GetActualBox()
 
-            let getEdge (innerBox: Rectangle) pageBoxKind (page: PdfPage) =
+            let getPageEdge (innerBox: Rectangle) pageBoxKind (page: PdfPage) =
                 let pageBox = page.GetPageBox(pageBoxKind)
 
                 if innerBox.IsInsideOf(pageBox) 

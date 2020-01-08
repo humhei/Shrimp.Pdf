@@ -1,11 +1,12 @@
 ﻿namespace Shrimp.Pdf.DSL
+open FParsec
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Parser
 open iText.Kernel.Pdf.Canvas.Parser
 open Shrimp.Pdf
-open FParsec
 open iText.Kernel.Geom
 open iText.Layout
+open iText.Kernel.Pdf.Canvas
 
 [<RequireQualifiedAccess>]
 type CanvasAreaOptions =
@@ -16,7 +17,7 @@ type PageModifier<'userState, 'newUserState> = PageModifingArguments<'userState>
 
 type PageModifier =
 
-    static member private AddNew canvasAreaOptions canvasActionsBuilder : PageModifier<_, _> =
+    static member private AddNew (canvasAreaOptions, canvasActionsBuilder) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             let page = args.Page
             let canvas = 
@@ -26,6 +27,19 @@ type PageModifier =
                     | CanvasAreaOptions.Specfic rect -> rect
 
                 new Canvas(page, rootArea)
+
+            let canvasActions = canvasActionsBuilder args
+
+            (canvas, canvasActions)
+            ||> List.fold(fun canvas canvasAction ->
+                canvasAction canvas
+            ) 
+            |> ignore
+
+    static member private AddNew (canvasActionsBuilder) : PageModifier<_, _> =
+        fun (args: PageModifingArguments<_>) infos ->
+            let page = args.Page
+            let canvas = new PdfCanvas(page)
 
             let canvasActions = canvasActionsBuilder args
 
@@ -51,7 +65,7 @@ type PageModifier =
             |> List.choose IIntegratedRenderInfo.asITextRenderInfo
             |> List.choose (fun renderInfo ->
                 let text = ITextRenderInfo.getText renderInfo
-                match run picker text with 
+                match FParsec.CharParsers.run picker text with 
                 | Success (result, _ ,_ )-> Some result
                 | Failure (msg, _ , _) -> None
             )
@@ -63,11 +77,33 @@ type PageModifier =
 
     static member GetPageEdge (pageBoxKind: PageBoxKind, innerBox: Rectangle) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
-            PdfPage.getEdge innerBox pageBoxKind args.Page
+            PdfPage.getPageEdge innerBox pageBoxKind args.Page
 
     static member AddText(canvasAreaOptions, text, mapping) : PageModifier<_, _> =
-        PageModifier.AddNew canvasAreaOptions (fun args ->
+        PageModifier.AddNew (canvasAreaOptions, (fun args ->
             [ Canvas.addText text (mapping) ]
+        ))
+
+    static member AddLine(line, mapping) : PageModifier<_, _> =
+        PageModifier.AddNew (fun args ->
+            [ PdfCanvas.addLine line mapping ]
+        )
+
+    static member AddLine(canvasAreaOptions: CanvasAreaOptions, startPosition: Position, endPosition: Position, mapping) : PageModifier<_, _> =
+        PageModifier.AddNew (fun args ->
+            let area = 
+                match canvasAreaOptions with 
+                | CanvasAreaOptions.PageBox pageBoxKind -> 
+                    args.Page.GetPageBox(pageBoxKind)
+                | CanvasAreaOptions.Specfic area -> area
+
+            let line =
+                let startPoint = area.GetPoint(startPosition)
+                let endPoint = area.GetPoint(endPosition)
+                { Start = startPoint 
+                  End = endPoint }
+
+            [ PdfCanvas.addLine line mapping ]
         )
 
     static member AddText(pageBoxKind, text, mapping) : PageModifier<_, _> =
@@ -76,11 +112,10 @@ type PageModifier =
     static member AddText(canvasRootArea: Rectangle, text, mapping) : PageModifier<_, _> =
         PageModifier.AddText(CanvasAreaOptions.Specfic canvasRootArea, text, mapping)
 
-
     static member AddRectangleToCanvasRootArea(canvasAreaOptions, mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) : PageModifier<_, _> =
-        PageModifier.AddNew canvasAreaOptions (fun args ->
+        PageModifier.AddNew (canvasAreaOptions, (fun args ->
             [ Canvas.addRectangleToRootArea mapping ]
-        )
+        ))
 
     static member Batch(pageModifiers: PageModifier<_, _> list) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
