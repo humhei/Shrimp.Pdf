@@ -93,7 +93,7 @@ let manipulateTests =
                       Selector = Text(fun _ _ -> true) 
                       Modifiers = [
                         Modifier.AddRectangleToBound(fun args -> 
-                            { args with StrokeColor = PdfCanvasColor.Specific DeviceCmyk.MAGENTA}
+                            { args with StrokeColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA}
                         )
                       ]
                     }
@@ -114,7 +114,7 @@ let manipulateTests =
                     Position.Center (mm -5, 0.),
                     Position.Center (mm 5, 0.),
                     (fun args ->
-                        { args with StrokeColor = PdfCanvasColor.}
+                        { args with StrokeColor = PdfCanvasColor.Registration }
                     )
                   ) 
                 )
@@ -333,7 +333,7 @@ let manipulateTests =
                 "add rect to area",
                 PageSelector.All,
                 Dummy,
-                PageModifier.AddRectangleToCanvasRootArea(CanvasAreaOptions.PageBox PageBoxKind.ActualBox, fun args -> { args with FillColor = PdfCanvasColor.Specific DeviceRgb.BLACK})
+                PageModifier.AddRectangleToCanvasRootArea(CanvasAreaOptions.PageBox PageBoxKind.ActualBox, fun args -> { args with FillColor = PdfCanvasColor.ITextColor DeviceRgb.BLACK})
             ) 
         )
         |> runWithBackup "datas/manipulate/add rect to area.pdf" 

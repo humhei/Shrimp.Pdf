@@ -322,7 +322,7 @@ and internal PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, 
 
 
 [<RequireQualifiedAccess>]
-module internal PdfPage =
+module PdfPage =
     let modify (selectorModifierMapping) (page: PdfPage) =
         let document = page.GetDocument()
         let editor = new PdfCanvasEditor(selectorModifierMapping, document)
@@ -336,42 +336,6 @@ module internal PdfPage =
             page.Put(PdfName.Contents, fixedStream)
             |> ignore
 
-
-type IntegratedDocument private (reader: string, writer: string) =
-    let mutable pdfDocument = new PdfDocumentWithCachedResources(reader, writer)
-
-    member x.ReaderName = reader
-
-    member x.WriterName = writer
-
-    member x.Value = pdfDocument
-
-    member x.ReOpen() =
-        pdfDocument.Close()
-
-        File.Delete(reader)
-        File.Move(writer, reader)
-
-        pdfDocument <- new PdfDocumentWithCachedResources(reader, writer, pdfDocument)
-
-    static member Create(reader, writer) = new IntegratedDocument(reader, writer)
-
-
-[<RequireQualifiedAccess>]
-module IntegratedDocument =
-
-    let modify (name) (pageSelector: PageSelector) (selectorModifierMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier>) (document: IntegratedDocument) =
-        let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
-        let totalNumberOfPages = document.Value.GetNumberOfPages()
-        Logger.infoWithStopWatch (sprintf "MODIFY: \n%s" name) (fun _ ->
-            for i = 1 to totalNumberOfPages do
-                if List.contains i selectedPageNumbers then
-                    let page = document.Value.GetPage(i)
-                    let selectorModifierMapping = selectorModifierMappingFactory (PageNumber i, page)
-                    for pair in selectorModifierMapping do
-                        PdfPage.modify (Map.ofList[pair.Key, pair.Value]) page
-                    
-        )
 
 
 

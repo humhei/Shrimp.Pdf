@@ -1,122 +1,28 @@
 ﻿namespace Shrimp.Pdf.Colors
+open System.Drawing
 open iText.Kernel.Pdf
 open Shrimp.Pdf
-open Colourful.Conversion
 open iText.Kernel.Colors
-open Colourful
 open System
 open iText.Kernel
-open Extensions
+open Shrimp.Pdf.Extensions
 open System.Linq
 open System.Collections.Generic
 open iText.Kernel.Colors
 
 
-[<RequireQualifiedAccess>]
-module Colourful =
-
-    let private avaliableRGBWorkingSpacesTexts =
-        [
-            "SRGB"           
-            "PROPHOTORGB"    
-            "PALSECAMRGB"    
-            "NTSCRGB"        
-            "EKTASPACEPS5"   
-            "DONRGB4"        
-            "COLORMATCHRGB"  
-            "CIERGB"         
-            "SMPTECRGB"      
-            "BRUCERGB"       
-            "BESTRGB"        
-            "APPLESRGB"      
-            "ADOBERGB1998"   
-            "ECIRGBV2"       
-            "REC2020"        
-            "REC709"         
-            "SRGBSIMPLIFIED" 
-            "BETARGB"        
-            "WIDEGAMUTRGB"   
-        ]
-
-    let targetRGBWoringSpace =
-        let text = config.GetString("shrimp.pdf.colourful.targetRGBWorkingSpace")
-        match text.ToUpper() with 
-        | "SRGB"            -> RGBWorkingSpaces.sRGB
-        | "PROPHOTORGB"     -> RGBWorkingSpaces.ProPhotoRGB
-        | "PALSECAMRGB"     -> RGBWorkingSpaces.PALSECAMRGB
-        | "NTSCRGB"         -> RGBWorkingSpaces.NTSCRGB
-        | "EKTASPACEPS5"    -> RGBWorkingSpaces.EktaSpacePS5
-        | "DONRGB4"         -> RGBWorkingSpaces.DonRGB4
-        | "COLORMATCHRGB"   -> RGBWorkingSpaces.ColorMatchRGB
-        | "CIERGB"          -> RGBWorkingSpaces.CIERGB
-        | "SMPTECRGB"       -> RGBWorkingSpaces.SMPTECRGB
-        | "BRUCERGB"        -> RGBWorkingSpaces.BruceRGB
-        | "BESTRGB"         -> RGBWorkingSpaces.BestRGB
-        | "APPLESRGB"       -> RGBWorkingSpaces.ApplesRGB
-        | "ADOBERGB1998"    -> RGBWorkingSpaces.AdobeRGB1998
-        | "ECIRGBV2"        -> RGBWorkingSpaces.ECIRGBv2
-        | "REC2020"         -> RGBWorkingSpaces.Rec2020
-        | "REC709"          -> RGBWorkingSpaces.Rec709
-        | "SRGBSIMPLIFIED"  -> RGBWorkingSpaces.sRGBSimplified
-        | "BETARGB"         -> RGBWorkingSpaces.BetaRGB
-        | "WIDEGAMUTRGB"    -> RGBWorkingSpaces.WideGamutRGB
-        | _ -> failwithf "targetRGBWoringSpace: expect one of %A" avaliableRGBWorkingSpacesTexts
-
-    let converter = 
-        ColourfulConverter(TargetRGBWorkingSpace = targetRGBWoringSpace)
-
-    let private avaliableWhitePoints =
-        [
-            "A"
-            "B"
-            "C"
-            "D50"
-            "D55"
-            "D65"
-            "D75"
-            "E"
-            "F2"
-            "F7"
-            "F11"
-        ]
-
-
-    converter.WhitePoint <- 
-        match config.GetString("shrimp.pdf.colourful.whitePoint").ToUpper() with
-        |"A"    -> Illuminants.A
-        |"B"    -> Illuminants.B
-        |"C"    -> Illuminants.C
-        |"D50"  -> Illuminants.D50
-        |"D55"  -> Illuminants.D55
-        |"D65"  -> Illuminants.D65
-        |"D75"  -> Illuminants.D75
-        |"E"    -> Illuminants.E
-        |"F2"   -> Illuminants.F2
-        |"F7"   -> Illuminants.F7
-        |"F11"  -> Illuminants.F11
-        | _ -> failwithf "whitePoint: expect one of %A" avaliableWhitePoints
-
-
-[<RequireQualifiedAccess>]
-module LabColor =
-
-    /// encode to colorbook enum value
-    let encode (labColor: LabColor) =
-        sprintf "0x%02x%02x%02x" (int labColor.L) (int labColor.a + 128) (int labColor.b + 128)
-
-    /// decode from colorbook enum value
-    let decode (hex: int) =
-        let l = hex >>> 16 |> byte |> int
-        let a = hex >>> 8 |> byte |> int
-        let b = hex >>> 0 |> byte |> int
-        let a2 = a - 128
-        let b2 = b - 128
-        [l; a2; b2] |> List.map float |> LabColor
-
+type LabColor =
+    { L: float 
+      a: float
+      b: float }
 
 
 [<RequireQualifiedAccess>]
 module DeviceRgb =
+
+    let fromKnownColor(knownColor: KnownColor) =
+        let color = Color.FromKnownColor(knownColor)
+        new DeviceRgb(int color.R, int color.G, int color.B)
 
     let MAGENTA = new DeviceRgb(1.f, 0.f, 1.f) :> Color
 
@@ -199,6 +105,7 @@ type PrintingColor =
     | CMYK
     | Single of ColorCard
     | Double of ColorCard * ColorCard
+
 
 [<RequireQualifiedAccess>]
 module PrintingColor =

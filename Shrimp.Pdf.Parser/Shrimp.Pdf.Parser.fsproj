@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
     <Configurations>Debug;Release;MiniBuild</Configurations>
   </PropertyGroup>
 
@@ -16,7 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Shrimp.Pdf.Extensions\Shrimp.Pdf.Extensions.fsproj" />
-    <ProjectReference Include="..\Shrimp.Pdf.Parser.Helper\Shrimp.Pdf.Parser.Helper.csproj"/>
+    <ProjectReference Include="..\Shrimp.Pdf.Parser.Helper\Shrimp.Pdf.Parser.Helper.csproj" />
   </ItemGroup>
 
   <ItemGroup>

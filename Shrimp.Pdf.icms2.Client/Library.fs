@@ -1,7 +1,6 @@
 ﻿namespace Shrimp.Pdf.icms2
 open Shrimp.Pdf.icms2.Model
 open iText.Kernel.Colors
-open Colourful
 open Akka.Configuration
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
 open System
@@ -13,6 +12,7 @@ open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Parser
 open System.Collections.Concurrent
 open Shrimp.Akkling.Cluster.Intergraction
+open Shrimp.Pdf.Colors
 
 [<AutoOpen>]
 module Client =
@@ -110,7 +110,7 @@ module Client =
             match outputIcc with 
             | Icc.Lab _ ->
                 let labValues = new ReadOnlyCollection<float>(outputValues |> Array.map float)
-                return CmsColor.Lab(new LabColor(labValues))
+                return CmsColor.Lab( {L = float outputValues.[0]; a = float outputValues.[1]; b = float outputValues.[2]} )
 
             | Icc.Cmyk _ -> return CmsColor.Cmyk(new DeviceCmyk(outputValues.[0], outputValues.[1], outputValues.[2], outputValues.[3]))
             | Icc.Gray _ -> return CmsColor.Gray(new DeviceGray(Array.exactlyOne outputValues))
@@ -124,8 +124,7 @@ module Client =
             let intent = defaultArg intent defaultIntent
 
             let! (outputValues : float32[])  = x.GetConvertedColorValuesAsync(Icc.Lab labIcc, intent, inputIcc)
-            let labValues = new ReadOnlyCollection<float>(outputValues |> Array.map float)
-            return new LabColor(labValues)
+            return{L = float outputValues.[0]; a = float outputValues.[1]; b = float outputValues.[2]}
         }
 
         static member OfColor(color: Color) =

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <Configurations>Debug;Release;MiniBuild</Configurations>
   </PropertyGroup>
@@ -45,6 +45,8 @@
     <Compile Include="Marks.fs" />
     <Compile Include="ColorCard.fs" />
     <Compile Include="Colors.fs" />
+    <Compile Include="PdfDocumentWithResourceCache.fs" />
+    <Compile Include="Extensions_PdfDocumentWithResourceCache.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Imposing.fs" />
     <Compile Include="Flow.fs" />
@@ -52,7 +54,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Colourful" Version="2.0.3" />
     <PackageReference Include="Fake.IO.FileSystem" Version="5.16.1" />
     <PackageReference Include="FParsec" Version="1.0.3" />
   </ItemGroup>

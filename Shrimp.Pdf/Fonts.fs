@@ -4,7 +4,10 @@ open iText.IO.Font
 open System.IO
 
 
-
+type RegisterableFont =
+    { PdfEncodings: string
+      Path: string 
+      FontFamily: string }
 
 
 [<RequireQualifiedAccess>]

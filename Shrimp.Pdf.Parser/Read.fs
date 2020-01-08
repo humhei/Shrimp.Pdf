@@ -228,8 +228,7 @@ module RenderInfoSelector =
 
 [<Struct>]
 type SelectorModiferToken = 
-    { Index: int 
-      Name: string }
+    { Name: string }
 
 module internal Listeners =
 
@@ -346,7 +345,7 @@ module NonInitialClippingPathPdfDocumentContentParser =
         match et with 
         | [] -> [] :> seq<IIntegratedRenderInfo>
         | _ ->
-            let renderInfoSelectorMapping = Map.ofList [{Index = 0; Name= "Unknown"}, renderInfoSelector]
+            let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled"}, renderInfoSelector]
             let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
             parser.ProcessContent(pageNum, listener).ParsedRenderInfos
         

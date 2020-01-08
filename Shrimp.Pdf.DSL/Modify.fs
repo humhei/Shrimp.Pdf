@@ -191,7 +191,7 @@ module ModifyOperators =
                                       UserState = flowModel.UserState
                                       Page = pdfPage
                                       TotalNumberOfPages = totalNumberOfPages }
-                                ( {Index = i; Name = selectAndModify.Name }, 
+                                ( { Name = selectAndModify.Name }, 
                                     ( Selector.toRenderInfoSelector pageModifingArguments selectAndModify.Selector,
                                         Modifiers.toSelectionModifier pageModifingArguments selectAndModify.Modifiers)
                                 )
