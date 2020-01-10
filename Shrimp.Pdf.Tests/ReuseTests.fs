@@ -30,6 +30,30 @@ let reuseTests =
         |> runWithBackup "datas/reuse/Imposing N-UP.pdf" 
         |> ignore
 
+    testCase "imposing N-UP2 tests" <| fun _ -> 
+
+        Flow.Reuse (
+            Reuses.Rotate(
+                PageSelector.All,
+                Rotation.Counterclockwise
+            )
+            <+>
+            Reuses.Impose
+                (fun args ->
+                    { args with 
+                        DesiredSizeOp = Some { Width = mm 40; Height = mm 30}
+                        ColNums = [6]
+                        RowNum = 12
+                        Cropmark = Some Cropmark.defaultValue
+                        Background = Background.Size FsSize.MAXIMUN
+                        Margin = Margin.Create(mm 6)
+                        CellRotation = CellRotation.R180WhenColNumIsEven
+                    }
+                )
+        )
+        |> runWithBackup "datas/reuse/imposing N-UP2.pdf" 
+        |> ignore
+
     testCase "imposing stepAndRepeat tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.Impose(fun args ->
@@ -91,16 +115,15 @@ let reuseTests =
         Flow.Reuse (
             Reuses.Impose(fun args ->
                 { args with 
-                    DesiredSizeOp = Some { Width = mm 50; Height = mm 50}
+                    DesiredSizeOp = Some { Width = mm 50; Height = mm 30}
                     ColNums = [4]
                     RowNum = 4
                     Cropmark = Some Cropmark.defaultValue
                     Background = Background.Size FsSize.A0
                     HSpaces = [mm 3; mm 9]
                     VSpaces = [mm 3; mm 9]
-                    Margin = Margin.Create(mm 30, mm 30, mm 30, mm 40)
+                    Margin = Margin.Create(mm 6, mm 6, mm 6, mm 6)
                     UseBleed = true
-                    CellRotation = CellRotation.R180WhenRowNumIsEven
                 }
             )
         )
@@ -159,8 +182,15 @@ let reuseTests =
 
     testCase "resize pageSize to 7x4cm tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.Resize(PageSelector.All, {Width = mm 70; Height = mm 40})
+            Reuses.Resize(PageSelector.All, PageBoxKind.ActualBox, {Width = mm 70; Height = mm 40})
         )
         |> runWithBackup "datas/reuse/resize pageSize to 7x4cm.pdf" 
+        |> ignore
+
+    testCase "resize pageSize to 7x4cm by trimbox tests" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.Resize(PageSelector.All, PageBoxKind.TrimBox , {Width = mm 70; Height = mm 40})
+        )
+        |> runWithBackup "datas/reuse/resize pageSize to 7x4cm by trimbox.pdf" 
         |> ignore
 ]

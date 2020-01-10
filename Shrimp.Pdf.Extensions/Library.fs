@@ -1,4 +1,5 @@
 ﻿namespace Shrimp.Pdf.Extensions
+#nowarn "0104"
 open iText.Kernel.Geom
 open iText.IO.Font
 open iText.IO.Font.Otf
@@ -866,101 +867,8 @@ module iText =
 
             
     type PdfPage with
-        member this.GetActualBox() = 
-            let crop = this.GetCropBox()
-            let media = this.GetMediaBox()
-            match Rectangle.tryGetIntersection crop media with 
-            | Some rect -> rect
-            | None -> failwithf "crop box %O doesn't has Intersection to media box %O" crop media
-
-        member this.GetActualHeight() = this.GetActualBox().GetHeight() |> float
-
-        member this.GetActualWidth() = this.GetActualBox().GetWidth() |> float
-
-        member page.GetPageBox(pageBoxKind) =
-            match pageBoxKind with 
-            | PageBoxKind.ArtBox -> page.GetArtBox()
-            | PageBoxKind.BleedBox -> page.GetBleedBox()
-            | PageBoxKind.TrimBox -> page.GetTrimBox()
-            | PageBoxKind.CropBox -> page.GetCropBox()
-            | PageBoxKind.ActualBox -> page.GetActualBox()
-            | PageBoxKind.AllBox -> failwith "PageBoxKind.AllBox is settable only"
-            | _ -> failwith "Invalid token"
-
-        member page.SetActualBox(rect: Rectangle) =
-            page
-                .SetCropBox(rect)
-                .SetMediaBox(rect)
-
-        member page.SetAllBox(rect: Rectangle) =
-            page
-                .SetTrimBox(rect)
-                .SetBleedBox(rect)
-                .SetCropBox(rect)
-                .SetArtBox(rect)
-                .SetMediaBox(rect)
-
-    [<RequireQualifiedAccess>]
-    module PdfPage = 
-
-        let setMediaBox (rect: Rectangle) (page: PdfPage) =
-            page.SetMediaBox rect
-
-        let setCropBox (rect: Rectangle) (page: PdfPage) =
-            page.SetCropBox rect
-
-        let setArtBox (rect: Rectangle) (page: PdfPage) =
-            page.SetArtBox rect
-
-        let setTrimBox (rect: Rectangle) (page: PdfPage) =
-            page.SetTrimBox rect
-
-        let setBleedBox (rect: Rectangle) (page: PdfPage) =
-            page.SetBleedBox rect
-
-        let setPageBox pageBoxKind (rect: Rectangle) (page: PdfPage) =
-            match pageBoxKind with 
-            | PageBoxKind.TrimBox -> setTrimBox rect page
-            | PageBoxKind.CropBox -> setCropBox rect page
-            | PageBoxKind.ActualBox ->
-                page 
-                |> setMediaBox rect
-                |> setCropBox rect
-
-            | PageBoxKind.AllBox ->
-                page 
-                |> setMediaBox rect
-                |> setCropBox rect
-                |> setTrimBox rect
-                |> setArtBox rect
-                |> setBleedBox rect
-
-            | _ -> failwith "Invalid token"
-
-        let getActualWidth (page: PdfPage) = 
-            page.GetActualBox().GetWidth() |> float
-
-        let getTrimBox (page: PdfPage) =
-            page.GetTrimBox()
-
-        let getCropBox (page: PdfPage) =
-            page.GetTrimBox()
-
-
-        let getMediaBox (page: PdfPage) =
-            page.GetMediaBox()
-
-        let getActualHeight (page: PdfPage) = 
-            page.GetActualBox().GetHeight() |> float
-
-        let getPageBox pageBoxKind (page: PdfPage) =
-            page.GetPageBox(pageBoxKind)
-
-        let getActualBox (page: PdfPage) =
-            page.GetActualBox()
-
-        let getPageEdge (innerBox: Rectangle) pageBoxKind (page: PdfPage) =
-            let pageBox = page.GetPageBox(pageBoxKind)
+        member x.GetPageEdge (innerBox: Rectangle, pageBoxKind) =
+            let pageBox = x.GetPageBox(pageBoxKind)
 
             if innerBox.IsInsideOf(pageBox) 
             then 
@@ -1030,6 +938,105 @@ module iText =
                   BottomMiddle = bottomMiddle }
 
             else failwithf "innerBox %O is not inside pageBox %O" innerBox pageBox
+
+        member this.GetActualBox() = 
+            let crop = this.GetCropBox()
+            let media = this.GetMediaBox()
+            match Rectangle.tryGetIntersection crop media with 
+            | Some rect -> rect
+            | None -> failwithf "crop box %O doesn't has Intersection to media box %O" crop media
+
+        member this.GetActualHeight() = this.GetActualBox().GetHeight() |> float
+
+        member this.GetActualWidth() = this.GetActualBox().GetWidth() |> float
+
+        member page.GetPageBox(pageBoxKind) =
+            match pageBoxKind with 
+            | PageBoxKind.ArtBox -> page.GetArtBox()
+            | PageBoxKind.BleedBox -> page.GetBleedBox()
+            | PageBoxKind.TrimBox -> page.GetTrimBox()
+            | PageBoxKind.CropBox -> page.GetCropBox()
+            | PageBoxKind.ActualBox -> page.GetActualBox()
+            | PageBoxKind.AllBox -> failwith "PageBoxKind.AllBox is settable only"
+            | PageBoxKind.MediaBox -> page.GetMediaBox()
+
+        member page.SetActualBox(rect: Rectangle) =
+            page
+                .SetCropBox(rect)
+                .SetMediaBox(rect)
+
+        member page.SetAllBox(rect: Rectangle) =
+            page
+                .SetTrimBox(rect)
+                .SetBleedBox(rect)
+                .SetCropBox(rect)
+                .SetArtBox(rect)
+                .SetMediaBox(rect)
+
+    [<RequireQualifiedAccess>]
+    module PdfPage = 
+
+        let setMediaBox (rect: Rectangle) (page: PdfPage) =
+            page.SetMediaBox rect
+
+        let setCropBox (rect: Rectangle) (page: PdfPage) =
+            page.SetCropBox rect
+
+        let setArtBox (rect: Rectangle) (page: PdfPage) =
+            page.SetArtBox rect
+
+        let setTrimBox (rect: Rectangle) (page: PdfPage) =
+            page.SetTrimBox rect
+
+        let setBleedBox (rect: Rectangle) (page: PdfPage) =
+            page.SetBleedBox rect
+
+        let setPageBox pageBoxKind (rect: Rectangle) (page: PdfPage) =
+            match pageBoxKind with 
+            | PageBoxKind.TrimBox -> setTrimBox rect page
+            | PageBoxKind.CropBox -> setCropBox rect page
+            
+            | PageBoxKind.ArtBox -> setArtBox rect page
+            | PageBoxKind.BleedBox -> setBleedBox rect page
+            | PageBoxKind.MediaBox -> setMediaBox rect page
+
+
+            | PageBoxKind.ActualBox ->
+                page 
+                |> setMediaBox rect
+                |> setCropBox rect
+
+            | PageBoxKind.AllBox ->
+                page 
+                |> setMediaBox rect
+                |> setCropBox rect
+                |> setTrimBox rect
+                |> setArtBox rect
+                |> setBleedBox rect
+
+
+        let getActualWidth (page: PdfPage) = 
+            page.GetActualBox().GetWidth() |> float
+
+        let getTrimBox (page: PdfPage) =
+            page.GetTrimBox()
+
+        let getCropBox (page: PdfPage) =
+            page.GetTrimBox()
+
+
+        let getMediaBox (page: PdfPage) =
+            page.GetMediaBox()
+
+        let getActualHeight (page: PdfPage) = 
+            page.GetActualBox().GetHeight() |> float
+
+        let getPageBox pageBoxKind (page: PdfPage) =
+            page.GetPageBox(pageBoxKind)
+
+        let getActualBox (page: PdfPage) =
+            page.GetActualBox()
+
 
     [<RequireQualifiedAccess>]
     module PdfDocument =

@@ -27,6 +27,13 @@ with
         let (Reuse value) = x
         value
 
+    member private x.Invoke =
+        fun flowModel (document: SplitDocument) ->
+            Logger.infoWithStopWatch (sprintf "%A" x) (fun _ ->
+                let userState = x.Value flowModel document
+                userState
+            )
+
     member private x.InvokeAndReOpenDocument =
         fun flowModel (document: SplitDocument) ->
             Logger.infoWithStopWatch (sprintf "%A" x) (fun _ ->
@@ -59,20 +66,20 @@ with
     static member (<+>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: SplitDocument) ->
             let middleUserState = reuse1.InvokeAndReOpenDocument flowModel document
-            reuse2.InvokeAndReOpenDocument (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
+            reuse2.Invoke (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
         |> Reuse
 
     static member (<++>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: SplitDocument) ->
             let middleUserState = reuse1.InvokeAndReOpenDocument flowModel document
-            reuse2.InvokeAndReOpenDocument (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document |> ignore
+            reuse2.Invoke (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document |> ignore
             middleUserState
         |> Reuse
 
     static member (<.+>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: SplitDocument) ->
             let middleUserState = reuse1.InvokeAndReOpenDocument flowModel document
-            middleUserState, reuse2.InvokeAndReOpenDocument (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
+            middleUserState, reuse2.Invoke (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
         |> Reuse
 
 [<RequireQualifiedAccess>]
@@ -119,19 +126,19 @@ with
     static member (<+>) (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: IntegratedDocument) ->
             let middleUserState = manipulate1.InvokeAndReOpenDocument flowModel document
-            manipulate2.InvokeAndReOpenDocument (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
+            manipulate2.Value (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
         |> Manipulate
 
     static member (<++>) (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: IntegratedDocument) ->
             let middleUserState: 'middleUserState = manipulate1.InvokeAndReOpenDocument flowModel document
-            middleUserState, manipulate2.InvokeAndReOpenDocument (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
+            middleUserState, manipulate2.Value (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
         |> Manipulate
 
     static member (<.+>) (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: IntegratedDocument) ->
             let middleUserState: 'middleUserState = manipulate1.InvokeAndReOpenDocument flowModel document
-            manipulate2.InvokeAndReOpenDocument (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document |> ignore
+            manipulate2.Value (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document |> ignore
             middleUserState
         |> Manipulate
 

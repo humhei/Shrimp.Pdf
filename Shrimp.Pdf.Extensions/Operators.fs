@@ -44,7 +44,7 @@ module Operators =
     let inline (@=) a b =
         float (abs (a - b)) < tolerance
 
-    /// mm to px
+    /// defaultConversion: mm to user unit
     let inline mm mm =
         let l = float mm
         l / 25.4 * 72.

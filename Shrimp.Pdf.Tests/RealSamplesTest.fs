@@ -182,4 +182,56 @@ let realSamplesTests =
         |> runWithBackup "datas/real samples/printing out.pdf" 
         |> ignore
 
+    testCase "add seam text and seam line test" <| fun _ -> 
+
+        Flow.Manipulate (
+            modifyPage
+                ("add seam line",
+                  PageSelector.All,
+                  Dummy,
+                  PageModifier.Batch [
+                    PageModifier.AddLine(
+                      CanvasAreaOptions.PageBox PageBoxKind.ActualBox,
+                      Position.BottomMiddle (0., mm 3.2),
+                      Position.BottomMiddle (0., 0.),
+                      (fun args ->
+                          { args with StrokeColor = PdfCanvasColor.Registration }
+                      )
+                    ) 
+
+                    PageModifier.AddLine(
+                      CanvasAreaOptions.PageBox PageBoxKind.ActualBox,
+                      Position.BottomMiddle (mm -3.5, mm 3.2),
+                      Position.BottomMiddle (mm 3.5, mm 3.2),
+                      (fun args ->
+                          { args with StrokeColor = PdfCanvasColor.Registration }
+                      )
+                    ) 
+
+                  ]
+
+                )
+            <+>
+            modifyPage (
+                "add seam text",
+                PageSelector.All,
+                Dummy,
+                PageModifier.AddText(
+                    PageBoxKind.ActualBox,
+                    "咬口左右翻",
+                    (fun args ->
+                        { args with 
+                            Position = Position.BottomMiddle (mm -15., mm 0.)
+                            PdfFontFactory = FsPdfFontFactory.Registerable RegisterableFonts.AlibabaPuHuiTiBold 
+                            CanvasFontSize = CanvasFontSize.Numeric 8. 
+                            FontColor = PdfCanvasColor.Registration }
+                    )
+                )
+            )
+
+        )
+        
+        |> runWithBackup "datas/real samples/add seam text and seam line.pdf" 
+        |> ignore
+
   ]

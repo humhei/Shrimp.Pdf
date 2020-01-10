@@ -77,7 +77,7 @@ type PageModifier =
 
     static member GetPageEdge (pageBoxKind: PageBoxKind, innerBox: Rectangle) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
-            PdfPage.getPageEdge innerBox pageBoxKind args.Page
+            args.Page.GetPageEdge(innerBox, pageBoxKind) 
 
     static member AddText(canvasAreaOptions, text, mapping) : PageModifier<_, _> =
         PageModifier.AddNew (canvasAreaOptions, (fun args ->

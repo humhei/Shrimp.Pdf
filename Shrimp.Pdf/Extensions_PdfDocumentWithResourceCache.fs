@@ -45,7 +45,7 @@ module PdfDocumentWithResourceCache =
     type CanvasAddTextArguments = 
         { PdfFontFactory: FsPdfFontFactory 
           CanvasFontSize: CanvasFontSize 
-          FontColor: Color
+          FontColor: PdfCanvasColor
           FontRotation: Rotation 
           Position: Position }
 
@@ -53,14 +53,26 @@ module PdfDocumentWithResourceCache =
         static member DefaultValue =
             { PdfFontFactory = FsPdfFontFactory.StandardFonts (iText.IO.Font.Constants.StandardFonts.HELVETICA)
               CanvasFontSize = CanvasFontSize.Numeric 9.
-              FontColor = DeviceGray.BLACK 
+              FontColor = PdfCanvasColor.ITextColor DeviceGray.BLACK 
               FontRotation = Rotation.None
               Position = Position.LeftTop (0., 0.)}
 
     type PdfCanvas with 
-        member private x.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =
+        member internal x.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =
             match pdfCanvasColor with 
             | PdfCanvasColor.ITextColor color ->Some color
+            | PdfCanvasColor.Separation separation ->
+                let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
+                let resourceColor = ResourceColor.CustomSeparation separation
+                pdfDocument.GetOrCreateColor(resourceColor) 
+                |> Some
+
+            | PdfCanvasColor.Lab lab ->
+                let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
+                let resourceColor = ResourceColor.Lab lab
+                pdfDocument.GetOrCreateColor(resourceColor) 
+                |> Some
+                
             | PdfCanvasColor.N -> None
             | PdfCanvasColor.ColorCard colorCard ->
                 match colorCard with 
@@ -70,14 +82,12 @@ module PdfDocumentWithResourceCache =
                     |> Some
                 | ColorCard.Pantone pantoneColor ->
                     let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
-                    let resourceColor =
-                        ResourceColor.Pantone pantoneColor
+                    let resourceColor = ResourceColor.Pantone pantoneColor
                     pdfDocument.GetOrCreateColor(resourceColor) 
                     |> Some
                 | ColorCard.TPX tpxColor ->
                     let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
-                    let resourceColor =
-                        ResourceColor.Tpx tpxColor
+                    let resourceColor = ResourceColor.Tpx tpxColor
                     pdfDocument.GetOrCreateColor(resourceColor) 
                     |> Some
 
@@ -99,6 +109,14 @@ module PdfDocumentWithResourceCache =
                 match canvas.GetOrCreateColor(fillColor) with 
                 | Some color ->canvas.SetFillColor(color)
                 | None -> canvas
+
+        member x.SetStrokeColor(strokeColor: PdfCanvasColor) =
+            PdfCanvas.SetStrokeColor (strokeColor) x
+
+        member x.SetFillColor(fillColor: PdfCanvasColor) =
+            PdfCanvas.SetFillColor (fillColor) x
+
+
 
     [<RequireQualifiedAccess>]
     module PdfCanvas =
@@ -133,6 +151,10 @@ module PdfDocumentWithResourceCache =
             |> PdfCanvas.rectangle rect
             |> close
 
+    type Canvas with 
+        member internal x.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =
+            x.GetPdfCanvas().GetOrCreateColor(pdfCanvasColor)
+
     [<RequireQualifiedAccess>]
     module Canvas =
         let addText
@@ -143,48 +165,54 @@ module PdfDocumentWithResourceCache =
                 let pdfFontFactory, canvasFontSize, fontColor, fontRotation, position = 
                     args.PdfFontFactory, args.CanvasFontSize, args.FontColor, args.FontRotation, args.Position
 
-                let pdfFont =
-                    let pdfDocument = canvas.GetPdfDocument() :?> PdfDocumentWithCachedResources
-                    pdfDocument.GetOrCreatePdfFont(pdfFontFactory)
+                match canvas.GetOrCreateColor(fontColor) with 
+                | Some fontColor ->
 
-                let fontSize =
-                    match canvasFontSize with 
-                    | CanvasFontSize.Numeric size -> size
-                    | CanvasFontSize.OfRootArea (scale) ->
-                        let area = canvas.GetRootArea()
-                        PdfFont.fontSizeOfArea area text pdfFont * scale
+                    let pdfFont =
+                        let pdfDocument = canvas.GetPdfDocument() :?> PdfDocumentWithCachedResources
+                        pdfDocument.GetOrCreatePdfFont(pdfFontFactory)
 
-                    | CanvasFontSize.OfArea (area) ->
-                        PdfFont.fontSizeOfArea area text pdfFont
+                    let fontSize =
+                        match canvasFontSize with 
+                        | CanvasFontSize.Numeric size -> size
+                        | CanvasFontSize.OfRootArea (scale) ->
+                            let area = canvas.GetRootArea()
+                            PdfFont.fontSizeOfArea area text pdfFont * scale
 
-
-                let point =
-                    let rootArea = canvas.GetRootArea()
-                    rootArea.GetPoint(position)
-
-                let horizonal = 
-                    match position with 
-                    | Position.XCenter (x, y) -> TextAlignment.CENTER
-                    | Position.Left (x, y) -> TextAlignment.LEFT
-                    | Position.Right (x, y) -> TextAlignment.RIGHT
-                    | _ -> failwith "Invalid token"
+                        | CanvasFontSize.OfArea (area) ->
+                            PdfFont.fontSizeOfArea area text pdfFont
 
 
-                let vertical = 
-                    match position with 
-                    | Position.YCenter (x, y) -> VerticalAlignment.MIDDLE
-                    | Position.Top (x, y) -> VerticalAlignment.TOP
-                    | Position.Bottom (x, y) -> VerticalAlignment.BOTTOM
-                    | _ -> failwith "Invalid token"
+                    let point =
+                        let rootArea = canvas.GetRootArea()
+                        rootArea.GetPoint(position)
 
-                let canvas =
+                    let horizonal = 
+                        match position with 
+                        | Position.XCenter (x, y) -> TextAlignment.CENTER
+                        | Position.Left (x, y) -> TextAlignment.LEFT
+                        | Position.Right (x, y) -> TextAlignment.RIGHT
+                        | _ -> failwith "Invalid token"
+
+
+                    let vertical = 
+                        match position with 
+                        | Position.YCenter (x, y) -> VerticalAlignment.MIDDLE
+                        | Position.Top (x, y) -> VerticalAlignment.TOP
+                        | Position.Bottom (x, y) -> VerticalAlignment.BOTTOM
+                        | _ -> failwith "Invalid token"
+
+
+                    let canvas =
+                        canvas
+                            .SetFont(pdfFont)
+                            .SetFontColor(fontColor)
+                            .SetFontSize(float32 fontSize)
+                            .ShowTextAligned(text,float32 point.x,float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getAngle fontRotation))
+
                     canvas
-                        .SetFont(pdfFont)
-                        .SetFontColor(fontColor)
-                        .SetFontSize(float32 fontSize)
-                        .ShowTextAligned(text,float32 point.x,float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getAngle fontRotation))
 
-                canvas
+                | None -> canvas
 
 
         let addRectangleToRootArea (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: Canvas) =

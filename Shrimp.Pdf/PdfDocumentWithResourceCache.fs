@@ -25,6 +25,7 @@ module private FontExtensions =
 
 
 open FontExtensions
+open iText.Kernel.Pdf.Colorspace
 
 
 /// StandardFonts: See iText.IO.Font.Constants.StandardFonts
@@ -33,22 +34,52 @@ type FsPdfFontFactory =
     | Registerable of RegisterableFont
     | StandardFonts of string
 
+
+
 [<RequireQualifiedAccess>]
 type ResourceColor =
     | Pantone of PantoneColorEnum
     | Tpx of TPXColorEnum
     | Registration 
+    | CustomSeparation of FsSeparation
+    | Lab of FsLab
 
 type private PdfDocumentCache (pdfDocument: unit -> PdfDocument) =
     let fontsCache = new ConcurrentDictionary<FsPdfFontFactory, PdfFont>()
     let colorsCache = new ConcurrentDictionary<ResourceColor, Color>()
+    let mutable labColorSpace = None
 
     member internal x.GetOrCreateColor(resourceColor: ResourceColor) =
         colorsCache.GetOrAdd((resourceColor), fun (color) ->
+            let labToItextColor (labColor: FsLab) =
+                match labColorSpace with 
+                | None -> 
+                    let color = labColor.ToItextColor()
+                    labColorSpace <- Some (color.GetColorSpace() :?> PdfCieBasedCs.Lab)
+                    color
+                | Some colorSpace ->
+                    labColor.ToItextColor(colorSpace)
+
             match color with 
-            | ResourceColor.Pantone pantoneColorEnum -> Color.pantoneSolidCoated pantoneColorEnum  (pdfDocument())
+            | ResourceColor.Pantone pantoneColorEnum -> 
+                let color = Color.pantoneSolidCoated pantoneColorEnum  (pdfDocument())
+                //let colorSpace = color.GetColorSpace() :?> PdfSpecialCs.Separation
+                //let array = colorSpace.GetPdfObject() :?> PdfArray
+                //let m = array |> Seq.item 3 :?> PdfStream
+                //let c = m.GetBytes()
+                color
             | ResourceColor.Tpx tpxColorEnum -> Color.pantoneTPX tpxColorEnum  (pdfDocument())
             | ResourceColor.Registration -> Color.registion (pdfDocument())
+            | ResourceColor.CustomSeparation separation ->
+                let valueColor = 
+                    match separation.Color with 
+                    | FsValueColor.Lab labColor -> labToItextColor labColor
+                    | color -> FsValueColor.ToItextColor color
+
+                Separation.Create(separation.Name, valueColor, separation.Transparency) :> Color
+
+
+            | ResourceColor.Lab labColor -> labToItextColor labColor
         )
 
     member internal x.GetOrCreateFont(fontFactory: FsPdfFontFactory) =
@@ -99,9 +130,10 @@ type PdfDocumentWithCachedResources =
 type PdfCanvasColor = 
     | N
     | ITextColor of Color
+    | Separation of FsSeparation
     | ColorCard of ColorCard
     | Registration
-
+    | Lab of FsLab
 
 type IntegratedDocument private (reader: string, writer: string) =
     let mutable pdfDocument = new PdfDocumentWithCachedResources(reader, writer)

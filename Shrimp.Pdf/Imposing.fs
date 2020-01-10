@@ -12,14 +12,16 @@ module Imposing =
     type Cropmark = 
         { Length: float
           Distance: float
-          Width: float }
+          Width: float
+          Color: PdfCanvasColor }
 
     [<RequireQualifiedAccess>]
     module Cropmark =
         let defaultValue = 
             { Length = mm 3.8
               Distance = mm 3.2
-              Width = mm 0.2 }
+              Width = mm 0.1
+              Color = PdfCanvasColor.Registration }
 
     [<RequireQualifiedAccess>]
     type Sheet_PlaceTable =
@@ -366,31 +368,41 @@ module Imposing =
                     | CellRotation.R180WhenColNumIsEven ->
                         let index = cell.RowIndex
                         if (index + 1) % 2 = 0 
-                        then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + cell.Size.Width / 2., xObjectContentBox.GetYF() + cell.Size.Height / 2.  )
+                        then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + xObjectContentBox.GetWidthF() / 2., xObjectContentBox.GetYF() + xObjectContentBox.GetHeightF() / 2.  )
+                        //then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., cell.Size.Width / 2., cell.Size.Height / 2.  )
                         else AffineTransform.GetTranslateInstance(0., 0.)
                     | CellRotation.R180WhenRowNumIsEven ->
                         let index = cell.ImposingRow.RowIndex
-                        if (index + 1) % 2 = 0 
-                        then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + cell.Size.Width / 2., xObjectContentBox.GetYF() + cell.Size.Height / 2.  )
+                        if (index + 1) % 2 = 0
+                        then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + xObjectContentBox.GetWidthF() / 2., xObjectContentBox.GetYF() + xObjectContentBox.GetHeightF() / 2.  )
+                        //then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + xObjectContentBox.GetWidthF() / 2., xObjectContentBox.GetYF() + xObjectContentBox.GetHeightF() / 2.  )
                         else AffineTransform.GetTranslateInstance(0., 0.)
 
                 let affineTransform_Scale =
                     AffineTransform.GetScaleInstance(scaleX, scaleY)
 
+                let affineTransform_Translate0 =
+                    AffineTransform.GetTranslateInstance(-xObjectContentBox.GetXF(), -xObjectContentBox.GetYF())
 
-                let affineTransform_Translate =
-                    AffineTransform.GetTranslateInstance(cell.X - xObjectContentBox.GetXF(), -(cell.Size.Height + cell.Y) - xObjectContentBox.GetYF())
+                let affineTransform_Translate1 =
+                    AffineTransform.GetTranslateInstance(cell.X, -(cell.Size.Height + cell.Y) )
 
-                let affineTransform = affineTransform_Translate.Clone()
+
+                let affineTransform = affineTransform_Translate0.Clone()
                 affineTransform.Concatenate(affineTransform_Rotate)
-                affineTransform.Concatenate(affineTransform_Scale)
-                //affineTransform.Concatenate(affineTransform_Translate)
+                affineTransform.PreConcatenate(affineTransform_Scale)
+                affineTransform.PreConcatenate(affineTransform_Translate1)
 
                 pdfCanvas.AddXObject(xObject, affineTransform)
 
             let addCropmarks (pdfCanvas: PdfCanvas) =
                 match cell.Cropmark with 
                 | Some cropmark ->
+                    pdfCanvas
+                        .SetLineWidth(float32 cropmark.Width) 
+                        .SetStrokeColor(cropmark.Color)
+                        |> ignore
+
                     let height = cell.Size.Height
 
                     let allCropmarkLines = 

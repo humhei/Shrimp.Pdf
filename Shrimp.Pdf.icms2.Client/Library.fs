@@ -64,7 +64,7 @@ module Client =
 
     [<RequireQualifiedAccess>]
     type CmsColor =
-        | Lab of LabColor
+        | Lab of FsLab
         | Cmyk of DeviceCmyk
         | Rgb of DeviceRgb
         | Gray of DeviceGray
@@ -82,7 +82,7 @@ module Client =
         member x.GetColorValues() =
             match x with 
             | CmsColor.Lab lab -> 
-                [|float32 lab.L; float32 lab.a; float32 lab.b|]
+                [|lab.L; lab.a; lab.b|]
             | CmsColor.Cmyk cmyk -> cmyk.GetColorValue()
             | CmsColor.Gray gray -> gray.GetColorValue()
             | CmsColor.Rgb rgb -> rgb.GetColorValue()
@@ -110,7 +110,7 @@ module Client =
             match outputIcc with 
             | Icc.Lab _ ->
                 let labValues = new ReadOnlyCollection<float>(outputValues |> Array.map float)
-                return CmsColor.Lab( {L = float outputValues.[0]; a = float outputValues.[1]; b = float outputValues.[2]} )
+                return CmsColor.Lab( {L = outputValues.[0]; a = outputValues.[1]; b = outputValues.[2]} )
 
             | Icc.Cmyk _ -> return CmsColor.Cmyk(new DeviceCmyk(outputValues.[0], outputValues.[1], outputValues.[2], outputValues.[3]))
             | Icc.Gray _ -> return CmsColor.Gray(new DeviceGray(Array.exactlyOne outputValues))
@@ -124,7 +124,7 @@ module Client =
             let intent = defaultArg intent defaultIntent
 
             let! (outputValues : float32[])  = x.GetConvertedColorValuesAsync(Icc.Lab labIcc, intent, inputIcc)
-            return{L = float outputValues.[0]; a = float outputValues.[1]; b = float outputValues.[2]}
+            return{L = outputValues.[0]; a = outputValues.[1]; b = outputValues.[2]}
         }
 
         static member OfColor(color: Color) =
@@ -146,7 +146,7 @@ module Client =
                         CmsColor.OfColor(info.Value.GetStrokeColor()).ConvertToLabAsync()
                         |> Async.RunSynchronously
 
-                    labColor.L = 100. && labColor.a = 0. && labColor.b = 0.
+                    labColor.L = 100.f && labColor.a = 0.f && labColor.b = 0.f
 
         static member StrokeColorIsNotWhite() =
             fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) -> 
@@ -164,7 +164,7 @@ module Client =
                         CmsColor.OfColor(info.Value.GetFillColor()).ConvertToLabAsync()
                         |> Async.RunSynchronously
 
-                    labColor.L = 100. && labColor.a = 0. && labColor.b = 0.
+                    labColor.L = 100.f && labColor.a = 0.f && labColor.b = 0.f
 
 
         static member FillColorIsNotWhite() =

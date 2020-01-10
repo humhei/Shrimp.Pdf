@@ -103,39 +103,67 @@ let manipulateTests =
         |> runWithBackup "datas/manipulate/add bound to text.pdf" 
         |> ignore
 
-    ftestCase "add line to position" <| fun _ -> 
+    testCase "add line to position" <| fun _ -> 
         Flow.Manipulate (
             modifyPage
                 ("add line to position",
                   PageSelector.All,
                   Dummy,
-                  PageModifier.AddLine(
-                    CanvasAreaOptions.PageBox PageBoxKind.ActualBox,
-                    Position.Center (mm -5, 0.),
-                    Position.Center (mm 5, 0.),
-                    (fun args ->
-                        { args with StrokeColor = PdfCanvasColor.Registration }
-                    )
-                  ) 
+                  PageModifier.Batch [
+                    PageModifier.AddLine(
+                      CanvasAreaOptions.PageBox PageBoxKind.ActualBox,
+                      Position.BottomMiddle (0., mm 3.2),
+                      Position.BottomMiddle (0., 0.),
+                      (fun args ->
+                          { args with StrokeColor = PdfCanvasColor.Registration }
+                      )
+                    ) 
+
+                    PageModifier.AddLine(
+                      CanvasAreaOptions.PageBox PageBoxKind.ActualBox,
+                      Position.BottomMiddle (mm -3.5, mm 3.2),
+                      Position.BottomMiddle (mm 3.5, mm 3.2),
+                      (fun args ->
+                          { args with StrokeColor = PdfCanvasColor.Registration }
+                      )
+                    ) 
+
+                  ]
+
                 )
         )
         |> runWithBackup "datas/manipulate/add line to position.pdf" 
         |> ignore
 
-    testCase "add text to position" <| fun _ -> 
+    ftestCase "add text to position" <| fun _ -> 
         Flow.Manipulate (
             modifyPage
                 ("add text to position",
                   PageSelector.All,
                   Dummy,
-                  PageModifier.AddText(PageBoxKind.ActualBox, "你好", fun args ->
-                    { args with 
-                        PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
-                        CanvasFontSize = CanvasFontSize.Numeric 25. 
-                        FontColor = DeviceCmyk.MAGENTA 
-                        FontRotation = Rotation.None 
-                        Position = Position.LeftTop(0., 0.)}
-                  ) 
+                  PageModifier.Batch [
+                    PageModifier.AddText(PageBoxKind.ActualBox, "你好Separation", fun args ->
+                      { args with 
+                          PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                          CanvasFontSize = CanvasFontSize.Numeric 25. 
+                          //FontColor = PdfCanvasColor.Separation (FsSeparation.Create("mySeparation", {L = 50.f; a = -30.f; b = 30.f}))
+                          //FontColor = PdfCanvasColor.ColorCard (ColorCard.Pantone PantoneColorEnum.``PANTONE 101 C``)
+                          //FontColor = PdfCanvasColor.Separation (FsSeparation.Create("mySeparation", DeviceCmyk.MAGENTA))
+                          FontColor = PdfCanvasColor.Separation (FsSeparation.Create("mySeparation", DeviceRgb.BLUE))
+                          //FontColor = PdfCanvasColor.Separation (FsSeparation.Create("mySeparation", DeviceGray(0.4f)))
+                          FontRotation = Rotation.None 
+                          Position = Position.LeftTop(0., 0.)}
+                    )
+
+                    PageModifier.AddText(PageBoxKind.ActualBox, "你好LAB", fun args ->
+                      { args with 
+                          PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                          CanvasFontSize = CanvasFontSize.Numeric 25. 
+                          FontColor = PdfCanvasColor.Lab {L = 50.f; a = 50.f; b = 50.f}
+                          FontRotation = Rotation.None 
+                          Position = Position.TopMiddle(0., 0.)}
+                    )
+                  ]
                 )
         )
         |> runWithBackup "datas/manipulate/add text to position.pdf" 
@@ -151,7 +179,7 @@ let manipulateTests =
                     { args with 
                         PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
-                        FontColor = DeviceCmyk.MAGENTA 
+                        FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
                         Position = Position.LeftTop(0., 0.)}
                   ) 
@@ -168,7 +196,7 @@ let manipulateTests =
                         { args with 
                             PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
                             CanvasFontSize = CanvasFontSize.Numeric 25. 
-                            FontColor = DeviceCmyk.MAGENTA 
+                            FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                             FontRotation = Rotation.None 
                             Position = Position.LeftTop(mm 20, 0.)}
                       ) args
@@ -188,7 +216,7 @@ let manipulateTests =
                     { args with 
                         PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
-                        FontColor = DeviceCmyk.MAGENTA 
+                        FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
                         Position = Position.LeftTop(mm 40, 0.)}
                   ) 
@@ -207,7 +235,7 @@ let manipulateTests =
                     { args with 
                         PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
-                        FontColor = DeviceCmyk.MAGENTA 
+                        FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
                         Position = Position.LeftTop(0., 0.)}
                   ) 
@@ -223,7 +251,7 @@ let manipulateTests =
                     { args with 
                         PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
-                        FontColor = DeviceCmyk.MAGENTA 
+                        FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
                         Position = Position.LeftTop(mm 3., 0.)}
                   ) 
@@ -244,7 +272,7 @@ let manipulateTests =
                 { args with 
                     PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
                     CanvasFontSize = CanvasFontSize.OfRootArea 0.8 
-                    FontColor = DeviceCmyk.MAGENTA 
+                    FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                     FontRotation = Rotation.None 
                     Position = Position.Center(0., 0.)}
                 )
@@ -267,7 +295,7 @@ let manipulateTests =
                 { args with 
                     PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
                     CanvasFontSize = CanvasFontSize.Numeric 12.
-                    FontColor = DeviceCmyk.MAGENTA 
+                    FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                     FontRotation = Rotation.None 
                     Position = Position.LeftTop(0., 0.)}
                 )
@@ -318,7 +346,7 @@ let manipulateTests =
                                 PdfFontFactory = pdfFontFactory
                                 CanvasFontSize = 
                                     CanvasFontSize.OfRootArea 0.8
-                                FontColor = DeviceCmyk.MAGENTA 
+                                FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                                 FontRotation = Rotation.None 
                                 Position = Position.LeftMiddle (0., 0.)}
                     ) args

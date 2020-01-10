@@ -79,34 +79,65 @@ module Reuses =
 
             |> reuse
 
-        static member Resize (pageSelector: PageSelector, size: FsSize) =
+        static member Resize (pageSelector: PageSelector, pageBoxKind: PageBoxKind, size: FsSize) =
             fun flowModel (splitDocument: SplitDocument) ->
                 let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
 
-                Logger.infoWithStopWatch (sprintf "Resize %A pageSize to %A" selectedPageNumbers size) (fun _ ->
+                Logger.infoWithStopWatch (sprintf "Resize %A %O to %A" selectedPageNumbers pageBoxKind size) (fun _ ->
                     PdfDocument.getPages splitDocument.Reader
                     |> List.iteri (fun i page ->
                         let pageNum = i + 1
                         if List.contains pageNum selectedPageNumbers 
                         then 
-                            let pageBox = page.GetActualBox()
+                            let actualBox = page.GetActualBox()
+                            let pageBox = page.GetPageBox(pageBoxKind)
 
                             let affineTransform_Scale = 
                                 AffineTransform.GetScaleInstance(size.Width / pageBox.GetWidthF(), size.Height / pageBox.GetHeightF())
 
-                            let affineTransform_Translate = AffineTransform.GetTranslateInstance(-pageBox.GetXF(), -pageBox.GetYF())
+                            let affineTransform_Translate = AffineTransform.GetTranslateInstance(-actualBox.GetXF(), -actualBox.GetYF())
 
-                            affineTransform_Scale.Concatenate(affineTransform_Translate)
+                            let affineTransform = affineTransform_Scale.Clone()
+
+                            affineTransform.Concatenate(affineTransform_Translate)
 
                             let xobject = page.CopyAsFormXObject(splitDocument.Writer)
-                            let newPage = splitDocument.Writer.AddNewPage(PageSize(Rectangle.create 0 0 size.Width size.Height))
+                            let newPage = 
+                                splitDocument.Writer.AddNewPage(
+                                    PageSize(
+                                        Rectangle.create 
+                                            0 
+                                            0 
+                                            (size.Width *  actualBox.GetWidthF() / pageBox.GetWidthF())
+                                            (size.Height * actualBox.GetHeightF() / pageBox.GetHeightF()) 
+                                    )
+                                )
+
+
                             let canvas = new PdfCanvas(newPage)
-                            canvas.AddXObject(xobject, affineTransform_Scale)
+                            canvas.AddXObject(xobject, affineTransform)
                             |> ignore
+
+                            [
+                                PageBoxKind.MediaBox
+                                PageBoxKind.CropBox
+                                PageBoxKind.ArtBox
+                                PageBoxKind.BleedBox
+                                PageBoxKind.TrimBox
+                            ] |> List.iter (fun pageBoxKind ->
+                                let pageBox = page.GetPageBox(pageBoxKind)
+                                
+                                let newPageBox = 
+                                    affineTransform.Transform(pageBox)
+
+                                PdfPage.setPageBox pageBoxKind newPageBox newPage
+                                |> ignore
+                            )
                     )
                 )
 
             |> reuse
+
 
         static member Rotate (pageSelector: PageSelector, rotation: Rotation) =
             fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
