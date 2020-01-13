@@ -18,6 +18,61 @@ open Shrimp.Pdf.icms2
 
 let manipulateTests =
   testList "Manipulates Tests" [
+
+    testCase "change separation color of pdfFunction2 PageNumber to m100" <| fun _ -> 
+
+        let pageNumberSeparationColor: PdfCanvasColor =
+            FsSeparation.Create("PageNumber", DeviceRgb(200, 0, 56))
+            |> PdfCanvasColor.Separation
+
+        Flow.Manipulate (
+            modify(
+                PageSelector.All,
+                [
+                    { Name = "change separation color of pdfFunction2 PageNumber to m100"
+                      Selector = Text(Info.FillColorIs pageNumberSeparationColor)
+                      Modifiers = [Modifier.SetFillColor(DeviceCmyk.MAGENTA)]
+                    }
+                ]
+            ) 
+        )
+        |> runWithBackup "datas/manipulate/change separation color of pdfFunction2 PageNumber to m100.pdf" 
+        |> ignore
+
+    testCase "change separation color of pdfFunction0 PageNumber to m100" <| fun _ -> 
+
+        let pantone100C: PdfCanvasColor =
+            PdfCanvasColor.ColorCard (ColorCard.Pantone PantoneColorEnum.``PANTONE 100 C``)
+
+        Flow.Manipulate (
+            modify(
+                PageSelector.All,
+                [
+                    { Name = "change separation color of pdfFunction0 PageNumber to m100"
+                      Selector = Path(Info.FillColorIs pantone100C)
+                      Modifiers = [Modifier.SetFillColor(DeviceCmyk.MAGENTA)]
+                    }
+                ]
+            ) 
+        )
+        |> runWithBackup "datas/manipulate/change separation color of pdfFunction0 PageNumber to m100.pdf" 
+        |> ignore
+
+    testCase "change separation color of pdfFunction0 Registration to m100" <| fun _ -> 
+        Flow.Manipulate (
+            modify(
+                PageSelector.All,
+                [
+                    { Name = "change separation color of pdfFunction0 Registration to m100"
+                      Selector = Path(Info.FillColorIs PdfCanvasColor.Registration)
+                      Modifiers = [Modifier.SetFillColor(DeviceCmyk.MAGENTA)]
+                    }
+                ]
+            ) 
+        )
+        |> runWithBackup "datas/manipulate/change separation color of pdfFunction0 Registration to m100.pdf" 
+        |> ignore
+
     testCase "change stroke color b255 to m100" <| fun _ -> 
         Flow.Manipulate (
             modify(
@@ -135,7 +190,7 @@ let manipulateTests =
         |> runWithBackup "datas/manipulate/add line to position.pdf" 
         |> ignore
 
-    ftestCase "add text to position" <| fun _ -> 
+    testCase "add text to position" <| fun _ -> 
         Flow.Manipulate (
             modifyPage
                 ("add text to position",
@@ -146,11 +201,7 @@ let manipulateTests =
                       { args with 
                           PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
                           CanvasFontSize = CanvasFontSize.Numeric 25. 
-                          //FontColor = PdfCanvasColor.Separation (FsSeparation.Create("mySeparation", {L = 50.f; a = -30.f; b = 30.f}))
-                          //FontColor = PdfCanvasColor.ColorCard (ColorCard.Pantone PantoneColorEnum.``PANTONE 101 C``)
-                          //FontColor = PdfCanvasColor.Separation (FsSeparation.Create("mySeparation", DeviceCmyk.MAGENTA))
                           FontColor = PdfCanvasColor.Separation (FsSeparation.Create("mySeparation", DeviceRgb.BLUE))
-                          //FontColor = PdfCanvasColor.Separation (FsSeparation.Create("mySeparation", DeviceGray(0.4f)))
                           FontRotation = Rotation.None 
                           Position = Position.LeftTop(0., 0.)}
                     )

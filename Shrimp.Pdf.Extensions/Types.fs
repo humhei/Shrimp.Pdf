@@ -249,29 +249,13 @@ module Position =
         | Right (0., _)  -> Some ()
         | _ -> None
 
+
 [<RequireQualifiedAccess>]
-module StraightLine =
-    /// http://www.navision-blog.de/blog/2008/12/02/calculate-the-intersection-of-two-lines-in-fsharp-2d/
-    let intersection (line1: StraightLine) (line2: StraightLine) =
-        let A,B,C,D = line1.Start,line1.End,line2.Start,line2.End
-        let (Ax,Ay,Bx,By,Cx,Cy,Dx,Dy) =
-            (A.x, A.y, B.x, B.y, C.x, C.y, D.x, D.y)
-        let d = (Bx-Ax)*(Dy-Cy)-(By-Ay)*(Dx-Cx)  
-
-        if  d = 0. then
-        // parallel lines ==> no intersection in euclidean plane
-            None
-        else
-            let q = (Ay-Cy)*(Dx-Cx)-(Ax-Cx)*(Dy-Cy) 
-            let r = q / d
-            let p = (Ay-Cy)*(Bx-Ax)-(Ax-Cx)*(By-Ay)
-            let s = p / d
-
-            if r < 0. || r > 1. || s < 0. || s > 1. then
-                None // intersection is not within the line segments
-            else
-                Some(
-                    Point(Ax+r*(Bx-Ax), Ay+r*(By-Ay))
-                )  // Py
-
-
+module Rectangle =
+    let (|Portrait|Landscape|Uniform|) (rect: Rectangle) =
+        let width = rect.GetWidth()
+        let height = rect.GetHeight()
+        if width > height 
+        then Portrait
+        elif width = height then Uniform
+        else Landscape

@@ -31,7 +31,7 @@ let setTrimBoxToStrokeB255() =
         (fun args -> PageModifier.SetPageBox(PageBoxKind.TrimBox, args.PageUserState()) args)
     ) ||>> ignore
 
-let retainTitleInfo color = 
+let retainTitleInfo (color: Color) = 
     { Name = (sprintf "retain title info %O" color)
       Selector = 
           Factory(fun args ->
@@ -64,7 +64,7 @@ let blackAndWhiteTitleInfo() =
         ]
     }
 
-let retainNavigationInfo color =
+let retainNavigationInfo (color: Color) =
     { Name = (sprintf "retain navigation info %O" color)
       Selector =
         PathOrText (fun args ->

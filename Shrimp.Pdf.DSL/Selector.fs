@@ -3,6 +3,7 @@ open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf
+open Shrimp.Pdf.Colors
 
 
 [<AutoOpen>]
@@ -54,7 +55,19 @@ type Info =
     static member StrokeColorIs (color: Color) =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
             IAbstractRenderInfo.hasStroke info
-            && info.Value.GetStrokeColor() = color
+            && Color.equal (info.Value.GetStrokeColor()) color
+
+    static member StrokeColorIs (color: PdfCanvasColor) =
+        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
+            IAbstractRenderInfo.hasStroke info
+            && color.IsEqualTo(info.Value.GetStrokeColor())
+
+    static member StrokeColorIsOneOf (colors: PdfCanvasColor seq)  =
+        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
+            colors
+            |> Seq.exists (fun color -> 
+                (Info.StrokeColorIs color) args info
+            )
 
     static member StrokeColorIsOneOf (colors: Color seq)  =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
@@ -66,9 +79,19 @@ type Info =
     static member FillColorIs (color: Color) =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
             IAbstractRenderInfo.hasFill info
-            && info.Value.GetFillColor() = color
+            && Color.equal (info.Value.GetFillColor()) color
+
+    static member FillColorIs (color: PdfCanvasColor) =
+        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
+            IAbstractRenderInfo.hasFill info
+            && color.IsEqualTo(info.Value.GetFillColor())
 
     static member FillColorIsOneOf (colors: Color seq) =
+        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
+            colors
+            |> Seq.exists (fun color -> Info.FillColorIs color args info)
+
+    static member FillColorIsOneOf (colors: PdfCanvasColor seq) =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
             colors
             |> Seq.exists (fun color -> Info.FillColorIs color args info)

@@ -189,8 +189,17 @@ let reuseTests =
 
     testCase "resize pageSize to 7x4cm by trimbox tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.Resize(PageSelector.All, PageBoxKind.TrimBox , {Width = mm 70; Height = mm 40})
+            Reuses.Resize(PageSelector.All, PageBoxKind.TrimBox , { Width = mm 70; Height = mm 40 })
         )
         |> runWithBackup "datas/reuse/resize pageSize to 7x4cm by trimbox.pdf" 
         |> ignore
+
+    testCase "resize pageSize to 29.7×21cm uniform tests" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.Resize(PageSelector.All, PageResizingRotationOptions.ColckwiseIfNeeded, PageResizingScaleOptions.Uniform , {Width = mm 210; Height = mm 297})
+        )
+        |> runWithBackup "datas/reuse/resize pageSize to 29.7×21cm uniform.pdf" 
+        |> ignore
+
+
 ]

@@ -30,6 +30,8 @@ module _Colors =
           a: float32
           b: float32 }
     with 
+        
+
         member x.ToItextColor(?colorSpace: PdfCieBasedCs.Lab) =
             match colorSpace with 
             | Some colorSpace ->
@@ -43,6 +45,22 @@ module _Colors =
                     null,
                     [| -128.f; 127.f; -128.f; 127.f |], 
                     [| x.L; x.a; x.b |]) :> Color
+
+        static member private OfHex(hex: int) =
+            let l = hex >>> 16 |> byte |> float32
+            let a = hex >>> 8 |> byte |> float32
+            let b = hex >>> 0 |> byte |> float32
+            let a2 = a - 128.f
+            let b2 = b - 128.f
+            { L = l 
+              a = a2 
+              b = b2 }
+
+        static member OfPantone(pantoneColor: PantoneColorEnum) =
+            FsLab.OfHex (int pantoneColor)
+
+        static member OfTpx(pantoneColor: TPXColorEnum) =
+            FsLab.OfHex (int pantoneColor)
 
 
     type FsDeviceCmyk =
@@ -60,6 +78,43 @@ module _Colors =
         | Lab of FsLab
         | Gray of FsGray
     with 
+        member x.GetColorValue() =
+            match x with 
+            | FsValueColor.Cmyk cmyk ->
+                [ cmyk.C; cmyk.M; cmyk.Y; cmyk.K ]
+
+            | FsValueColor.Gray (FsGray v) ->
+                [ v ]
+
+            | FsValueColor.Rgb rgb ->
+                [ rgb.R; rgb.G; rgb.B ]
+
+            | FsValueColor.Lab lab -> [ lab.L; lab.a; lab.b ]
+
+        member x.EqualWhenColorValueRounded(y: FsValueColor) =
+            FsValueColor.EqualWhenColorValueRounded (x, y)
+
+        static member EqualWhenColorValueRounded (color1: FsValueColor, color2: FsValueColor) =
+            let isColorSpaceEqual =
+                match color1, color2 with
+                | FsValueColor.Rgb _, FsValueColor.Rgb _
+                | FsValueColor.Cmyk _, FsValueColor.Cmyk _
+                | FsValueColor.Lab _, FsValueColor.Lab _
+                | FsValueColor.Gray _, FsValueColor.Gray _ -> true
+                | _ -> false
+
+            isColorSpaceEqual &&
+                let colorValue1 =
+                    color1.GetColorValue()
+                    |> List.map (fun v -> System.Math.Round(float v, 0) )
+
+                let colorValue2 =
+                    color2.GetColorValue()
+                    |> List.map (fun v -> System.Math.Round(float v, 0) )
+
+                colorValue1 = colorValue2
+
+
         static member ToItextColor = function
             | FsValueColor.Cmyk cmyk ->
                 new DeviceCmyk(cmyk.C, cmyk.M, cmyk.Y, cmyk.K) :> Color
@@ -135,15 +190,88 @@ module _Colors =
     module DeviceCmyk =
         let WHITE = DeviceCmyk(0,0,0,0)
     
-    
-    
-    
+    let internal (|PdfName|_|) (pdfName0: PdfName) (pdfName1: PdfName) =
+        if pdfName0 = pdfName1 
+        then Some ()
+        else None
+
+    type PdfSpecialCs.Separation with 
+        member x.GetAlternateSpace() =
+            let colorSpacePdfArray = x.GetPdfObject() :?> PdfArray
+            match colorSpacePdfArray.Get(2) with
+            | :? PdfArray as pdfArray -> pdfArray.GetAsName(0)
+            | :? PdfName as pdfName -> pdfName 
+            | _ -> failwith "Invalid token "
+
+        member x.GetAlternateColorValue() =
+            let colorSpacePdfArray = x.GetPdfObject() :?> PdfArray
+            let colorSpacePdfFunction = 
+                match colorSpacePdfArray.GetAsDictionary(3) with
+                | null ->
+                    colorSpacePdfArray.GetAsStream(3) :> PdfDictionary
+                | v -> v
+            let pdfFunctionType = colorSpacePdfFunction.GetAsInt(PdfName.FunctionType)
+
+            match pdfFunctionType.Value with
+            | 0 ->
+                let alterColorSpace = x.GetAlternateSpace()
+                let range = 
+                    colorSpacePdfFunction.GetAsArray(PdfName.Range)
+                    |> List.ofSeq
+                    |> List.map (fun m -> (m :?> PdfNumber).FloatValue())
+
+                match alterColorSpace with 
+                | PdfName PdfName.Lab ->
+
+                    let getColorValue valueGroup = 
+                        match valueGroup with 
+                        | [0.f; v] -> v
+                        | [v; 0.f] -> v
+                        | _ -> failwith "Invalid token"
+
+                    [ range.[0]; getColorValue range.[2..3]; getColorValue range.[4..5] ]
+
+                | PdfName PdfName.DeviceCMYK ->
+                    [ range.[1]; range.[3]; range.[5]; range.[7] ]
+
+                | _ -> failwith "Not implemnted"
+            | 2 ->
+                colorSpacePdfFunction.GetAsArray(PdfName.C1)
+                |> List.ofSeq
+                |> List.map (fun m -> (m :?> PdfNumber).FloatValue())
+
+            | _ -> failwith "Not implemnted"
+
+        member private x.GetAlterateColor(colorValue: float32 list) =
+            match x.GetAlternateSpace() with 
+            | PdfName PdfName.Lab -> 
+                { L = colorValue.[0]
+                  a = colorValue.[1]
+                  b = colorValue.[2] }
+                |> FsValueColor.Lab
+
+            | PdfName PdfName.DeviceRGB ->
+                { R = colorValue.[0] 
+                  G = colorValue.[1]
+                  B = colorValue.[2] }
+                |> FsValueColor.Rgb
+
+            | PdfName PdfName.DeviceGray ->
+                FsValueColor.Gray(FsGray colorValue.[0])
+
+            | PdfName PdfName.DeviceCMYK ->
+                { C = colorValue.[0] 
+                  M = colorValue.[1]
+                  Y = colorValue.[2] 
+                  K = colorValue.[3] }
+                |> FsValueColor.Cmyk
+
+            | _-> failwith "Not implemented"
+
+        member x.GetAlterateColor() =
+            x.GetAlterateColor(x.GetAlternateColorValue())
+
     type Separation with 
-        static member private ColorText(color: Color) =
-            color.GetColorValue()
-            |> Array.map string
-            |> String.concat " "
-            |> sprintf "{%s}"
 
         static member private Range(color: Color) =
             let colorValues = color.GetColorValue()
@@ -160,15 +288,8 @@ module _Colors =
             | :? DeviceCmyk ->
                 [| 0.f; colorValues.[0];  0.f; colorValues.[1]; 0.f; colorValues.[2]; 0.f; colorValues.[3]; |]
 
-            | _ -> failwith ""
-          
-        static member private Decode(color: Color) =
-            let colorValues = color.GetColorValue()
-            match color with 
-            | :? Lab ->
-                [| 100.f; colorValues.[0];  0.f;  colorValues.[1]; 0.f; colorValues.[2];|]
-            | _ ->  Separation.Range(color)
-        
+            | _ -> failwithf "Invalid token"
+
 
         static member Create(name, color: DeviceCmyk, ?transparency: float) =
             let transparency = defaultArg transparency 1.
@@ -176,8 +297,8 @@ module _Colors =
 
             let separationPdfFunction =
                 new PdfFunction.Type2(
-                    new PdfArray([| 0; 1 |]), 
-                    new PdfArray(range),
+                    PdfArray([| 0; 1 |]), 
+                    PdfArray(range),
                     PdfArray([|0; 0; 0; 0|]),
                     PdfArray(color.GetColorValue()),
                     PdfNumber(1)
@@ -189,19 +310,9 @@ module _Colors =
             let transparency = defaultArg transparency 1.
             let separationPdfFunction =
                 let range = Separation.Range color
-                //new PdfFunction.Type0(
-                //    new PdfArray([| 0; 1 |]), 
-                //    new PdfArray(range),
-                //    PdfArray[| 2 |],
-                //    PdfNumber(8),
-                //    PdfNumber(1),
-                //    new PdfArray([| 0; 1 |]),
-                //    PdfArray(Separation.Decode color),
-                //    [| 255uy; 255uy; 255uy; 0uy; 0uy; 0uy;  |]
-                //)
                 new PdfFunction.Type2(
-                    new PdfArray([| 0; 1 |]), 
-                    new PdfArray(range),
+                    PdfArray([| 0; 1 |]), 
+                    PdfArray(range),
                     PdfArray([|1; 1; 1|]),
                     PdfArray(color.GetColorValue()),
                     PdfNumber(1)
@@ -216,8 +327,8 @@ module _Colors =
 
             let separationPdfFunction =
                 new PdfFunction.Type2(
-                    new PdfArray([| 0; 1 |]), 
-                    new PdfArray(range),
+                    PdfArray([| 0; 1 |]), 
+                    PdfArray(range),
                     PdfArray([|1|]),
                     PdfArray(color.GetColorValue()),
                     PdfNumber(1)
@@ -230,12 +341,13 @@ module _Colors =
             let separationPdfFunction =
                 let range = Separation.Range color
                 new PdfFunction.Type2(
-                    new PdfArray([| 0; 1 |]), 
-                    new PdfArray(range),
+                    PdfArray([| 0; 1 |]), 
+                    PdfArray(range),
                     PdfArray([|100; 0; 0|]),
                     PdfArray(color.GetColorValue()),
                     PdfNumber(1)
                 )
+
             let colorSpace = new PdfSpecialCs.Separation(name, color.GetColorSpace(), separationPdfFunction)
             new Separation(colorSpace, float32 transparency)
 
@@ -266,7 +378,6 @@ module _Colors =
             | :? DeviceCmyk -> true
             | _ -> false
     
-    
         let registion (writer:PdfDocument) =
             PdfDocument.obtainSperationColorFromResources "registration" writer
             
@@ -280,7 +391,7 @@ module _Colors =
             | :? Colors.Separation as sepa -> Some sepa
             | _ -> None
     
-        let isValueEqual (c1: Color) (c2: Color) =
+        let equal (c1: Color) (c2: Color) =
             let isSeparationEqual = 
                 match c1 with 
                 | :? Colors.Separation as c1 ->
@@ -305,7 +416,7 @@ module _Colors =
             let comparer =
                 { new IEqualityComparer<Color> with 
                     member __.Equals(x,y) = 
-                        Color.isValueEqual x y
+                        Color.equal x y
     
                     member __.GetHashCode(_) = 0
                 }
@@ -313,13 +424,14 @@ module _Colors =
             colors.Distinct(comparer)
             
         let contain color colors =
-            colors |> List.exists (Color.isValueEqual color)
+            colors |> List.exists (Color.equal color)
     
         let except colors1 colors2 =
             colors2 |> List.filter (fun c -> 
                 contain c colors1 
                 |> not
             )
+
     
     [<RequireQualifiedAccess>]
     type PrintingColor =

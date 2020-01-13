@@ -181,6 +181,31 @@ module iText =
             let x,y = point.x, point.y
             x < rect.GetXF() || x > rect.GetRightF() || y < rect.GetYF() || y > rect.GetTopF()
 
+    [<RequireQualifiedAccess>]
+    module StraightLine =
+        /// http://www.navision-blog.de/blog/2008/12/02/calculate-the-intersection-of-two-lines-in-fsharp-2d/
+        let intersection (line1: StraightLine) (line2: StraightLine) =
+            let A,B,C,D = line1.Start,line1.End,line2.Start,line2.End
+            let (Ax,Ay,Bx,By,Cx,Cy,Dx,Dy) =
+                (A.x, A.y, B.x, B.y, C.x, C.y, D.x, D.y)
+            let d = (Bx-Ax)*(Dy-Cy)-(By-Ay)*(Dx-Cx)  
+    
+            if  d = 0. then
+            // parallel lines ==> no intersection in euclidean plane
+                None
+            else
+                let q = (Ay-Cy)*(Dx-Cx)-(Ax-Cx)*(Dy-Cy) 
+                let r = q / d
+                let p = (Ay-Cy)*(Bx-Ax)-(Ax-Cx)*(By-Ay)
+                let s = p / d
+    
+                if r < 0. || r > 1. || s < 0. || s > 1. then
+                    None // intersection is not within the line segments
+                else
+                    Some(
+                        Point(Ax+r*(Bx-Ax), Ay+r*(By-Ay))
+                    )  // Py
+
     type StraightLine with 
         member line.IsOutsideOf (rect: Rectangle) =
             [line.Start; line.End] |> List.forall (fun pt ->
@@ -197,8 +222,12 @@ module iText =
                 | None -> false
 
 
+
+
     [<RequireQualifiedAccess>]
     module Rectangle = 
+
+
 
         let isInsideOf (paramRect) (rect: Rectangle) =
             rect.IsInsideOf(paramRect)

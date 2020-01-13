@@ -11,6 +11,14 @@ type FsSize =
 
 [<RequireQualifiedAccess>]
 module FsSize =
+    let (|Portrait|Landscape|Uniform|) (fsSize: FsSize) =
+        let width = fsSize.Width
+        let height = fsSize.Height
+        if width > height 
+        then Portrait
+        elif width = height then Uniform
+        else Landscape
+
     let create width height =
         { Width = width
           Height = height }

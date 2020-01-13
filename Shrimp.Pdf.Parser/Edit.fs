@@ -93,7 +93,7 @@ type PageSelector =
     | First
     | All
     | Expr of PageSelectorExpr
-
+    | Numbers of Set<int>
 
 
 
@@ -116,7 +116,7 @@ type internal CallbackableContentOperator (originalOperator) =
                         let size = size.FloatValue()
                         processor.GetGraphicsState().SetFontSize(size)
 
-                    else failwithf "%A" ex
+                    else raise ex
 
             processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
 
@@ -166,7 +166,7 @@ module Extensions =
             | PageSelector.Expr expr -> 
                 pdfDocument.GetPageNumbers(expr)
             | PageSelector.All -> [1..numberOfPages]
-
+            | PageSelector.Numbers numbers -> List.ofSeq numbers
 
 
 
