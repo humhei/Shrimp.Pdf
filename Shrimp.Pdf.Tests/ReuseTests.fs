@@ -15,14 +15,14 @@ let reuseTests =
             Reuses.Impose
                 (fun args ->
                     { args with 
-                        DesiredSizeOp = Some { Width = mm 50; Height = mm 50}
+                        DesiredSizeOp = Some { Width = mm 50.; Height = mm 50.}
                         ColNums = [4]
                         RowNum = 4
                         Cropmark = Some Cropmark.defaultValue
                         Background = Background.Size FsSize.A0
-                        HSpaces = [mm 3; mm 9]
-                        VSpaces = [mm 3; mm 9]
-                        Margin = Margin.Create(mm 30, mm 30, mm 30, mm 40)
+                        HSpaces = [mm 3.; mm 9.]
+                        VSpaces = [mm 3.; mm 9.]
+                        Margin = Margin.Create(mm 30., mm 30., mm 30., mm 40.)
                         UseBleed = true
                     }
                 )
@@ -41,12 +41,12 @@ let reuseTests =
             Reuses.Impose
                 (fun args ->
                     { args with 
-                        DesiredSizeOp = Some { Width = mm 40; Height = mm 30}
+                        DesiredSizeOp = Some { Width = mm 40.; Height = mm 30.}
                         ColNums = [6]
                         RowNum = 12
                         Cropmark = Some Cropmark.defaultValue
                         Background = Background.Size FsSize.MAXIMUN
-                        Margin = Margin.Create(mm 6)
+                        Margin = Margin.Create(mm 6.)
                         CellRotation = CellRotation.R180WhenColNumIsEven
                     }
                 )
@@ -58,13 +58,13 @@ let reuseTests =
         Flow.Reuse (
             Reuses.Impose(fun args ->
                 { args with 
-                    DesiredSizeOp = Some { Width = mm 50; Height = mm 50}
+                    DesiredSizeOp = Some { Width = mm 50.; Height = mm 50.}
                     ColNums = [2]
                     RowNum = 2
                     Cropmark = Some Cropmark.defaultValue
-                    HSpaces = [mm 3; mm 9]
-                    VSpaces = [mm 3; mm 9]
-                    Margin = Margin.Create(mm 0, mm 6, mm 9, mm 12)
+                    HSpaces = [mm 3.; mm 9.]
+                    VSpaces = [mm 3.; mm 9.]
+                    Margin = Margin.Create(mm 0., mm 6., mm 9., mm 12.)
                     IsRepeated = true
                 }
             )
@@ -76,13 +76,13 @@ let reuseTests =
         Flow.Reuse (
             Reuses.Impose(fun args ->
                 { args with 
-                    DesiredSizeOp = Some { Width = mm 80; Height = mm 50}
+                    DesiredSizeOp = Some { Width = mm 80.; Height = mm 50.}
                     Cropmark = Some Cropmark.defaultValue
-                    Margin = Margin.Create(mm 6)
+                    Margin = Margin.Create(mm 6.)
                     Background = 
                         let size =
-                            { Width = FsSize.A4.Width + mm 12 
-                              Height = FsSize.A4.Height + mm 12 }
+                            { Width = FsSize.A4.Width + mm 12. 
+                              Height = FsSize.A4.Height + mm 12. }
                         Background.Size size
                     IsRepeated = true
                 }
@@ -96,14 +96,14 @@ let reuseTests =
         Flow.Reuse (
             Reuses.Impose(fun args ->
                 { args with 
-                    DesiredSizeOp = Some { Width = mm 50; Height = mm 50}
+                    DesiredSizeOp = Some { Width = mm 50.; Height = mm 50.}
                     ColNums = [4]
                     RowNum = 4
                     Cropmark = Some Cropmark.defaultValue
                     Background = Background.Size FsSize.A0
-                    HSpaces = [mm 3; mm 9]
-                    VSpaces = [mm 3; mm 9]
-                    Margin = Margin.Create(mm 30, mm 30, mm 30, mm 40)
+                    HSpaces = [mm 3.; mm 9.]
+                    VSpaces = [mm 3.; mm 9.]
+                    Margin = Margin.Create(mm 30., mm 30., mm 30., mm 40.)
                     UseBleed = true
                 }
             )
@@ -115,14 +115,14 @@ let reuseTests =
         Flow.Reuse (
             Reuses.Impose(fun args ->
                 { args with 
-                    DesiredSizeOp = Some { Width = mm 50; Height = mm 30}
+                    DesiredSizeOp = Some { Width = mm 50.; Height = mm 30.}
                     ColNums = [4]
                     RowNum = 4
                     Cropmark = Some Cropmark.defaultValue
                     Background = Background.Size FsSize.A0
-                    HSpaces = [mm 3; mm 9]
-                    VSpaces = [mm 3; mm 9]
-                    Margin = Margin.Create(mm 6, mm 6, mm 6, mm 6)
+                    HSpaces = [mm 3.; mm 9.]
+                    VSpaces = [mm 3.; mm 9.]
+                    Margin = Margin.Create(mm 6., mm 6., mm 6., mm 6.)
                     UseBleed = true
                 }
             )
@@ -182,21 +182,21 @@ let reuseTests =
 
     testCase "resize pageSize to 7x4cm tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.Resize(PageSelector.All, PageBoxKind.ActualBox, {Width = mm 70; Height = mm 40})
+            Reuses.Resize(PageSelector.All, PageBoxKind.ActualBox, {Width = mm 70.; Height = mm 40.})
         )
         |> runWithBackup "datas/reuse/resize pageSize to 7x4cm.pdf" 
         |> ignore
 
     testCase "resize pageSize to 7x4cm by trimbox tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.Resize(PageSelector.All, PageBoxKind.TrimBox , { Width = mm 70; Height = mm 40 })
+            Reuses.Resize(PageSelector.All, PageBoxKind.TrimBox , { Width = mm 70.; Height = mm 40. })
         )
         |> runWithBackup "datas/reuse/resize pageSize to 7x4cm by trimbox.pdf" 
         |> ignore
 
     testCase "resize pageSize to 29.7×21cm uniform tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.Resize(PageSelector.All, PageResizingRotationOptions.ColckwiseIfNeeded, PageResizingScaleOptions.Uniform , {Width = mm 210; Height = mm 297})
+            Reuses.Resize(PageSelector.All, PageResizingRotationOptions.ColckwiseIfNeeded, PageResizingScaleOptions.Uniform , {Width = mm 210.; Height = mm 297.})
         )
         |> runWithBackup "datas/reuse/resize pageSize to 29.7×21cm uniform.pdf" 
         |> ignore

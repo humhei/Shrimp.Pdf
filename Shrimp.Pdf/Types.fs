@@ -1,9 +1,13 @@
 ﻿namespace Shrimp.Pdf
+#nowarn "0104"
 open iText.Kernel.Pdf
 open iText.Kernel.Geom
 open Shrimp.Pdf.Extensions
 open System.IO
 
+type PageOrientation =
+    | Landscape  = 0
+    | Portrait = 1
 
 type FsSize =
     { Width: float 
@@ -51,7 +55,10 @@ module FsSize =
               Width = size.Height }
         | _ -> failwith "Invalid token"
 
-
+    let rotateTo (pageOrientation: PageOrientation) size =
+        match pageOrientation with
+        | PageOrientation.Landscape -> landscape size
+        | PageOrientation.Portrait -> portrait size
 
     let clockwise size = 
         rotate Rotation.Clockwise size
@@ -75,7 +82,7 @@ module FsSize =
 
     let A4 = ofPageSize PageSize.A4
 
-    let MAXIMUN = { Width = mm 5080; Height = mm 5080 }
+    let MAXIMUN = { Width = mm 5080.; Height = mm 5080. }
 
 type ContentResizeMode =
     | CropOrAdd = 0

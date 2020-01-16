@@ -1,11 +1,15 @@
 ﻿
 namespace Shrimp.Pdf
 open iText.Kernel.Pdf
+open Shrimp.Pdf.Colors
 open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf.Extensions
 open System.Linq
 open System
+open System.Collections.Concurrent
+
+
 
 module Imposing =
 
@@ -28,17 +32,53 @@ module Imposing =
         | Trim_CenterTable
         | At of Position
 
+
+    type BackgroundFile = private BackgroundFile of string
+    with 
+        static member Create(pdfPath: string) =
+            if System.IO.File.Exists pdfPath && pdfPath.EndsWith ".pdf"
+            then BackgroundFile pdfPath
+            else failwithf "Cannot create backGroundFile from pdf path %s" pdfPath
+
+        member x.Value =
+            let (BackgroundFile value) = x
+            value
+
+    [<RequireQualifiedAccess>]
+    module BackgroundFile =
+        let getPageBoxes = 
+            let backgroundFilePageBoxCache = new ConcurrentDictionary<BackgroundFile, Rectangle list>()
+            fun (backGroundFile: BackgroundFile) ->
+                backgroundFilePageBoxCache.GetOrAdd(backGroundFile, fun backGroundFile ->
+                    let reader = new PdfDocument(new PdfReader(backGroundFile.Value))
+                    PdfDocument.getPages reader
+                    |> List.map (fun page ->
+                        let pageBox = (page.GetActualBox())
+                        reader.Close()
+                        pageBox
+                    )
+                )
+
+        let getSize (backgroundFile) =
+            getPageBoxes backgroundFile
+            |> function
+                | [pageBox] -> FsSize.ofRectangle pageBox
+                | h :: t -> failwithf "Cannot get background size as more than 1 pages founded in file %A" backgroundFile
+                | [] -> failwithf "Cannot get background size as no pages founded in file %A" backgroundFile
+
+
+
     [<RequireQualifiedAccess>]
     type Background =
         | Size of FsSize
-        | File of string
+        | File of BackgroundFile
 
     [<RequireQualifiedAccess>]
     module Background =
-        let getSize (backgrounp: Background) =
-            match backgrounp with 
+        let getSize = function
             | Background.Size pageSize -> pageSize
-            | _ -> failwith "Not implemented"
+            | Background.File backgroundFile -> BackgroundFile.getSize backgroundFile
+
 
     type NumericFillingMode =
         { ColNums: int list 
@@ -75,9 +115,7 @@ module Imposing =
             | _ -> None
 
 
-    type PageOrientation =
-        | Landscape  = 0
-        | Portrait = 1
+
 
     type DesiredPageOrientation =
         | Landscape  = 0
@@ -85,19 +123,15 @@ module Imposing =
         | Automatic = 2
 
 
-    type FsPageSize = private FsPageSize of size: FsSize * orientation: PageOrientation
-    with 
-        member x.PageOrientation = 
-            let (FsPageSize (size, pageOrientation)) = x
-            pageOrientation
+    type FsPageSize(originSize: FsSize, pageOrientation) =
+        let size = FsSize.rotateTo pageOrientation originSize
+        member x.PageOrientation = pageOrientation
 
-        member x.Size = 
-            let (FsPageSize (size, pageOrientation)) = x
-            size
+        member x.Size = size
 
-        member x.Width = x.Size.Width
+        member x.Width = size.Width
 
-        member x.Height = x.Size.Height
+        member x.Height = size.Height
 
 
     [<RequireQualifiedAccess>]
@@ -535,7 +569,7 @@ module Imposing =
 
         member x.ImposingArguments : ImposingArguments  = imposingDocument.ImposingArguments
 
-        member internal x.PageSize: FsPageSize = pageSize
+        member x.PageSize: FsPageSize = pageSize
 
         member internal x.ImposingDocument: ImposingDocument = imposingDocument
 

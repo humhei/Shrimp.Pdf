@@ -44,7 +44,6 @@ module internal Config =
             .FromResource<AssemblyFinder>("Shrimp.Pdf.reference.conf")
         |> fallBackByApplicationConf
 
-[<AutoOpen>]
 module Resources =
     open Fake.IO
     let internal resourceDirectory = 

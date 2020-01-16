@@ -249,7 +249,7 @@ let manipulateTests =
                             CanvasFontSize = CanvasFontSize.Numeric 25. 
                             FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                             FontRotation = Rotation.None 
-                            Position = Position.LeftTop(mm 20, 0.)}
+                            Position = Position.LeftTop(mm 20., 0.)}
                       ) args
                 )
         )
@@ -269,7 +269,7 @@ let manipulateTests =
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
                         FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
-                        Position = Position.LeftTop(mm 40, 0.)}
+                        Position = Position.LeftTop(mm 40., 0.)}
                   ) 
                 )
         )
@@ -361,7 +361,7 @@ let manipulateTests =
                 "setPageBox",
                 PageSelector.All,
                 Dummy,
-                PageModifier.SetPageBox (PageBoxKind.AllBox, Rectangle.create 0 0 500 100)
+                PageModifier.SetPageBox (PageBoxKind.AllBox, Rectangle.create 0. 0. 500. 100.)
             )
             <+>
             modifyPage(
@@ -420,14 +420,14 @@ let manipulateTests =
 
     testCase "trim to visible test" <| fun _ -> 
         Flow.Manipulate(
-            trimToVisible PageSelector.All (Margin.Create(mm 6)) 
+            trimToVisible PageSelector.All (Margin.Create(mm 6.)) 
         )
         |> runWithBackup "datas/manipulate/trim to visible.pdf" 
         |> ignore
 
     testCase "trim to visible test 2" <| fun _ -> 
         Flow.Manipulate(
-            trimToVisible PageSelector.All (Margin.Create(mm 6)) 
+            trimToVisible PageSelector.All (Margin.Create(mm 6.)) 
         )
         |> runWithBackup "datas/manipulate/trim to visible2.pdf" 
         |> ignore

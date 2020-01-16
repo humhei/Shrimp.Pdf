@@ -1,10 +1,6 @@
 ﻿namespace Shrimp.Pdf
-open iText.Kernel.Font
-open Shrimp.Pdf.Parser
 open Fake.IO
 open System.IO
-open System.Collections.Concurrent
-open Shrimp.Pdf.FontExtensions
 
 
 
@@ -72,8 +68,7 @@ with
     static member (<++>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: SplitDocument) ->
             let middleUserState = reuse1.InvokeAndReOpenDocument flowModel document
-            reuse2.Invoke (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document |> ignore
-            middleUserState
+            middleUserState, reuse2.Invoke (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
         |> Reuse
 
     static member (<.+>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
@@ -289,9 +284,6 @@ module Flow =
 
 [<AutoOpen>]
 module Operators =
-
-    let inline redirect (mapping : ^b) (flow: ^a) =
-        (^a: (member RedirectUserState : ^b -> ^c) (flow, mapping))
 
     let run (flowModel: FlowModel<'userState>) flow = 
         Logger.infoWithStopWatch(sprintf "RUN: %s" flowModel.File) (fun _ ->

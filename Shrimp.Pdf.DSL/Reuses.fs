@@ -49,7 +49,7 @@ type PageResizingRotationOptions =
 
 
 [<AutoOpen>]
-module Reuses =
+module _Reuses =
     let private reuse v = Reuse v 
 
     type Reuses =
@@ -78,11 +78,11 @@ module Reuses =
                         if List.contains pageNum selectedPageNumbers 
                         then 
                             let pageBox = page.GetActualBox()
-                            let width = pageBox.GetWidth()
-                            let height = pageBox.GetHeight()
+                            let width = pageBox.GetWidthF()
+                            let height = pageBox.GetHeightF()
 
                             let xobject = page.CopyAsFormXObject(splitDocument.Writer)
-                            let newPage = splitDocument.Writer.AddNewPage(PageSize(Rectangle.create 0 0 width height))
+                            let newPage = splitDocument.Writer.AddNewPage(PageSize(Rectangle.create 0. 0. width height))
                             let canvas = new PdfCanvas(newPage)
                             canvas.AddXObject(xobject, -pageBox.GetX(), -pageBox.GetY())
                             |> ignore
@@ -164,8 +164,8 @@ module Reuses =
                                 splitDocument.Writer.AddNewPage(
                                     PageSize(
                                         Rectangle.create 
-                                            0 
-                                            0 
+                                            0. 
+                                            0. 
                                             (size.Width *  actualBox.GetWidthF() / pageBox.GetWidthF())
                                             (size.Height * actualBox.GetHeightF() / pageBox.GetHeightF()) 
                                     )
@@ -278,8 +278,8 @@ module Reuses =
                                         splitDocument.Writer.AddNewPage(
                                             PageSize(
                                                 Rectangle.create 
-                                                    0 
-                                                    0 
+                                                    0. 
+                                                    0. 
                                                     (size.Width)
                                                     (size.Height) 
                                             )

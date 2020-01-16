@@ -41,11 +41,10 @@ module Operators =
 
     /// approximately equal to 
     /// benchmark by (CONFIG: shrimp.pdf.tolerance (default is 0.1))
-    let inline (@=) a b =
-        float (abs (a - b)) < tolerance
+    let (@=) a b =
+        (abs (a - b)) < tolerance
 
     /// defaultConversion: mm to user unit
-    let inline mm mm =
-        let l = float mm
-        l / 25.4 * 72.
+    let mm (mm: float) =
+        mm / 25.4 * 72.
 

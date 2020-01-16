@@ -2,6 +2,7 @@
 
 open iText.IO.Font
 open System.IO
+open Resources
 
 
 type RegisterableFont =

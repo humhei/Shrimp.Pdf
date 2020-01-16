@@ -223,10 +223,8 @@ module iText =
 
 
 
-
     [<RequireQualifiedAccess>]
     module Rectangle = 
-
 
 
         let isInsideOf (paramRect) (rect: Rectangle) =
@@ -238,7 +236,7 @@ module iText =
         let isCrossOf (paramRect) (rect: Rectangle) =
             rect.IsCrossOf(paramRect)
 
-        let inline create x y width height =
+        let create x y width height =
             let x = float32 x
             let y = float32 y 
             let width = float32 width
@@ -636,6 +634,7 @@ module iText =
             let info = info.Value
             let descent = info.GetDescentLine()
             descent.GetStartPoint().Get(0)
+            |> float
 
         let getText (info: ITextRenderInfo) =
             info.Value.GetText()
