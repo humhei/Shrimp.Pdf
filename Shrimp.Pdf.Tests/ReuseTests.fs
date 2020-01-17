@@ -140,6 +140,11 @@ let reuseTests =
         |> runWithBackup "datas/reuse/clockwise all pages2.pdf" 
         |> ignore
 
+    testCase "clockwise all pages3" <| fun _ -> 
+        Flow.Reuse (Reuses.Rotate(PageSelector.All, Rotation.Clockwise))
+        |> runWithBackup "datas/reuse/clockwise all pages3.pdf" 
+        |> ignore
+
     testCase "duplicate all pages 15x tests" <| fun _ -> 
         Flow.Reuse (Reuses.DuplicatePages(PageSelector.All, 15))
         |> runWithBackup "datas/reuse/duplicate all pages 15x.pdf" 
@@ -196,7 +201,7 @@ let reuseTests =
 
     testCase "resize pageSize to 29.7×21cm uniform tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.Resize(PageSelector.All, PageResizingRotationOptions.ColckwiseIfNeeded, PageResizingScaleOptions.Uniform , {Width = mm 210.; Height = mm 297.})
+            Reuses.Resize(PageSelector.All, PageResizingRotationOptions.Keep, PageResizingScaleOptions.Uniform , FsSize.landscape {Width = mm 210.; Height = mm 297.})
         )
         |> runWithBackup "datas/reuse/resize pageSize to 29.7×21cm uniform.pdf" 
         |> ignore

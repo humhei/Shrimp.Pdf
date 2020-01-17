@@ -7,7 +7,7 @@
 
   <ItemGroup>
     <Folder Include="datas\real samples\" />
-    <None Include="datas\*\*.pdf">
+    <None Include="datas\**\*.pdf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <Compile Include="FunctionTests.fs" />

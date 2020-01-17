@@ -131,6 +131,7 @@ module _Reuses =
                             canvas.AddXObject(xobject,AffineTransformRecord.ofAffineTransform affineTransform) |> ignore
 
                         else 
+                            let page = page.CopyTo(splitDocument.Writer)
                             splitDocument.Writer.AddPage(page) |> ignore
                     )
                 )
@@ -218,22 +219,20 @@ module _Reuses =
                                 | FsSize.Landscape, FsSize.Portrait -> Some pageNum
                             )
 
-                        splitDocument.Reader.GetPageNumbers(pageSelector) 
-                        @ proposedRotatedPageNumbers
-                        |> List.distinct
-                        |> function
-                            | [] -> ()
-                            | pageNumbers ->
-                                let pageSelector = 
-                                    PageSelector.Numbers (Set.ofList pageNumbers)
+                        Set.intersect
+                            (Set.ofList (splitDocument.Reader.GetPageNumbers(pageSelector))) 
+                            (Set.ofList proposedRotatedPageNumbers)
+                        |> fun pageNumbers ->
+                            let pageSelector = 
+                                PageSelector.Numbers (pageNumbers)
 
-                                let rotation = 
-                                    match pageResizingRotationOptions with 
-                                    | PageResizingRotationOptions.CounterColckwiseIfNeeded -> Rotation.Counterclockwise
-                                    | PageResizingRotationOptions.ColckwiseIfNeeded -> Rotation.Clockwise
-                                    | PageResizingRotationOptions.Keep -> Rotation.None
+                            let rotation = 
+                                match pageResizingRotationOptions with 
+                                | PageResizingRotationOptions.CounterColckwiseIfNeeded -> Rotation.Counterclockwise
+                                | PageResizingRotationOptions.ColckwiseIfNeeded -> Rotation.Clockwise
+                                | PageResizingRotationOptions.Keep -> Rotation.None
 
-                                Reuses.Rotate(pageSelector, rotation).Value flowModel splitDocument
+                            Reuses.Rotate(pageSelector, rotation).Value flowModel splitDocument
 
                                 
                     )
@@ -289,7 +288,7 @@ module _Reuses =
                                         let scaledActualBox = affineTransform_Scale.Transform(actualBox)
                                         AffineTransform.GetTranslateInstance((size.Width - scaledActualBox.GetWidthF()) / 2., (size.Height - scaledActualBox.GetHeightF()) / 2.)
 
-                                    affineTransform.Concatenate(affineTransform_Translate_Center)
+                                    affineTransform.PreConcatenate(affineTransform_Translate_Center)
 
                                     let canvas = new PdfCanvas(newPage)
                                     canvas.AddXObject(xobject, affineTransform)

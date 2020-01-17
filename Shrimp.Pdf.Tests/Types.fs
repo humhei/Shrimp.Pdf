@@ -11,6 +11,7 @@ open Fake.IO
 open System.IO
 open System.Threading
 open iText.Kernel.Pdf
+open Fake.IO.FileSystemOperators
 
 
 let runWithBackup path flow =
@@ -19,3 +20,15 @@ let runWithBackup path flow =
 
     run { UserState = (); File = newPath } flow
 
+let runManyWithBackup (paths: string list) outputDir flow =
+    Directory.ensure outputDir
+    let flowModels =
+        paths 
+        |> List.map (fun path ->
+            let newPath = 
+                outputDir </> Path.GetFileName(path)
+            File.Copy(path, newPath, true)
+            { UserState = (); File = newPath }
+        )
+
+    runMany flowModels flow

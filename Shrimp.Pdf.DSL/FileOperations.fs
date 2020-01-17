@@ -27,42 +27,45 @@ module FileOperations =
           Override: bool }
     with 
         static member DefalutValue =
-            { TargetDocumentName = null
+            { TargetDocumentName = Path.GetTempFileName() |> Path.changeExtension ".pdf"
               Override = false }
 
 
     /// expose this function for modifyAsync
     let internal mergeDocumentsInternal targetDocumentName (writer: PdfDocument)  =
         fun (flowModels: FlowModel<'userState> list) ->
-            for pageNum = 1 to writer.GetNumberOfPages() do
-                writer.RemovePage(1)
+            Logger.infoWithStopWatch(sprintf "Merge files %A to %s" (flowModels |> List.map (fun m -> m.File)) targetDocumentName) (fun _ ->
+                for pageNum = 1 to writer.GetNumberOfPages() do
+                    writer.RemovePage(1)
 
-            for flowModel in flowModels do
-                let readerDocument = new ReaderDocument(flowModel.File)
-                for pageNum = 1 to readerDocument.Reader.GetNumberOfPages() do
-                    let page = readerDocument.Reader.GetPage(pageNum)
-                    let writerPageResource = page.CopyTo(writer)
-                    writer.AddPage(writerPageResource) |> ignore
+                for flowModel in flowModels do
+                    let readerDocument = new ReaderDocument(flowModel.File)
+                    for pageNum = 1 to readerDocument.Reader.GetNumberOfPages() do
+                        let page = readerDocument.Reader.GetPage(pageNum)
+                        let writerPageResource = page.CopyTo(writer)
+                        writer.AddPage(writerPageResource) |> ignore
 
-                readerDocument.Reader.Close()
+                    readerDocument.Reader.Close()
 
-            flowModels.[0]
-            |> FlowModel.mapM (fun m ->
-                flowModels |> List.map (fun flowModel -> flowModel.UserState)
+                { File = targetDocumentName 
+                  UserState = flowModels |> List.map (fun m -> m.UserState) }
+                |> List.singleton
             )
-            |> List.singleton
+
 
         |> FileOperation
 
     let mergeDocuments (f) =
         let args = f DocumentMergingArguments.DefalutValue
 
-        if File.exists args.TargetDocumentName && not args.Override then failwithf "target file %s already exists" args.TargetDocumentName
-        else File.delete args.TargetDocumentName 
-
-        let writer = new PdfDocument(new PdfWriter(args.TargetDocumentName))
-        let flow = mergeDocumentsInternal (args.TargetDocumentName) writer
         fun flowModels ->
+
+            if File.exists args.TargetDocumentName && not args.Override then failwithf "target file %s already exists" args.TargetDocumentName
+            else File.delete args.TargetDocumentName 
+
+            let writer = new PdfDocument(new PdfWriter(args.TargetDocumentName))
+            let flow = mergeDocumentsInternal (args.TargetDocumentName) writer
+
             let result = 
                 flow.Value flowModels
             writer.Close()
