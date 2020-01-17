@@ -161,121 +161,129 @@ type Flow<'oldUserState, 'newUserState> =
     | Reuse of (Reuse<'oldUserState, 'newUserState>)
     | FileOperation of FileOperation<'oldUserState, 'newUserState>
     | Transform of (FlowModel<'oldUserState> -> FlowModel<'newUserState> list)
+    | TransformList of (FlowModel<'oldUserState> list -> FlowModel<'newUserState> list)
     | Factory of (FlowModel<'oldUserState> -> Flow<'oldUserState, 'newUserState>)
 with 
-    static member internal Run(flowModel: FlowModel<_>, flow) =
-        let file = flowModel.File
-        let writerFile = Path.changeExtension ".writer.pdf" file
-
-        let draft() =
-            File.Delete(file)
-            File.Move(writerFile, file)
-
+    static member internal Run(flowModels: FlowModel<_> list, flow) =
         match flow with 
-        | Flow.Manipulate (manipulate) ->
-            let pdfDocument = IntegratedDocument.Create(file, writerFile)
-            let newUserState = manipulate.Value flowModel pdfDocument
-            pdfDocument.Value.Close()
-            draft()
-            [(flowModel |> FlowModel.mapM(fun _ -> newUserState))]
+        | Flow.FileOperation flow -> 
+            flow.Value flowModels
+        | Flow.TransformList flow ->
+            flow flowModels
+        | _ ->
+            flowModels
+            |> List.collect(fun flowModel ->
+                let file = flowModel.File
+                let writerFile = Path.changeExtension ".writer.pdf" file
+
+                let draft() =
+                    File.Delete(file)
+                    File.Move(writerFile, file)
+
+                match flow with 
+                | Flow.Manipulate (manipulate) ->
+                    let pdfDocument = IntegratedDocument.Create(file, writerFile)
+                    let newUserState = manipulate.Value flowModel pdfDocument
+                    pdfDocument.Value.Close()
+                    draft()
+                    [(flowModel |> FlowModel.mapM(fun _ -> newUserState))]
 
 
-        | Flow.Reuse (reuse) ->
-            Logger.infoWithStopWatch (sprintf "%A" reuse) (fun _ ->
-                let pdfDocument = SplitDocument.Create(file, writerFile)
-                let newUserState = reuse.Value flowModel pdfDocument
-                pdfDocument.Reader.Close()
-                pdfDocument.Writer.Close()
-                draft()
-                [ (flowModel |> FlowModel.mapM(fun _ -> newUserState)) ]
+                | Flow.Reuse (reuse) ->
+                    Logger.infoWithStopWatch (sprintf "%A" reuse) (fun _ ->
+                        let pdfDocument = SplitDocument.Create(file, writerFile)
+                        let newUserState = reuse.Value flowModel pdfDocument
+                        pdfDocument.Reader.Close()
+                        pdfDocument.Writer.Close()
+                        draft()
+                        [ (flowModel |> FlowModel.mapM(fun _ -> newUserState)) ]
+                    )
+
+                | Flow.Transform transform ->
+                    transform flowModel
+
+                | Flow.Factory (factory) ->
+                    let flow = factory flowModel
+                    Flow<_, _>.Run([flowModel], flow)
+
+                | Flow.FileOperation fileOperation -> failwith "Invalid token"
+                | Flow.TransformList _ -> failwith "Invalid token"
             )
 
-        | Flow.FileOperation fileOperation -> fileOperation.Value [flowModel]
-
-        | Flow.Transform transform ->
-            transform flowModel
-
-        | Flow.Factory (factory) ->
-            let flow = factory flowModel
-            Flow<_, _>.Run(flowModel, flow)
 
 
     static member (<+>) (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
-        fun flowModel ->
-            let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModel, flow1) 
+        fun flowModels ->
+            let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModels, flow1) 
 
-            let newFlowModels = 
-                match flow2 with 
-                | Flow.FileOperation fileOperation ->
-                    fileOperation.Value middleFlowModels
-                | _ ->
-                    middleFlowModels
-                    |> List.collect (fun middleFlowModel ->
-                        Flow<'middleUserState, 'newUserState>.Run (middleFlowModel, flow2) 
-                    )
+            let newFlowModels = Flow<'middleUserState, 'newUserState>.Run (middleFlowModels, flow2) 
+          
             newFlowModels
 
-        |> Flow.Transform
+        |> Flow.TransformList
 
 
     static member (<++>) (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
-        fun flowModel ->
-            let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModel, flow1) 
+        fun flowModels ->
+            let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModels, flow1) 
+            let newFlowModels = Flow<'middleUserState, 'newUserState>.Run (middleFlowModels, flow2) 
 
-            match flow2 with 
-            | Flow.FileOperation fileOperation -> failwith "file operation only support <+> only"
-            | _ -> 
-                let newFlowModels = 
-                    middleFlowModels
-                    |> List.collect (fun middleFlowModel ->
-                        Flow<'middleUserState, 'modifiedUserState>.Run (middleFlowModel, flow2) 
-                        |> List.map (FlowModel.mapM(fun modifiedUserState -> middleFlowModel.UserState, modifiedUserState))
-                    )
-                newFlowModels
+            let middleFiles = middleFlowModels |> List.map (fun m -> m.File)
+            let newFiles = newFlowModels |> List.map (fun m -> m.File)
 
-        |> Flow.Transform
+            if middleFiles = newFiles 
+            then 
+                (middleFlowModels, newFlowModels)
+                ||> List.map2 (fun middleFlowModel newFlowModel ->
+                    FlowModel.mapM (fun modifiedUserState -> (middleFlowModel.UserState, modifiedUserState)) newFlowModel
+                )
+            else 
+                failwithf "<++> is not supported when middleFiles %A are different to new files %A" middleFiles newFiles
+
+        |> Flow.TransformList
 
 
     static member (<.+>) (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
         fun flowModel ->
             let middleFlowModels = Flow<'originUserState, 'middleUserState>.Run (flowModel, flow1) 
 
-            match flow2 with 
-            | Flow.FileOperation _ -> failwith "file operation only support <+> only"
-            | _ ->
-                let newFlowModels = 
-                    middleFlowModels
-                    |> List.collect (fun middleFlowModel ->
-                        Flow<'middleUserState, 'modifiedUserState>.Run (middleFlowModel, flow2) 
-                        |> List.map (FlowModel.mapM(fun _ -> middleFlowModel.UserState))
-                    )
-                newFlowModels
-        |> Flow.Transform
+            let newFlowModels = Flow<'middleUserState, 'newUserState>.Run (middleFlowModels, flow2) 
+
+            let middleFiles = middleFlowModels |> List.map (fun m -> m.File)
+            let newFiles = newFlowModels |> List.map (fun m -> m.File)
+
+            if middleFiles = newFiles 
+            then 
+                (middleFlowModels, newFlowModels)
+                ||> List.map2 (fun middleFlowModel newFlowModel ->
+                    FlowModel.mapM (fun modifiedUserState -> middleFlowModel) newFlowModel
+                )
+            else 
+                failwithf "<++> is not supported when middleFiles %A are different to new files %A" middleFiles newFiles
+
+        |> Flow.TransformList
 
     static member (<<||) (mapping, flow: Flow<_, _>) =
-        fun flowModel ->
-            let flowModel = FlowModel.mapM mapping flowModel
-            Flow<_, _>.Run(flowModel, flow) 
+        fun flowModels ->
+
+            let flowModels = 
+                flowModels
+                |> List.map (FlowModel.mapM mapping)
+
+            Flow<_, _>.Run(flowModels, flow) 
          
-        |> Flow.Transform 
+        |> Flow.TransformList
 
 
 
     /// internal use
     /// using ||>> instead
     static member (||>>) (flow, mapping)  =
-        fun flowModel ->
-            Flow<_, _>.Run(flowModel, flow) 
+        fun flowModels ->
+            Flow<_, _>.Run(flowModels, flow) 
             |> List.map (FlowModel.mapM mapping)
-        |> Flow.Transform 
+        |> Flow.TransformList 
 
-    member x.RedirectUserState (mapping) =
-        fun flowModel ->
-            let filwModels = Flow<_, _>.Run (flowModel, x) 
-            filwModels
-            |> List.map (FlowModel.mapM (fun newUserState -> mapping (flowModel.UserState, newUserState)))
-       
-        |> Flow.Transform
     
 [<RequireQualifiedAccess>]
 module Flow =
@@ -285,15 +293,17 @@ module Flow =
 [<AutoOpen>]
 module Operators =
 
-    let run (flowModel: FlowModel<'userState>) flow = 
-        Logger.infoWithStopWatch(sprintf "RUN: %s" flowModel.File) (fun _ ->
-            Flow<_, _>.Run(flowModel, flow)
-        )
- 
+
     let runMany (flowModels: FlowModel<_> list) flow = 
-        ( Flow.Transform (fun _ -> flowModels )
-          <+>
-          flow )
-        |> run {File = ""; UserState = ()}
+        let filesListText =
+            flowModels 
+            |> List.map (fun m -> m.File)
+            |> String.concat "\n"
 
+        Logger.infoWithStopWatch(sprintf "RUN: %s" filesListText) (fun _ ->
+            Flow<_, _>.Run(flowModels, flow)
+        )
 
+    let run (flowModel: FlowModel<'userState>) flow = 
+        runMany [flowModel] flow
+ 
