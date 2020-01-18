@@ -48,3 +48,7 @@ module Operators =
     let mm (mm: float) =
         mm / 25.4 * 72.
 
+    /// defaultConversion: userUnit to mm
+    let userUnitToMM (userUnit: float) =
+        userUnit / 72. * 25.4
+

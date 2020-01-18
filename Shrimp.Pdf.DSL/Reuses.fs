@@ -7,6 +7,7 @@ open iText.Kernel.Pdf.Canvas.Parser
 open Shrimp.Pdf.DSL
 open iText.Kernel.Geom
 open System
+open System.IO
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf
 
@@ -52,7 +53,50 @@ type PageResizingRotationOptions =
 module _Reuses =
     let private reuse v = Reuse v 
 
+    type PageInsertingOptions =
+        | BeforePoint = 0
+        | AfterPoint = 1
+
+
     type Reuses =
+        static member Insert(file: string, ?pageInsertingOptions: PageInsertingOptions, ?singlePageSelectorExpr: SinglePageSelectorExpr) =
+            fun flowModel (splitDocument: SplitDocument) ->
+                if Path.GetFullPath(file) = Path.GetFullPath(splitDocument.ReaderName) 
+                then failwith "Cannot insert file to self"
+
+                let pageInsertingOptions = defaultArg pageInsertingOptions PageInsertingOptions.AfterPoint
+                let singlePageSelectorExpr = defaultArg singlePageSelectorExpr (SinglePageSelectorExpr.End 1)
+                Logger.infoWithStopWatch (sprintf "Insert file %s to %s %s %A" file splitDocument.ReaderName (pageInsertingOptions.ToString()) singlePageSelectorExpr) (fun _ ->
+                    let numberOfPages = splitDocument.Reader.GetNumberOfPages()
+                    let pageNum =
+                        splitDocument.Reader.GetPageNumber singlePageSelectorExpr
+
+                    let tryCopyPages (reader: PdfDocument) pageFrom pageTo =
+                        if pageTo >= pageFrom
+                        then reader.CopyPagesTo(pageFrom, pageTo, splitDocument.Writer) |> ignore
+
+
+                    match pageInsertingOptions with
+                    | PageInsertingOptions.AfterPoint ->
+                        tryCopyPages splitDocument.Reader 1 pageNum 
+                        
+                        let readerResource = new PdfDocument(new PdfReader(file))
+                        tryCopyPages readerResource 1 (readerResource.GetNumberOfPages())
+                        readerResource.Close()
+
+                        tryCopyPages splitDocument.Reader (pageNum + 1) numberOfPages
+
+                    | PageInsertingOptions.BeforePoint ->
+                        tryCopyPages splitDocument.Reader 1 (pageNum - 1)
+                        
+                        let readerResource = new PdfDocument(new PdfReader(file))
+                        tryCopyPages readerResource 1 (readerResource.GetNumberOfPages())
+                        readerResource.Close()
+
+                        tryCopyPages splitDocument.Reader (pageNum) numberOfPages
+                )
+
+            |> reuse
 
         static member Impose (fArgs) =
             fun flowModel (splitDocument: SplitDocument) ->

@@ -205,6 +205,12 @@ let reuseTests =
         )
         |> runWithBackup "datas/reuse/resize pageSize to 29.7×21cm uniform.pdf" 
         |> ignore
-
+        
+    testCase "insert pages tests" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.Insert("datas/reuse/insertPagesResource.pdf")
+        )
+        |> runWithBackup "datas/reuse/insertPages.pdf" 
+        |> ignore
 
 ]

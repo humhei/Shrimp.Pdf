@@ -43,7 +43,7 @@ let fileOperationTests =
         |> runMany inputFlowModels
         |> ignore
 
-    ftestCase "run many tests" <| fun _ -> 
+    testCase "run many tests" <| fun _ -> 
         let targetFile = Path.GetFullPath("datas/file operation/merge documents/mergdDocuments.pdf")
         
         let inputFiles = 

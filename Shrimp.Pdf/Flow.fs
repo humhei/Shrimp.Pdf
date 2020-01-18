@@ -256,10 +256,10 @@ with
             then 
                 (middleFlowModels, newFlowModels)
                 ||> List.map2 (fun middleFlowModel newFlowModel ->
-                    FlowModel.mapM (fun modifiedUserState -> middleFlowModel) newFlowModel
+                    FlowModel.mapM (fun modifiedUserState -> middleFlowModel.UserState) newFlowModel
                 )
             else 
-                failwithf "<++> is not supported when middleFiles %A are different to new files %A" middleFiles newFiles
+                failwithf "<.+> is not supported when middleFiles %A are different to new files %A" middleFiles newFiles
 
         |> Flow.TransformList
 

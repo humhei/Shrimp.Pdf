@@ -38,18 +38,16 @@ module PdfCanvas =
         pdfCanvas
 
 
-type Begin = Begin of int
-type End = End of int
 
 [<RequireQualifiedAccess>]
-type PageSelectorExprSinglePage =
-    | Begin of Begin
-    | End of End
+type SinglePageSelectorExpr =
+    | Begin of int
+    | End of int
 
 [<RequireQualifiedAccess>]
 type PageSelectorExpr = 
-    | SinglePage of PageSelectorExprSinglePage
-    | Between of PageSelectorExprSinglePage * PageSelectorExprSinglePage
+    | SinglePage of SinglePageSelectorExpr
+    | Between of SinglePageSelectorExpr * SinglePageSelectorExpr
     | Compose of PageSelectorExpr list
 
 [<RequireQualifiedAccess>]
@@ -59,18 +57,18 @@ module PageSelectorExpr =
         let pSinglePage = 
             let pBegin = 
                 pint32 |>> (fun i -> 
-                    if i > 0 then Begin i
+                    if i > 0 then  SinglePageSelectorExpr.Begin i
                     else failwithf "page num %d should be bigger than 0" i
                 )
 
             let pEnd = 
                 (pstringCI "R") >>. pint32 |>> (fun i ->
-                    if i > 0 then End i
+                    if i > 0 then  SinglePageSelectorExpr.End i
                     else failwithf "page num %d should be bigger than 0" i
                 )
 
-            (pEnd |>> (PageSelectorExprSinglePage.End))
-            <|> (pBegin |>> (PageSelectorExprSinglePage.Begin))
+            (pEnd)
+            <|> (pBegin)
 
         let pBetween = 
             (pSinglePage .>>? pchar '-' .>>. pSinglePage )
@@ -141,17 +139,22 @@ and internal OperatorRangeCallbackablePdfCanvasProcessor(listener) =
 module Extensions =
 
     type PdfDocument with
-        member pdfDocument.GetPageNumbers(pageSelectorExpr: PageSelectorExpr) =
+
+        member pdfDocument.GetPageNumber(pageSelectorExpr: SinglePageSelectorExpr) =
             let totalPageNum = pdfDocument.GetNumberOfPages()
-            let getPageNumOfSinglePage = function
-                | PageSelectorExprSinglePage.Begin (Begin i) -> i
-                | PageSelectorExprSinglePage.End (End i) -> totalPageNum - i
+            
+            match pageSelectorExpr with
+            | SinglePageSelectorExpr.Begin (i) -> i
+            | SinglePageSelectorExpr.End (i) -> totalPageNum - i + 1
+
+
+        member pdfDocument.GetPageNumbers(pageSelectorExpr: PageSelectorExpr) =
 
             match pageSelectorExpr with 
-            | PageSelectorExpr.SinglePage singlePage -> [getPageNumOfSinglePage singlePage]
+            | PageSelectorExpr.SinglePage singlePage -> [pdfDocument.GetPageNumber singlePage]
 
             | PageSelectorExpr.Between (beginExpr, endExpr) ->
-                [getPageNumOfSinglePage beginExpr .. getPageNumOfSinglePage endExpr]
+                [pdfDocument.GetPageNumber beginExpr .. pdfDocument.GetPageNumber endExpr]
 
             | PageSelectorExpr.Compose compose ->
                 compose
