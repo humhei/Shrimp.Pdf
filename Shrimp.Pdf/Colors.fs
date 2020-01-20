@@ -79,6 +79,8 @@ module _Colors =
         | Lab of FsLab
         | Gray of FsGray
     with 
+
+
         member x.GetColorValue() =
             match x with 
             | FsValueColor.Cmyk cmyk ->
@@ -115,6 +117,28 @@ module _Colors =
 
                 colorValue1 = colorValue2
 
+        static member Invert = function
+            | FsValueColor.Rgb rgbColor ->
+                { R = 1.f - rgbColor.R
+                  G = 1.f - rgbColor.G
+                  B = 1.f - rgbColor.B }
+                |> FsValueColor.Rgb
+
+            | FsValueColor.Cmyk cmykColor ->
+                { C = 1.f - cmykColor.C 
+                  M = 1.f - cmykColor.M 
+                  Y = 1.f - cmykColor.Y
+                  K = 1.f - cmykColor.K }
+                |> FsValueColor.Cmyk
+
+            | FsValueColor.Gray (FsGray grayColor) ->
+                FsValueColor.Gray (FsGray (1.f - grayColor))
+
+            | FsValueColor.Lab (labColor) ->
+                { L = 100.f - labColor.L
+                  a = -labColor.a
+                  b = -labColor.b }
+                |> FsValueColor.Lab
 
         static member ToItextColor = function
             | FsValueColor.Cmyk cmyk ->
@@ -379,6 +403,16 @@ module _Colors =
             | :? DeviceCmyk -> true
             | _ -> false
     
+        let isGray (color: Color) =
+            match color with 
+            | :? DeviceGray -> true
+            | _ -> false
+
+        let isRgb (color: Color) =
+            match color with 
+            | :? DeviceRgb -> true
+            | _ -> false
+
         let registion (writer:PdfDocument) =
             PdfDocument.obtainSperationColorFromResources "registration" writer
             
@@ -408,8 +442,11 @@ module _Colors =
         let pantoneTPX (tpxColorEnum: TPXColorEnum) writer =
             PdfDocument.obtainSperationColorFromResources (@"TPX/" + tpxColorEnum.ToString()) writer
     
-
-
+        let fromKnownColor (knownColor: KnownColor) =
+            match knownColor with 
+            | KnownColor.Black -> DeviceGray.BLACK :> Color
+            | KnownColor.White -> DeviceGray.WHITE :> Color
+            | _ -> DeviceRgb.fromKnownColor knownColor :> Color
 
     [<RequireQualifiedAccess>]
     module Colors =
@@ -424,43 +461,18 @@ module _Colors =
     
             colors.Distinct(comparer)
             
-        let contain color colors =
+        let contains color colors =
             colors |> List.exists (Color.equal color)
     
+        let tryFindIndex color colors =
+            colors |> List.tryFindIndex (Color.equal color)
+
         let except colors1 colors2 =
             colors2 |> List.filter (fun c -> 
-                contain c colors1 
+                contains c colors1 
                 |> not
             )
 
-    
-    [<RequireQualifiedAccess>]
-    type PrintingColor =
-        | CMYK
-        | Single of ColorCard
-        | Double of ColorCard * ColorCard
-    
-    
-    [<RequireQualifiedAccess>]
-    module PrintingColor =
-        let BLACK =
-            KnownColor.Black
-            |> ColorCard.KnownColor
-            |> PrintingColor.Single 
-    
-        let isBlack = function 
-            | PrintingColor.Single colorCard ->
-                match colorCard with 
-                | ColorCard.KnownColor enum when enum = KnownColor.Black -> true
-                | _ -> false
-            | _ -> false
-    
-        let isCmyk printingColor =
-            match printingColor with 
-            | PrintingColor.CMYK -> true
-            | _ -> false
-    
-    
 
     [<RequireQualifiedAccess>]
     type PdfCanvasColor = 
@@ -540,7 +552,7 @@ module _Colors =
                     separation1.IsEqualTo(color)
                 | ColorCard.KnownColor knownColor1 ->
                     let itextColor1 = 
-                        (DeviceRgb.fromKnownColor knownColor1 :> Color)
+                        (Color.fromKnownColor knownColor1)
                         |> PdfCanvasColor.ITextColor
     
                     itextColor1.IsEqualTo(color)

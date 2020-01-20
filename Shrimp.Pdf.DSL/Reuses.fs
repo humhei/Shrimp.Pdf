@@ -59,14 +59,15 @@ module _Reuses =
 
 
     type Reuses =
-        static member Insert(file: string, ?pageInsertingOptions: PageInsertingOptions, ?singlePageSelectorExpr: SinglePageSelectorExpr) =
+        static member Insert(insertingFile: string, ?insertingFilePageSelector: PageSelector, ?pageInsertingOptions: PageInsertingOptions, ?insertingPoint: SinglePageSelectorExpr) =
             fun flowModel (splitDocument: SplitDocument) ->
-                if Path.GetFullPath(file) = Path.GetFullPath(splitDocument.ReaderName) 
+                if Path.GetFullPath(insertingFile) = Path.GetFullPath(splitDocument.ReaderName) 
                 then failwith "Cannot insert file to self"
 
+                let insertingFilePageSelector = defaultArg insertingFilePageSelector PageSelector.All
                 let pageInsertingOptions = defaultArg pageInsertingOptions PageInsertingOptions.AfterPoint
-                let singlePageSelectorExpr = defaultArg singlePageSelectorExpr (SinglePageSelectorExpr.End 1)
-                Logger.infoWithStopWatch (sprintf "Insert file %s to %s %s %A" file splitDocument.ReaderName (pageInsertingOptions.ToString()) singlePageSelectorExpr) (fun _ ->
+                let singlePageSelectorExpr = defaultArg insertingPoint (SinglePageSelectorExpr.End 1)
+                Logger.infoWithStopWatch (sprintf "Insert file %s %A to %s %s %A" insertingFile insertingFilePageSelector splitDocument.ReaderName (pageInsertingOptions.ToString()) singlePageSelectorExpr) (fun _ ->
                     let numberOfPages = splitDocument.Reader.GetNumberOfPages()
                     let pageNum =
                         splitDocument.Reader.GetPageNumber singlePageSelectorExpr
@@ -80,18 +81,31 @@ module _Reuses =
                     | PageInsertingOptions.AfterPoint ->
                         tryCopyPages splitDocument.Reader 1 pageNum 
                         
-                        let readerResource = new PdfDocument(new PdfReader(file))
-                        tryCopyPages readerResource 1 (readerResource.GetNumberOfPages())
+
+                        let readerResource = new PdfDocument(new PdfReader(insertingFile))
+                        let readerResourcePageNumbers = readerResource.GetPageNumbers(insertingFilePageSelector)
+
+                        for readerResourcePageNumber in readerResourcePageNumbers do
+                            let page = readerResource.GetPage(readerResourcePageNumber).CopyTo(splitDocument.Writer)
+                            splitDocument.Writer.AddPage(page) |> ignore
                         readerResource.Close()
+
 
                         tryCopyPages splitDocument.Reader (pageNum + 1) numberOfPages
 
                     | PageInsertingOptions.BeforePoint ->
                         tryCopyPages splitDocument.Reader 1 (pageNum - 1)
                         
-                        let readerResource = new PdfDocument(new PdfReader(file))
-                        tryCopyPages readerResource 1 (readerResource.GetNumberOfPages())
+
+                        let readerResource = new PdfDocument(new PdfReader(insertingFile))
+                        let readerResourcePageNumbers = readerResource.GetPageNumbers(insertingFilePageSelector)
+
+                        for readerResourcePageNumber in readerResourcePageNumbers do
+                            let page = readerResource.GetPage(readerResourcePageNumber).CopyTo(splitDocument.Writer)
+                            splitDocument.Writer.AddPage(page) |> ignore
+
                         readerResource.Close()
+
 
                         tryCopyPages splitDocument.Reader (pageNum) numberOfPages
                 )

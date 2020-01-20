@@ -6,14 +6,13 @@ open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Extensions
 open iText.Kernel.Colors
 open Fake.IO.Globbing.Operators
-open Shrimp.Pdf.FileOperations
 open System.IO
 
 let fileOperationTests =
   testList "FileOperation Tests" [
     testCase "split document" <| fun _ -> 
         Flow.FileOperation (
-            splitDocumentToMany (fun args ->
+            FileOperations.splitDocumentToMany (fun args ->
                 { args with 
                     ChunkSize = 2
                     Override = true }
@@ -34,7 +33,7 @@ let fileOperationTests =
             )
 
         Flow.FileOperation (
-            mergeDocuments (fun args ->
+            FileOperations.mergeDocuments (fun args ->
                 { args with 
                     Override = true
                     TargetDocumentName = targetFile }
@@ -61,7 +60,7 @@ let fileOperationTests =
         )
         <+>
         Flow.FileOperation (
-            mergeDocuments (fun args ->
+            FileOperations.mergeDocuments (fun args ->
                 { args with 
                     Override = true
                     TargetDocumentName = targetFile }

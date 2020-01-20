@@ -1,11 +1,13 @@
 ﻿namespace Shrimp.Pdf.DSL
+
+open Shrimp.Pdf.Colors
+
 #nowarn "0104"
 open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Parser
 open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf
-open Shrimp.Pdf.FileOperations
 open System.IO
 open iText.Kernel.Pdf
 
@@ -72,6 +74,45 @@ type Modifier =
                     PdfCanvas.writeOperatorRange args.Close
                 ]
 
+
+
+    static member ReplaceColor(picker: (Color -> Color option)) : Modifier<'userState> =
+        fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
+            [
+                if IAbstractRenderInfo.hasFill args.CurrentRenderInfo 
+                then 
+                    match picker (args.CurrentRenderInfo.Value.GetFillColor()) with
+                    | Some newColor ->
+                        PdfCanvas.setFillColor(newColor)
+                    | None -> ()
+
+                if IAbstractRenderInfo.hasStroke args.CurrentRenderInfo 
+                then 
+                    match picker (args.CurrentRenderInfo.Value.GetFillColor()) with
+                    | Some newColor ->
+                        PdfCanvas.setStrokeColor(newColor)
+                    | None -> ()
+
+                PdfCanvas.writeOperatorRange args.Close
+            ]
+
+    static member InvertColors() =
+        Modifier.ReplaceColor(fun color ->
+            (FsValueColor.OfItextColor color)
+            |> FsValueColor.Invert
+            |> FsValueColor.ToItextColor
+            |> Some
+        )
+
+    static member ReplaceColor(colorKeyValuePairs: list<Color * Color>) : Modifier<'userState> =
+        let originColors = colorKeyValuePairs |> List.map fst
+        let newColors = colorKeyValuePairs |> List.map snd
+        Modifier.ReplaceColor(fun color ->
+            match Colors.tryFindIndex color originColors with 
+            | Some index -> Some newColors.[index]
+            | None -> None
+        )
+    
     static member SetStrokeColor(color: Color) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
             [
@@ -128,7 +169,7 @@ module ModifyOperators =
                 | ModifyingAsyncWorker.PageNumberEveryWorker i, _ when i < 1 -> failwith "Async worker number should bigger than 1"
                 | ModifyingAsyncWorker.PageNumberEveryWorker i, j when i > 0 && j > 1 ->
                     let splitedFlowModels = 
-                        run flowModel (Flow.FileOperation (splitDocumentToMany (fun args -> { args with Override = true; ChunkSize = i})))
+                        run flowModel (Flow.FileOperation (FileOperations.splitDocumentToMany (fun args -> { args with Override = true; ChunkSize = i})))
 
 
                     let flowModels = 
@@ -152,7 +193,7 @@ module ModifyOperators =
 
                     let mergeFlow = 
                         Flow.FileOperation 
-                            (mergeDocumentsInternal flowModel.File (document.Value))
+                            (FileOperations.mergeDocumentsInternal flowModel.File (document.Value))
 
 
                     runMany flowModels mergeFlow

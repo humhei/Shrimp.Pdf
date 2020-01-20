@@ -1,5 +1,5 @@
 ﻿namespace Shrimp.Pdf.icms2
-open Shrimp.Pdf.icms2.Model
+open Shrimp.Pdf.icms2.Core
 open iText.Kernel.Colors
 open Akka.Configuration
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
@@ -78,6 +78,13 @@ module Client =
             | CmsColor.Lab _ -> Icc.Lab defaultLabIcc
             | CmsColor.Separation separation -> failwith "Not implement"
           
+        member x.GetColor() =
+            match x with 
+            | CmsColor.Lab lab -> lab.ToItextColor()
+            | CmsColor.Cmyk cmyk -> cmyk :> Color
+            | CmsColor.Gray gray -> gray :> Color
+            | CmsColor.Rgb rgb -> rgb :> Color
+            | CmsColor.Separation separation -> failwith "Not implement"
 
         member x.GetColorValues() =
             match x with 
@@ -173,7 +180,7 @@ module Client =
                 && not (Info.FillColorIsWhite() args info)
 
 
-    type Modify =
+    type Modifier =
         static member BlackOrWhite() =
             fun (args: _SelectionModifierFixmentArguments<'userState>) ->
                 match Info.FillColorIsNotWhite() args.PageModifingArguments args.CurrentRenderInfo,Info.StrokeColorIsNotWhite() args.PageModifingArguments args.CurrentRenderInfo with 
@@ -184,6 +191,15 @@ module Client =
         
 
 
-
-
+        static member ConvertTo(outputIcc: Icc, ?predicate: Color -> bool, ?intent: Intent, ?inputIcc) =
+            let predicate = defaultArg predicate (fun _ -> true)
+            Modifier.ReplaceColor(fun originColor -> 
+                if predicate originColor 
+                then 
+                    let newColor = 
+                        (CmsColor.OfColor originColor).ConvertToAsync(outputIcc, ?intent = intent, ?inputIcc = inputIcc)
+                        |> Async.RunSynchronously
+                    Some (newColor.GetColor())
+                else None
+            )
 

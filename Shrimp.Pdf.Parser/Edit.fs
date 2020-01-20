@@ -169,7 +169,14 @@ module Extensions =
             | PageSelector.Expr expr -> 
                 pdfDocument.GetPageNumbers(expr)
             | PageSelector.All -> [1..numberOfPages]
-            | PageSelector.Numbers numbers -> List.ofSeq numbers
+            | PageSelector.Numbers numbers -> 
+                let intersectedNumbers =
+                    Set.intersect
+                        numbers
+                        (Set.ofList [1..numberOfPages])
+                    |> Set.toList
+
+                intersectedNumbers
 
 
 

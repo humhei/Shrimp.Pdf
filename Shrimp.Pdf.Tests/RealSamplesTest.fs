@@ -16,7 +16,7 @@ let readB255Bound() =
         PageSelector.All,
         Path (
             Info.StrokeColorIs DeviceRgb.BLUE
-            <&> Info.BoundIsInsideOfPageBox()
+            <&&> Info.BoundIsInsideOfPageBox()
         ),
         PageModifier.GetBoundOfSelector()
     )
@@ -39,11 +39,11 @@ let retainTitleInfo (color: Color) =
             OR [
                 PathOrText (
                     Info.BoundIsInsideOf(pageEdge.TopMiddle)
-                    <&> Info.BoundIsOutsideOf(titleArea)
+                    <&&> Info.BoundIsOutsideOf(titleArea)
                 )
                 PathOrText (
                     Info.BoundIsInsideOf(titleArea)
-                    <&> (!!(Info.FillColorIs color))
+                    <&&> (!!(Info.FillColorIs color))
                 )
             ])
       Modifiers = [ Modifier.CancelFillAndStroke() ]
@@ -60,7 +60,7 @@ let blackAndWhiteTitleInfo() =
         )
       Modifiers = 
         [
-            Modify.BlackOrWhite()
+            Modifier.BlackOrWhite()
         ]
     }
 
@@ -70,7 +70,7 @@ let retainNavigationInfo (color: Color) =
         PathOrText (fun args ->
             let pageEdge, _ = args.PageUserState()
             ( Info.BoundIsInsideOf(pageEdge.LeftMiddle)
-                <&> (!!(Info.FillColorIs color)) 
+                <&&> (!!(Info.FillColorIs color)) 
             ) args
         )
       Modifiers = [ Modifier.CancelFillAndStroke() ]
@@ -82,7 +82,7 @@ let removeNavigationInfo() =
         PathOrText (fun args ->
             let pageEdge, _ = args.PageUserState()
             ( Info.BoundIsCrossOf(pageEdge.LeftMiddle)
-                <&> Info.FillColorIs DeviceRgb.MAGENTA
+                <&&> Info.FillColorIs DeviceRgb.MAGENTA
             ) args
         )
       Modifiers =[ Modifier.CancelFillAndStroke() ]
@@ -137,7 +137,7 @@ let realSamplesTests =
         Flow.Manipulate (
             Manipulate.dummy
             <.+>
-            (trimToVisible PageSelector.All (Margin.Create(mm 2.)))
+            (ModifyPage.trimToVisible PageSelector.All (Margin.Create(mm 2.)))
             <+> (getPageEdgeAndTitleArea())
             <+> 
             modify(

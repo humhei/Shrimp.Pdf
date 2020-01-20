@@ -7,6 +7,7 @@ open Shrimp.Pdf
 open iText.Kernel.Geom
 open iText.Layout
 open iText.Kernel.Pdf.Canvas
+open Shrimp.Pdf.Colors
 
 [<RequireQualifiedAccess>]
 type CanvasAreaOptions =
@@ -57,6 +58,24 @@ type PageModifier =
                 |> Seq.map (IAbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth)
                 |> Rectangle.ofRectangles
             trimedBox
+
+    static member GetColors() : PageModifier<_, _> =
+        fun (args: PageModifingArguments<_>) infos ->
+            infos
+            |> List.ofSeq
+            |> List.collect (fun info ->
+                let hasFill = IAbstractRenderInfo.hasFill info
+                let hasStroke = IAbstractRenderInfo.hasStroke info
+                if hasFill && hasStroke 
+                then [ info.Value.GetFillColor(); info.Value.GetStrokeColor() ]
+                elif hasFill 
+                then [info.Value.GetFillColor()]
+                elif hasStroke 
+                then [info.Value.GetStrokeColor()]
+                else []
+            )
+            |> Colors.distinct
+            |> List.ofSeq
 
     static member PickTexts(picker: Parser<_, _>) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->

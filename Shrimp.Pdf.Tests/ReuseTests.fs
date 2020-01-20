@@ -173,7 +173,7 @@ let reuseTests =
     testCase "tile pages by selector tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.TilePages
-                (Path(Info.StrokeColorIs DeviceRgb.BLUE <&> Info.BoundIsInsideOfPageBox()))
+                (Path(Info.StrokeColorIs DeviceRgb.BLUE <&&> Info.BoundIsInsideOfPageBox()))
         )
         |> runWithBackup "datas/reuse/tile pages by selector.pdf" 
         |> ignore

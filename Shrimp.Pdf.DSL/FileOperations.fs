@@ -4,32 +4,31 @@ open Shrimp.Pdf.Extensions
 open iText.Kernel.Pdf
 open System.IO
 
+[<RequireQualifiedAccess>]
+type FileOperationOutputDirectoryOptions =
+    | ReaderDirectoryPath
+    | CustomDirectoryPath of string
 
+type DocumentSplitArguments =
+    { ChunkSize: int 
+      OutputDirectory: FileOperationOutputDirectoryOptions
+      Override: bool }
+with 
+    static member DefalutValue =
+        { ChunkSize = 1 
+          OutputDirectory = FileOperationOutputDirectoryOptions.ReaderDirectoryPath 
+          Override = false }
+    
+type DocumentMergingArguments =
+    { TargetDocumentName: string 
+      Override: bool }
+with 
+    static member DefalutValue =
+        { TargetDocumentName = Path.GetTempFileName() |> Path.changeExtension ".pdf"
+          Override = false }
+
+[<RequireQualifiedAccess>]
 module FileOperations =
-
-    [<RequireQualifiedAccess>]
-    type FileOperationOutputDirectoryOptions =
-        | ReaderDirectoryPath
-        | CustomDirectoryPath of string
-
-    type DocumentSplitArguments =
-        { ChunkSize: int 
-          OutputDirectory: FileOperationOutputDirectoryOptions
-          Override: bool }
-    with 
-        static member DefalutValue =
-            { ChunkSize = 1 
-              OutputDirectory = FileOperationOutputDirectoryOptions.ReaderDirectoryPath 
-              Override = false }
-        
-    type DocumentMergingArguments =
-        { TargetDocumentName: string 
-          Override: bool }
-    with 
-        static member DefalutValue =
-            { TargetDocumentName = Path.GetTempFileName() |> Path.changeExtension ".pdf"
-              Override = false }
-
 
     /// expose this function for modifyAsync
     let internal mergeDocumentsInternal targetDocumentName (writer: PdfDocument)  =

@@ -8,10 +8,15 @@ open Shrimp.Pdf.Colors
 
 [<AutoOpen>]
 module SelectorOperators =
-    let (<&>) (a: PageModifingArguments<_> -> #IAbstractRenderInfo -> bool) (b:PageModifingArguments<_> -> #IAbstractRenderInfo -> bool) =
+    let (<&&>) (a: PageModifingArguments<_> -> #IAbstractRenderInfo -> bool) (b:PageModifingArguments<_> -> #IAbstractRenderInfo -> bool) =
         fun args renderInfo ->
             a args renderInfo
             && b args renderInfo
+
+    let (<||>) (a: PageModifingArguments<_> -> #IAbstractRenderInfo -> bool) (b:PageModifingArguments<_> -> #IAbstractRenderInfo -> bool) =
+        fun args renderInfo ->
+            a args renderInfo
+            || b args renderInfo
 
     let (!!) (a: PageModifingArguments<_> -> #IAbstractRenderInfo -> bool) =
         fun args renderInfo ->

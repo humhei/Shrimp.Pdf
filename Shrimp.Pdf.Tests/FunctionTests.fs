@@ -5,7 +5,6 @@ open Shrimp.Pdf.Imposing
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Extensions
 open iText.Kernel.Colors
-open Shrimp.Pdf.FileOperations
 
 let functionTests =
   testList "Function Tests" [

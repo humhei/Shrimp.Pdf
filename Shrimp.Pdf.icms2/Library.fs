@@ -5,7 +5,8 @@ open Shrimp.Akkling.Cluster
 open Shrimp.Akkling.Cluster.Intergraction
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
 
-module Model =
+[<AutoOpen>]
+module Core =
 
     [<RequireQualifiedAccess>]
     type GrayIcc =

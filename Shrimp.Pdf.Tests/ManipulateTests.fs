@@ -132,7 +132,7 @@ let manipulateTests =
                 [
                     { Name = "black or white"
                       Selector = PathOrText(fun _ _ -> true)
-                      Modifiers = [Modify.BlackOrWhite()] }
+                      Modifiers = [Modifier.BlackOrWhite()] }
                 ]
             )
         )
@@ -292,7 +292,7 @@ let manipulateTests =
                   ) 
                 )
             <+>
-            Manipulates.trimToVisible(PageSelector.All) (Margin.Create (mm 6.))
+            ModifyPage.trimToVisible(PageSelector.All) (Margin.Create (mm 6.))
             <+>
             modifyPage
                 ("add text to position",
@@ -420,14 +420,14 @@ let manipulateTests =
 
     testCase "trim to visible test" <| fun _ -> 
         Flow.Manipulate(
-            trimToVisible PageSelector.All (Margin.Create(mm 6.)) 
+            ModifyPage.trimToVisible PageSelector.All (Margin.Create(mm 6.)) 
         )
         |> runWithBackup "datas/manipulate/trim to visible.pdf" 
         |> ignore
 
     testCase "trim to visible test 2" <| fun _ -> 
         Flow.Manipulate(
-            trimToVisible PageSelector.All (Margin.Create(mm 6.)) 
+            ModifyPage.trimToVisible PageSelector.All (Margin.Create(mm 6.)) 
         )
         |> runWithBackup "datas/manipulate/trim to visible2.pdf" 
         |> ignore
