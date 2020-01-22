@@ -1,4 +1,5 @@
 ﻿namespace Shrimp.Pdf.DSL
+#nowarn "0104"
 open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Parser
@@ -22,6 +23,9 @@ module SelectorOperators =
         fun args renderInfo ->
             not (a args renderInfo)
 
+    let reSharp (resharper: #IAbstractRenderInfo -> #IAbstractRenderInfo) (f: PageModifingArguments<_> -> #IAbstractRenderInfo -> bool) =
+        fun args info ->
+            f args (info |> resharper)
 
 type Selector<'userState> =
     | Path of (PageModifingArguments<'userState> -> IntegratedPathRenderInfo -> bool)
@@ -53,54 +57,120 @@ module internal Selector =
 
 type Info =
 
+
     static member IsVisible() =
-        fun (args: PageModifingArguments<_>) (info: #IIntegratedRenderInfo) ->
+        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
             IIntegratedRenderInfo.isVisible info
 
-    static member StrokeColorIs (color: Color) =
-        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            IAbstractRenderInfo.hasStroke info
-            && Color.equal (info.Value.GetStrokeColor()) color
+    static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, predicate: Color -> bool, ?predicateCompose) =
+        let predicate =
+            match predicateCompose with 
+            | Some predicateCompose -> predicate >> predicateCompose 
+            | None -> predicate
 
-    static member StrokeColorIs (color: PdfCanvasColor) =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            IAbstractRenderInfo.hasStroke info
-            && color.IsEqualTo(info.Value.GetStrokeColor())
+            match fillOrStrokeOptions with 
+            | FillOrStrokeOptions.FillOrStroke ->
+                IAbstractRenderInfo.hasStroke info
+                && predicate(info.Value.GetStrokeColor()) 
+                || 
+                    IAbstractRenderInfo.hasFill info
+                    && predicate(info.Value.GetFillColor())
 
-    static member StrokeColorIsOneOf (colors: PdfCanvasColor seq)  =
-        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            colors
-            |> Seq.exists (fun color -> 
-                (Info.StrokeColorIs color) args info
-            )
+            | FillOrStrokeOptions.Fill ->
+                IAbstractRenderInfo.hasFill info
+                && predicate(info.Value.GetFillColor())
 
-    static member StrokeColorIsOneOf (colors: Color seq)  =
-        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            colors
-            |> Seq.exists (fun color -> 
-                (Info.StrokeColorIs color) args info
-            )
+            | FillOrStrokeOptions.FillAndStroke ->
+                IAbstractRenderInfo.hasStroke info
+                && predicate(info.Value.GetStrokeColor()) 
+                && 
+                    IAbstractRenderInfo.hasFill info
+                    && predicate (info.Value.GetFillColor())
+
+            | FillOrStrokeOptions.Stroke ->
+                IAbstractRenderInfo.hasStroke info
+                && predicate(info.Value.GetStrokeColor())
+
+
+    static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, color: Color) =
+        Info.ColorIs(fillOrStrokeOptions, Color.equal color)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+    
+
+    static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, pdfCanvasColor: PdfCanvasColor) =
+        Info.ColorIs(fillOrStrokeOptions, fun color -> pdfCanvasColor.IsEqualTo(color))
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+
+    static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, colorSpace: ColorSpace) =
+        Info.ColorIs(fillOrStrokeOptions, fun color -> color.IsInColorSpace(colorSpace)) 
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
 
     static member FillColorIs (color: Color) =
-        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            IAbstractRenderInfo.hasFill info
-            && Color.equal (info.Value.GetFillColor()) color
+        Info.ColorIs(FillOrStrokeOptions.Fill, Color.equal color)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
-    static member FillColorIs (color: PdfCanvasColor) =
-        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            IAbstractRenderInfo.hasFill info
-            && color.IsEqualTo(info.Value.GetFillColor())
+    static member FillColorIs (pdfCanvasColor: PdfCanvasColor) =
+        Info.ColorIs(FillOrStrokeOptions.Fill, fun color -> pdfCanvasColor.IsEqualTo(color))
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
-    static member FillColorIsOneOf (colors: Color seq) =
-        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            colors
-            |> Seq.exists (fun color -> Info.FillColorIs color args info)
+    static member FillColorIs (colorSpace: ColorSpace) =
+        Info.ColorIs(FillOrStrokeOptions.Fill, fun color -> color.IsInColorSpace(colorSpace))
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
-    static member FillColorIsOneOf (colors: PdfCanvasColor seq) =
-        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            colors
-            |> Seq.exists (fun color -> Info.FillColorIs color args info)
+    static member FillColorIsNot (color: Color) =
+        Info.ColorIs(FillOrStrokeOptions.Fill, Color.equal color, not)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
+    static member FillColorIsNot (pdfCanvasColor: PdfCanvasColor) =
+        Info.ColorIs(FillOrStrokeOptions.Fill, (fun color -> pdfCanvasColor.IsEqualTo(color)), not)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member FillColorIsNot (colorSpace: ColorSpace) =
+        Info.ColorIs(FillOrStrokeOptions.Fill, (fun color -> color.IsInColorSpace(colorSpace)), not)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member StrokeColorIs (color: Color) =
+        Info.ColorIs(FillOrStrokeOptions.Stroke, Color.equal color)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member StrokeColorIs (pdfCanvasColor: PdfCanvasColor) =
+        Info.ColorIs(FillOrStrokeOptions.Stroke, fun color -> pdfCanvasColor.IsEqualTo(color))
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member StrokeColorIs (colorSpace: ColorSpace) =
+        Info.ColorIs(FillOrStrokeOptions.Stroke, fun color -> color.IsInColorSpace(colorSpace))
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member StrokeColorIsNot (color: Color) =
+        Info.ColorIs(FillOrStrokeOptions.Stroke, Color.equal color, not)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member StrokeColorIsNot (pdfCanvasColor: PdfCanvasColor) =
+        Info.ColorIs(FillOrStrokeOptions.Stroke, (fun color -> pdfCanvasColor.IsEqualTo(color)), not)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member StrokeColorIsNot (colorSpace: ColorSpace) =
+        Info.ColorIs(FillOrStrokeOptions.Stroke, (fun color -> color.IsInColorSpace(colorSpace)), not)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member ColorIsOneOf (fillOrStrokeOptions: FillOrStrokeOptions, colors: Color list) =
+        Info.ColorIs(fillOrStrokeOptions, fun color -> Colors.contains color colors)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member FillColorIsOneOf (colors: Color list) =
+        Info.ColorIs(FillOrStrokeOptions.Fill, fun color -> Colors.contains color colors)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member FillColorIsNotOneOf (colors: Color list) =
+        Info.ColorIs(FillOrStrokeOptions.Fill, (fun color -> Colors.contains color colors), not)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member StrokeColorIsNotOneOf (colors: Color list) =
+        Info.ColorIs(FillOrStrokeOptions.Stroke, (fun color -> Colors.contains color colors), not)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member BoundIsCrossOf (rect, ?boundGettingOptions) =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->

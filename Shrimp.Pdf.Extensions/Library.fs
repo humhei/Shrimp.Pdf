@@ -533,6 +533,13 @@ module iText =
         | WithoutStrokeWidth = 1
 
 
+    type FillOrStrokeOptions =
+        | Stroke = 0
+        | Fill = 1
+        | FillOrStroke = 2
+        | FillAndStroke = 3
+
+
 
 
     [<RequireQualifiedAccess>]
@@ -640,19 +647,24 @@ module iText =
             info.Value.GetText()
 
         let hasFill (info: ITextRenderInfo) =             
-            let md = info.Value.GetTextRenderMode()
-            match md with 
-            | PdfCanvasConstants.TextRenderingMode.FILL 
-            | PdfCanvasConstants.TextRenderingMode.FILL_STROKE -> true
-            | _ -> false
+            let textRenderMode = info.Value.GetTextRenderMode()
+            match textRenderMode with 
+            | TextRenderingMode.FILL 
+            | TextRenderingMode.FILL_STROKE -> true
+            | TextRenderingMode.STROKE -> false
+            | _ -> 
+                Logger.unSupportedTextRenderMode textRenderMode
+                false
 
         let hasStroke (info: ITextRenderInfo) =             
-            let md = info.Value.GetTextRenderMode()
-            match md with 
-            | PdfCanvasConstants.TextRenderingMode.STROKE
-            | PdfCanvasConstants.TextRenderingMode.FILL_STROKE  
-            | PdfCanvasConstants.TextRenderingMode.STROKE_CLIP -> true
-            |  _ -> false
+            let textRenderMode = info.Value.GetTextRenderMode()
+            match textRenderMode with 
+            | TextRenderingMode.STROKE
+            | TextRenderingMode.FILL_STROKE -> true  
+            | TextRenderingMode.FILL -> false
+            | _ -> 
+                Logger.unSupportedTextRenderMode textRenderMode
+                false
 
         let getBound (boundGettingOptions: BoundGettingOptions) (info: ITextRenderInfo) =
             let width = getWidth info

@@ -23,14 +23,14 @@ with
         let (Reuse value) = x
         value
 
-    member private x.Invoke =
+    member internal x.Invoke =
         fun flowModel (document: SplitDocument) ->
             Logger.infoWithStopWatch (sprintf "%A" x) (fun _ ->
                 let userState = x.Value flowModel document
                 userState
             )
 
-    member private x.InvokeAndReOpenDocument =
+    member internal x.InvokeAndReOpenDocument =
         fun flowModel (document: SplitDocument) ->
             Logger.infoWithStopWatch (sprintf "%A" x) (fun _ ->
                 let userState = x.Value flowModel document
@@ -77,6 +77,8 @@ with
             middleUserState, reuse2.Invoke (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
         |> Reuse
 
+
+
 [<RequireQualifiedAccess>]
 module Reuse =
     let dummy = 
@@ -87,13 +89,24 @@ module Reuse =
             flowModel.UserState 
         )
 
+    let batch (reuses: seq<Reuse<'originUserState,'newUserState>>) =
+        fun flowModel (document: SplitDocument) ->
+            let reuses = List.ofSeq reuses
+            reuses
+            |> List.mapi(fun i reuse ->
+                if i = reuses.Length - 1 
+                then reuse.Invoke flowModel document
+                else reuse.InvokeAndReOpenDocument flowModel document
+            )
+        |> Reuse
+
 type Manipulate<'oldUserState, 'newUserState> = Manipulate of (FlowModel<'oldUserState> -> IntegratedDocument -> 'newUserState)
 with 
     member x.Value =
         let (Manipulate (value)) = x
         value
 
-    member private x.InvokeAndReOpenDocument =
+    member internal x.InvokeAndReOpenDocument =
         let (Manipulate (value)) = x
         fun flowModel (document: IntegratedDocument) ->
             let userState = value flowModel document
@@ -137,16 +150,24 @@ with
             middleUserState
         |> Manipulate
 
+
+
+
 [<RequireQualifiedAccess>]
 module Manipulate =
     /// followed by <++> or <.+> to restore userState
     let dummy = Manipulate(fun model _ -> model.UserState)
 
-    let ofConstraint (manipulateFactory: 'oldUserState -> Manipulate<'oldUserState,'newUserState>) =
-        fun (flowModel: FlowModel<'oldUserState>) ->
-            (manipulateFactory flowModel.UserState).Value flowModel
+    let batch (manipulates: seq<Manipulate<'originUserState,'newUserState>>) =
+        fun flowModel (document: IntegratedDocument) ->
+            let manipulates = List.ofSeq manipulates
+            manipulates
+            |> List.mapi(fun i manipulate ->
+                if i = manipulates.Length - 1 
+                then manipulate.Value flowModel document
+                else manipulate.InvokeAndReOpenDocument flowModel document
+            )
         |> Manipulate
-
 
 type FileOperation<'oldUserState, 'newUserState> = 
     FileOperation of (FlowModel<'oldUserState> list -> FlowModel<'newUserState> list)
@@ -284,12 +305,34 @@ with
             |> List.map (FlowModel.mapM mapping)
         |> Flow.TransformList 
 
+
     
 [<RequireQualifiedAccess>]
 module Flow =
     let dummy = Flow.Transform (fun flowModel -> [flowModel] )
 
+    let batch (flows: seq<Flow<'originUserState,'newUserState>>) =
+        fun flowModels ->
+            let flows = List.ofSeq flows
+            let newFlowModels = 
+                flows
+                |> List.collect(fun flow ->
+                    Flow<_, _>.Run (flowModels, flow)
+                )
 
+            let files = flowModels |> List.map (fun m -> m.File)
+            let newFiles = newFlowModels |> List.map (fun m -> m.File)
+
+            if files = newFiles 
+            then 
+                flowModels
+                |> List.map (FlowModel.mapM(fun originUserState -> 
+                    newFlowModels
+                    |> List.map (fun flow -> flow.UserState)
+                ))
+            else failwithf "Batch is not supported when origin files %A are different to new files %A" files newFiles
+
+        |> Flow.TransformList
 [<AutoOpen>]
 module Operators =
 

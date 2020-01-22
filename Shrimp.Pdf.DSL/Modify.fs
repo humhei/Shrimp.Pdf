@@ -11,6 +11,11 @@ open Shrimp.Pdf
 open System.IO
 open iText.Kernel.Pdf
 
+type FillOrStrokeModifingOptions =
+    | Stroke = 0
+    | Fill = 1
+    | FillAndStroke = 2
+
 type _SelectionModifierAddNewArguments<'userState> =
     { CurrentRenderInfo: IIntegratedRenderInfo  
       PageModifingArguments: PageModifingArguments<'userState> }
@@ -35,7 +40,24 @@ with
     member x.Page = x.PageModifingArguments.Page
 
 
+type PageInfosValidation = PageInfosValidation of (PageNumber -> seq<IIntegratedRenderInfo> -> unit)
+with 
+    member x.Value =
+        let (PageInfosValidation value) = x
+        value
 
+[<RequireQualifiedAccess>]
+module PageInfosValidation =
+    let atLeastOne =
+        fun (pageNumber) infos ->
+            let length = (Seq.length infos)
+            if length = 0 then failwith "Didn't selector any page infos"
+
+        |> PageInfosValidation
+
+    let ignore = 
+        fun _ _ -> ()
+        |> PageInfosValidation
 
 type Modifier<'userState> = _SelectionModifierFixmentArguments<'userState> -> list<PdfCanvas -> PdfCanvas>
  
@@ -74,66 +96,156 @@ type Modifier =
                     PdfCanvas.writeOperatorRange args.Close
                 ]
 
+    static member CancelStroke() : Modifier<'userState> =
+        fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
+            match args.CurrentRenderInfo.Tag with 
+            | IntegratedRenderInfoTag.Path ->
+                let newOperatorName =
+                    match args.Close.Operator.ToString() with 
+                    | "b" -> "f"
+                    | "B" -> "F"
+                    | "b*" -> "f*"
+                    | "B*" -> "f*"
+                    | operatorName -> 
+                        match operatorName with 
+                        | "f" | "F" | "f*" -> operatorName
+                        | "s" | "S" -> "n"
+                        | _ -> failwithf "Unexcepted opetor %s" operatorName
 
 
-    static member ReplaceColor(picker: (Color -> Color option)) : Modifier<'userState> =
+                let newClose = 
+                    { args.Close with 
+                        Operator = new PdfLiteral(newOperatorName)
+                        Operands = ResizeArray [new PdfLiteral(newOperatorName) :> PdfObject]}
+                [
+                    PdfCanvas.writeOperatorRange newClose
+                ]
+
+            | IntegratedRenderInfoTag.Text ->
+                let newTextRenderingMode =
+                    match args.CurrentRenderInfo.Value.GetGraphicsState().GetTextRenderingMode() with 
+                    | PdfCanvasConstants.TextRenderingMode.FILL_STROKE -> PdfCanvasConstants.TextRenderingMode.FILL
+                    | PdfCanvasConstants.TextRenderingMode.FILL -> PdfCanvasConstants.TextRenderingMode.FILL
+                    | PdfCanvasConstants.TextRenderingMode.STROKE -> TextRenderingMode.INVISIBLE
+                    | textRenderMode -> 
+                        Logger.unSupportedTextRenderMode textRenderMode
+                        TextRenderingMode.INVISIBLE
+
+                [
+                    PdfCanvas.setTextRenderingMode(newTextRenderingMode) 
+                    PdfCanvas.writeOperatorRange args.Close
+                ]
+
+
+    static member CancelFill() : Modifier<'userState> =
+        fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
+            match args.CurrentRenderInfo.Tag with 
+            | IntegratedRenderInfoTag.Path ->
+                let newOperatorName =
+                    match args.Close.Operator.ToString() with 
+                    | "b" -> "s"
+                    | "B" -> "S"
+                    | "b*" -> "s"
+                    | "B*" -> "S"
+                    | operatorName -> 
+                        match operatorName with 
+                        | "s" | "S" -> operatorName
+                        | "f" | "F" | "f*" -> "n"
+                        | _ -> failwithf "Unexcepted opetor %s" operatorName
+
+
+                let newClose = 
+                    { args.Close with 
+                        Operator = new PdfLiteral(newOperatorName)
+                        Operands = ResizeArray [new PdfLiteral(newOperatorName) :> PdfObject]}
+                [
+                    PdfCanvas.writeOperatorRange newClose
+                ]
+
+            | IntegratedRenderInfoTag.Text ->
+                let newTextRenderingMode =
+                    match args.CurrentRenderInfo.Value.GetGraphicsState().GetTextRenderingMode() with 
+                    | TextRenderingMode.FILL_STROKE -> TextRenderingMode.STROKE
+                    | TextRenderingMode.STROKE -> TextRenderingMode.STROKE
+                    | TextRenderingMode.FILL -> TextRenderingMode.INVISIBLE
+                    | textRenderMode -> 
+                        Logger.unSupportedTextRenderMode textRenderMode
+                        TextRenderingMode.INVISIBLE
+
+                [
+                    PdfCanvas.setTextRenderingMode(newTextRenderingMode) 
+                    PdfCanvas.writeOperatorRange args.Close
+                ]
+
+
+    static member ReplaceColor(picker: (Color -> Color option), ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
+        let fillOrStrokeModifyingOptions = defaultArg fillOrStrokeModifyingOptions FillOrStrokeModifingOptions.FillAndStroke
+
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
             [
                 if IAbstractRenderInfo.hasFill args.CurrentRenderInfo 
                 then 
-                    match picker (args.CurrentRenderInfo.Value.GetFillColor()) with
-                    | Some newColor ->
+                    match fillOrStrokeModifyingOptions, picker (args.CurrentRenderInfo.Value.GetFillColor()) with
+                    | FillOrStrokeModifingOptions.Stroke, _ 
+                    | _, None -> ()
+                    | FillOrStrokeModifingOptions.Fill, Some (newColor) 
+                    | FillOrStrokeModifingOptions.FillAndStroke, Some (newColor) ->
                         PdfCanvas.setFillColor(newColor)
-                    | None -> ()
+
 
                 if IAbstractRenderInfo.hasStroke args.CurrentRenderInfo 
                 then 
-                    match picker (args.CurrentRenderInfo.Value.GetFillColor()) with
-                    | Some newColor ->
+                    match fillOrStrokeModifyingOptions, picker (args.CurrentRenderInfo.Value.GetStrokeColor()) with
+                    | FillOrStrokeModifingOptions.Fill, _ 
+                    | _, None -> ()
+                    | FillOrStrokeModifingOptions.Stroke, Some (newColor) 
+                    | FillOrStrokeModifingOptions.FillAndStroke, Some (newColor) ->
                         PdfCanvas.setStrokeColor(newColor)
-                    | None -> ()
 
                 PdfCanvas.writeOperatorRange args.Close
             ]
 
-    static member InvertColors() =
-        Modifier.ReplaceColor(fun color ->
-            (FsValueColor.OfItextColor color)
-            |> FsValueColor.Invert
-            |> FsValueColor.ToItextColor
-            |> Some
-        )
 
-    static member ReplaceColor(colorKeyValuePairs: list<Color * Color>) : Modifier<'userState> =
+    static member ReplaceColor(colorKeyValuePairs: list<Color * Color>, ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
         let originColors = colorKeyValuePairs |> List.map fst
         let newColors = colorKeyValuePairs |> List.map snd
-        Modifier.ReplaceColor(fun color ->
-            match Colors.tryFindIndex color originColors with 
-            | Some index -> Some newColors.[index]
-            | None -> None
+        Modifier.ReplaceColor(
+            ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
+            picker =
+                fun color ->
+                    match Colors.tryFindIndex color originColors with 
+                    | Some index -> Some newColors.[index]
+                    | None -> None
+        )
+
+    static member InvertColors(?fillOrStrokeModifyingOptions) =
+        Modifier.ReplaceColor(
+            ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
+            picker = 
+                fun color ->
+                    (FsValueColor.OfItextColor color)
+                    |> FsValueColor.Invert
+                    |> FsValueColor.ToItextColor
+                    |> Some
         )
     
-    static member SetStrokeColor(color: Color) : Modifier<'userState> =
-        fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
-            [
-                PdfCanvas.setStrokeColor (color)
-                PdfCanvas.writeOperatorRange args.Close
-            ]
+    static member SetColor(color: Color, ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
+        Modifier.ReplaceColor(
+            ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
+            picker = fun _ -> Some color
+        )
 
     static member SetFillColor(color: Color) : Modifier<'userState> =
-        fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
-            [
-                PdfCanvas.setFillColor (color)
-                PdfCanvas.writeOperatorRange args.Close
-            ]
+        Modifier.ReplaceColor(
+            fillOrStrokeModifyingOptions = FillOrStrokeModifingOptions.Fill,
+            picker = fun _ -> Some color
+        )
 
-    static member SetFillAndStrokeColor(color: Color) : Modifier<'userState> =
-        fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
-            [
-                PdfCanvas.setFillColor (color)
-                PdfCanvas.setStrokeColor (color)
-                PdfCanvas.writeOperatorRange args.Close
-            ]
+    static member SetStrokeColor(color: Color) : Modifier<'userState> =
+        Modifier.ReplaceColor(
+            fillOrStrokeModifyingOptions = FillOrStrokeModifingOptions.Stroke,
+            picker = fun _ -> Some color
+        )
 
     static member AddRectangleToBound(mapping) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
@@ -147,6 +259,12 @@ type _SelectorAndModifiers<'userState> =
     { Selector: Selector<'userState> 
       Modifiers: Modifier<'userState> list
       Name: string }
+
+type _SelectorAndModifiersAndPageInfosValidation<'userState> =
+    { Selector: Selector<'userState> 
+      Modifiers: Modifier<'userState> list
+      Name: string 
+      PageInfosValidation: PageInfosValidation }
 
 
 
@@ -211,14 +329,14 @@ module ModifyOperators =
             |> Manipulate
 
     /// async may doesn't make any sense for cpu bound computation?
-    let modifyAsync (modifyingAsyncWorker, pageSelector, (modifiers: list<_SelectorAndModifiers<'userState>>)) =
+    let modifyAsyncAndValidatePageInfos (modifyingAsyncWorker, pageSelector, (modifiers: list<_SelectorAndModifiersAndPageInfosValidation<'userState>>)) =
         let names = 
             modifiers
             |> List.map (fun selectorAndModifier -> selectorAndModifier.Name)
 
         if names.Length <> (List.distinct names).Length then failwithf "Duplicated keys in SelectorAndModifiers %A" modifiers
 
-        let asyncManiputation = 
+        let asyncManiputation  = 
             fun (totalNumberOfPages) (transformPageNum: PageNumber -> PageNumber) (flowModel: FlowModel<_>) (document: IntegratedDocument) ->
                 IntegratedDocument.modify
                     (String.concat "\n" names)
@@ -226,15 +344,17 @@ module ModifyOperators =
                     (
                         fun (pageNum, pdfPage) ->
                             modifiers 
-                            |> List.mapi (fun i (selectAndModify) ->
+                            |> List.mapi (fun i (selectAndModifyAndPageInfosValidatioin) ->
                                 let pageModifingArguments =
                                     { PageNum = (transformPageNum pageNum).Value
                                       UserState = flowModel.UserState
                                       Page = pdfPage
                                       TotalNumberOfPages = totalNumberOfPages }
-                                ( { Name = selectAndModify.Name }, 
-                                    ( Selector.toRenderInfoSelector pageModifingArguments selectAndModify.Selector,
-                                        Modifiers.toSelectionModifier pageModifingArguments selectAndModify.Modifiers)
+                                ( { Name = selectAndModifyAndPageInfosValidatioin.Name }, 
+                                    ( Selector.toRenderInfoSelector pageModifingArguments selectAndModifyAndPageInfosValidatioin.Selector,
+                                      Modifiers.toSelectionModifier pageModifingArguments selectAndModifyAndPageInfosValidatioin.Modifiers,
+                                      selectAndModifyAndPageInfosValidatioin.PageInfosValidation.Value
+                                    )
                                 )
                             )
                             |> Map.ofList
@@ -243,6 +363,18 @@ module ModifyOperators =
                 
             
         Manipulate.runInAsync modifyingAsyncWorker asyncManiputation
+
+    /// async may doesn't make any sense for cpu bound computation?
+    let modifyAsync (modifyingAsyncWorker, pageSelector, (modifiers: list<_SelectorAndModifiers<'userState>>)) =
+        modifyAsyncAndValidatePageInfos(modifyingAsyncWorker, pageSelector, (modifiers |> List.map (fun modifer ->
+            { Name = modifer.Name 
+              Selector = modifer.Selector
+              Modifiers = modifer.Modifiers 
+              PageInfosValidation = PageInfosValidation (fun _ _ -> ())}
+        )))
+
+    let modifyAndValidatePageInfos (pageSelector, (modifiers: list<_SelectorAndModifiersAndPageInfosValidation<'userState>>)) =
+        modifyAsyncAndValidatePageInfos (ModifyingAsyncWorker.Sync, pageSelector, modifiers)
 
     let modify (pageSelector, (modifiers: list<_SelectorAndModifiers<'userState>>)) =
         modifyAsync (ModifyingAsyncWorker.Sync, pageSelector, modifiers)

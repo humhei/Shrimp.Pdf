@@ -6,9 +6,6 @@ open System.IO
 [<RequireQualifiedAccess>]
 module Logger =
     let mutable logger: NLog.Logger option = None
-    let unSupportedTextRenderMode(textRendingMode: int) =
-        let stackTrace = new System.Diagnostics.StackTrace();
-        printfn "Unsupported text render mode %d \n %s" textRendingMode (stackTrace.ToString())
 
 
     let warning (message: string) =
@@ -20,6 +17,10 @@ module Logger =
         match logger with 
         | Some (logger: NLog.Logger) -> logger.Info message
         | None -> printfn "%s" message
+
+    let unSupportedTextRenderMode(textRendingMode: int) =
+        let stackTrace = new System.Diagnostics.StackTrace();
+        warning (sprintf "Unsupported text render mode %d \n %s" textRendingMode (stackTrace.ToString()))
 
 
     let infoWithStopWatch message f =

@@ -16,6 +16,13 @@ open Resources
 [<AutoOpen>]
 module _Colors =
 
+    type ColorSpace =
+        | Gray = 0
+        | Rgb = 1
+        | Cmyk = 2
+        | Lab = 3
+        | Separation = 4
+
     let private whitePoint = 
         lazy 
             config.GetFloatList("shrimp.pdf.colors.whitePoint")
@@ -578,3 +585,12 @@ module _Colors =
                     }
                     |> PdfCanvasColor.Separation
                 registration1.IsEqualTo(color)
+
+    type Color with 
+        member x.IsInColorSpace(colorSpace: ColorSpace) =
+            match x, colorSpace with 
+            | :? DeviceCmyk, ColorSpace.Cmyk
+            | :? DeviceGray, ColorSpace.Gray
+            | :? DeviceRgb, ColorSpace.Rgb
+            | :? Lab, ColorSpace.Lab -> true
+            | _ -> false

@@ -1,4 +1,5 @@
 ﻿namespace Shrimp.Pdf.Parser
+#nowarn "0104"
 open iText.Kernel.Pdf.Canvas.Parser
 open iText.Kernel.Pdf.Canvas.Parser.Listener
 open System.Collections.Generic
@@ -23,9 +24,6 @@ module ClippingPathInfo =
             |> Rectangle.ofPoints
         )
 
-type FillOrStrokeOptions =
-    | Stroke = 0
-    | Fill = 1
 
 [<RequireQualifiedAccess>]
 module internal IAbstractRenderInfo =
@@ -34,7 +32,9 @@ module internal IAbstractRenderInfo =
         match fillOrStrokeOptions with 
         | FillOrStrokeOptions.Fill -> IAbstractRenderInfo.hasFill info
         | FillOrStrokeOptions.Stroke -> IAbstractRenderInfo.hasStroke info
-        | _ -> failwith "Invalid token"
+        | FillOrStrokeOptions.FillAndStroke -> IAbstractRenderInfo.hasFill info && IAbstractRenderInfo.hasStroke info
+        | FillOrStrokeOptions.FillOrStroke -> IAbstractRenderInfo.hasFill info || IAbstractRenderInfo.hasStroke info
+
         &&
             match info with 
             | :? PathRenderInfo as info -> not (info.IsPathModifiesClippingPath())
@@ -52,7 +52,7 @@ module internal IAbstractRenderInfo =
             | None -> true
 
     let tryGetVisibleBound boundGettingOptions (clippingPathInfo: ClippingPathInfo option) (info: IAbstractRenderInfo) =
-        if isVisible (FillOrStrokeOptions.Stroke) clippingPathInfo info || isVisible (FillOrStrokeOptions.Fill) clippingPathInfo info 
+        if isVisible (FillOrStrokeOptions.FillOrStroke) clippingPathInfo info 
         then
             let bound = IAbstractRenderInfo.getBound boundGettingOptions info
             match clippingPathInfo with 
@@ -326,6 +326,7 @@ type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener ,
     override this.ProcessPageContent(page) =
         this.ProcessContent(page.GetContentBytes(), page.GetResources());
 
+    new (listener: IEventListener) = NonInitialCallbackablePdfCanvasProcessor(listener, dict [])
 
 type NonInitialClippingPathPdfDocumentContentParser(pdfDocument) =
     inherit PdfDocumentContentParser(pdfDocument)

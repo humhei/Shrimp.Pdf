@@ -145,16 +145,16 @@ type IntegratedDocument private (reader: string, writer: string) =
 module IntegratedDocument =
     type private Modifier = _SelectionModifierFixmentArguments -> list<PdfCanvas -> PdfCanvas>
     
-    let modify (name) (pageSelector: PageSelector) (selectorModifierMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier>) (document: IntegratedDocument) =
+    let modify (name) (pageSelector: PageSelector) (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfo seq -> unit)>) (document: IntegratedDocument) =
         let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
         let totalNumberOfPages = document.Value.GetNumberOfPages()
         Logger.infoWithStopWatch (sprintf "MODIFY: \n%s" name) (fun _ ->
             for i = 1 to totalNumberOfPages do
                 if List.contains i selectedPageNumbers then
                     let page = document.Value.GetPage(i)
-                    let selectorModifierMapping = selectorModifierMappingFactory (PageNumber i, page)
+                    let selectorModifierMapping = selectorModifierPageInfosValidationMappingFactory (PageNumber i, page)
                     for pair in selectorModifierMapping do
-                        PdfPage.modify (Map.ofList[pair.Key, pair.Value]) page
-                
+                        let renderInfoSelector, modifier, pageInfosValidation = pair.Value
+                        pageInfosValidation (PageNumber i) (PdfPage.modify (Map.ofList[pair.Key, (renderInfoSelector, modifier)]) page)
         )
 

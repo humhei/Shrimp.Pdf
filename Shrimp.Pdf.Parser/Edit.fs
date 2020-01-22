@@ -118,8 +118,8 @@ type internal CallbackableContentOperator (originalOperator) =
 
             processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
 
-and internal OperatorRangeCallbackablePdfCanvasProcessor(listener) =
-    inherit PdfCanvasProcessor(listener)
+and private OperatorRangeCallbackablePdfCanvasProcessor(listener) =
+    inherit NonInitialCallbackablePdfCanvasProcessor(listener)
     abstract member InvokeOperatorRange: OperatorRange -> unit
 
     default this.InvokeOperatorRange(operatorRange) = ()
@@ -190,7 +190,7 @@ type private Modifier = _SelectionModifierFixmentArguments -> list<PdfCanvas -> 
 
 
 
-and internal PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * Modifier>, document: PdfDocument) =
+and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * Modifier>, document: PdfDocument) =
     inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(Map.map (fun _ -> fst) selectorModifierMapping))
     
     let eventTypes = 
@@ -294,6 +294,8 @@ and internal PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, 
             |> ignore
 
 
+    member internal x.ParsedRenderInfos = eventListener.ParsedRenderInfos
+
     member this.EditContent (resources: PdfResources, pdfObject: PdfObject) =
         match eventListener with 
         | null -> eventListener <- this.GetEventListener() :?> FilteredEventListenerEx
@@ -339,12 +341,15 @@ module PdfPage =
         let pageContents = page.GetPdfObject().Get(PdfName.Contents)
 
         match pageContents with 
-        | null -> ()
+        | null -> Seq.empty
         | _ ->
             let resources = page.GetResources()
             let fixedStream = editor.EditContent(resources, pageContents)
+
             page.Put(PdfName.Contents, fixedStream)
             |> ignore
+
+            editor.ParsedRenderInfos
 
 
 
