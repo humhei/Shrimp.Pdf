@@ -55,7 +55,6 @@
 
   <ItemGroup>
     <PackageReference Include="Fake.IO.FileSystem" Version="5.16.1" />
-    <PackageReference Include="FParsec" Version="1.0.3" />
   </ItemGroup>
 
   <ItemGroup>

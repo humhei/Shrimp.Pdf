@@ -10,44 +10,26 @@ open iText.Kernel.Pdf.Canvas.Parser
 open Shrimp.Pdf.Parser
 open iText.Kernel.Colors
 open iText.Kernel.Pdf.Colorspace
-
+open Shrimp.Akkling.Cluster.Intergraction.Configuration
 
 //open Shrimp.Pdf.Parser
 
 [<AutoOpen>]
 module internal Config =
-    let private possibleFolders = 
-        [ "../Assets"(*UWP*) ] 
 
     type private AssemblyFinder = AssemblyFinder
 
-    /// application.conf should be copied to target folder
-    let private fallBackByApplicationConf config =
-        let folder = System.IO.Path.GetDirectoryName(Assembly.GetEntryAssembly().Location)
-        let folders = 
-            [ folder ] 
-            @ possibleFolders
-                |> List.map (fun m -> Path.Combine(folder, m))
-
-        folders 
-        |> List.map (fun folder -> Path.Combine(folder, "application.conf"))
-        |> List.tryFind (fun file -> File.Exists(file))
-        |> function
-            | Some file ->
-                let texts = File.ReadAllText(file, Encoding.UTF8)
-                let applicationConfig = ConfigurationFactory.ParseString(texts)
-                applicationConfig.WithFallback(config)
-            | None -> config
-
     let internal config = 
-        ConfigurationFactory
-            .FromResource<AssemblyFinder>("Shrimp.Pdf.reference.conf")
-        |> fallBackByApplicationConf
+        lazy
+            ConfigurationFactory
+                .FromResource<AssemblyFinder>("Shrimp.Pdf.reference.conf")
+            |> Configuration.fallBackByApplicationConf
 
 module Resources =
     open Fake.IO
     let internal resourceDirectory = 
-        Path.GetFullPath (config.GetString("shrimp.pdf.resourcesDirectory"))
+        lazy
+            Path.GetFullPath (config.Value.GetString("shrimp.pdf.resourcesDirectory"))
 
 
     [<RequireQualifiedAccess>]
@@ -57,7 +39,7 @@ module Resources =
         /// then invoke it: e.g. obtainCmykMarkFromResource "CMYK" writer 
         let obtainMarkFromResources (fileNameWithoutExtension: string) (writer: PdfDocument) =
 
-            let file = resourceDirectory </> "Marks" </> fileNameWithoutExtension + ".pdf"
+            let file = resourceDirectory.Value </> "Marks" </> fileNameWithoutExtension + ".pdf"
             lock writer (fun _ ->
                 let doc = new PdfDocument(new PdfReader(file))
                 let markPage = 
@@ -72,7 +54,7 @@ module Resources =
         /// then invoke it: e.g. obtainColorFromResource "registration" writer 
         /// e.g. obtainColorFromResource @"Pantone+ Solid Coated/PANTONE 100 C" writer 
         let obtainSperationColorFromResources (fileNameWithoutExtension: string) (writer: PdfDocument) =
-            let file = resourceDirectory </> "Colors" </> fileNameWithoutExtension + ".pdf"
+            let file = resourceDirectory.Value </> "Colors" </> fileNameWithoutExtension + ".pdf"
             lock writer (fun _ ->
                 let doc = new PdfDocument(new PdfReader(file))
 

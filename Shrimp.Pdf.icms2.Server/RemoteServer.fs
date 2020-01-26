@@ -1,8 +1,7 @@
 ﻿module Shrimp.Pdf.icms2.Server.RemoteServer
 open Shrimp.Akkling.Cluster.Intergraction
 open Akkling
-
-open Shrimp.Pdf.icms2.Model
+open Shrimp.Pdf.icms2
 open icms2_wrapper
 open Fake.IO.FileSystemOperators
 

@@ -22,46 +22,56 @@ module Client =
 
     [<AutoOpen>]
     module ClientCluster =
-        let  mutable private client: option<Client<unit, ServerMsg>> = None
-        let SetClientContext() = client <- Some (Client.create())
+        let mutable private client: option<Client<unit, ServerMsg>> = None
+        let SetClientContext() = 
+            match client with 
+            | None -> client <- Some (Client.create())
+            | Some _ -> ()
+
         let GetClient() = 
             match client with
             | Some client -> client
             | None -> failwith "Please run SetClientContext() first to aceess icm server"
 
 
-
     let private referenceConfig = 
-        ConfigurationFactory.FromResource<AssemblyFinder>("Shrimp.Pdf.icms2.Client.reference.conf")
-        |> Configuration.fallBackByApplicationConf
+        lazy
+            ConfigurationFactory.FromResource<AssemblyFinder>("Shrimp.Pdf.icms2.Client.reference.conf")
+            |> Configuration.fallBackByApplicationConf
 
     let private getEnumFromConfig configName : 'enum =
         let avaliableIccs = Enum.GetNames(typeof<'enum>)
-        let cmykIccText = referenceConfig.GetString(configName)
+        let cmykIccText = referenceConfig.Value.GetString(configName)
         match Array.tryFind (fun m -> String.Compare(m, cmykIccText.Trim(), true) = 0) avaliableIccs with 
         | Some icc -> 
             Enum.Parse(typeof<'enum>, icc)
             |> unbox
         | None -> failwithf "avaliableIccs %A not include %s" avaliableIccs cmykIccText 
      
-    let defaultCmykIcc: CmykIcc = 
-        getEnumFromConfig "shrimp.pdf.icms2.client.icc.cmyk"
-
-    let defaultRgbIcc: RgbIcc =
-        getEnumFromConfig "shrimp.pdf.icms2.client.icc.rgb"
 
 
-    let defaultLabIcc: LabIcc =
-        getEnumFromConfig "shrimp.pdf.icms2.client.icc.lab"
+    let defaultCmykIcc: Lazy<CmykIcc> = 
+        lazy
+            getEnumFromConfig "shrimp.pdf.icms2.client.icc.cmyk"
 
-    let defaultGrayIcc: GrayIcc =
-        getEnumFromConfig "shrimp.pdf.icms2.client.icc.gray"
+    let defaultRgbIcc: Lazy<RgbIcc> =
+        lazy
+            getEnumFromConfig "shrimp.pdf.icms2.client.icc.rgb"
 
-    let defaultIntent: Intent =
+    let defaultLabIcc: Lazy<LabIcc> =
+        lazy
+            getEnumFromConfig "shrimp.pdf.icms2.client.icc.lab"
+
+    let defaultGrayIcc: Lazy<GrayIcc> =
+        lazy
+            getEnumFromConfig "shrimp.pdf.icms2.client.icc.gray"
+
+    let defaultIntent: Lazy<Intent> =
         getEnumFromConfig "shrimp.pdf.icms2.client.icc.intent"
 
     let defaultMaxCmsGrayDeviation: float32 =
-        referenceConfig.GetFloat("shrimp.pdf.icms2.client.maxCmsGrayDeviation")
+        referenceConfig.Value.GetFloat("shrimp.pdf.icms2.client.maxCmsGrayDeviation")
+
 
 
     let private msgCache = new ConcurrentDictionary<ServerMsg, float32[]>()
@@ -77,10 +87,10 @@ module Client =
         | Separation of Separation
     with 
         static member DefaultIcc = function
-            | CmsColor.Rgb _ -> Icc.Rgb defaultRgbIcc
-            | CmsColor.Cmyk _ -> Icc.Cmyk defaultCmykIcc
-            | CmsColor.Gray _ -> Icc.Gray defaultGrayIcc
-            | CmsColor.Lab _ -> Icc.Lab defaultLabIcc
+            | CmsColor.Rgb _ -> Icc.Rgb defaultRgbIcc.Value
+            | CmsColor.Cmyk _ -> Icc.Cmyk defaultCmykIcc.Value
+            | CmsColor.Gray _ -> Icc.Gray defaultGrayIcc.Value
+            | CmsColor.Lab _ -> Icc.Lab defaultLabIcc.Value
             | CmsColor.Separation separation -> failwith "Not implement"
           
         member x.AsLab() =
@@ -131,7 +141,7 @@ module Client =
 
         member x.ConvertToAsync(outputIcc: Icc, ?intent: Intent, ?inputIcc: CmsColor -> Icc) = async {
             let inputIcc = (defaultArg inputIcc CmsColor.DefaultIcc) x
-            let intent = defaultArg intent defaultIntent
+            let intent = defaultArg intent defaultIntent.Value
 
             if inputIcc = outputIcc 
             then return x
@@ -149,9 +159,9 @@ module Client =
         }
 
         member x.ConvertToLabAsync(?labIcc: LabIcc, ?intent: Intent, ?inputIcc: CmsColor -> Icc) = async {
-            let labIcc = defaultArg labIcc defaultLabIcc
+            let labIcc = defaultArg labIcc defaultLabIcc.Value
             let inputIcc = (defaultArg inputIcc CmsColor.DefaultIcc) x
-            let intent = defaultArg intent defaultIntent
+            let intent = defaultArg intent defaultIntent.Value
 
             if x.IsSameColorSpaceWith(inputIcc) 
             then 
@@ -285,9 +295,8 @@ module Client =
            
 
     type Modify =
-        static member ConvertColorsTo(pageSelector: PageSelector, outputIcc: Icc, ?predicate, ?fillOrStrokeOptions: FillOrStrokeOptions, ?intent, ?inputIcc : InputIccModifyArgs) =
+        static member ReplaceColors (pageSelector: PageSelector, picker, ?fillOrStrokeOptions: FillOrStrokeOptions, ?pageInfosValidation, ?modifierName: string) =
             let fillOrStrokeOptions = defaultArg fillOrStrokeOptions FillOrStrokeOptions.FillOrStroke
-            let predicate = defaultArg predicate (fun _ -> true)
 
             let fillOrStrokeModifyingOptions =
                 match fillOrStrokeOptions with 
@@ -295,46 +304,69 @@ module Client =
                 | FillOrStrokeOptions.FillOrStroke -> FillOrStrokeModifingOptions.FillAndStroke
                 | FillOrStrokeOptions.Fill -> FillOrStrokeModifingOptions.Fill
                 | FillOrStrokeOptions.Stroke -> FillOrStrokeModifingOptions.Stroke
+            
+            Manipulate(fun flowModel splitDocument ->
+                let pageInfosValidation = defaultArg pageInfosValidation PageInfosValidation.ignore
+                modifyAndValidatePageInfos(
+                    pageSelector,
+                    [
+                        { Name = defaultArg modifierName (sprintf "replace colors by %A" picker)
+                          Selector = 
+                            PathOrText(Info.ColorIs(fillOrStrokeOptions, fun color -> 
+                                match picker color with 
+                                | Some _ -> true
+                                | None -> false
+                            ))
+                          Modifiers = [
+                            Modifier.ReplaceColor(
+                                fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
+                                picker = picker
+                            )
+                          ]
+                          PageInfosValidation = pageInfosValidation
+                        }
+                    ]
+                    
+                ).Value flowModel splitDocument
+            )
 
-            modify(
-                pageSelector,
-                [
-                    { Name =
-                        match inputIcc with 
-                        | Some inputIcc ->
-                            sprintf "Convert all %A %s colors to outputIcc %A" fillOrStrokeOptions inputIcc.InputIccName outputIcc
-                        | None -> sprintf "Convert %A all colors to outputIcc %A" fillOrStrokeOptions outputIcc
-                      
-                      Selector = 
-                        PathOrText (
-                            match inputIcc with 
-                            | Some inputIcc -> inputIcc.Info_IsColorInColorSpace(fillOrStrokeOptions, predicate)
-                            | None ->
-                                Info.ColorIs(
-                                    fillOrStrokeOptions,
-                                    predicate
-                                )
-                        )
-             
-                      Modifiers = 
+        static member ConvertColorsTo(pageSelector: PageSelector, outputIcc: Icc, ?predicate, ?fillOrStrokeOptions: FillOrStrokeOptions, ?intent, ?inputIcc : InputIccModifyArgs, ?pageInfosValidation) =
+            let fillOrStrokeOptions = defaultArg fillOrStrokeOptions FillOrStrokeOptions.FillOrStroke
+
+            let predicate = defaultArg predicate (fun _ -> true)
+
+            let modifierName = 
+                match inputIcc with 
+                | Some inputIcc ->
+                    sprintf "Convert all %A %s colors to outputIcc %A" fillOrStrokeOptions inputIcc.InputIccName outputIcc
+                | None -> sprintf "Convert %A all colors to outputIcc %A" fillOrStrokeOptions outputIcc
+
+            Modify.ReplaceColors(
+                pageSelector = pageSelector,
+                fillOrStrokeOptions = fillOrStrokeOptions,
+                ?pageInfosValidation = pageInfosValidation,
+                modifierName = modifierName,
+                picker = 
+                    fun color -> 
                         let inputIcc = 
                             inputIcc |> Option.map (fun m -> m.Factory)
 
-                        [ Modifier.ConvertColorsTo(
-                            fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
-                            outputIcc = outputIcc,
-                            predicate = predicate,
-                            ?intent = intent,
-                            ?inputIcc = inputIcc
-                        )]
-                    }
-                ]
+                        if predicate color 
+                        then 
+                            let newColor = 
+                                let cmsColor = (CmsColor.OfColor color)
+                                cmsColor.ConvertToAsync(outputIcc, ?intent = intent, ?inputIcc = inputIcc)
+                                |> Async.RunSynchronously
+                            Some (newColor.GetColor())
+                        else None
+                            
             )
 
-        static member ConvertColorsToDeviceGray(pageSelector: PageSelector, ?fillOrStrokeOptions, ?maxDeviation: float32, ?predicate, ?outputIcc: GrayIcc, ?labIcc, ?intent, ?inputIcc: InputIccModifyArgs) =
+
+        static member ConvertColorsToDeviceGray(pageSelector: PageSelector, ?fillOrStrokeOptions, ?maxDeviation: float32, ?predicate, ?outputIcc: GrayIcc, ?labIcc, ?intent, ?inputIcc: InputIccModifyArgs, ?pageInfosValidation) =
             let maxDeviation = defaultArg maxDeviation 0.f
             let outputIcc = 
-                defaultArg outputIcc defaultGrayIcc |> Icc.Gray
+                defaultArg outputIcc defaultGrayIcc.Value |> Icc.Gray
 
             let predicate = defaultArg predicate (fun _ -> true)
             let inputIccFactory = 
@@ -346,6 +378,7 @@ module Client =
                 ?fillOrStrokeOptions = fillOrStrokeOptions,
                 ?intent = intent,
                 ?inputIcc = inputIcc,
+                ?pageInfosValidation = pageInfosValidation,
                 predicate = 
                     fun color ->
                         predicate color 

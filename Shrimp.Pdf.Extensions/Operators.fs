@@ -4,6 +4,7 @@ open Akka.Configuration
 open System.Reflection
 open System.IO
 open System
+open Shrimp.Akkling.Cluster.Intergraction.Configuration
 
 
 [<AutoOpen>]
@@ -11,38 +12,20 @@ module Operators =
 
     type private AssemblyFinder = AssemblyFinder
 
-    let private possibleFolders = 
-        [ "../Assets"(*UWP*) ] 
-
-    /// application.conf should be copied to target folder
-    let private fallBackByApplicationConf config =
-        let folder = System.IO.Path.GetDirectoryName(Assembly.GetEntryAssembly().Location)
-        let folders = 
-            [ folder ] 
-            @ possibleFolders
-                |> List.map (fun m -> Path.Combine(folder, m))
-
-        folders 
-        |> List.map (fun folder -> Path.Combine(folder, "application.conf"))
-        |> List.tryFind (fun file -> File.Exists(file))
-        |> function
-            | Some file ->
-                let texts = File.ReadAllText(file, Text.Encoding.UTF8)
-                let applicationConfig = ConfigurationFactory.ParseString(texts)
-                applicationConfig.WithFallback(config)
-            | None -> config
-
     let private config = 
-        ConfigurationFactory
-            .FromResource<AssemblyFinder>("Shrimp.Pdf.Extensions.reference.conf")
-        |> fallBackByApplicationConf
+        lazy
+            ConfigurationFactory
+                .FromResource<AssemblyFinder>("Shrimp.Pdf.Extensions.reference.conf")
+            |> Configuration.fallBackByApplicationConf
 
-    let tolerance = config.GetDouble("shrimp.pdf.tolerance")
+    let tolerance = 
+        lazy
+            config.Value.GetDouble("shrimp.pdf.tolerance")
 
     /// approximately equal to 
     /// benchmark by (CONFIG: shrimp.pdf.tolerance (default is 0.1))
     let (@=) a b =
-        (abs (a - b)) < tolerance
+        (abs (a - b)) < tolerance.Value
 
     /// defaultConversion: mm to user unit
     let mm (mm: float) =

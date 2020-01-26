@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <UserSecretsId>d19fc658-5e7c-4d92-85e2-a85b732d695f</UserSecretsId>
   </PropertyGroup>
 
@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <PackageReference Include="Akka.Logger.NLog" Version="1.3.3" />
-    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.1.56" />
+    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.1.59" />
   </ItemGroup>
 
   <ItemGroup>

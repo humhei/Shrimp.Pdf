@@ -25,7 +25,7 @@ module _Colors =
 
     let private whitePoint = 
         lazy 
-            config.GetFloatList("shrimp.pdf.colors.whitePoint")
+            config.Value.GetFloatList("shrimp.pdf.colors.whitePoint")
             |> Array.ofSeq
 
     type FsDeviceRgb =
@@ -211,18 +211,18 @@ module _Colors =
 
     [<RequireQualifiedAccess>]
     module DeviceRgb =
-    
         let fromKnownColor(knownColor: KnownColor) =
             let color = Color.FromKnownColor(knownColor)
             new DeviceRgb(int color.R, int color.G, int color.B)
     
-        let MAGENTA = new DeviceRgb(1.f, 0.f, 1.f) :> Color
     
-    [<RequireQualifiedAccess>]
-    module DeviceCmyk =
-        let WHITE = DeviceCmyk(0,0,0,0)
+    type DeviceRgb with 
+        static member MAGENTA = new DeviceRgb(1.f, 0.f, 1.f) :> Color
+
+    type DeviceCmyk with
+        static member WHITE = DeviceCmyk(0,0,0,0)
     
-    let internal (|PdfName|_|) (pdfName0: PdfName) (pdfName1: PdfName) =
+    let private (|PdfName|_|) (pdfName0: PdfName) (pdfName1: PdfName) =
         if pdfName0 = pdfName1 
         then Some ()
         else None
@@ -454,6 +454,10 @@ module _Colors =
             | KnownColor.Black -> DeviceGray.BLACK :> Color
             | KnownColor.White -> DeviceGray.WHITE :> Color
             | _ -> DeviceRgb.fromKnownColor knownColor :> Color
+
+        let (|EqualTo|_|) color1 color2 =
+            if equal color1 color2 then Some ()
+            else None
 
     [<RequireQualifiedAccess>]
     module Colors =

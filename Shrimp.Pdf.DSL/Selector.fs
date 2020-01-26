@@ -168,6 +168,10 @@ type Info =
         Info.ColorIs(FillOrStrokeOptions.Fill, (fun color -> Colors.contains color colors), not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
+    static member StrokeColorIsOneOf (colors: Color list) =
+        Info.ColorIs(FillOrStrokeOptions.Stroke, (fun color -> Colors.contains color colors))
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
     static member StrokeColorIsNotOneOf (colors: Color list) =
         Info.ColorIs(FillOrStrokeOptions.Stroke, (fun color -> Colors.contains color colors), not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)

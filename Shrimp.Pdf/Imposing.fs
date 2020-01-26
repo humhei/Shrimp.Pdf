@@ -122,7 +122,6 @@ module Imposing =
         | Portrait = 1
         | Automatic = 2
 
-
     type FsPageSize(originSize: FsSize, pageOrientation) =
         let size = FsSize.rotateTo pageOrientation originSize
         member x.PageOrientation = pageOrientation
@@ -132,6 +131,20 @@ module Imposing =
         member x.Width = size.Width
 
         member x.Height = size.Height
+
+        override x.Equals(y) =
+            match y with 
+            | :? FsPageSize as pageSize -> pageSize.Size = x.Size
+            | _ -> failwithf "Cannot compare different types"
+
+        override x.GetHashCode() =
+            x.Size.GetHashCode()
+
+        interface IComparable with 
+            member x.CompareTo(y) =
+                match y with 
+                | :? FsPageSize as pageSize -> (x.Size :> IComparable).CompareTo(pageSize.Size)
+                | _ -> failwithf "Cannot compare different types"
 
 
     [<RequireQualifiedAccess>]
@@ -656,7 +669,7 @@ module Imposing =
                     |> List.ofSeq
                     |> List.map (fun cell ->
                         let rect = Rectangle.create cell.X cell.Y cell.Size.Width cell.Size.Height
-                        Rectangle.applyMargin (Margin.Create (cropmark.Distance - tolerance)) rect
+                        Rectangle.applyMargin (Margin.Create (cropmark.Distance - tolerance.Value)) rect
                     )
                 | _ -> []
 

@@ -52,7 +52,7 @@ type PageSelectorExpr =
 
 [<RequireQualifiedAccess>]
 module PageSelectorExpr = 
-    let private parser = 
+    let private parser() = 
 
         let pSinglePage = 
             let pBegin = 
@@ -77,7 +77,7 @@ module PageSelectorExpr =
         sepBy1 ((pBetween <|> (pSinglePage |>> PageSelectorExpr.SinglePage)) .>> spaces) (pchar ',')
 
     let create (exprText: string) =
-        match run parser exprText with 
+        match run (parser()) exprText with 
         | Success (result, _, _) -> 
             match result with 
             | [expr] -> expr

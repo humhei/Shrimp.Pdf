@@ -58,8 +58,9 @@ module Core =
     type private AssemblyFinder = AssemblyFinder
 
     let private referenceConfig = 
-        ConfigurationFactory.FromResource<AssemblyFinder>("Shrimp.Pdf.icms2.reference.conf")
-        |> Configuration.fallBackByApplicationConf
+        lazy
+            ConfigurationFactory.FromResource<AssemblyFinder>("Shrimp.Pdf.icms2.reference.conf")
+            |> Configuration.fallBackByApplicationConf
 
 
     let [<Literal>] private SERVER = "server"
@@ -68,23 +69,26 @@ module Core =
 
     let [<Literal>] private SHRIMP_PDF_ICMS2 = "shrimpPdfIcms2"
 
-    let private seedPort = referenceConfig.GetInt("shrimp.pdf.icms2.port")
+    let private seedPort = 
+        lazy
+            referenceConfig.Value.GetInt("shrimp.pdf.icms2.port")
 
     [<RequireQualifiedAccess>]
     module Server =
         let createAgent (receive): Server<unit, ServerMsg> =
-            Server(SHRIMP_PDF_ICMS2, SERVER, CLIENT, seedPort, seedPort, setParams_Loggers_Nlog, receive)
-
+            Server(SHRIMP_PDF_ICMS2, SERVER, CLIENT, seedPort.Value, seedPort.Value, setParams_Loggers_Nlog, receive)
 
 
     [<RequireQualifiedAccess>]
     module Routed =
-        let port = referenceConfig.GetInt("shrimp.pdf.icms2.port")
+        let port = 
+            lazy
+                referenceConfig.Value.GetInt("shrimp.pdf.icms2.port")
 
     [<RequireQualifiedAccess>]
     module Client =
         let create(): Client<unit, ServerMsg>  =
-            Client(SHRIMP_PDF_ICMS2, CLIENT, SERVER, 0, seedPort, Behaviors.ignore, setParams_Loggers_Nlog)
+            Client(SHRIMP_PDF_ICMS2, CLIENT, SERVER, 0, seedPort.Value, Behaviors.ignore, setParams_Loggers_Nlog)
 
 
 
