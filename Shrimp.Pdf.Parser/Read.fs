@@ -44,7 +44,7 @@ module internal IAbstractRenderInfo =
             | Some clippingPathInfo ->
                 match ClippingPathInfo.tryGetActualClippingArea clippingPathInfo with 
                     | Some clippingBound ->
-                        let bound = IAbstractRenderInfo.getBound BoundGettingOptions.WithStrokeWidth info
+                        let bound = IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithStrokeWidth info
                         match Rectangle.tryGetIntersection bound clippingBound with 
                         | Some _ -> true
                         | None -> false

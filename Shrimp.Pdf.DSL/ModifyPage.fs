@@ -9,10 +9,8 @@ open iText.Layout
 open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf.Colors
 
-[<RequireQualifiedAccess>]
-type CanvasAreaOptions =
-    | PageBox of PageBoxKind
-    | Specfic of Rectangle
+
+
 
 type PageModifier<'userState, 'newUserState> = PageModifingArguments<'userState> -> seq<IIntegratedRenderInfo> -> 'newUserState
 
@@ -22,11 +20,7 @@ type PageModifier =
         fun (args: PageModifingArguments<_>) infos ->
             let page = args.Page
             let canvas = 
-                let rootArea =
-                    match canvasAreaOptions with 
-                    | CanvasAreaOptions.PageBox pageBoxKind -> page.GetPageBox(pageBoxKind)
-                    | CanvasAreaOptions.Specfic rect -> rect
-
+                let rootArea = page.GetArea(canvasAreaOptions)
                 new Canvas(page, rootArea)
 
             let canvasActions = canvasActionsBuilder args
@@ -55,7 +49,7 @@ type PageModifier =
         fun (args: PageModifingArguments<_>) infos ->
             let trimedBox = 
                 infos
-                |> Seq.map (IAbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth)
+                |> Seq.map (IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth)
                 |> Rectangle.ofRectangles
             trimedBox
 
@@ -108,14 +102,9 @@ type PageModifier =
             [ PdfCanvas.addLine line mapping ]
         )
 
-    static member AddLine(canvasAreaOptions: CanvasAreaOptions, startPosition: Position, endPosition: Position, mapping) : PageModifier<_, _> =
+    static member AddLine(canvasAreaOptions: AreaGettingOptions, startPosition: Position, endPosition: Position, mapping) : PageModifier<_, _> =
         PageModifier.AddNew (fun args ->
-            let area = 
-                match canvasAreaOptions with 
-                | CanvasAreaOptions.PageBox pageBoxKind -> 
-                    args.Page.GetPageBox(pageBoxKind)
-                | CanvasAreaOptions.Specfic area -> area
-
+            let area = args.Page.GetArea(canvasAreaOptions)
             let line =
                 let startPoint = area.GetPoint(startPosition)
                 let endPoint = area.GetPoint(endPosition)
@@ -126,10 +115,10 @@ type PageModifier =
         )
 
     static member AddText(pageBoxKind, text, mapping) : PageModifier<_, _> =
-        PageModifier.AddText(CanvasAreaOptions.PageBox pageBoxKind, text, mapping)
+        PageModifier.AddText(AreaGettingOptions.PageBox pageBoxKind, text, mapping)
 
     static member AddText(canvasRootArea: Rectangle, text, mapping) : PageModifier<_, _> =
-        PageModifier.AddText(CanvasAreaOptions.Specfic canvasRootArea, text, mapping)
+        PageModifier.AddText(AreaGettingOptions.Specfic canvasRootArea, text, mapping)
 
     static member AddRectangleToCanvasRootArea(canvasAreaOptions, mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) : PageModifier<_, _> =
         PageModifier.AddNew (canvasAreaOptions, (fun args ->

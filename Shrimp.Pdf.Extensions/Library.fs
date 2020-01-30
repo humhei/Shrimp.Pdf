@@ -131,21 +131,23 @@ module iText =
             |> List.distinct
 
         member this.IsOutsideOf(rect: Rectangle) =
-            this.GetEdgePoints()
-            |> List.forall(fun pt ->
-                pt.IsOutsideOf(rect)    
-            )
+            this.GetBottom() > rect.GetTop() 
+            || this.GetTop() < rect.GetBottom()
+            || this.GetLeft() > rect.GetRight()
+            || this.GetRight() < rect.GetLeft()
 
-        member this.IsCrossOf(rect: Rectangle) =
-            this.GetEdgePoints() |> List.exists (fun pt ->
-                pt.IsInsideOf(rect)
-            )
+
 
         member this.IsInsideOf(rect: Rectangle) =
             this.GetBottom() > rect.GetBottom()
             && this.GetTop() < rect.GetTop()
             && this.GetLeft() > rect.GetLeft()
             && this.GetRight() < rect.GetRight()
+
+        member this.IsCrossOf(rect: Rectangle) =
+            (not <| this.IsOutsideOf(rect)) 
+            &&  (not <| this.IsInsideOf(rect)) 
+
 
         member this.RelativePositionOf(rect: Rectangle) =
             if this.IsInsideOf(rect) then RelativePosition.Inbox
@@ -528,7 +530,7 @@ module iText =
             points.Count > 0
 
 
-    type BoundGettingOptions =
+    type BoundGettingStrokeOptions =
         | WithStrokeWidth = 0
         | WithoutStrokeWidth = 1
 
@@ -595,11 +597,11 @@ module iText =
                     failwithf "unSupported path render operation %d" others
             else []
 
-        let getBound (boundGettingOptions: BoundGettingOptions) (info: IPathRenderInfo) = 
+        let getBound (boundGettingOptions: BoundGettingStrokeOptions) (info: IPathRenderInfo) = 
             let boundWithoutWidth = info |> toActualPoints |> Rectangle.ofPoints
             match boundGettingOptions with 
-            | BoundGettingOptions.WithoutStrokeWidth -> boundWithoutWidth
-            | BoundGettingOptions.WithStrokeWidth ->
+            | BoundGettingStrokeOptions.WithoutStrokeWidth -> boundWithoutWidth
+            | BoundGettingStrokeOptions.WithStrokeWidth ->
                 if hasStroke info then
                     let grahpicsState = info.Value.GetGraphicsState()
                     let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
@@ -666,7 +668,7 @@ module iText =
                 Logger.unSupportedTextRenderMode textRenderMode
                 false
 
-        let getBound (boundGettingOptions: BoundGettingOptions) (info: ITextRenderInfo) =
+        let getBound (boundGettingOptions: BoundGettingStrokeOptions) (info: ITextRenderInfo) =
             let width = getWidth info
             let height = getHeight info
             let x = getX info
@@ -674,8 +676,8 @@ module iText =
             let boundWithoutWidth = Rectangle.create x y width height
 
             match boundGettingOptions with 
-            | BoundGettingOptions.WithoutStrokeWidth -> boundWithoutWidth
-            | BoundGettingOptions.WithStrokeWidth ->
+            | BoundGettingStrokeOptions.WithoutStrokeWidth -> boundWithoutWidth
+            | BoundGettingStrokeOptions.WithStrokeWidth ->
                 if hasStroke info then 
                     let grahpicsState = info.Value.GetGraphicsState()
                     let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
@@ -907,6 +909,10 @@ module iText =
 
             
     type PdfPage with
+
+
+
+
         member x.GetPageEdge (innerBox: Rectangle, pageBoxKind) =
             let pageBox = x.GetPageBox(pageBoxKind)
 
@@ -1012,6 +1018,14 @@ module iText =
                 .SetCropBox(rect)
                 .SetArtBox(rect)
                 .SetMediaBox(rect)
+
+        member x.GetArea(areaGettingOptions: AreaGettingOptions) =
+            match areaGettingOptions with 
+            | AreaGettingOptions.PageBox pageBoxKind -> x.GetPageBox(pageBoxKind)
+            | AreaGettingOptions.Specfic rect -> rect
+            | AreaGettingOptions.PageBoxWithOffset (pageBoxKind, margin) ->
+                x.GetPageBox(pageBoxKind)
+                |> Rectangle.applyMargin margin
 
     [<RequireQualifiedAccess>]
     module PdfPage = 

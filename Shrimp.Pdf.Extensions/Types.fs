@@ -153,6 +153,13 @@ type PageBoxKind =
 
 
 [<RequireQualifiedAccess>]
+type AreaGettingOptions =
+    | PageBox of PageBoxKind
+    | PageBoxWithOffset of PageBoxKind * Margin
+    | Specfic of Rectangle
+
+
+[<RequireQualifiedAccess>]
 type CanvasFontSize =
     | Numeric of size: float
     | OfRootArea of scale: float

@@ -88,6 +88,21 @@ let manipulateTests =
         |> runWithBackup "datas/manipulate/change stroke color b255 to m100.pdf" 
         |> ignore
 
+    testCase "change red to black outside of trimbox" <| fun _ -> 
+        Flow.Manipulate (
+            modify(
+                PageSelector.All,
+                [
+                    { Name = "change red to black outside of trimbox"
+                      Selector = PathOrText(Info.FillColorIs DeviceRgb.RED <&&> Info.BoundIsOutsideOf(AreaGettingOptions.PageBox PageBoxKind.TrimBox))
+                      Modifiers = [Modifier.SetFillColor(DeviceGray.BLACK)]
+                    }
+                ]
+            ) 
+        )
+        |> runWithBackup "datas/manipulate/change red to black outside of trimbox.pdf" 
+        |> ignore
+
     testCase "xobject_change stroke color b255 to m100" <| fun _ -> 
         Flow.Manipulate (
             modify (
@@ -166,7 +181,7 @@ let manipulateTests =
                   Dummy,
                   PageModifier.Batch [
                     PageModifier.AddLine(
-                      CanvasAreaOptions.PageBox PageBoxKind.ActualBox,
+                      AreaGettingOptions.PageBox PageBoxKind.ActualBox,
                       Position.BottomMiddle (0., mm 3.2),
                       Position.BottomMiddle (0., 0.),
                       (fun args ->
@@ -175,7 +190,7 @@ let manipulateTests =
                     ) 
 
                     PageModifier.AddLine(
-                      CanvasAreaOptions.PageBox PageBoxKind.ActualBox,
+                      AreaGettingOptions.PageBox PageBoxKind.ActualBox,
                       Position.BottomMiddle (mm -3.5, mm 3.2),
                       Position.BottomMiddle (mm 3.5, mm 3.2),
                       (fun args ->
@@ -412,7 +427,7 @@ let manipulateTests =
                 "add rect to area",
                 PageSelector.All,
                 Dummy,
-                PageModifier.AddRectangleToCanvasRootArea(CanvasAreaOptions.PageBox PageBoxKind.ActualBox, fun args -> { args with FillColor = PdfCanvasColor.ITextColor DeviceRgb.BLACK})
+                PageModifier.AddRectangleToCanvasRootArea(AreaGettingOptions.PageBox PageBoxKind.ActualBox, fun args -> { args with FillColor = PdfCanvasColor.ITextColor DeviceRgb.BLACK})
             ) 
         )
         |> runWithBackup "datas/manipulate/add rect to area.pdf" 

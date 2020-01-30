@@ -16,7 +16,7 @@ let readB255Bound() =
         PageSelector.All,
         Path (
             Info.StrokeColorIs DeviceRgb.BLUE
-            <&&> Info.BoundIsInsideOfPageBox()
+            <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)
         ),
         PageModifier.GetBoundOfSelector()
     )
@@ -38,11 +38,11 @@ let retainTitleInfo (color: Color) =
             let pageEdge, titleArea = args.PageUserState()
             OR [
                 PathOrText (
-                    Info.BoundIsInsideOf(pageEdge.TopMiddle)
-                    <&&> Info.BoundIsOutsideOf(titleArea)
+                    Info.BoundIsInsideOf(AreaGettingOptions.Specfic pageEdge.TopMiddle)
+                    <&&> Info.BoundIsOutsideOf(AreaGettingOptions.Specfic titleArea)
                 )
                 PathOrText (
-                    Info.BoundIsInsideOf(titleArea)
+                    Info.BoundIsInsideOf(AreaGettingOptions.Specfic titleArea)
                     <&&> (!!(Info.FillColorIs color))
                 )
             ])
@@ -55,7 +55,7 @@ let blackAndWhiteTitleInfo() =
         Factory (fun args ->
             let pageEdge, titleArea = args.PageUserState()
             PathOrText (
-                Info.BoundIsInsideOf(titleArea)
+                Info.BoundIsInsideOf(AreaGettingOptions.Specfic titleArea)
             )
         )
       Modifiers = 
@@ -69,7 +69,7 @@ let retainNavigationInfo (color: Color) =
       Selector =
         PathOrText (fun args ->
             let pageEdge, _ = args.PageUserState()
-            ( Info.BoundIsInsideOf(pageEdge.LeftMiddle)
+            ( Info.BoundIsInsideOf(AreaGettingOptions.Specfic pageEdge.LeftMiddle)
                 <&&> (!!(Info.FillColorIs color)) 
             ) args
         )
@@ -81,7 +81,7 @@ let removeNavigationInfo() =
       Selector =
         PathOrText (fun args ->
             let pageEdge, _ = args.PageUserState()
-            ( Info.BoundIsCrossOf(pageEdge.LeftMiddle)
+            ( Info.BoundIsCrossOf(AreaGettingOptions.Specfic pageEdge.LeftMiddle)
                 <&&> Info.FillColorIs DeviceRgb.MAGENTA
             ) args
         )
@@ -193,7 +193,7 @@ let realSamplesTests =
                   Dummy,
                   PageModifier.Batch [
                     PageModifier.AddLine(
-                      CanvasAreaOptions.PageBox PageBoxKind.ActualBox,
+                      AreaGettingOptions.PageBox PageBoxKind.ActualBox,
                       Position.BottomMiddle (0., mm 3.2),
                       Position.BottomMiddle (0., 0.),
                       (fun args ->
@@ -202,7 +202,7 @@ let realSamplesTests =
                     ) 
 
                     PageModifier.AddLine(
-                      CanvasAreaOptions.PageBox PageBoxKind.ActualBox,
+                      AreaGettingOptions.PageBox PageBoxKind.ActualBox,
                       Position.BottomMiddle (mm -3.5, mm 3.2),
                       Position.BottomMiddle (mm 3.5, mm 3.2),
                       (fun args ->

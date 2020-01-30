@@ -458,7 +458,7 @@ module _Reuses =
                     let selector = (Selector.toRenderInfoSelector args selector)
                     let infos = NonInitialClippingPathPdfDocumentContentParser.parse i selector parser
                     for info in infos do
-                        let bound = IAbstractRenderInfo.getBound BoundGettingOptions.WithoutStrokeWidth info
+                        let bound = IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth info
                         let writer = splitDocument.Writer
                         let writerPageResource = readerPage.CopyTo(writer)
                         PdfPage.setPageBox PageBoxKind.AllBox bound writerPageResource |> ignore

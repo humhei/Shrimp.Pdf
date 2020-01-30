@@ -15,7 +15,7 @@ module Manipulates =
                 (fun args renderInfos ->
                     let bound = 
                         renderInfos
-                        |> Seq.choose (IIntegratedRenderInfo.tryGetVisibleBound BoundGettingOptions.WithStrokeWidth)
+                        |> Seq.choose (IIntegratedRenderInfo.tryGetVisibleBound BoundGettingStrokeOptions.WithStrokeWidth)
                         |> Rectangle.ofRectangles
                     args.Page.SetActualBox(bound |> Rectangle.applyMargin margin)
                     |> ignore

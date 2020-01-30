@@ -21,11 +21,10 @@ module _Colors =
         | Rgb = 1
         | Cmyk = 2
         | Lab = 3
-        | Separation = 4
 
     let private whitePoint = 
         lazy 
-            config.Value.GetFloatList("shrimp.pdf.colors.whitePoint")
+            config.Value.GetFloatList("shrimp.pdf.colors.labWhitePoint")
             |> Array.ofSeq
 
     type FsDeviceRgb =
@@ -38,7 +37,6 @@ module _Colors =
           a: float32
           b: float32 }
     with 
-        
 
         member x.ToItextColor(?colorSpace: PdfCieBasedCs.Lab) =
             match colorSpace with 
@@ -87,6 +85,29 @@ module _Colors =
         | Gray of FsGray
     with 
 
+        member x.MapColorValue(mapping) =
+            match x with
+            | FsValueColor.Rgb rgbColor ->
+                { R = mapping rgbColor.R
+                  G = mapping rgbColor.G
+                  B = mapping rgbColor.B }
+                |> FsValueColor.Rgb
+
+            | FsValueColor.Cmyk cmykColor ->
+                { C = mapping cmykColor.C 
+                  M = mapping cmykColor.M 
+                  Y = mapping cmykColor.Y
+                  K = mapping cmykColor.K }
+                |> FsValueColor.Cmyk
+
+            | FsValueColor.Gray (FsGray grayColor) ->
+                FsValueColor.Gray (FsGray (mapping grayColor))
+
+            | FsValueColor.Lab (labColor) ->
+                { L = mapping labColor.L
+                  a = mapping labColor.a
+                  b = mapping labColor.b }
+                |> FsValueColor.Lab
 
         member x.GetColorValue() =
             match x with 
@@ -101,10 +122,10 @@ module _Colors =
 
             | FsValueColor.Lab lab -> [ lab.L; lab.a; lab.b ]
 
-        member x.EqualWhenColorValueRounded(y: FsValueColor) =
-            FsValueColor.EqualWhenColorValueRounded (x, y)
+        member x.EqualByRoundedColorValue(y: FsValueColor) =
+            FsValueColor.EqualByRoundedColorValue (x, y)
 
-        static member EqualWhenColorValueRounded (color1: FsValueColor, color2: FsValueColor) =
+        static member EqualByRoundedColorValue (color1: FsValueColor, color2: FsValueColor) =
             let isColorSpaceEqual =
                 match color1, color2 with
                 | FsValueColor.Rgb _, FsValueColor.Rgb _
@@ -147,7 +168,8 @@ module _Colors =
                   b = -labColor.b }
                 |> FsValueColor.Lab
 
-        static member ToItextColor = function
+        static member ToItextColor fsValueColor =
+            match fsValueColor with
             | FsValueColor.Cmyk cmyk ->
                 new DeviceCmyk(cmyk.C, cmyk.M, cmyk.Y, cmyk.K) :> Color
 
@@ -208,6 +230,28 @@ module _Colors =
             { Name = name 
               Color = FsValueColor.Lab color
               Transparency = defaultArg transparency 1. }
+
+
+        static member Create(name: string, color: FsValueColor, ?transparency) =
+            { Name = name 
+              Color = color
+              Transparency = defaultArg transparency 1. }
+
+        static member Registration =
+            { Name = "All";
+              Color = 
+                FsValueColor.Cmyk 
+                    { C = 1.f 
+                      M = 1.f 
+                      Y = 1.f 
+                      K = 1.f  }
+              Transparency = 1.
+            }
+
+        static member EqualByRoundedColorValue(color1: FsSeparation, color2: FsSeparation) =
+            color1.Name = color2.Name
+            && color1.Transparency = color2.Transparency
+            && FsValueColor.EqualByRoundedColorValue (color1.Color, color2.Color)
 
     [<RequireQualifiedAccess>]
     module DeviceRgb =
@@ -305,6 +349,14 @@ module _Colors =
 
     type Separation with 
 
+
+        member separation.GetAlterateColor() =
+            let colorSpace = separation.GetColorSpace() :?> PdfSpecialCs.Separation
+            let color = 
+                colorSpace.GetAlterateColor()
+
+            color.MapColorValue(fun color -> color * (separation.GetColorValue().[0]))
+
         static member private Range(color: Color) =
             let colorValues = color.GetColorValue()
             match color with 
@@ -393,6 +445,36 @@ module _Colors =
             | _ -> failwithf "cannot create separation from color %s" (color.GetType().FullName)
 
 
+    type FsSeparation with 
+
+        static member OfSeparation(separation: Separation) =
+            let colorSpace = separation.GetColorSpace() :?> PdfSpecialCs.Separation
+    
+            let colorSpacePdfArray = 
+                colorSpace.GetPdfObject() :?> PdfArray
+    
+            let colorName = 
+                let uri = 
+                    (colorSpacePdfArray.Get(1)
+                     |> string).TrimStart('/')
+                uri.Replace("#20", " ")
+    
+            FsSeparation.Create(colorName, separation.GetAlterateColor())
+       
+
+        member separation1.IsEqualTo(color: Color, ?equalByRoundedColorValue) =
+            let equalByRoundedColorValue = defaultArg equalByRoundedColorValue false
+            match color with 
+            | :? Separation as separation ->
+                let sepation0 = FsSeparation.OfSeparation separation
+                if equalByRoundedColorValue then FsSeparation.EqualByRoundedColorValue(sepation0, separation1)
+                else separation1 = sepation0
+            | _ -> false
+
+        static member Contains(?equalByRoundedColorValue) =
+            fun (color: Color) (fsSeparations: FsSeparation list) ->
+                fsSeparations
+                |> List.exists (fun m -> m.IsEqualTo(color, ?equalByRoundedColorValue = equalByRoundedColorValue))
 
     [<RequireQualifiedAccess>]
     module Separation =
@@ -498,33 +580,7 @@ module _Colors =
             match pdfCanvasColor with 
             | PdfCanvasColor.N -> false
             | PdfCanvasColor.ITextColor color1 -> Color.equal color color1
-            | PdfCanvasColor.Separation separation1 ->
-                match color with 
-                | :? Separation as separation ->
-                    let colorSpace = separation.GetColorSpace() :?> PdfSpecialCs.Separation
-    
-                    let colorSpacePdfArray = 
-                        colorSpace.GetPdfObject() :?> PdfArray
-    
-                    let colorName = 
-                        let uri = 
-                            (colorSpacePdfArray.Get(1)
-                             |> string).TrimStart('/')
-                        uri.Replace("#20", " ")
-    
-                    if colorName = separation1.Name && (separation.GetColorValue().[0] = float32 separation1.Transparency)
-                    then 
-                        
-                        let color = 
-                            colorSpace.GetAlterateColor()
-    
-    
-                        let color1 = separation1.Color
-    
-                        color.EqualWhenColorValueRounded color1
-    
-                    else false
-                | _ -> false
+            | PdfCanvasColor.Separation separation1 -> separation1.IsEqualTo(color, equalByRoundedColorValue = false)
             | PdfCanvasColor.ColorCard colorCard1 ->
     
                 match colorCard1 with 
@@ -558,9 +614,8 @@ module _Colors =
                           Name = separationName1
                           Transparency = 1.
                         }
-                        |> PdfCanvasColor.Separation
                     
-                    separation1.IsEqualTo(color)
+                    separation1.IsEqualTo(color, equalByRoundedColorValue = true)
                 | ColorCard.KnownColor knownColor1 ->
                     let itextColor1 = 
                         (Color.fromKnownColor knownColor1)
@@ -577,24 +632,30 @@ module _Colors =
                 | _ -> false
     
             | PdfCanvasColor.Registration ->
-                let registration1 = 
-                    { Name = "All";
-                      Color = 
-                        FsValueColor.Cmyk 
-                            { C = 1.f 
-                              M = 1.f 
-                              Y = 1.f 
-                              K = 1.f  }
-                      Transparency = 1.
-                    }
-                    |> PdfCanvasColor.Separation
-                registration1.IsEqualTo(color)
+                 FsSeparation.Registration.IsEqualTo(color)
+
+        static member Contains(color: Color) (pdfCanvasColor: PdfCanvasColor list) =
+            pdfCanvasColor
+            |> List.exists(fun pdfCanvasColor -> pdfCanvasColor.IsEqualTo(color))
+  
+
+
 
     type Color with 
+        member x.GetFsColorSpace() =
+            match x with 
+            | :? DeviceCmyk -> ColorSpace.Cmyk
+            | :? DeviceGray -> ColorSpace.Gray
+            | :? DeviceRgb -> ColorSpace.Rgb
+            | :? Lab -> ColorSpace.Lab 
+            | :? Separation as separation -> 
+                let alterateColor = 
+                    separation.GetAlterateColor()
+                    |> FsValueColor.ToItextColor
+                alterateColor.GetFsColorSpace()
+            | _ -> failwithf "Cannot get colorspace from %A" x
+
+
         member x.IsInColorSpace(colorSpace: ColorSpace) =
-            match x, colorSpace with 
-            | :? DeviceCmyk, ColorSpace.Cmyk
-            | :? DeviceGray, ColorSpace.Gray
-            | :? DeviceRgb, ColorSpace.Rgb
-            | :? Lab, ColorSpace.Lab -> true
-            | _ -> false
+            x.GetFsColorSpace() = colorSpace
+         

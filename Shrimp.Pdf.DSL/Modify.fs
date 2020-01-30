@@ -249,7 +249,7 @@ type Modifier =
 
     static member AddRectangleToBound(mapping) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
-            let border = IAbstractRenderInfo.getBound BoundGettingOptions.WithStrokeWidth args.CurrentRenderInfo
+            let border = IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithStrokeWidth args.CurrentRenderInfo
             [
                 PdfCanvas.writeOperatorRange args.Close
                 PdfCanvas.addRectangle border mapping
@@ -378,3 +378,140 @@ module ModifyOperators =
 
     let modify (pageSelector, (modifiers: list<_SelectorAndModifiers<'userState>>)) =
         modifyAsync (ModifyingAsyncWorker.Sync, pageSelector, modifiers)
+
+
+
+type Modify_ReplaceColors_Options = 
+    { FillOrStrokeOptions: FillOrStrokeOptions 
+      PageInfosValidation: PageInfosValidation 
+      ModifierName: string option
+      SelectorTag: SelectorTag
+      Info_BoundIs_Args: Info_BoundIs_Args option
+      PageSelector: PageSelector }
+with 
+    static member DefaultValue =
+        { FillOrStrokeOptions = FillOrStrokeOptions.FillOrStroke 
+          PageInfosValidation = PageInfosValidation.ignore
+          ModifierName = None
+          SelectorTag = SelectorTag.PathOrText 
+          Info_BoundIs_Args = None
+          PageSelector = PageSelector.All }
+
+type Modify =
+    static member ReplaceColors (picker, ?options: Modify_ReplaceColors_Options) =
+        let options = defaultArg options Modify_ReplaceColors_Options.DefaultValue
+        let fillOrStrokeOptions = options.FillOrStrokeOptions
+
+        let selectorTag = options.SelectorTag
+
+        let pageInfosValidation = options.PageInfosValidation
+
+        let fillOrStrokeModifyingOptions =
+            match fillOrStrokeOptions with 
+            | FillOrStrokeOptions.FillAndStroke 
+            | FillOrStrokeOptions.FillOrStroke -> FillOrStrokeModifingOptions.FillAndStroke
+            | FillOrStrokeOptions.Fill -> FillOrStrokeModifingOptions.Fill
+            | FillOrStrokeOptions.Stroke -> FillOrStrokeModifingOptions.Stroke
+        
+        Manipulate(fun flowModel splitDocument ->
+
+            modifyAndValidatePageInfos(
+                options.PageSelector,
+                [
+                    { Name = defaultArg options.ModifierName (sprintf "replace colors by %A" picker)
+                      Selector = 
+                        let colorInfo = Info.ColorIs(fillOrStrokeOptions, fun color -> 
+                            match picker color with 
+                            | Some _ -> true
+                            | None -> false
+                        )
+
+                        let info =
+                            match options.Info_BoundIs_Args with 
+                            | None -> colorInfo
+                            | Some info_boundIs_args -> Info.BoundIs(info_boundIs_args) <&&> colorInfo
+
+                        match selectorTag with 
+                        | SelectorTag.PathOrText -> 
+                            PathOrText info
+                        | SelectorTag.Path -> Selector.Path info
+                        | SelectorTag.Text -> Text info
+
+
+                      Modifiers = [
+                        Modifier.ReplaceColor(
+                            fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
+                            picker = picker
+                        )
+                      ]
+                      PageInfosValidation = pageInfosValidation
+                    }
+                ]
+                
+            ).Value flowModel splitDocument
+        )
+
+
+    static member ReplaceColors (originColors: Color list, targetColor: Color, ?options: Modify_ReplaceColors_Options) =
+        let options =
+            options 
+            |> Option.map (fun options -> 
+                { options with 
+                    ModifierName = Some (sprintf "Replace color %A to %A" originColors targetColor)
+                }
+            )
+
+        Modify.ReplaceColors(
+            ?options = options,
+            picker = fun color ->
+                if Colors.contains color originColors
+                then Some targetColor
+                else None
+        )
+
+
+    static member ReplaceColors (originColors: Color list, targetColor: FsSeparation, ?options: Modify_ReplaceColors_Options) =
+        Manipulate(fun flowModel splitDocument ->
+            let seperationColor = splitDocument.Value.GetOrCreateColor(ResourceColor.CustomSeparation targetColor)
+            Modify.ReplaceColors(originColors, seperationColor, ?options = options).Value flowModel splitDocument
+        )
+
+    static member ReplaceColors1 (originColors: Color list, targetColor: Color, ?options: Modify_ReplaceColors_Options) =
+        let options =
+            options 
+            |> Option.map (fun options ->
+                { options with  
+                    PageInfosValidation = PageInfosValidation.atLeastOne }
+            )
+
+        Modify.ReplaceColors(originColors, targetColor, ?options = options)
+
+    static member ReplaceColors1 (originColors: Color list, targetColor: FsSeparation, ?options: Modify_ReplaceColors_Options) =
+        let options =
+            options 
+            |> Option.map (fun options ->
+                { options with  
+                    PageInfosValidation = PageInfosValidation.atLeastOne }
+            )
+
+        Modify.ReplaceColors(originColors, targetColor, ?options = options)
+
+
+    static member InvertColors(?predicate: Color -> bool, ?options: Modify_ReplaceColors_Options) =
+        let options =
+            options |> Option.map (fun options -> {options with ModifierName = Some "InvertColors"})
+
+        let predicate = defaultArg predicate (fun _ -> true)
+
+        Modify.ReplaceColors(
+            ?options = options,
+            picker = 
+                fun color ->
+                    if predicate color 
+                    then
+                        (FsValueColor.OfItextColor color)
+                        |> FsValueColor.Invert
+                        |> FsValueColor.ToItextColor
+                        |> Some
+                    else None
+        )

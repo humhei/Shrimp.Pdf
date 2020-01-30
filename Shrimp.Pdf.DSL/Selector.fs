@@ -27,6 +27,11 @@ module SelectorOperators =
         fun args info ->
             f args (info |> resharper)
 
+type SelectorTag =
+    | Path = 0
+    | Text = 1
+    | PathOrText = 2
+
 type Selector<'userState> =
     | Path of (PageModifingArguments<'userState> -> IntegratedPathRenderInfo -> bool)
     | Text of (PageModifingArguments<'userState> -> IntegratedTextRenderInfo -> bool)
@@ -37,8 +42,8 @@ type Selector<'userState> =
     | OR of Selector<'userState> list
 
 [<RequireQualifiedAccess>]
-module internal Selector =
-    let rec toRenderInfoSelector (args: PageModifingArguments<_>) selector =
+module Selector =
+    let rec internal toRenderInfoSelector (args: PageModifingArguments<_>) selector =
         match selector with 
         | Selector.Path factory -> factory args |> RenderInfoSelector.Path
         | Selector.Text factory -> factory args |> RenderInfoSelector.Text 
@@ -54,9 +59,16 @@ module internal Selector =
             |> List.map (toRenderInfoSelector args)
             |> RenderInfoSelector.OR
 
+type Info_BoundIs_Args (relativePosition: RelativePosition, ?areaGettingOptions, ?boundGettingStrokeOptions) =
+    member x.RelativePosition = relativePosition
+
+    member x.AreaGettingOptions = defaultArg areaGettingOptions (AreaGettingOptions.PageBox PageBoxKind.ActualBox)
+
+    member val BoundGettingStrokeOptions = 
+        defaultArg boundGettingStrokeOptions BoundGettingStrokeOptions.WithoutStrokeWidth
+
 
 type Info =
-
 
     static member IsVisible() =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
@@ -102,6 +114,9 @@ type Info =
         Info.ColorIs(fillOrStrokeOptions, fun color -> pdfCanvasColor.IsEqualTo(color))
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
+    static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, fsSeparation: FsSeparation) =
+        Info.ColorIs(fillOrStrokeOptions, fun color -> fsSeparation.IsEqualTo(color, false))
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, colorSpace: ColorSpace) =
         Info.ColorIs(fillOrStrokeOptions, fun color -> color.IsInColorSpace(colorSpace)) 
@@ -160,6 +175,16 @@ type Info =
         Info.ColorIs(fillOrStrokeOptions, fun color -> Colors.contains color colors)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
+    static member ColorIsOneOf (fillOrStrokeOptions: FillOrStrokeOptions, fsSeparations: FsSeparation list) =
+        Info.ColorIs(fillOrStrokeOptions, fun color -> 
+            FsSeparation.Contains() color fsSeparations
+        )
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member ColorIsOneOf (fillOrStrokeOptions: FillOrStrokeOptions, colors: PdfCanvasColor list) =
+        Info.ColorIs(fillOrStrokeOptions, fun color -> PdfCanvasColor.Contains color colors)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
     static member FillColorIsOneOf (colors: Color list) =
         Info.ColorIs(FillOrStrokeOptions.Fill, fun color -> Colors.contains color colors)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
@@ -176,36 +201,31 @@ type Info =
         Info.ColorIs(FillOrStrokeOptions.Stroke, (fun color -> Colors.contains color colors), not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
-    static member BoundIsCrossOf (rect, ?boundGettingOptions) =
+    static member BoundIs (relativePosition, areaGettingOptions: AreaGettingOptions, ?boundGettingStrokeOptions) =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            let boundGettingOptions = defaultArg boundGettingOptions BoundGettingOptions.WithoutStrokeWidth
-            (IAbstractRenderInfo.getBound boundGettingOptions info).IsCrossOf(rect)
+            let boundGettingOptions = defaultArg boundGettingStrokeOptions BoundGettingStrokeOptions.WithoutStrokeWidth
 
-    static member BoundIsInsideOf (rect, ?boundGettingOptions) =
-        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            let boundGettingOptions = defaultArg boundGettingOptions BoundGettingOptions.WithoutStrokeWidth
-            (IAbstractRenderInfo.getBound boundGettingOptions info).IsInsideOf(rect)
+            let bound = IAbstractRenderInfo.getBound boundGettingOptions info
 
-    static member BoundIsInsideOfPageBox(?pageBoxKind: PageBoxKind, ?boundGettingOptions) =
-        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            let pageBoxKind = defaultArg pageBoxKind PageBoxKind.ActualBox
-            let pageBox = args.Page.GetPageBox(pageBoxKind)
-            match boundGettingOptions with 
-            | Some boundGettingOptions -> Info.BoundIsInsideOf (pageBox, boundGettingOptions) args info
-            | None -> Info.BoundIsInsideOf (pageBox) args info
+            let rect = args.Page.GetArea(areaGettingOptions)
 
-    static member BoundIsOutsideOf (rect, ?boundGettingOptions) =
-        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            let boundGettingOptions = defaultArg boundGettingOptions BoundGettingOptions.WithoutStrokeWidth
-            (IAbstractRenderInfo.getBound boundGettingOptions info).IsOutsideOf(rect)
+            match relativePosition with 
+            | RelativePosition.CrossBox -> bound.IsCrossOf(rect)
+            | RelativePosition.Inbox -> bound.IsInsideOf(rect)
+            | RelativePosition.OutBox -> bound.IsOutsideOf(rect)
 
+    static member BoundIs (args: Info_BoundIs_Args) =
+        Info.BoundIs(args.RelativePosition, (args.AreaGettingOptions) , args.BoundGettingStrokeOptions)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
-    static member BoundIsOutsideOfPageBox(?pageBoxKind: PageBoxKind, ?boundGettingOptions) =
-        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            let pageBoxKind = defaultArg pageBoxKind PageBoxKind.ActualBox
-            let pageBox = args.Page.GetPageBox(pageBoxKind)
-            match boundGettingOptions with 
-            | Some boundGettingOptions -> Info.BoundIsInsideOf (pageBox, boundGettingOptions) args info
-            | None -> Info.BoundIsOutsideOf (pageBox) args info
+    static member BoundIsCrossOf (areaGettingOptions, ?boundGettingOptions) =
+        Info.BoundIs(RelativePosition.CrossBox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
+    static member BoundIsInsideOf (areaGettingOptions, ?boundGettingOptions) =
+        Info.BoundIs(RelativePosition.Inbox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
+    static member BoundIsOutsideOf (areaGettingOptions, ?boundGettingOptions) =
+        Info.BoundIs(RelativePosition.OutBox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
