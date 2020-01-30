@@ -6,11 +6,14 @@ open iText.Kernel.Pdf.Canvas.Parser
 open Shrimp.Pdf
 open iText.Kernel.Geom
 open iText.Layout
+open iText.Layout.Properties
 open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf.Colors
 
 
-
+type ColoredText =
+    { Text: string 
+      Color: PdfCanvasColor }
 
 type PageModifier<'userState, 'newUserState> = PageModifingArguments<'userState> -> seq<IIntegratedRenderInfo> -> 'newUserState
 
@@ -119,6 +122,71 @@ type PageModifier =
 
     static member AddText(canvasRootArea: Rectangle, text, mapping) : PageModifier<_, _> =
         PageModifier.AddText(AreaGettingOptions.Specfic canvasRootArea, text, mapping)
+
+    static member AddColoredTexts(canvasAreaOptions: AreaGettingOptions, coloredTexts: ColoredText list , mapping) : PageModifier<_, _> =
+        fun pageModifingArgs infos ->
+            match coloredTexts with 
+            | [] -> ()
+            | _ ->
+                let canvas = 
+                    let page = pageModifingArgs.Page
+                    new Canvas(page, page.GetArea(canvasAreaOptions))
+
+                let args = mapping CanvasAddTextArguments.DefaultValue
+
+                let offsets =
+                    let totalTextWidth =
+                        let totalText = 
+                            coloredTexts 
+                            |> List.map (fun m -> m.Text) 
+                            |> String.concat ""
+
+                        canvas.CalcTextWidth(totalText, args)
+
+                    let textWidths = 
+                        coloredTexts
+                        |> List.map (fun coloredText ->
+                            canvas.CalcTextWidth(coloredText.Text, args)
+                        )
+
+                    let scanedTextWidths = 
+                        (0., textWidths)
+                        ||> List.scan(fun offset textWidth ->
+                            textWidth + offset
+                        )
+
+                    match args.GetCalculatedHorizontalTextAlignment() with 
+                    | TextAlignment.LEFT -> scanedTextWidths
+                    | TextAlignment.CENTER -> 
+                        textWidths
+                        |> List.mapi (fun i textWidth ->
+                            -totalTextWidth / 2. + scanedTextWidths.[i] + textWidth / 2.
+                        )
+
+                    | TextAlignment.RIGHT -> scanedTextWidths |> List.map (fun scanedTextWidth -> -scanedTextWidth) 
+
+                    | _ -> failwith "Not implemented"
+
+                let pageModifier = 
+                    coloredTexts
+                    |> List.mapi(fun i coloredText ->
+                        let args = 
+                            { args with 
+                                Position = 
+                                    Position.mapValue (fun (x, y) -> 
+                                        (offsets.[i] + x, y)
+                                    ) args.Position 
+
+                                FontColor = coloredText.Color
+                            }
+                        PageModifier.AddText(canvasAreaOptions, coloredText.Text, fun _ -> args) 
+                    )
+                    |> PageModifier.Batch
+
+                pageModifier pageModifingArgs infos
+                |> ignore
+            
+
 
     static member AddRectangleToCanvasRootArea(canvasAreaOptions, mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) : PageModifier<_, _> =
         PageModifier.AddNew (canvasAreaOptions, (fun args ->

@@ -7,9 +7,13 @@ open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Colors
+open iText.Kernel.Pdf
 
 [<AutoOpen>]
-module PdfDocumentWithResourceCache =
+module PdfDocumentWithCachedResources =
+
+
+
 
     type PdfCanvasAddRectangleArguments =
         { LineWidth: float 
@@ -36,7 +40,9 @@ module PdfDocumentWithResourceCache =
           CanvasFontSize: CanvasFontSize 
           FontColor: PdfCanvasColor
           FontRotation: Rotation 
-          Position: Position }
+          Position: Position
+          HorizontalTextAlignment: TextAlignment option 
+          VerticalTextAlignment: VerticalAlignment option }
 
     with 
         static member DefaultValue =
@@ -44,7 +50,29 @@ module PdfDocumentWithResourceCache =
               CanvasFontSize = CanvasFontSize.Numeric 9.
               FontColor = PdfCanvasColor.ITextColor DeviceGray.BLACK 
               FontRotation = Rotation.None
-              Position = Position.LeftTop (0., 0.)}
+              Position = Position.LeftTop (0., 0.)
+              HorizontalTextAlignment = None 
+              VerticalTextAlignment = None }
+
+        member args.GetCalculatedHorizontalTextAlignment() =
+            match args.HorizontalTextAlignment with 
+            | Some textAlignment -> textAlignment
+            | None ->
+                match args.Position with 
+                | Position.XCenter (x, y) -> TextAlignment.CENTER
+                | Position.Left (x, y) -> TextAlignment.LEFT
+                | Position.Right (x, y) -> TextAlignment.RIGHT
+                | _ -> failwith "Invalid token"
+        member args.GetCalculatedVerticalTextAlignment() =
+            match args.VerticalTextAlignment with 
+            | Some verticalAlignment -> verticalAlignment
+            | None ->
+                match args.Position with 
+                | Position.YCenter (x, y) -> VerticalAlignment.MIDDLE
+                | Position.Top (x, y) -> VerticalAlignment.TOP
+                | Position.Bottom (x, y) -> VerticalAlignment.BOTTOM
+                | _ -> failwith "Invalid token"
+
 
     type PdfCanvas with 
         member internal x.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =
@@ -144,15 +172,52 @@ module PdfDocumentWithResourceCache =
         member internal x.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =
             x.GetPdfCanvas().GetOrCreateColor(pdfCanvasColor)
 
+        member canvas.CalcFontSize (text, args: CanvasAddTextArguments) = 
+            let pdfFontFactory, canvasFontSize = 
+                args.PdfFontFactory, args.CanvasFontSize
+
+            let pdfFont =
+                let pdfDocument = canvas.GetPdfDocument() :?> PdfDocumentWithCachedResources
+                pdfDocument.GetOrCreatePdfFont(pdfFontFactory)
+            
+            match canvasFontSize with 
+            | CanvasFontSize.Numeric size -> size
+            | CanvasFontSize.OfRootArea (scale) ->
+                let area = canvas.GetRootArea()
+                PdfFont.fontSizeOfArea area text pdfFont * scale
+
+            | CanvasFontSize.OfArea (area) ->
+                PdfFont.fontSizeOfArea area text pdfFont
+
+        member canvas.CalcTextLineWidthUnits (text, args: CanvasAddTextArguments) = 
+            let pdfFont = 
+                let pdfFontFactory = 
+                    args.PdfFontFactory
+                let pdfDocument = canvas.GetPdfDocument() :?> PdfDocumentWithCachedResources
+                pdfDocument.GetOrCreatePdfFont(pdfFontFactory)
+
+            PdfFont.calcLineWidthUnits text pdfFont
+
+
+        member canvas.CalcTextWidth (text, args: CanvasAddTextArguments) = 
+            let fontSize = canvas.CalcFontSize(text, args)
+            let widthUnit = 
+                let widthUnits = canvas.CalcTextLineWidthUnits(text, args)
+                widthUnits |> List.max
+
+            fontSize * widthUnit
+           
+
     [<RequireQualifiedAccess>]
     module Canvas =
+
         let addText
             text
             (mapping: CanvasAddTextArguments -> CanvasAddTextArguments)
             (canvas: Canvas) = 
                 let args = mapping CanvasAddTextArguments.DefaultValue
-                let pdfFontFactory, canvasFontSize, fontColor, fontRotation, position = 
-                    args.PdfFontFactory, args.CanvasFontSize, args.FontColor, args.FontRotation, args.Position
+                let pdfFontFactory, fontColor, fontRotation, position = 
+                    args.PdfFontFactory, args.FontColor, args.FontRotation, args.Position
 
                 match canvas.GetOrCreateColor(fontColor) with 
                 | Some fontColor ->
@@ -161,36 +226,17 @@ module PdfDocumentWithResourceCache =
                         let pdfDocument = canvas.GetPdfDocument() :?> PdfDocumentWithCachedResources
                         pdfDocument.GetOrCreatePdfFont(pdfFontFactory)
 
-                    let fontSize =
-                        match canvasFontSize with 
-                        | CanvasFontSize.Numeric size -> size
-                        | CanvasFontSize.OfRootArea (scale) ->
-                            let area = canvas.GetRootArea()
-                            PdfFont.fontSizeOfArea area text pdfFont * scale
-
-                        | CanvasFontSize.OfArea (area) ->
-                            PdfFont.fontSizeOfArea area text pdfFont
+                    let fontSize = canvas.CalcFontSize(text, args)
+                        
 
 
                     let point =
                         let rootArea = canvas.GetRootArea()
                         rootArea.GetPoint(position)
 
-                    let horizonal = 
-                        match position with 
-                        | Position.XCenter (x, y) -> TextAlignment.CENTER
-                        | Position.Left (x, y) -> TextAlignment.LEFT
-                        | Position.Right (x, y) -> TextAlignment.RIGHT
-                        | _ -> failwith "Invalid token"
+                    let horizonal = args.GetCalculatedHorizontalTextAlignment()
 
-
-                    let vertical = 
-                        match position with 
-                        | Position.YCenter (x, y) -> VerticalAlignment.MIDDLE
-                        | Position.Top (x, y) -> VerticalAlignment.TOP
-                        | Position.Bottom (x, y) -> VerticalAlignment.BOTTOM
-                        | _ -> failwith "Invalid token"
-
+                    let vertical = args.GetCalculatedVerticalTextAlignment()
 
                     let canvas =
                         canvas
@@ -202,6 +248,8 @@ module PdfDocumentWithResourceCache =
                     canvas
 
                 | None -> canvas
+
+
 
 
         let addRectangleToRootArea (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: Canvas) =

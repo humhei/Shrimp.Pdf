@@ -45,8 +45,8 @@
     <Compile Include="Marks.fs" />
     <Compile Include="ColorCard.fs" />
     <Compile Include="Colors.fs" />
-    <Compile Include="PdfDocumentWithResourceCache.fs" />
-    <Compile Include="Extensions_PdfDocumentWithResourceCache.fs" />
+    <Compile Include="PdfDocumentWithCachedResources.fs" />
+    <Compile Include="Extensions_PdfDocumentWithCachedResources.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Imposing.fs" />
     <Compile Include="Flow.fs" />

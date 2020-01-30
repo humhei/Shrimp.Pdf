@@ -30,13 +30,41 @@ let manipulateTests =
                 PageSelector.All,
                 [
                     { Name = "change separation color of pdfFunction2 PageNumber to m100"
-                      Selector = Text(Info.FillColorIs pageNumberSeparationColor)
+                      Selector = 
+                        Text(Info.ColorIsOneOf (FillOrStrokeOptions.Fill, [PdfCanvasColor.Registration ;pageNumberSeparationColor]))
                       Modifiers = [Modifier.SetFillColor(DeviceCmyk.MAGENTA)]
                     }
                 ]
             ) 
         )
         |> runWithBackup "datas/manipulate/change separation color of pdfFunction2 PageNumber to m100.pdf" 
+        |> ignore
+
+    ftestCase "remove specfic separation colors" <| fun _ -> 
+
+        let colors = 
+            [
+                { Name = "CuttingLine_BLUE" 
+                  Color = FsValueColor.OfItextColor DeviceRgb.BLUE
+                  Transparency = 1. }
+
+                FsSeparation.Create("PageNumber", DeviceRgb(200, 0, 56))
+            ]
+            |> List.map PdfCanvasColor.Separation
+
+        Flow.Manipulate (
+            modify(
+                PageSelector.All,
+                [
+                    { Name = "remove specfic separation colors"
+                      Selector = 
+                        PathOrText(Info.ColorIsOneOf (FillOrStrokeOptions.FillOrStroke, colors))
+                      Modifiers = [Modifier.CancelFillAndStroke()]
+                    }
+                ]
+            ) 
+        )
+        |> runWithBackup "datas/manipulate/remove specfic separation colors.pdf" 
         |> ignore
 
     testCase "change separation color of pdfFunction0 PageNumber to m100" <| fun _ -> 
@@ -205,6 +233,65 @@ let manipulateTests =
         |> runWithBackup "datas/manipulate/add line to position.pdf" 
         |> ignore
 
+    testCase "add colored texts to position" <| fun _ -> 
+        Flow.Manipulate (
+            modifyPage
+                ("add colored texts to position",
+                  PageSelector.All,
+                  Dummy,
+                  PageModifier.AddColoredTexts(
+                    AreaGettingOptions.PageBox PageBoxKind.ActualBox,
+                    [ 
+                        { Text = "C"
+                          Color = PdfCanvasColor.ITextColor DeviceCmyk.CYAN }
+
+                        { Text = "M"
+                          Color = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA }
+
+                        { Text = "Y"
+                          Color = PdfCanvasColor.ITextColor DeviceCmyk.YELLOW }
+
+                        { Text = "K"
+                          Color = PdfCanvasColor.ITextColor DeviceCmyk.BLACK }
+                    ],
+                    fun args -> 
+                        { args with 
+                            Position = Position.Center(0., 0.)
+                        }
+                  )
+                )
+        )
+        |> runWithBackup "datas/manipulate/add colored texts to position.pdf" 
+        |> ignore
+
+    testCase "add colored texts to position2" <| fun _ -> 
+        Flow.Manipulate (
+            modifyPage
+                ("add colored texts to position2",
+                  PageSelector.All,
+                  Dummy,
+                  PageModifier.AddColoredTexts(
+                    AreaGettingOptions.PageBox PageBoxKind.ActualBox,
+                    [ 
+                        { Text = "BLACK"
+                          Color = PdfCanvasColor.ITextColor DeviceCmyk.CYAN }
+
+                        { Text = "C= 8.0, M=100.0, Y=15.0, K=0.0"
+                          Color = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA }
+
+                    ],
+                    fun args -> 
+                        { args with 
+                            Position = Position.Center(0., 0.)
+                            PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                            HorizontalTextAlignment = Some iText.Layout.Properties.TextAlignment.RIGHT
+                        }
+                  )
+                )
+        )
+        |> runWithBackup "datas/manipulate/add colored texts to position2.pdf" 
+        |> ignore
+
     testCase "add text to position" <| fun _ -> 
         Flow.Manipulate (
             modifyPage
@@ -216,7 +303,7 @@ let manipulateTests =
                       { args with 
                           PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
                           CanvasFontSize = CanvasFontSize.Numeric 25. 
-                          FontColor = PdfCanvasColor.Separation (FsSeparation.Create("mySeparation", DeviceRgb.BLUE))
+                          FontColor = PdfCanvasColor.Separation (FsSeparation.Create("专色1", DeviceRgb.BLUE))
                           FontRotation = Rotation.None 
                           Position = Position.LeftTop(0., 0.)}
                     )

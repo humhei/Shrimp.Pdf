@@ -115,7 +115,7 @@ type Info =
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, fsSeparation: FsSeparation) =
-        Info.ColorIs(fillOrStrokeOptions, fun color -> fsSeparation.IsEqualTo(color, false))
+        Info.ColorIs(fillOrStrokeOptions, fun color -> fsSeparation.IsEqualTo(color, ValueEqualOptions.RoundedValue 3))
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, colorSpace: ColorSpace) =
@@ -177,7 +177,7 @@ type Info =
 
     static member ColorIsOneOf (fillOrStrokeOptions: FillOrStrokeOptions, fsSeparations: FsSeparation list) =
         Info.ColorIs(fillOrStrokeOptions, fun color -> 
-            FsSeparation.Contains() color fsSeparations
+            FsSeparation.Contains(ValueEqualOptions.RoundedValue 3) color fsSeparations
         )
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 

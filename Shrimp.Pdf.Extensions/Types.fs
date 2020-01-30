@@ -256,6 +256,17 @@ module Position =
         | Right (0., _)  -> Some ()
         | _ -> None
 
+    let mapValue (mapping) position = 
+        match position with
+        | Position.LeftBottom (x, y)-> Position.LeftBottom (mapping (x, y))
+        | Position.LeftMiddle (x, y) -> Position.LeftMiddle (mapping (x, y))
+        | Position.LeftTop (x, y) -> Position.LeftTop (mapping (x, y))
+        | Position.TopMiddle (x, y) -> Position.TopMiddle (mapping (x, y))
+        | Position.RightTop (x, y) -> Position.RightTop (mapping (x, y))
+        | Position.RightMiddle (x, y) -> Position.RightMiddle (mapping (x, y))
+        | Position.RightBottom (x, y) -> Position.RightBottom (mapping (x, y))
+        | Position.BottomMiddle (x, y) -> Position.BottomMiddle (mapping (x, y))
+        | Position.Center (x, y) -> Position.Center (mapping (x, y))
 
 [<RequireQualifiedAccess>]
 module Rectangle =

@@ -16,6 +16,11 @@ open Resources
 [<AutoOpen>]
 module _Colors =
 
+    [<RequireQualifiedAccess>]
+    type ValueEqualOptions =
+        | Exactly
+        | RoundedValue of digits: int
+
     type ColorSpace =
         | Gray = 0
         | Rgb = 1
@@ -122,10 +127,10 @@ module _Colors =
 
             | FsValueColor.Lab lab -> [ lab.L; lab.a; lab.b ]
 
-        member x.EqualByRoundedColorValue(y: FsValueColor) =
-            FsValueColor.EqualByRoundedColorValue (x, y)
+        member x.IsEqualTo(y: FsValueColor, valueEqualOptions: ValueEqualOptions) =
+            FsValueColor.IsEqual (x, y, valueEqualOptions)
 
-        static member EqualByRoundedColorValue (color1: FsValueColor, color2: FsValueColor) =
+        static member IsEqual (color1: FsValueColor, color2: FsValueColor, valueEqualOptions: ValueEqualOptions) =
             let isColorSpaceEqual =
                 match color1, color2 with
                 | FsValueColor.Rgb _, FsValueColor.Rgb _
@@ -135,15 +140,26 @@ module _Colors =
                 | _ -> false
 
             isColorSpaceEqual &&
-                let colorValue1 =
-                    color1.GetColorValue()
-                    |> List.map (fun v -> System.Math.Round(float v, 0) )
+                match valueEqualOptions with 
+                | ValueEqualOptions.Exactly -> 
+                    let colorValue1 =
+                        color1.GetColorValue()
 
-                let colorValue2 =
-                    color2.GetColorValue()
-                    |> List.map (fun v -> System.Math.Round(float v, 0) )
+                    let colorValue2 =
+                        color2.GetColorValue()
 
-                colorValue1 = colorValue2
+                    colorValue1 = colorValue2
+
+                | ValueEqualOptions.RoundedValue digits ->
+                    let colorValue1 =
+                        color1.GetColorValue()
+                        |> List.map (fun v -> System.Math.Round(float v, digits) )
+
+                    let colorValue2 =
+                        color2.GetColorValue()
+                        |> List.map (fun v -> System.Math.Round(float v, digits) )
+
+                    colorValue1 = colorValue2
 
         static member Invert = function
             | FsValueColor.Rgb rgbColor ->
@@ -248,10 +264,29 @@ module _Colors =
               Transparency = 1.
             }
 
-        static member EqualByRoundedColorValue(color1: FsSeparation, color2: FsSeparation) =
+        static member IsEqual(color1: FsSeparation, color2: FsSeparation, valueEqualOptions) =
             color1.Name = color2.Name
             && color1.Transparency = color2.Transparency
-            && FsValueColor.EqualByRoundedColorValue (color1.Color, color2.Color)
+            && FsValueColor.IsEqual (color1.Color, color2.Color, valueEqualOptions)
+
+
+        static member OfPantone(color: PantoneColorEnum) =
+            let fsValueColor = FsLab.OfPantone color
+    
+            let separationName1 = color.ToString()
+            
+            { Color = FsValueColor.Lab fsValueColor
+              Name = separationName1
+              Transparency = 1. }
+
+        static member OfTpx(color: TPXColorEnum) =
+            let fsValueColor = FsLab.OfTpx color
+    
+            let separationName1 = color.ToString()
+            
+            { Color = FsValueColor.Lab fsValueColor
+              Name = separationName1
+              Transparency = 1. }
 
     [<RequireQualifiedAccess>]
     module DeviceRgb =
@@ -462,19 +497,18 @@ module _Colors =
             FsSeparation.Create(colorName, separation.GetAlterateColor())
        
 
-        member separation1.IsEqualTo(color: Color, ?equalByRoundedColorValue) =
-            let equalByRoundedColorValue = defaultArg equalByRoundedColorValue false
+        member separation1.IsEqualTo(color: Color, valueEqualOptions) =
             match color with 
             | :? Separation as separation ->
-                let sepation0 = FsSeparation.OfSeparation separation
-                if equalByRoundedColorValue then FsSeparation.EqualByRoundedColorValue(sepation0, separation1)
-                else separation1 = sepation0
+                let separation0 = FsSeparation.OfSeparation separation
+                FsSeparation.IsEqual(separation0, separation1, valueEqualOptions)
+
             | _ -> false
 
-        static member Contains(?equalByRoundedColorValue) =
+        static member Contains(valueEqualOptions) =
             fun (color: Color) (fsSeparations: FsSeparation list) ->
                 fsSeparations
-                |> List.exists (fun m -> m.IsEqualTo(color, ?equalByRoundedColorValue = equalByRoundedColorValue))
+                |> List.exists (fun m -> m.IsEqualTo(color, valueEqualOptions))
 
     [<RequireQualifiedAccess>]
     module Separation =
@@ -580,42 +614,19 @@ module _Colors =
             match pdfCanvasColor with 
             | PdfCanvasColor.N -> false
             | PdfCanvasColor.ITextColor color1 -> Color.equal color color1
-            | PdfCanvasColor.Separation separation1 -> separation1.IsEqualTo(color, equalByRoundedColorValue = false)
+            | PdfCanvasColor.Separation separation1 -> separation1.IsEqualTo(color, ValueEqualOptions.RoundedValue 3)
             | PdfCanvasColor.ColorCard colorCard1 ->
     
                 match colorCard1 with 
                 | ColorCard.Pantone _ 
                 | ColorCard.TPX _ ->
-                    let fsValueColor1 =
+                    let separation1 =
                         match colorCard1 with 
-                        | ColorCard.Pantone pantoneColor1 ->
-                            FsLab.OfPantone pantoneColor1
-                            |> FsValueColor.Lab
-    
-                        | ColorCard.TPX tpxColor1 ->
-                            FsLab.OfTpx tpxColor1
-                            |> FsValueColor.Lab
-    
-                        | ColorCard.KnownColor knownColor -> 
-                            failwith "Invalid token"
-    
-                    let separationName1 = 
-                        match colorCard1 with 
-                        | ColorCard.Pantone pantoneColor1 ->
-                            pantoneColor1.ToString()
-    
-                        | ColorCard.TPX tpxColor1 ->
-                            tpxColor1.ToString()
-                        | ColorCard.KnownColor _ -> failwith "Invalid token"
-    
-    
-                    let separation1 = 
-                        { Color = fsValueColor1
-                          Name = separationName1
-                          Transparency = 1.
-                        }
+                        | ColorCard.Pantone pantoneColor1 -> FsSeparation.OfPantone pantoneColor1
+                        | ColorCard.TPX tpxColor1 -> FsSeparation.OfTpx tpxColor1
+                        | ColorCard.KnownColor knownColor -> failwith "Invalid token"
                     
-                    separation1.IsEqualTo(color, equalByRoundedColorValue = true)
+                    separation1.IsEqualTo(color, ValueEqualOptions.RoundedValue 0)
                 | ColorCard.KnownColor knownColor1 ->
                     let itextColor1 = 
                         (Color.fromKnownColor knownColor1)
@@ -632,7 +643,7 @@ module _Colors =
                 | _ -> false
     
             | PdfCanvasColor.Registration ->
-                 FsSeparation.Registration.IsEqualTo(color)
+                 FsSeparation.Registration.IsEqualTo(color, ValueEqualOptions.RoundedValue 0)
 
         static member Contains(color: Color) (pdfCanvasColor: PdfCanvasColor list) =
             pdfCanvasColor
@@ -642,6 +653,9 @@ module _Colors =
 
 
     type Color with 
+        member x.IsEqualTo(fsSeparation: FsSeparation, valueEqualOptions) =
+            fsSeparation.IsEqualTo(x, valueEqualOptions)
+
         member x.GetFsColorSpace() =
             match x with 
             | :? DeviceCmyk -> ColorSpace.Cmyk

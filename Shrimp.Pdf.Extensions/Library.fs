@@ -62,7 +62,6 @@ module iText =
         let calcLineWidthUnits (text: string) (font: PdfFont) =
             let linesOfText = text.Split([|"\r\n"; "\n"|], StringSplitOptions.None)
 
-
             linesOfText 
             |> List.ofArray
             |> List.map (fun line ->
