@@ -40,7 +40,7 @@ let manipulateTests =
         |> runWithBackup "datas/manipulate/change separation color of pdfFunction2 PageNumber to m100.pdf" 
         |> ignore
 
-    ftestCase "remove specfic separation colors" <| fun _ -> 
+    testCase "remove specfic separation colors" <| fun _ -> 
 
         let colors = 
             [

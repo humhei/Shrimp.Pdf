@@ -127,7 +127,7 @@ let realSamplesTests =
                 { args with
                     ColNums = [6]
                     RowNum = 3
-                    Margin = Margin.Create(mm 6.)
+                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable(Margin.Create(mm 6.))
                     Background = Background.Size FsSize.MAXIMUN
                     UseBleed = true
                 }
@@ -159,7 +159,7 @@ let realSamplesTests =
                 { args with
                     ColNums = [0]
                     RowNum = 0
-                    Margin = Margin.Create(mm 6.)
+                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable(Margin.Create(mm 6.))
                     Background = Background.Size FsSize.A4
                     UseBleed = true
                     Cropmark = Some Cropmark.defaultValue

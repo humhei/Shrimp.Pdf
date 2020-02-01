@@ -22,7 +22,7 @@ let reuseTests =
                         Background = Background.Size FsSize.A0
                         HSpaces = [mm 3.; mm 9.]
                         VSpaces = [mm 3.; mm 9.]
-                        Margin = Margin.Create(mm 30., mm 30., mm 30., mm 40.)
+                        Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 30., mm 30., mm 30., mm 40.))
                         UseBleed = true
                     }
                 )
@@ -46,7 +46,7 @@ let reuseTests =
                         RowNum = 12
                         Cropmark = Some Cropmark.defaultValue
                         Background = Background.Size FsSize.MAXIMUN
-                        Margin = Margin.Create(mm 6.)
+                        Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable(Margin.Create(mm 6.))
                         CellRotation = CellRotation.R180WhenColNumIsEven
                     }
                 )
@@ -64,7 +64,7 @@ let reuseTests =
                     Cropmark = Some Cropmark.defaultValue
                     HSpaces = [mm 3.; mm 9.]
                     VSpaces = [mm 3.; mm 9.]
-                    Margin = Margin.Create(mm 0., mm 6., mm 9., mm 12.)
+                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create (mm 0., mm 6., mm 9., mm 12.))
                     IsRepeated = true
                 }
             )
@@ -78,7 +78,7 @@ let reuseTests =
                 { args with 
                     DesiredSizeOp = Some { Width = mm 80.; Height = mm 50.}
                     Cropmark = Some Cropmark.defaultValue
-                    Margin = Margin.Create(mm 6.)
+                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 6.))
                     Background = 
                         let size =
                             { Width = FsSize.A4.Width + mm 12. 
@@ -103,7 +103,7 @@ let reuseTests =
                     Background = Background.Size FsSize.A0
                     HSpaces = [mm 3.; mm 9.]
                     VSpaces = [mm 3.; mm 9.]
-                    Margin = Margin.Create(mm 30., mm 30., mm 30., mm 40.)
+                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable(Margin.Create(mm 9.863, mm 11.201, 0., 0.))
                     UseBleed = true
                 }
             )
@@ -122,12 +122,29 @@ let reuseTests =
                     Background = Background.Size FsSize.A0
                     HSpaces = [mm 3.; mm 9.]
                     VSpaces = [mm 3.; mm 9.]
-                    Margin = Margin.Create(mm 6., mm 6., mm 6., mm 6.)
+                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable(Margin.Create(mm 6., mm 6., mm 6., mm 6.))
                     UseBleed = true
                 }
             )
         )
         |> runWithBackup "datas/reuse/Imposing when cell roation is setted.pdf" 
+        |> ignore
+
+    testCase "Imposing when backgroudFile is setted" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.Impose(fun args ->
+                { args with 
+                    DesiredSizeOp = Some { Width = mm 30.; Height = mm 30.}
+                    ColNums = [8]
+                    RowNum = 11
+                    Background = Background.File (BackgroundFile.Create "datas/reuse/backgroundFile.pdf")
+                    HSpaces = [mm 4.]
+                    VSpaces = [mm 3.]
+                    Sheet_PlaceTable = Sheet_PlaceTable.At(Position.LeftTop(mm 9.863, mm -11.201))
+                }
+            )
+        )
+        |> runWithBackup "datas/reuse/Imposing when backgroudFile is setted.pdf" 
         |> ignore
 
     testCase "clockwise all pages" <| fun _ -> 

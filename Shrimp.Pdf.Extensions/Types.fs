@@ -176,6 +176,10 @@ type StraightLine =
     { Start: Point
       End: Point }
 
+
+
+
+
 [<RequireQualifiedAccess>]
 type Position =
     | LeftBottom of float * float
@@ -204,41 +208,27 @@ with
 [<RequireQualifiedAccess>]
 module Position =
 
-    let (|Left|_|) = function
+    let (|Left|XCenter|Right|) = function
         | Position.LeftTop (x, y) 
         | Position.LeftBottom (x, y) 
-        | Position.LeftMiddle(x, y) -> Some (x, y)
-        | _ -> None
-
-    let (|Bottom|_|) = function
-        | Position.LeftBottom (x, y)
-        | Position.RightBottom (x, y)
-        | Position.BottomMiddle (x, y)-> Some (x, y)
-        | _ -> None
-
-    let (|Top|_|) = function
-        | Position.LeftTop (x, y) 
-        | Position.RightTop (x, y)
-        | Position.TopMiddle(x, y) -> Some (x, y)
-        | _ -> None
-
-    let (|Right|_|) = function
-        | Position.RightBottom (x, y) 
-        | Position.RightTop (x, y)
-        | Position.RightMiddle (x, y) -> Some (x, y)
-        | _ -> None
-
-    let (|XCenter|_|) = function
+        | Position.LeftMiddle(x, y) -> Left (x, y)
         | Position.Center (x, y) 
         | Position.BottomMiddle (x, y) 
-        | Position.TopMiddle(x, y) -> Some (x, y)
-        | _ -> None
+        | Position.TopMiddle(x, y) -> XCenter (x, y)
+        | Position.RightBottom (x, y) 
+        | Position.RightTop (x, y)
+        | Position.RightMiddle (x, y) -> Right (x, y)
 
-    let (|YCenter|_|) = function
+    let (|Bottom|Top|YCenter|) = function
+        | Position.LeftBottom (x, y)
+        | Position.RightBottom (x, y)
+        | Position.BottomMiddle (x, y)-> Bottom (x, y)
+        | Position.LeftTop (x, y) 
+        | Position.RightTop (x, y)
+        | Position.TopMiddle(x, y) -> Top (x, y)
         | Position.Center (x, y) 
         | Position.LeftMiddle (x, y) 
-        | Position.RightMiddle(x, y) -> Some (x, y)
-        | _ -> None
+        | Position.RightMiddle(x, y) -> YCenter (x, y)
 
     let (|LeftEdge|_|) = function
         | Left (0., _) -> Some ()
@@ -255,6 +245,18 @@ module Position =
     let (|RightEdge|_|) = function
         | Right (0., _)  -> Some ()
         | _ -> None
+
+    let getValue position = 
+        match position with
+        | Position.LeftBottom (x, y)
+        | Position.LeftMiddle (x, y)
+        | Position.LeftTop (x, y) 
+        | Position.TopMiddle (x, y) 
+        | Position.RightTop (x, y)
+        | Position.RightMiddle (x, y)
+        | Position.RightBottom (x, y)
+        | Position.BottomMiddle (x, y) 
+        | Position.Center (x, y) -> x, y
 
     let mapValue (mapping) position = 
         match position with

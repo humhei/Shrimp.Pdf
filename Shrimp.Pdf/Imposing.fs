@@ -27,9 +27,10 @@ module Imposing =
               Width = mm 0.1
               Color = PdfCanvasColor.Registration }
 
+
     [<RequireQualifiedAccess>]
     type Sheet_PlaceTable =
-        | Trim_CenterTable
+        | Trim_CenterTable of Margin
         | At of Position
 
 
@@ -182,7 +183,6 @@ module Imposing =
             Cropmark: Cropmark option
             HSpaces: float list
             VSpaces: float list
-            Margin: Margin
             UseBleed: bool
             Background: Background
             DesiredPageOrientation: DesiredPageOrientation
@@ -193,6 +193,8 @@ module Imposing =
         }
 
     with 
+
+
         static member DefaultValue =
             {
                 ColNums = [0]
@@ -200,10 +202,9 @@ module Imposing =
                 Cropmark = None
                 HSpaces = [0.]
                 VSpaces = [0.]
-                Margin = Margin.Create(0.)
                 UseBleed = false
                 Background = Background.Size FsSize.A4
-                Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable
+                Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(0.))
                 DesiredSizeOp = None
                 IsRepeated = false
                 CellRotation = CellRotation.None
@@ -222,6 +223,24 @@ module Imposing =
 
         static member Create(mapping: _ImposingArguments -> _ImposingArguments) = 
             let args = mapping _ImposingArguments.DefaultValue
+            
+            let isValidSheet_PlaceTable = 
+                match args.Sheet_PlaceTable with 
+                | Sheet_PlaceTable.Trim_CenterTable margin -> 
+                    [ margin.Left; margin.Top; margin.Right; margin.Bottom ]
+                    |> List.forall(fun m -> m >= 0.)
+                | Sheet_PlaceTable.At position ->
+                    match position with
+                    | Position.Left (x, _) -> x >= 0.
+                    | Position.Right (x, _) -> x <= 0.
+                    | Position.XCenter (x, y) -> true
+                    && 
+                        match position with
+                        | Position.Top (_, y) -> y <= 0.
+                        | Position.Bottom (_, y) -> y >= 0.
+                        | Position.YCenter _ -> true
+
+            if not isValidSheet_PlaceTable then failwithf "Invalid Sheet_PlaceTable %A" args.Sheet_PlaceTable
 
             let fillingMode =
                 match List.distinct args.ColNums, args.RowNum with
@@ -533,7 +552,17 @@ module Imposing =
 
             let willWidthExceedPageWidth = 
                 let pageSize = this.PageSize
-                newCell.X + newCell.Size.Width + args.Margin.Left + args.Margin.Right > pageSize.Width
+                let marginX =
+                    match args.Sheet_PlaceTable with 
+                    | Sheet_PlaceTable.Trim_CenterTable margin ->
+                        margin.Left + margin.Right
+                    | Sheet_PlaceTable.At position ->
+                        match position with 
+                        | Position.Left (x, _) -> x
+                        | Position.Right (x, _) -> -x
+                        | Position.XCenter(x, _) -> abs x
+
+                newCell.X + newCell.Size.Width + marginX > pageSize.Width
 
             if willWidthExceedPageWidth then false
             else 
@@ -621,7 +650,18 @@ module Imposing =
 
                     let heightExeedPageHeight =
                         match Seq.tryLast rows with 
-                        | Some row -> row.Height + y + args.Margin.Top + args.Margin.Bottom > pageSize.Height
+                        | Some row -> 
+                            let marginY =
+                                match args.Sheet_PlaceTable with 
+                                | Sheet_PlaceTable.Trim_CenterTable margin ->
+                                    margin.Left + margin.Right
+                                | Sheet_PlaceTable.At position ->
+                                    match position with 
+                                    | Position.Top (_, y) -> -y
+                                    | Position.Bottom (_, y) -> y
+                                    | Position.YCenter(_, y) -> abs y
+
+                            row.Height + y + marginY > pageSize.Height
 
                         | None -> false
 
@@ -649,15 +689,70 @@ module Imposing =
                 else addNewRow_UpdateState_PushAgain()
 
 
+        member this.Margin =
+            let args = this.ImposingArguments.Value
+            match args.Sheet_PlaceTable with 
+            | Sheet_PlaceTable.Trim_CenterTable margin -> margin
+            | Sheet_PlaceTable.At position ->
+                let left = 
+                    match position with 
+                    | Position.Left (x, _) -> x
+                    | Position.Right (x, _) -> this.Width - this.TableWidth + x
+                    | Position.XCenter(x, _) -> (this.Width - this.TableWidth) / 2. + x
+
+                let right = this.Width - this.TableWidth - left
+
+                let bottom = 
+                    match position with 
+                    | Position.Top (_, y) -> this.Height - this.TableHeight + y
+                    | Position.Bottom (_, y) -> y
+                    | Position.YCenter(_, y) -> (this.Height - this.TableHeight) / 2. + y
+
+                let top = this.Height - this.TableHeight - bottom
+
+                Margin.Create(left, top, right, bottom)
 
 
-        member internal x.Draw() =
-            let args = x.ImposingArguments.Value
+        member internal this.Draw() =
+            let args = this.ImposingArguments.Value
 
-            let newPage = x.SplitDocument.Writer.AddNewPage()
+            let newPage = this.SplitDocument.Writer.AddNewPage()
             
-            let pdfCanvas = 
-                PdfCanvas(newPage)
+            let pdfCanvas = PdfCanvas(newPage)
+
+            let height = this.Height
+            let width = this.Width
+
+            let pageBox = 
+                match args.Sheet_PlaceTable with 
+                | Sheet_PlaceTable.Trim_CenterTable margin ->
+                    (Rectangle.create -margin.Left -(height - margin.Top) width height)
+
+                | Sheet_PlaceTable.At position ->
+                    let x =
+                        match position with
+                        | Position.Left (x, _) -> x
+                        | Position.Right (x, _) -> x + (width - this.TableWidth)
+                        | Position.XCenter (x, _) -> (width - this.TableWidth) / 2. + x
+                 
+                    let y =
+                        match position with 
+                        | Position.Top (_, y) -> -y
+                        | Position.Bottom (_, y) -> -y + height - this.TableHeight
+                        | Position.YCenter(_, y) -> -y + (height - this.TableHeight) / 2.
+
+
+                    (Rectangle.create -x (-height + y) width height) 
+
+            PdfPage.setPageBox (PageBoxKind.AllBox) pageBox newPage |> ignore
+
+            match args.Background with 
+            | Background.File backgroudFile ->
+                let reader = new PdfDocument(new PdfReader(backgroudFile.Value))
+                let xobject = reader.GetPage(1).CopyAsFormXObject(this.SplitDocument.Writer)
+                pdfCanvas.AddXObject(xobject, pageBox.GetX(), pageBox.GetY()) |> ignore
+                reader.Close()
+            | _ -> ()
 
             let cellContentAreas_ExtendByCropmarkDistance = 
                 match args.Cropmark with 
@@ -673,52 +768,51 @@ module Imposing =
                     )
                 | _ -> []
 
+
             (pdfCanvas, rows)
             ||> Seq.fold (fun pdfCanvas row -> 
                 row.AddToCanvas cellContentAreas_ExtendByCropmarkDistance pdfCanvas
             )
             |> ignore
 
-            let height = x.Height
 
-
-
-            PdfPage.setPageBox (PageBoxKind.AllBox) (Rectangle.create -args.Margin.Left -(height - args.Margin.Top) x.Width height) newPage
-            |> ignore
 
 
         member x.TableWidth = 
             let args = x.ImposingArguments.Value
-            match args.Sheet_PlaceTable with
-            | Sheet_PlaceTable.Trim_CenterTable ->
-                if rows.Count = 0 then 0.
-                else 
-                    rows
-                    |> Seq.map (fun row -> row.Width)
-                    |> Seq.max
+            if rows.Count = 0 then 0.
+            else 
+                rows
+                |> Seq.map (fun row -> row.Width)
+                |> Seq.max
+
+
+        member x.Width = 
+            let args = x.ImposingArguments.Value
+            match args.Sheet_PlaceTable with 
+            | Sheet_PlaceTable.Trim_CenterTable margin ->
+                margin.Left + margin.Right + x.TableWidth
 
             | Sheet_PlaceTable.At _ ->
                 pageSize.Width
 
-        member x.Width = 
-            let margin = x.ImposingArguments.Value.Margin
-            margin.Left + margin.Right + x.TableWidth
-
-
         member x.TableHeight =
             let args = x.ImposingArguments.Value
-            match args.Sheet_PlaceTable with
-            | Sheet_PlaceTable.Trim_CenterTable ->
-                match Seq.tryLast rows with 
-                | Some row -> row.Height + x.Y
-                | None -> 0.
+            match Seq.tryLast rows with 
+            | Some row -> row.Height + x.Y
+            | None -> 0.
+
+
+        member x.Height = 
+            let args = x.ImposingArguments.Value
+            match args.Sheet_PlaceTable with 
+            | Sheet_PlaceTable.Trim_CenterTable margin ->
+                x.TableHeight + margin.Bottom + margin.Top
 
             | Sheet_PlaceTable.At _ ->
                 pageSize.Height
 
-        member x.Height = 
-            let margin = x.ImposingArguments.Value.Margin
-            x.TableHeight + margin.Bottom + margin.Top
+            
 
         member internal x.Rows: ResizeArray<ImposingRow> = rows
         

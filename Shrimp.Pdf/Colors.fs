@@ -21,6 +21,9 @@ module _Colors =
         | Exactly
         | RoundedValue of digits: int
 
+    with 
+        static member DefaultRoundedValue = ValueEqualOptions.RoundedValue 3
+
     type ColorSpace =
         | Gray = 0
         | Rgb = 1
@@ -614,7 +617,7 @@ module _Colors =
             match pdfCanvasColor with 
             | PdfCanvasColor.N -> false
             | PdfCanvasColor.ITextColor color1 -> Color.equal color color1
-            | PdfCanvasColor.Separation separation1 -> separation1.IsEqualTo(color, ValueEqualOptions.RoundedValue 3)
+            | PdfCanvasColor.Separation separation1 -> separation1.IsEqualTo(color, ValueEqualOptions.DefaultRoundedValue)
             | PdfCanvasColor.ColorCard colorCard1 ->
     
                 match colorCard1 with 
