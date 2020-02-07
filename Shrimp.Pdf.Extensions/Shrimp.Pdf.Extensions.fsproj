@@ -12,16 +12,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="itext7" Version="7.1.8" />
-    <PackageReference Include="itext7.font-asian" Version="7.1.8" />
-    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.1.60" />
+    <PackageReference Include="FParsec" Version="1.1.1" />
+    <PackageReference Include="itext7" Version="7.1.9" />
+    <PackageReference Include="itext7.font-asian" Version="7.1.9" />
+    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.1.62" />
   </ItemGroup>
 
   <ItemGroup>
-    <!--<ProjectReference Include="..\..\itext7-dotnet\itext\itext.font-asian\itext.font-asian.netstandard.csproj" />
-    <ProjectReference Include="..\..\itext7-dotnet\itext\itext.io\itext.io.netstandard.csproj" />
-    <ProjectReference Include="..\..\itext7-dotnet\itext\itext.kernel\itext.kernel.netstandard.csproj" />
-    <ProjectReference Include="..\..\itext7-dotnet\itext\itext.layout\itext.layout.netstandard.csproj" />-->
     <ProjectReference Include="..\Shrimp.Pdf.Logger\Shrimp.Pdf.Logger.fsproj" />
   </ItemGroup>
 

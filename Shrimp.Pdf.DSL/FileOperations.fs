@@ -5,26 +5,26 @@ open iText.Kernel.Pdf
 open System.IO
 
 [<RequireQualifiedAccess>]
-type FileOperationOutputDirectoryOptions =
+type DocumentSplitOutputDirectoryOptions =
     | ReaderDirectoryPath
     | CustomDirectoryPath of string
 
 type DocumentSplitArguments =
     { ChunkSize: int 
-      OutputDirectory: FileOperationOutputDirectoryOptions
+      OutputDirectory: DocumentSplitOutputDirectoryOptions
       Override: bool }
 with 
     static member DefalutValue =
         { ChunkSize = 1 
-          OutputDirectory = FileOperationOutputDirectoryOptions.ReaderDirectoryPath 
+          OutputDirectory = DocumentSplitOutputDirectoryOptions.ReaderDirectoryPath 
           Override = false }
     
 type DocumentMergingArguments =
-    { TargetDocumentName: string 
+    { TargetDocumentPath: string 
       Override: bool }
 with 
     static member DefalutValue =
-        { TargetDocumentName = Path.GetTempFileName() |> Path.changeExtension ".pdf"
+        { TargetDocumentPath = Path.GetTempFileName() |> Path.changeExtension ".pdf"
           Override = false }
 
 [<RequireQualifiedAccess>]
@@ -59,11 +59,11 @@ module FileOperations =
 
         fun flowModels ->
 
-            if File.exists args.TargetDocumentName && not args.Override then failwithf "target file %s already exists" args.TargetDocumentName
-            else File.delete args.TargetDocumentName 
+            if File.exists args.TargetDocumentPath && not args.Override then failwithf "target file %s already exists" args.TargetDocumentPath
+            else File.delete args.TargetDocumentPath 
 
-            let writer = new PdfDocument(new PdfWriter(args.TargetDocumentName))
-            let flow = mergeDocumentsInternal (args.TargetDocumentName) writer
+            let writer = new PdfDocument(new PdfWriter(args.TargetDocumentPath))
+            let flow = mergeDocumentsInternal (args.TargetDocumentPath) writer
 
             let result = 
                 flow.Value flowModels
@@ -82,10 +82,10 @@ module FileOperations =
 
                 let outputDirectory =
                     match args.OutputDirectory with 
-                    | FileOperationOutputDirectoryOptions.ReaderDirectoryPath -> 
+                    | DocumentSplitOutputDirectoryOptions.ReaderDirectoryPath -> 
                         Path.getDirectory flowModel.File
 
-                    | FileOperationOutputDirectoryOptions.CustomDirectoryPath directory ->
+                    | DocumentSplitOutputDirectoryOptions.CustomDirectoryPath directory ->
                         let directoryFullName = Path.GetFullPath directory
                         Directory.ensure directoryFullName
                         directoryFullName

@@ -4,13 +4,8 @@ open iText.Kernel.Geom
 open iText.IO.Font
 open iText.IO.Font.Otf
 open iText.Kernel.Font
-open Akka.Configuration
 open System
-open System.IO
-open iText.Layout
 open iText.Kernel.Colors
-open iText.Layout.Properties
-open System.Collections.Concurrent
 open iText.Kernel.Pdf
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open iText.Kernel.Pdf.Canvas
@@ -100,8 +95,6 @@ module iText =
             List.max widthUnits * fontSize 
 
 
-    type TextRenderingMode = PdfCanvasConstants.TextRenderingMode
-
     type Rectangle with 
         member this.GetWidthF() = this.GetWidth() |> float
         member this.GetHeightF() = this.GetHeight() |> float
@@ -160,7 +153,6 @@ module iText =
                 | Position.XCenter (x, y) -> (rect.GetXF() + rect.GetRightF()) / 2. + x
                 | Position.Left (x, y) -> rect.GetXF() + x
                 | Position.Right (x, y) -> rect.GetRightF() + x
-                | _ -> failwith "Invalid token"
 
 
             let y = 
@@ -168,7 +160,6 @@ module iText =
                 | Position.YCenter (x, y) -> (rect.GetBottomF() + rect.GetTopF()) / 2. + y
                 | Position.Top (x, y) -> rect.GetTopF() + y
                 | Position.Bottom (x, y) -> rect.GetBottomF() + y
-                | _ -> failwith "Invalid token"
 
             new Point (x, y)
 
@@ -227,6 +218,13 @@ module iText =
     [<RequireQualifiedAccess>]
     module Rectangle = 
 
+        let (|Portrait|Landscape|Uniform|) (rect: Rectangle) =
+            let width = rect.GetWidth()
+            let height = rect.GetHeight()
+            if width > height 
+            then Portrait
+            elif width = height then Uniform
+            else Landscape
 
         let isInsideOf (paramRect) (rect: Rectangle) =
             rect.IsInsideOf(paramRect)
@@ -413,38 +411,19 @@ module iText =
             new AffineTransform(m00, m10, m01, m11, m02, m12)
 
         let toRecord (affineTransform: AffineTransform) =
-            { ScaleX = affineTransform.GetScaleX() 
-              ShearX = affineTransform.GetShearX() 
-              ShearY = affineTransform.GetShearY() 
-              ScaleY = affineTransform.GetScaleY() 
-              TranslateX = affineTransform.GetTranslateX() 
-              TranslateY = affineTransform.GetTranslateY() }
+            AffineTransformRecord.ofAffineTransform affineTransform
 
         let ofRecord (record: AffineTransformRecord) =
-            create 
-                record.m00
-                record.m10
-                record.m01
-                record.m11
-                record.m02
-                record.m12
+            AffineTransformRecord.toAffineTransform record
 
 
         let ofMatrix (matrix: Matrix) =
-            let values =
-                [| matrix.Get(Matrix.I11)
-                   matrix.Get(Matrix.I12)
-                   matrix.Get(Matrix.I21)
-                   matrix.Get(Matrix.I22)
-                   matrix.Get(Matrix.I31)
-                   matrix.Get(Matrix.I32) |]
-
-            new AffineTransform(values)
+            AffineTransformRecord.ofMatrix matrix
+            |> ofRecord
 
         let toMatrix (affineTransform: AffineTransform) =
-            let values = Array.create 6 0.f
-            affineTransform.GetMatrix(values)
-            new Matrix(values.[Matrix.I11], values.[Matrix.I12], values.[Matrix.I21], values.[Matrix.I22], values.[Matrix.I31], values.[Matrix.I32])
+            toRecord affineTransform
+            |> AffineTransformRecord.toMatrix
 
         let transform (p0: Point) (affineTransform: AffineTransform) = 
             let p1 = new Point()
@@ -478,22 +457,7 @@ module iText =
             let p4 = new Point (rect.GetRightF(),rect.GetYF())
             [p1; p2; p3 ;p4] |> List.map (fun p -> AffineTransform.inverseTransform p this) |> Rectangle.ofPoints
 
-    [<RequireQualifiedAccess>]
-    module AffineTransformRecord =
-        let ofAffineTransform (affineTransform: AffineTransform) =
-            AffineTransform.toRecord affineTransform
 
-        let toAffineTransform (record: AffineTransformRecord) =
-            AffineTransform.ofRecord record
-
-
-        let ofMatrix (matrix: Matrix) =
-            AffineTransform.ofMatrix matrix
-            |> ofAffineTransform
-
-        let toMatrix (record: AffineTransformRecord) =
-            AffineTransform.ofRecord record
-            |> AffineTransform.toMatrix
 
     type AbstractRenderInfo with 
         member this.GetFillColor() =
@@ -527,19 +491,6 @@ module iText =
         let isNotEmpty (subpath: Subpath) =
             let points = toRawPoints subpath
             points.Count > 0
-
-
-    type BoundGettingStrokeOptions =
-        | WithStrokeWidth = 0
-        | WithoutStrokeWidth = 1
-
-
-    type FillOrStrokeOptions =
-        | Stroke = 0
-        | Fill = 1
-        | FillOrStroke = 2
-        | FillAndStroke = 3
-
 
 
 
@@ -739,6 +690,78 @@ module iText =
         let boundIsInsideOf  boundGettingOptions rect (info: IAbstractRenderInfo) =
             (getBound boundGettingOptions info).IsInsideOf(rect)
 
+    [<RequireQualifiedAccess>]
+    module IIntegratedRenderInfo =
+        [<RequireQualifiedAccess>]
+        module private ClippingPathInfo =
+            let tryGetActualClippingPath (info: ClippingPathInfo) = 
+                match info.GetClippingPath() with 
+                | null -> None
+                | path -> 
+                    if path.GetSubpaths() |> Seq.forall(fun subPath -> subPath.GetPiecewiseLinearApproximation().Count = 0) then None
+                    else Some path
+        
+            let tryGetActualClippingArea (info) =
+                tryGetActualClippingPath info
+                |> Option.map (fun clippingPath ->
+                    clippingPath.GetSubpaths()
+                    |> Seq.collect(Subpath.toActualPoints (info.GetGraphicsState().GetCtm()))
+                    |> Rectangle.ofPoints
+                )
+        
+        
+        [<RequireQualifiedAccess>]
+        module private IAbstractRenderInfo =
+            let isVisible (fillOrStrokeOptions: FillOrStrokeOptions) (clippingPathInfo: ClippingPathInfo option) (info: IAbstractRenderInfo) =
+        
+                match fillOrStrokeOptions with 
+                | FillOrStrokeOptions.Fill -> IAbstractRenderInfo.hasFill info
+                | FillOrStrokeOptions.Stroke -> IAbstractRenderInfo.hasStroke info
+                | FillOrStrokeOptions.FillAndStroke -> IAbstractRenderInfo.hasFill info && IAbstractRenderInfo.hasStroke info
+                | FillOrStrokeOptions.FillOrStroke -> IAbstractRenderInfo.hasFill info || IAbstractRenderInfo.hasStroke info
+        
+                &&
+                    match info with 
+                    | :? PathRenderInfo as info -> not (info.IsPathModifiesClippingPath())
+                    | _ -> true
+                && 
+                    match clippingPathInfo with 
+                    | Some clippingPathInfo ->
+                        match ClippingPathInfo.tryGetActualClippingArea clippingPathInfo with 
+                            | Some clippingBound ->
+                                let bound = IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithStrokeWidth info
+                                match Rectangle.tryGetIntersection bound clippingBound with 
+                                | Some _ -> true
+                                | None -> false
+                            | None -> true
+                    | None -> true
+        
+            let tryGetVisibleBound boundGettingOptions (clippingPathInfo: ClippingPathInfo option) (info: IAbstractRenderInfo) =
+                if isVisible (FillOrStrokeOptions.FillOrStroke) clippingPathInfo info 
+                then
+                    let bound = IAbstractRenderInfo.getBound boundGettingOptions info
+                    match clippingPathInfo with 
+                    | None -> Some bound 
+                    | Some clippingPathInfo ->
+                        match ClippingPathInfo.tryGetActualClippingArea clippingPathInfo with 
+                        | Some clippingBound -> Rectangle.tryGetIntersection bound clippingBound 
+                        | None -> 
+                            if bound.GetWidthF() @= 0. || bound.GetHeightF() @= 0. then None
+                            else
+                                Some bound
+                else None
+
+        let isStrokeVisible (info: IIntegratedRenderInfo) = 
+            IAbstractRenderInfo.isVisible FillOrStrokeOptions.Stroke info.ClippingPathInfo info
+    
+        let isFillVisible (info: IIntegratedRenderInfo) = 
+            IAbstractRenderInfo.isVisible FillOrStrokeOptions.Fill info.ClippingPathInfo info
+    
+        let tryGetVisibleBound boundGettingOptions (info: IIntegratedRenderInfo) =
+            IAbstractRenderInfo.tryGetVisibleBound boundGettingOptions info.ClippingPathInfo info
+    
+        let isVisible (info: IIntegratedRenderInfo) =
+            isFillVisible info || isStrokeVisible info
 
     [<RequireQualifiedAccess>]
     module CanvasGraphicsState =
@@ -1026,8 +1049,11 @@ module iText =
                 x.GetPageBox(pageBoxKind)
                 |> Rectangle.applyMargin margin
 
+
+
     [<RequireQualifiedAccess>]
     module PdfPage = 
+
 
         let setMediaBox (rect: Rectangle) (page: PdfPage) =
             page.SetMediaBox rect
@@ -1089,7 +1115,6 @@ module iText =
 
         let getActualBox (page: PdfPage) =
             page.GetActualBox()
-
 
     [<RequireQualifiedAccess>]
     module PdfDocument =

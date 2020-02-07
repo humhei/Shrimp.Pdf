@@ -147,7 +147,7 @@ let realSamplesTests =
             )
         )
         
-        |> runWithBackup "datas/real samples/Layout to Confirm.pdf" 
+        |> runTest "datas/real samples/Layout to Confirm.pdf" 
         |> ignore
 
     testCase "printing out test" <| fun _ -> 
@@ -181,7 +181,7 @@ let realSamplesTests =
             )
         )
         
-        |> runWithBackup "datas/real samples/printing out.pdf" 
+        |> runTest "datas/real samples/printing out.pdf" 
         |> ignore
 
     testCase "add seam text and seam line test" <| fun _ -> 
@@ -233,7 +233,7 @@ let realSamplesTests =
 
         )
         
-        |> runWithBackup "datas/real samples/add seam text and seam line.pdf" 
+        |> runTest "datas/real samples/add seam text and seam line.pdf" 
         |> ignore
 
   ]

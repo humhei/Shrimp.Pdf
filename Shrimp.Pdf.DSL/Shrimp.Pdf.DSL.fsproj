@@ -8,9 +8,9 @@
     <Compile Include="Types.fs" />
     <Compile Include="Selector.fs" />
     <Compile Include="FileOperations.fs" />
+    <Compile Include="Reuses.fs" />
     <Compile Include="ModifyPage.fs" />
     <Compile Include="Modify.fs" />
-    <Compile Include="Reuses.fs" />
     <Compile Include="Manipulates.fs" />
   </ItemGroup>
 

@@ -37,7 +37,7 @@ let manipulateTests =
                 ]
             ) 
         )
-        |> runWithBackup "datas/manipulate/change separation color of pdfFunction2 PageNumber to m100.pdf" 
+        |> runTest "datas/manipulate/change separation color of pdfFunction2 PageNumber to m100.pdf" 
         |> ignore
 
     testCase "remove specfic separation colors" <| fun _ -> 
@@ -64,7 +64,7 @@ let manipulateTests =
                 ]
             ) 
         )
-        |> runWithBackup "datas/manipulate/remove specfic separation colors.pdf" 
+        |> runTest "datas/manipulate/remove specfic separation colors.pdf" 
         |> ignore
 
     testCase "change separation color of pdfFunction0 PageNumber to m100" <| fun _ -> 
@@ -83,7 +83,7 @@ let manipulateTests =
                 ]
             ) 
         )
-        |> runWithBackup "datas/manipulate/change separation color of pdfFunction0 PageNumber to m100.pdf" 
+        |> runTest "datas/manipulate/change separation color of pdfFunction0 PageNumber to m100.pdf" 
         |> ignore
 
     testCase "change separation color of pdfFunction0 Registration to m100" <| fun _ -> 
@@ -98,7 +98,7 @@ let manipulateTests =
                 ]
             ) 
         )
-        |> runWithBackup "datas/manipulate/change separation color of pdfFunction0 Registration to m100.pdf" 
+        |> runTest "datas/manipulate/change separation color of pdfFunction0 Registration to m100.pdf" 
         |> ignore
 
     testCase "change stroke color b255 to m100" <| fun _ -> 
@@ -113,7 +113,7 @@ let manipulateTests =
                 ]
             ) 
         )
-        |> runWithBackup "datas/manipulate/change stroke color b255 to m100.pdf" 
+        |> runTest "datas/manipulate/change stroke color b255 to m100.pdf" 
         |> ignore
 
     testCase "change red to black outside of trimbox" <| fun _ -> 
@@ -128,7 +128,7 @@ let manipulateTests =
                 ]
             ) 
         )
-        |> runWithBackup "datas/manipulate/change red to black outside of trimbox.pdf" 
+        |> runTest "datas/manipulate/change red to black outside of trimbox.pdf" 
         |> ignore
 
     testCase "xobject_change stroke color b255 to m100" <| fun _ -> 
@@ -142,7 +142,7 @@ let manipulateTests =
                 ]
             )
         )
-        |> runWithBackup "datas/manipulate/xobject_change stroke color b255 to m100.pdf" 
+        |> runTest "datas/manipulate/xobject_change stroke color b255 to m100.pdf" 
         |> ignore
 
     testCase "xobject_change stroke color b255 to m100 and then change m100 to c100" <| fun _ -> 
@@ -165,7 +165,7 @@ let manipulateTests =
                 ]
             )
         )
-        |> runWithBackup "datas/manipulate/xobject_change stroke color b255 to m100 and then change m100 to c100.pdf" 
+        |> runTest "datas/manipulate/xobject_change stroke color b255 to m100 and then change m100 to c100.pdf" 
         |> ignore
 
     testCase "black or white" <| fun _ -> 
@@ -179,7 +179,7 @@ let manipulateTests =
                 ]
             )
         )
-        |> runWithBackup "datas/manipulate/black or white.pdf" 
+        |> runTest "datas/manipulate/black or white.pdf" 
         |> ignore
 
     testCase "add bound to text" <| fun _ -> 
@@ -198,7 +198,7 @@ let manipulateTests =
                 ]
             )
         )
-        |> runWithBackup "datas/manipulate/add bound to text.pdf" 
+        |> runTest "datas/manipulate/add bound to text.pdf" 
         |> ignore
 
     testCase "add line to position" <| fun _ -> 
@@ -230,7 +230,7 @@ let manipulateTests =
 
                 )
         )
-        |> runWithBackup "datas/manipulate/add line to position.pdf" 
+        |> runTest "datas/manipulate/add line to position.pdf" 
         |> ignore
 
     testCase "add colored texts to position" <| fun _ -> 
@@ -261,7 +261,7 @@ let manipulateTests =
                   )
                 )
         )
-        |> runWithBackup "datas/manipulate/add colored texts to position.pdf" 
+        |> runTest "datas/manipulate/add colored texts to position.pdf" 
         |> ignore
 
     testCase "add colored texts to position2" <| fun _ -> 
@@ -289,7 +289,7 @@ let manipulateTests =
                   )
                 )
         )
-        |> runWithBackup "datas/manipulate/add colored texts to position2.pdf" 
+        |> runTest "datas/manipulate/add colored texts to position2.pdf" 
         |> ignore
 
     testCase "add text to position" <| fun _ -> 
@@ -319,7 +319,7 @@ let manipulateTests =
                   ]
                 )
         )
-        |> runWithBackup "datas/manipulate/add text to position.pdf" 
+        |> runTest "datas/manipulate/add text to position.pdf" 
         |> ignore
 
     testCase "add text to position with cached fonts" <| fun _ -> 
@@ -375,7 +375,7 @@ let manipulateTests =
                   ) 
                 )
         )
-        |> runWithBackup "datas/manipulate/add text to position with cached fonts.pdf" 
+        |> runTest "datas/manipulate/add text to position with cached fonts.pdf" 
         |> ignore
 
     testCase "add text to position and trimToVisible" <| fun _ -> 
@@ -412,7 +412,7 @@ let manipulateTests =
 
         )
 
-        |> runWithBackup "datas/manipulate/add text to position and trimToVisible.pdf" 
+        |> runTest "datas/manipulate/add text to position and trimToVisible.pdf" 
         |> ignore
     
     testCase "add page-scaling text" <| fun _ -> 
@@ -431,7 +431,7 @@ let manipulateTests =
                 )
             )
         )
-        |> runWithBackup "datas/manipulate/add page-scaling text.pdf" 
+        |> runTest "datas/manipulate/add page-scaling text.pdf" 
         |> ignore
 
     testCase "rotate page and add text to top left" <| fun _ -> 
@@ -454,7 +454,7 @@ let manipulateTests =
                 )
             )
         )
-        |> runWithBackup "datas/manipulate/rotate page and add text to top left.pdf" 
+        |> runTest "datas/manipulate/rotate page and add text to top left.pdf" 
         |> ignore
 
     testCase "add page-scaling multiLines-text" <| fun _ -> 
@@ -505,7 +505,7 @@ let manipulateTests =
                     ) args
             ) 
         )
-        |> runWithBackup "datas/manipulate/add page-scaling multiLines-text.pdf" 
+        |> runTest "datas/manipulate/add page-scaling multiLines-text.pdf" 
         |> ignore
 
     testCase "add rect to area" <| fun _ -> 
@@ -517,21 +517,21 @@ let manipulateTests =
                 PageModifier.AddRectangleToCanvasRootArea(AreaGettingOptions.PageBox PageBoxKind.ActualBox, fun args -> { args with FillColor = PdfCanvasColor.ITextColor DeviceRgb.BLACK})
             ) 
         )
-        |> runWithBackup "datas/manipulate/add rect to area.pdf" 
+        |> runTest "datas/manipulate/add rect to area.pdf" 
         |> ignore
 
     testCase "trim to visible test" <| fun _ -> 
         Flow.Manipulate(
             ModifyPage.trimToVisible PageSelector.All (Margin.Create(mm 6.)) 
         )
-        |> runWithBackup "datas/manipulate/trim to visible.pdf" 
+        |> runTest "datas/manipulate/trim to visible.pdf" 
         |> ignore
 
     testCase "trim to visible test 2" <| fun _ -> 
         Flow.Manipulate(
             ModifyPage.trimToVisible PageSelector.All (Margin.Create(mm 6.)) 
         )
-        |> runWithBackup "datas/manipulate/trim to visible2.pdf" 
+        |> runTest "datas/manipulate/trim to visible2.pdf" 
         |> ignore
 
   ]

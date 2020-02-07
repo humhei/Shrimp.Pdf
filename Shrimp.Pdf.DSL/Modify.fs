@@ -277,6 +277,24 @@ module ModifyOperators =
         | Sync
 
     [<RequireQualifiedAccess>]
+    module IntegratedDocument =
+        type private Modifier = _SelectionModifierFixmentArguments -> list<PdfCanvas -> PdfCanvas>
+        
+        let modify (name) (pageSelector: PageSelector) (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfo seq -> unit)>) (document: IntegratedDocument) =
+            let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
+            let totalNumberOfPages = document.Value.GetNumberOfPages()
+            Logger.infoWithStopWatch (sprintf "MODIFY: \n%s" name) (fun _ ->
+                for i = 1 to totalNumberOfPages do
+                    if List.contains i selectedPageNumbers then
+                        let page = document.Value.GetPage(i)
+                        let selectorModifierMapping = selectorModifierPageInfosValidationMappingFactory (PageNumber i, page)
+                        for pair in selectorModifierMapping do
+                            let renderInfoSelector, modifier, pageInfosValidation = pair.Value
+                            pageInfosValidation (PageNumber i) (PdfPage.modify (Map.ofList[pair.Key, (renderInfoSelector, modifier)]) page)
+            )
+    
+
+    [<RequireQualifiedAccess>]
     module private Manipulate =
         let runInAsync (modifyingAsyncWorker: ModifyingAsyncWorker) f  =
             fun (flowModel: FlowModel<_>) (document: IntegratedDocument) ->

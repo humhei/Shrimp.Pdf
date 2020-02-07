@@ -38,11 +38,11 @@ module CopiedNumSequence =
         elif List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in sequence %A must be bigger than 0" sequence
         CopiedNumSequence sequence
 
-type PageResizingScaleOptions =
+type PageResizingScalingOptions =
     | Uniform = 0
     | Anamorphic = 1
 
-type PageResizingRotationOptions =
+type PageResizingRotatingOptions =
     | Keep = 0
     | ColckwiseIfNeeded = 1
     | CounterColckwiseIfNeeded = 2
@@ -255,12 +255,12 @@ module _Reuses =
 
             |> reuse
 
-        static member Resize (pageSelector: PageSelector, pageResizingRotationOptions: PageResizingRotationOptions, pageResizingScaleOptions: PageResizingScaleOptions, size: FsSize) =
+        static member Resize (pageSelector: PageSelector, pageResizingRotatingOptions: PageResizingRotatingOptions, pageResizingScalingOptions: PageResizingScalingOptions, size: FsSize) =
             let tryRotate() =
-                match pageResizingRotationOptions with
-                | PageResizingRotationOptions.Keep -> Reuse.dummy ||>> ignore
-                | PageResizingRotationOptions.ColckwiseIfNeeded 
-                | PageResizingRotationOptions.CounterColckwiseIfNeeded ->
+                match pageResizingRotatingOptions with
+                | PageResizingRotatingOptions.Keep -> Reuse.dummy ||>> ignore
+                | PageResizingRotatingOptions.ColckwiseIfNeeded 
+                | PageResizingRotatingOptions.CounterColckwiseIfNeeded ->
                     Reuse(fun flowModel splitDocument ->
                         let proposedRotatedPageNumbers =
                             PdfDocument.getPages splitDocument.Reader
@@ -285,10 +285,10 @@ module _Reuses =
                                 PageSelector.Numbers (pageNumbers)
 
                             let rotation = 
-                                match pageResizingRotationOptions with 
-                                | PageResizingRotationOptions.CounterColckwiseIfNeeded -> Rotation.Counterclockwise
-                                | PageResizingRotationOptions.ColckwiseIfNeeded -> Rotation.Clockwise
-                                | PageResizingRotationOptions.Keep -> Rotation.None
+                                match pageResizingRotatingOptions with 
+                                | PageResizingRotatingOptions.CounterColckwiseIfNeeded -> Rotation.Counterclockwise
+                                | PageResizingRotatingOptions.ColckwiseIfNeeded -> Rotation.Clockwise
+                                | PageResizingRotatingOptions.Keep -> Rotation.None
 
                             Reuses.Rotate(pageSelector, rotation).Value flowModel splitDocument
 
@@ -296,8 +296,8 @@ module _Reuses =
                     )
 
             let resize() =
-                match pageResizingScaleOptions with 
-                | PageResizingScaleOptions.Anamorphic -> 
+                match pageResizingScalingOptions with 
+                | PageResizingScalingOptions.Anamorphic -> 
                     Reuse(fun flowModel splitDocument ->
                         Reuses.Resize(pageSelector, PageBoxKind.ActualBox, size).Value flowModel splitDocument
                         PdfDocument.getPages splitDocument.Writer
@@ -307,7 +307,7 @@ module _Reuses =
                             |> ignore
                         )
                     )
-                | PageResizingScaleOptions.Uniform ->
+                | PageResizingScalingOptions.Uniform ->
                     Reuse(fun flowModel splitDocument ->
                         let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
                         Logger.infoWithStopWatch (sprintf "Resize %A to %A" selectedPageNumbers size) (fun _ ->

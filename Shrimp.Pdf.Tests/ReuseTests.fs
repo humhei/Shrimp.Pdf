@@ -27,7 +27,7 @@ let reuseTests =
                     }
                 )
         )
-        |> runWithBackup "datas/reuse/Imposing N-UP.pdf" 
+        |> runTest "datas/reuse/Imposing N-UP.pdf" 
         |> ignore
 
     testCase "imposing N-UP2 tests" <| fun _ -> 
@@ -51,7 +51,7 @@ let reuseTests =
                     }
                 )
         )
-        |> runWithBackup "datas/reuse/imposing N-UP2.pdf" 
+        |> runTest "datas/reuse/imposing N-UP2.pdf" 
         |> ignore
 
     testCase "imposing stepAndRepeat tests" <| fun _ -> 
@@ -69,7 +69,7 @@ let reuseTests =
                 }
             )
         )
-        |> runWithBackup "datas/reuse/imposing stepAndRepeat.pdf" 
+        |> runTest "datas/reuse/imposing stepAndRepeat.pdf" 
         |> ignore
 
     testCase "imposing stepAndRepeat2 tests" <| fun _ -> 
@@ -88,7 +88,7 @@ let reuseTests =
                 }
             )
         )
-        |> runWithBackup "datas/reuse/imposing stepAndRepeat2.pdf" 
+        |> runTest "datas/reuse/imposing stepAndRepeat2.pdf" 
         |> ignore
 
 
@@ -108,7 +108,7 @@ let reuseTests =
                 }
             )
         )
-        |> runWithBackup "datas/reuse/Imposing when use bleed and bleedBox bigger than actualbox.pdf" 
+        |> runTest "datas/reuse/Imposing when use bleed and bleedBox bigger than actualbox.pdf" 
         |> ignore
 
     testCase "Imposing when cell roation is setted" <| fun _ -> 
@@ -127,7 +127,7 @@ let reuseTests =
                 }
             )
         )
-        |> runWithBackup "datas/reuse/Imposing when cell roation is setted.pdf" 
+        |> runTest "datas/reuse/Imposing when cell roation is setted.pdf" 
         |> ignore
 
     testCase "Imposing when backgroudFile is setted" <| fun _ -> 
@@ -144,47 +144,47 @@ let reuseTests =
                 }
             )
         )
-        |> runWithBackup "datas/reuse/Imposing when backgroudFile is setted.pdf" 
+        |> runTest "datas/reuse/Imposing when backgroudFile is setted.pdf" 
         |> ignore
 
     testCase "clockwise all pages" <| fun _ -> 
         Flow.Reuse (Reuses.Rotate(PageSelector.All, Rotation.Clockwise))
-        |> runWithBackup "datas/reuse/clockwise all pages.pdf" 
+        |> runTest "datas/reuse/clockwise all pages.pdf" 
         |> ignore
 
     testCase "clockwise all pages2" <| fun _ -> 
         Flow.Reuse (Reuses.Rotate(PageSelector.All, Rotation.Clockwise))
-        |> runWithBackup "datas/reuse/clockwise all pages2.pdf" 
+        |> runTest "datas/reuse/clockwise all pages2.pdf" 
         |> ignore
 
     testCase "clockwise all pages3" <| fun _ -> 
         Flow.Reuse (Reuses.Rotate(PageSelector.All, Rotation.Clockwise))
-        |> runWithBackup "datas/reuse/clockwise all pages3.pdf" 
+        |> runTest "datas/reuse/clockwise all pages3.pdf" 
         |> ignore
 
     testCase "duplicate all pages 15x tests" <| fun _ -> 
         Flow.Reuse (Reuses.DuplicatePages(PageSelector.All, 15))
-        |> runWithBackup "datas/reuse/duplicate all pages 15x.pdf" 
+        |> runTest "datas/reuse/duplicate all pages 15x.pdf" 
         |> ignore
 
     testCase "duplicate pages by page num sequence tests" <| fun _ -> 
         Flow.Reuse (Reuses.SequencePages (PageNumSequence.create [1;1;1;3;4;5;8]))
-        |> runWithBackup "datas/reuse/duplicate pages by sequence.pdf" 
+        |> runTest "datas/reuse/duplicate pages by sequence.pdf" 
         |> ignore
 
     testCase "duplicate pages by page num sequence tests2" <| fun _ -> 
         Flow.Reuse (Reuses.SequencePages (PageNumSequence.create [1;1;1;3;4;5;8]))
-        |> runWithBackup "datas/reuse/duplicate pages by sequence2.pdf" 
+        |> runTest "datas/reuse/duplicate pages by sequence2.pdf" 
         |> ignore
 
     testCase "duplicate pages by copied num sequence tests3" <| fun _ -> 
         Flow.Reuse (Reuses.DuplicatePages (PageSelector.All, CopiedNumSequence.create [15;15;15;15]))
-        |> runWithBackup "datas/reuse/duplicate pages by copied num sequence.pdf" 
+        |> runTest "datas/reuse/duplicate pages by copied num sequence.pdf" 
         |> ignore
 
     testCase "tile pages by colNum and rowNum tests" <| fun _ -> 
         Flow.Reuse (Reuses.TilePages (TileTable.create 3 2))
-        |> runWithBackup "datas/reuse/tile pages by colNum and rowNum.pdf" 
+        |> runTest "datas/reuse/tile pages by colNum and rowNum.pdf" 
         |> ignore
 
     testCase "tile pages by selector tests" <| fun _ -> 
@@ -192,42 +192,42 @@ let reuseTests =
             Reuses.TilePages
                 (Path(Info.StrokeColorIs DeviceRgb.BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)))
         )
-        |> runWithBackup "datas/reuse/tile pages by selector.pdf" 
+        |> runTest "datas/reuse/tile pages by selector.pdf" 
         |> ignore
 
     testCase "move pagebox to origin tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.MovePageBoxToOrigin(PageSelector.All)
         )
-        |> runWithBackup "datas/reuse/move pagebox to origin.pdf" 
+        |> runTest "datas/reuse/move pagebox to origin.pdf" 
         |> ignore
 
     testCase "resize pageSize to 7x4cm tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.Resize(PageSelector.All, PageBoxKind.ActualBox, {Width = mm 70.; Height = mm 40.})
         )
-        |> runWithBackup "datas/reuse/resize pageSize to 7x4cm.pdf" 
+        |> runTest "datas/reuse/resize pageSize to 7x4cm.pdf" 
         |> ignore
 
     testCase "resize pageSize to 7x4cm by trimbox tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.Resize(PageSelector.All, PageBoxKind.TrimBox , { Width = mm 70.; Height = mm 40. })
         )
-        |> runWithBackup "datas/reuse/resize pageSize to 7x4cm by trimbox.pdf" 
+        |> runTest "datas/reuse/resize pageSize to 7x4cm by trimbox.pdf" 
         |> ignore
 
     testCase "resize pageSize to 29.7×21cm uniform tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.Resize(PageSelector.All, PageResizingRotationOptions.Keep, PageResizingScaleOptions.Uniform , FsSize.landscape {Width = mm 210.; Height = mm 297.})
+            Reuses.Resize(PageSelector.All, PageResizingRotatingOptions.Keep, PageResizingScalingOptions.Uniform , FsSize.landscape {Width = mm 210.; Height = mm 297.})
         )
-        |> runWithBackup "datas/reuse/resize pageSize to 29.7×21cm uniform.pdf" 
+        |> runTest "datas/reuse/resize pageSize to 29.7×21cm uniform.pdf" 
         |> ignore
         
     testCase "insert pages tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.Insert("datas/reuse/insertPagesResource.pdf")
         )
-        |> runWithBackup "datas/reuse/insertPages.pdf" 
+        |> runTest "datas/reuse/insertPages.pdf" 
         |> ignore
 
 ]

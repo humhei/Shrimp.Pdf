@@ -1,5 +1,6 @@
 ﻿
 namespace Shrimp.Pdf
+#nowarn "0104"
 open iText.Kernel.Pdf
 open Shrimp.Pdf.Colors
 open iText.Kernel.Geom
@@ -123,43 +124,6 @@ module Imposing =
         | Portrait = 1
         | Automatic = 2
 
-    type FsPageSize(originSize: FsSize, pageOrientation) =
-        let size = FsSize.rotateTo pageOrientation originSize
-        member x.PageOrientation = pageOrientation
-
-        member x.Size = size
-
-        member x.Width = size.Width
-
-        member x.Height = size.Height
-
-        override x.Equals(y) =
-            match y with 
-            | :? FsPageSize as pageSize -> pageSize.Size = x.Size
-            | _ -> failwithf "Cannot compare different types"
-
-        override x.GetHashCode() =
-            x.Size.GetHashCode()
-
-        interface IComparable with 
-            member x.CompareTo(y) =
-                match y with 
-                | :? FsPageSize as pageSize -> (x.Size :> IComparable).CompareTo(pageSize.Size)
-                | _ -> failwithf "Cannot compare different types"
-
-
-    [<RequireQualifiedAccess>]
-    module FsPageSize =
-        let create (size: FsSize) pageOrientation =
-            match pageOrientation with 
-            | PageOrientation.Landscape -> 
-                FsPageSize (FsSize.landscape size, pageOrientation)
-            | PageOrientation.Portrait ->
-                FsPageSize (FsSize.portrait size, pageOrientation)
-            | _ -> failwith "Invalid token"
-
-
-
 
     [<RequireQualifiedAccess>]
     module DesiredPageOrientation =
@@ -168,7 +132,6 @@ module Imposing =
             | DesiredPageOrientation.Landscape -> Some PageOrientation.Landscape
             | DesiredPageOrientation.Portrait -> Some PageOrientation.Portrait
             | DesiredPageOrientation.Automatic -> None
-            | _ -> failwith "Invalid token"
 
     [<RequireQualifiedAccess>]
     type CellRotation =

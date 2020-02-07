@@ -18,7 +18,7 @@ let fileOperationTests =
                     Override = true }
             )
         )
-        |> runWithBackup "datas/file operation/split document.pdf" 
+        |> runTest "datas/file operation/split document.pdf" 
         |> ignore
 
     testCase "merge documents" <| fun _ -> 
@@ -36,7 +36,7 @@ let fileOperationTests =
             FileOperations.mergeDocuments (fun args ->
                 { args with 
                     Override = true
-                    TargetDocumentName = targetFile }
+                    TargetDocumentPath = targetFile }
             )
         )
         |> runMany inputFlowModels
@@ -63,7 +63,7 @@ let fileOperationTests =
             FileOperations.mergeDocuments (fun args ->
                 { args with 
                     Override = true
-                    TargetDocumentName = targetFile }
+                    TargetDocumentPath = targetFile }
             )
         )
         |> runManyWithBackup  inputFiles "datas/file operation/merge documents/outputs/"

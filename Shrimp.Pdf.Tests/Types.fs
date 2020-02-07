@@ -14,7 +14,7 @@ open iText.Kernel.Pdf
 open Fake.IO.FileSystemOperators
 
 
-let runWithBackup path flow =
+let runTest path flow =
     let newPath = Path.changeExtension ".tests.pdf" path
     File.Copy(path, newPath, true)
 

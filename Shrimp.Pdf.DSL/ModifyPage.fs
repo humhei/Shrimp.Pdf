@@ -237,8 +237,3 @@ module ModifyPageOperators =
     let modifyPage (name: string, pageSelector, (selector: Selector<'userState>), (pageModifier: PageModifier<_, _>)) =
         modifyPageCurried (name) pageSelector selector pageModifier
 
-    //let flush() =
-    //    fun (flowModel: FlowModel<_>) (document: IntegratedDocument) ->
-    //        document.Value.FlushCopiedObjects(document.Value)
-    //        flowModel.UserState
-    //    |> Manipulate

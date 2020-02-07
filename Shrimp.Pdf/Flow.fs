@@ -350,3 +350,6 @@ module Operators =
     let run (flowModel: FlowModel<'userState>) flow = 
         runMany [flowModel] flow
  
+    let runWithBackup backupPath path flow =
+        File.Copy(path, backupPath, true)
+        run { UserState = (); File = backupPath } flow

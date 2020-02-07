@@ -12,9 +12,6 @@ open iText.Kernel.Pdf
 [<AutoOpen>]
 module PdfDocumentWithCachedResources =
 
-
-
-
     type PdfCanvasAddRectangleArguments =
         { LineWidth: float 
           StrokeColor: PdfCanvasColor
@@ -62,7 +59,7 @@ module PdfDocumentWithCachedResources =
                 | Position.XCenter (x, y) -> TextAlignment.CENTER
                 | Position.Left (x, y) -> TextAlignment.LEFT
                 | Position.Right (x, y) -> TextAlignment.RIGHT
-                | _ -> failwith "Invalid token"
+
         member args.GetCalculatedVerticalTextAlignment() =
             match args.VerticalTextAlignment with 
             | Some verticalAlignment -> verticalAlignment
@@ -71,7 +68,6 @@ module PdfDocumentWithCachedResources =
                 | Position.YCenter (x, y) -> VerticalAlignment.MIDDLE
                 | Position.Top (x, y) -> VerticalAlignment.TOP
                 | Position.Bottom (x, y) -> VerticalAlignment.BOTTOM
-                | _ -> failwith "Invalid token"
 
 
     type PdfCanvas with 

@@ -39,61 +39,6 @@ module PdfCanvas =
 
 
 
-[<RequireQualifiedAccess>]
-type SinglePageSelectorExpr =
-    | Begin of int
-    | End of int
-
-[<RequireQualifiedAccess>]
-type PageSelectorExpr = 
-    | SinglePage of SinglePageSelectorExpr
-    | Between of SinglePageSelectorExpr * SinglePageSelectorExpr
-    | Compose of PageSelectorExpr list
-
-[<RequireQualifiedAccess>]
-module PageSelectorExpr = 
-    let private parser() = 
-
-        let pSinglePage = 
-            let pBegin = 
-                pint32 |>> (fun i -> 
-                    if i > 0 then  SinglePageSelectorExpr.Begin i
-                    else failwithf "page num %d should be bigger than 0" i
-                )
-
-            let pEnd = 
-                (pstringCI "R") >>. pint32 |>> (fun i ->
-                    if i > 0 then  SinglePageSelectorExpr.End i
-                    else failwithf "page num %d should be bigger than 0" i
-                )
-
-            (pEnd)
-            <|> (pBegin)
-
-        let pBetween = 
-            (pSinglePage .>>? pchar '-' .>>. pSinglePage )
-            |>> PageSelectorExpr.Between
-
-        sepBy1 ((pBetween <|> (pSinglePage |>> PageSelectorExpr.SinglePage)) .>> spaces) (pchar ',')
-
-    let create (exprText: string) =
-        match run (parser()) exprText with 
-        | Success (result, _, _) -> 
-            match result with 
-            | [expr] -> expr
-            | _ -> PageSelectorExpr.Compose result
-
-        | Failure (errorMsg, _, _) -> failwithf "%s" errorMsg
-
-[<RequireQualifiedAccess>]
-type PageSelector =
-    | Last
-    | First
-    | All
-    | Expr of PageSelectorExpr
-    | Numbers of Set<int>
-
-
 
 type internal CallbackableContentOperator (originalOperator) =
     member this.OriginalOperator: IContentOperator = originalOperator
@@ -135,48 +80,6 @@ and private OperatorRangeCallbackablePdfCanvasProcessor(listener) =
         this.ProcessContent(page.GetContentBytes(), page.GetResources());
 
 
-[<AutoOpen>]
-module Extensions =
-
-    type PdfDocument with
-
-        member pdfDocument.GetPageNumber(pageSelectorExpr: SinglePageSelectorExpr) =
-            let totalPageNum = pdfDocument.GetNumberOfPages()
-            
-            match pageSelectorExpr with
-            | SinglePageSelectorExpr.Begin (i) -> i
-            | SinglePageSelectorExpr.End (i) -> totalPageNum - i + 1
-
-
-        member pdfDocument.GetPageNumbers(pageSelectorExpr: PageSelectorExpr) =
-
-            match pageSelectorExpr with 
-            | PageSelectorExpr.SinglePage singlePage -> [pdfDocument.GetPageNumber singlePage]
-
-            | PageSelectorExpr.Between (beginExpr, endExpr) ->
-                [pdfDocument.GetPageNumber beginExpr .. pdfDocument.GetPageNumber endExpr]
-
-            | PageSelectorExpr.Compose compose ->
-                compose
-                |> List.collect (pdfDocument.GetPageNumbers)
-                |> List.distinct
-
-        member pdfDocument.GetPageNumbers(pageSelector) =
-            let numberOfPages = pdfDocument.GetNumberOfPages()
-            match pageSelector with 
-            | PageSelector.First -> [1]
-            | PageSelector.Last -> [numberOfPages]
-            | PageSelector.Expr expr -> 
-                pdfDocument.GetPageNumbers(expr)
-            | PageSelector.All -> [1..numberOfPages]
-            | PageSelector.Numbers numbers -> 
-                let intersectedNumbers =
-                    Set.intersect
-                        numbers
-                        (Set.ofList [1..numberOfPages])
-                    |> Set.toList
-
-                intersectedNumbers
 
 
 

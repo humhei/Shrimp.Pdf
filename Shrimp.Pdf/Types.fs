@@ -84,31 +84,41 @@ module FsSize =
 
     let MAXIMUN = { Width = mm 5080.; Height = mm 5080. }
 
-type ContentResizeMode =
-    | CropOrAdd = 0
-    | Anamorphic = 1
-    | Uniform = 2
+
+type FsPageSize(originSize: FsSize, pageOrientation) =
+    let size = FsSize.rotateTo pageOrientation originSize
+    member x.PageOrientation = pageOrientation
+
+    member x.Size = size
+
+    member x.Width = size.Width
+
+    member x.Height = size.Height
+
+    override x.Equals(y) =
+        match y with 
+        | :? FsPageSize as pageSize -> pageSize.Size = x.Size
+        | _ -> failwithf "Cannot compare different types"
+
+    override x.GetHashCode() =
+        x.Size.GetHashCode()
+
+    interface System.IComparable with 
+        member x.CompareTo(y) =
+            match y with 
+            | :? FsPageSize as pageSize -> (x.Size :> System.IComparable).CompareTo(pageSize.Size)
+            | _ -> failwithf "Cannot compare different types"
+
 
 [<RequireQualifiedAccess>]
-module PdfPage =
-
-    let increaseHeight 
-        (origin: Position)
-        (pageboxKind: PageBoxKind)
-        (contentResizeMode: ContentResizeMode)
-        (length: float)
-        (page: PdfPage) =
-
-        let newRect = 
-            page 
-            |> PdfPage.getPageBox pageboxKind
-            |> Rectangle.increaseHeight origin length
-            
-        match contentResizeMode with 
-        | ContentResizeMode.CropOrAdd ->
-            PdfPage.setPageBox pageboxKind newRect page 
-        | _ -> failwith "not implemented"
-
+module FsPageSize =
+    let create (size: FsSize) pageOrientation =
+        match pageOrientation with 
+        | PageOrientation.Landscape -> 
+            FsPageSize (FsSize.landscape size, pageOrientation)
+        | PageOrientation.Portrait ->
+            FsPageSize (FsSize.portrait size, pageOrientation)
+        | _ -> failwith "Invalid token"
 
 type ReaderDocument (reader: string) =
     let reader = new PdfDocument(new PdfReader(reader))
