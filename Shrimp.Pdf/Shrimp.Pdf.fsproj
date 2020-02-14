@@ -49,7 +49,10 @@
     <Compile Include="Extensions_PdfDocumentWithCachedResources.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Imposing.fs" />
-    <Compile Include="Flow.fs" />
+    <Compile Include="Flow\FlowTypes.fs" />
+    <Compile Include="Flow\Reuse.fs" />
+    <Compile Include="Flow\Manipulate.fs" />
+    <Compile Include="Flow\Flow.fs" />
 
   </ItemGroup>
 

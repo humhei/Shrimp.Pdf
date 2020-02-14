@@ -131,7 +131,9 @@ type SplitDocument (reader: string, writer: string) =
 
     let mutable writerDocument = new PdfDocumentWithCachedResources(writer)
 
-    member x.ReaderName = reader
+    member x.ReaderPath = reader
+
+    member x.WriterPath = writer
 
     member x.Reader = readerDocument
 

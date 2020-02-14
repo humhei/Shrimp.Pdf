@@ -61,13 +61,13 @@ module _Reuses =
     type Reuses =
         static member Insert(insertingFile: string, ?insertingFilePageSelector: PageSelector, ?pageInsertingOptions: PageInsertingOptions, ?insertingPoint: SinglePageSelectorExpr) =
             fun flowModel (splitDocument: SplitDocument) ->
-                if Path.GetFullPath(insertingFile) = Path.GetFullPath(splitDocument.ReaderName) 
+                if Path.GetFullPath(insertingFile) = Path.GetFullPath(splitDocument.ReaderPath) 
                 then failwith "Cannot insert file to self"
 
                 let insertingFilePageSelector = defaultArg insertingFilePageSelector PageSelector.All
                 let pageInsertingOptions = defaultArg pageInsertingOptions PageInsertingOptions.AfterPoint
                 let singlePageSelectorExpr = defaultArg insertingPoint (SinglePageSelectorExpr.End 1)
-                Logger.infoWithStopWatch (sprintf "Insert file %s %A to %s %s %A" insertingFile insertingFilePageSelector splitDocument.ReaderName (pageInsertingOptions.ToString()) singlePageSelectorExpr) (fun _ ->
+                Logger.infoWithStopWatch (sprintf "Insert file %s %A to %s %s %A" insertingFile insertingFilePageSelector splitDocument.ReaderPath (pageInsertingOptions.ToString()) singlePageSelectorExpr) (fun _ ->
                     let numberOfPages = splitDocument.Reader.GetNumberOfPages()
                     let pageNum =
                         splitDocument.Reader.GetPageNumber singlePageSelectorExpr

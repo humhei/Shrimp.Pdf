@@ -124,9 +124,9 @@ type PdfDocumentWithCachedResources =
 type IntegratedDocument private (reader: string, writer: string) =
     let mutable pdfDocument = new PdfDocumentWithCachedResources(reader, writer)
 
-    member x.ReaderName = reader
+    member x.ReaderPath = reader
 
-    member x.WriterName = writer
+    member x.WriterPath = writer
 
     member x.Value = pdfDocument
 
