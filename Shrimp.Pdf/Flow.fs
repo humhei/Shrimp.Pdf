@@ -39,14 +39,6 @@ with
             )
 
 
-
-
-    member x.RedirectUserState (mapping) =
-        fun flowModel document ->
-            let newUserState = x.Value flowModel document
-            mapping (flowModel.UserState, newUserState)
-        |> Reuse
-
     static member (||>>) (reuse: Reuse<_, _>, mapping) =
         fun flowModel document ->
             reuse.Value flowModel document
@@ -74,7 +66,9 @@ with
     static member (<.+>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
         fun flowModel (document: SplitDocument) ->
             let middleUserState = reuse1.InvokeAndReOpenDocument flowModel document
-            middleUserState, reuse2.Invoke (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
+            reuse2.Invoke (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document 
+            |> ignore
+            middleUserState
         |> Reuse
 
 
@@ -123,12 +117,6 @@ with
         fun flowModel document ->
             let flowModel = FlowModel.mapM mapping flowModel
             manipulate.Value flowModel document
-        |> Manipulate
-
-    member x.RedirectUserState (mapping) =
-        fun flowModel document ->
-            let newUserState = x.Value flowModel document
-            mapping (flowModel.UserState, newUserState)
         |> Manipulate
 
     static member (<+>) (manipulate1: Manipulate<'originUserState,'middleUserState>, manipulate2: Manipulate<'middleUserState,'modifiedUserState>) =
