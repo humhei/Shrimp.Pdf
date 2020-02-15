@@ -23,7 +23,7 @@ module rec _FlowMutualTypes =
         | FileOperation of FileOperation<'oldUserState, 'newUserState>
         | TupledFlow of ITupledFlow<'oldUserState, 'newUserState>
         | Factory of ('oldUserState -> Flow<'oldUserState, 'newUserState>)
-        | NamedFlow of (FlowName * FlowNameIndex list * Flow<'oldUserState, 'newUserState>)
+        | NamedFlow of (IFlowName * Flow<'oldUserState, 'newUserState>)
     with 
         static member internal Run(flowModels: FlowModel<'oldUserState> list, flow): FlowModel<'newUserState> list =
             match flow with 
@@ -65,10 +65,10 @@ module rec _FlowMutualTypes =
                         let flow = factory flowModel.UserState
                         Flow<_, _>.Run([flowModel], flow)
 
-                    | Flow.NamedFlow (flowName, flowNameIndexes, flow) ->
-                        Logger.tryInfoWithFlowName flowName flowNameIndexes (fun _ ->
+                    | Flow.NamedFlow (iFlowName, flow) ->
+                        Logger.tryInfoWithFlowName iFlowName.Value iFlowName.FlowNameIndexes (fun _ ->
                             let flowModels = Flow<_, _>.Run([flowModel], flow)
-                            flowModel.TryBackupFile(flowName, flowNameIndexes)
+                            flowModel.TryBackupFile(iFlowName.Value, iFlowName.FlowNameIndexes)
                             flowModels
                         )
                         
@@ -154,8 +154,8 @@ module rec _FlowMutualTypes =
                         |> loop
                     |> Flow.Factory
 
-                | Flow.NamedFlow (flowName, flowNameIndexes, flow) ->
-                    (flowName, flowNameIndexes, loop flow)
+                | Flow.NamedFlow (iFlowName, flow) ->
+                    (iFlowName, loop flow)
                     |> Flow.NamedFlow
 
                 | Flow.FileOperation fileOperation ->
@@ -192,8 +192,8 @@ module rec _FlowMutualTypes =
                         |> loop
                     |> Flow.Factory
                 
-                | Flow.NamedFlow (flowName, flowNameIndexes, flow) ->
-                    (flowName, flowNameIndexes, loop flow)
+                | Flow.NamedFlow (iFlowName, flow) ->
+                    (iFlowName, loop flow)
                     |> Flow.NamedFlow
 
                 | Flow.FileOperation fileOperation ->
@@ -256,10 +256,10 @@ module rec _FlowMutualTypes =
             |> Flow.FileOperation 
 
 
-        let batch flowName (flows: seq<Flow<'originUserState,'newUserState>>) =
+        let batch (flowName: FlowName) (flows: seq<Flow<'originUserState,'newUserState>>) =
             match List.ofSeq flows with 
             | [] -> 
-                Flow.NamedFlow (flowName, [], Flow.dummy() ||>> fun _ -> [])
+                Flow.NamedFlow (IFlowName.OfFlowName flowName, Flow.dummy() ||>> fun _ -> [])
 
             | flows ->
                 Flow.Factory(fun userState ->

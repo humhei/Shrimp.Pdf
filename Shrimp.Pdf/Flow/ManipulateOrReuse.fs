@@ -4,7 +4,7 @@ open Fake.IO.FileSystemOperators
 open System.IO
 
 
-module internal ManipulateOrReuse =
+module internal rec ManipulateOrReuse =
     [<RequireQualifiedAccess>]
     type SplitOrIntegratedDocument =
         | SplitDocument of SplitDocument
@@ -26,6 +26,10 @@ module internal ManipulateOrReuse =
         abstract member FlowNameIndexes: FlowNameIndex list
         abstract member MapState: ('oldUserState * 'newUserState -> 'a) -> INamedFlow<'oldUserState, 'a>
         abstract member MapStateBack: ('a -> 'oldUserState) -> INamedFlow<'a, 'newUserState>
+
+
+
+
 
     type SingletonNamedFlow<'oldUserState, 'newUserState> =
         { FlowName: FlowName 
@@ -199,40 +203,41 @@ module internal ManipulateOrReuse =
 
 
         let batch flowName (flows: seq<Flow<'originUserState,'newUserState>>) =
-            let rec loop (flowAccum: Flow<'originUserState, 'newUserState list> option) (flows: Flow<'originUserState, 'newUserState> list) =
-                match flows with 
-                | [] -> 
-                    match flowAccum with 
-                    | Some flow -> flow
-                    | None -> 
-                        Flow.MapState(
-                            Flow(
-                                namedFlow = dummy().AsNamedFlow,
-                                flowName = flowName
-                            ),
-                            fun _ -> []
-                        )
+            match List.ofSeq flows with 
+            | [] -> 
+                Flow.MapState(
+                    Flow(
+                        namedFlow = dummy().AsNamedFlow,
+                        flowName = flowName
+                    ),
+                    fun _ -> []
+                )
 
-                | flow :: flows ->
-                    match flowAccum with 
-                    | None -> 
-                        let flowAccum = Flow<_, _>.MapState(flow, List.singleton)
-                        loop (Some flowAccum) flows
+            | flows ->
+                let rec loop (flowAccum: Flow<'originUserState, 'newUserState list> option) (flows: Flow<'originUserState, 'newUserState> list) =
+                    match flows with 
+                    | [] -> flowAccum.Value
 
-                    | Some flowAccum -> 
+                    | flow :: flows ->
+                        match flowAccum with 
+                        | None -> 
+                            let flowAccum = Flow<_, _>.MapState(flow, List.singleton)
+                            loop (Some flowAccum) flows
 
-                        let flowAccum =
-                            Flow<_, _>.TupleState(flowAccum)
+                        | Some flowAccum -> 
 
-                        let flow = 
-                            Flow<_, _>.MapStateBack(fst, flow)
-                        
-                        let flowAccum = 
-                            Flow<_, _>.Apply(flowAccum, flow, fun (a, b) -> snd a @ [b])
+                            let flowAccum =
+                                Flow<_, _>.TupleState(flowAccum)
 
-                        loop (Some flowAccum) flows
+                            let flow = 
+                                Flow<_, _>.MapStateBack(fst, flow)
+                    
+                            let flowAccum = 
+                                Flow<_, _>.Apply(flowAccum, flow, fun (a, b) -> snd a @ [b])
 
-            loop None (List.ofSeq flows)
+                            loop (Some flowAccum) flows
+
+                loop None (List.ofSeq flows)
 
 
             
@@ -276,6 +281,28 @@ type Reuse<'oldUserState, 'newUserState> private (flow: Flow<'oldUserState, 'new
         |> Flow.batch flowName
         |> Reuse
 
+    static member Factory (factory: 'oldUserState -> Reuse<_, _>) =
+
+        ()
+
+    static member internal ReName (name: string) =
+        fun (reuse: Reuse<_, _>) ->
+            Reuse(
+                Flow<_, _>(
+                    namedFlow = reuse.Flow.AsNamedFlow,
+                    flowName = FlowName.Override name
+                )
+            )
+
+    static member internal ReName (flowName: FlowName) =
+        fun (reuse: Reuse<_, _>) ->
+            Reuse(
+                Flow<_, _>(
+                    namedFlow = reuse.Flow.AsNamedFlow,
+                    flowName = flowName
+                )
+            )
+
     new (f: FlowModel<'oldUserState> -> SplitDocument -> 'newUserState, flowName: FlowName) =
         Reuse(
             new Flow<_, _>(
@@ -299,24 +326,11 @@ type Reuse<'oldUserState, 'newUserState> private (flow: Flow<'oldUserState, 'new
                 | Some name ->  FlowName.Override name
         )
 
-    new (reuse: Reuse<'oldUserState, 'newUserState>, flowName: FlowName) =
-        Reuse(
-            Flow<_, _>(
-                namedFlow = reuse.Flow.AsNamedFlow,
-                flowName = flowName
-            )
-        )
 
-    new (reuse: Reuse<'oldUserState, 'newUserState>, ?name: string) =
-        Reuse(
-            Flow<_, _>(
-                namedFlow = reuse.Flow.AsNamedFlow,
-                ?flowName = Option.map FlowName.Override name 
-            )
-        )
+    
 
 
-     
+
 [<RequireQualifiedAccess>]
 module Reuse =
     let dummy() = 
@@ -326,7 +340,6 @@ module Reuse =
 
             flowModel.UserState 
         )
-
 
 
 
@@ -408,3 +421,13 @@ type Manipulate<'oldUserState, 'newUserState> private (flow: Flow<'oldUserState,
 [<RequireQualifiedAccess>]
 module Manipualte =
     let dummy() = Manipulate(fun model _ -> model.UserState)
+
+
+[<AutoOpen>]
+module ManipulateOrReuseDSL =
+    type Reuse =
+        static member ReName (name: string) =
+            Reuse<_,_>.ReName name
+     
+        static member ReName (flowName: FlowName) =
+            Reuse<_,_>.ReName flowName

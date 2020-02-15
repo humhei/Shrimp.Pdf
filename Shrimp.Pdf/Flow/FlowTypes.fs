@@ -13,11 +13,31 @@ type FlowName =
     | New of string
     | Disable
 
-type FlowNameIndex =
+type internal FlowNameIndex =
     { Index: int 
       Name: string }
 
 
+[<Sealed>]
+type IFlowName private (flowName: FlowName, flowNameIndexes) =
+    member x.Value = flowName
+
+    member internal x.FlowNameIndexes: FlowNameIndex list = flowNameIndexes
+
+    static member Default = IFlowName(FlowName.Default, [])
+
+    static member Override name = IFlowName(FlowName.Override name, [])
+
+    static member New name = IFlowName(FlowName.New name, [])
+
+    static member Disable = IFlowName(FlowName.Disable, [])
+
+    static member internal OfFlowName(flowName: FlowName) =
+        match flowName with 
+        | FlowName.Default -> IFlowName.Default
+        | FlowName.Override name -> IFlowName.Override name
+        | FlowName.Disable -> IFlowName.Disable
+        | FlowName.New name -> IFlowName.New name
 
 
 
