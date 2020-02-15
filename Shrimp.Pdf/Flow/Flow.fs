@@ -15,16 +15,16 @@ module _FileOperation =
 [<AutoOpen>]
 module rec _FlowMutualTypes =
 
+
     [<RequireQualifiedAccess>]
     type Flow<'oldUserState, 'newUserState> =
         | Manipulate of (Manipulate<'oldUserState, 'newUserState>)
         | Reuse of (Reuse<'oldUserState, 'newUserState>)
         | FileOperation of FileOperation<'oldUserState, 'newUserState>
         | TupledFlow of ITupledFlow<'oldUserState, 'newUserState>
-        | Factory of (FlowModel<'oldUserState> -> Flow<'oldUserState, 'newUserState>)
-
+        | Factory of ('oldUserState -> Flow<'oldUserState, 'newUserState>)
+        | NamedFlow of (FlowName * FlowNameIndex list * Flow<'oldUserState, 'newUserState>)
     with 
-
         static member internal Run(flowModels: FlowModel<'oldUserState> list, flow): FlowModel<'newUserState> list =
             match flow with 
             | Flow.FileOperation flow -> 
@@ -62,9 +62,16 @@ module rec _FlowMutualTypes =
 
 
                     | Flow.Factory (factory) ->
-                        let flow = factory flowModel
+                        let flow = factory flowModel.UserState
                         Flow<_, _>.Run([flowModel], flow)
 
+                    | Flow.NamedFlow (flowName, flowNameIndexes, flow) ->
+                        Logger.tryInfoWithFlowName flowName flowNameIndexes (fun _ ->
+                            let flowModels = Flow<_, _>.Run([flowModel], flow)
+                            flowModel.TryBackupFile(flowName, flowNameIndexes)
+                            flowModels
+                        )
+                        
 
                     | Flow.FileOperation fileOperation -> failwith "Invalid token"
                     | Flow.TupledFlow _ ->  failwith "Invalid token"
@@ -140,12 +147,16 @@ module rec _FlowMutualTypes =
                     |> Flow.TupledFlow
 
                 | Flow.Factory factory ->
-                    fun flowModel ->
-                        flowModel
-                        |> FlowModel.mapM mapping
+                    fun userState ->
+                        userState
+                        |> mapping
                         |> factory 
                         |> loop
                     |> Flow.Factory
+
+                | Flow.NamedFlow (flowName, flowNameIndexes, flow) ->
+                    (flowName, flowNameIndexes, loop flow)
+                    |> Flow.NamedFlow
 
                 | Flow.FileOperation fileOperation ->
                     _FileOperation.FileOperation(
@@ -170,15 +181,21 @@ module rec _FlowMutualTypes =
                 | Flow.Manipulate manipulate -> 
                     manipulate ||>> mapping
                     |> Flow.Manipulate
+
                 | Flow.TupledFlow (tupledFlow) ->
                     tupledFlow.MapState (mapping)
                     |> Flow.TupledFlow
 
                 | Flow.Factory factory ->
-                    fun flowModel ->
-                        factory flowModel
+                    fun userState ->
+                        factory userState
                         |> loop
                     |> Flow.Factory
+                
+                | Flow.NamedFlow (flowName, flowNameIndexes, flow) ->
+                    (flowName, flowNameIndexes, loop flow)
+                    |> Flow.NamedFlow
+
                 | Flow.FileOperation fileOperation ->
                     _FileOperation.FileOperation(
                         fun flowModels ->
@@ -206,7 +223,9 @@ module rec _FlowMutualTypes =
         interface ITupledFlow<'a, 'finalUserState> with 
             member x.Run(flowModels: FlowModel<_> list) =
                 let flowModels = flowModels |> List.map (FlowModel.mapM x.FMonadStateBack)
+
                 let middleUserModels  = Flow<_, _>.Run(flowModels, x.Flow1)
+
                 let newUserModels = Flow<_, _>.Run(middleUserModels, x.Flow2)
                 x.FMonadState(middleUserModels, newUserModels)
 
@@ -237,28 +256,41 @@ module rec _FlowMutualTypes =
             |> Flow.FileOperation 
 
 
-        let batch (flows: seq<Flow<'originUserState,'newUserState>>) =
-            fun flowModels ->
-                let flows = List.ofSeq flows
-                let newFlowModels = 
-                    flows
-                    |> List.collect(fun flow ->
-                        Flow<_, _>.Run (flowModels, flow)
-                    )
+        let batch flowName (flows: seq<Flow<'originUserState,'newUserState>>) =
+            match List.ofSeq flows with 
+            | [] -> 
+                Flow.NamedFlow (flowName, [], Flow.dummy() ||>> fun _ -> [])
 
-                let files = flowModels |> List.map (fun m -> m.File)
-                let newFiles = newFlowModels |> List.map (fun m -> m.File)
+            | flows ->
+                Flow.Factory(fun userState ->
+                    let rec loop (flowAccum: Flow<'originUserState, 'newUserState list> option) (flows: Flow<'originUserState, 'newUserState> list) =
+                        match flows with 
+                        | [] -> flowAccum.Value
 
-                if files = newFiles 
-                then 
-                    flowModels
-                    |> List.map (FlowModel.mapM(fun originUserState -> 
-                        newFlowModels
-                        |> List.map (fun flow -> flow.UserState)
-                    ))
-                else failwithf "Batch is not supported when origin files %A are different to new files %A" files newFiles
+                        | flow :: flows ->
+                            match flowAccum with 
+                            | None -> 
+                                let flowAccum = flow ||>> List.singleton
+                                loop (Some flowAccum) flows
 
-            |> Flow.TransformList
+                            | Some flowAccum -> 
+
+                                let flowAccum = flowAccum ||>> (fun newUserStates -> userState, newUserStates)
+                                
+
+                                let flow = fst <<|| flow
+                        
+                                let flowAccum = flowAccum <++> flow ||>> (fun (a, b) -> snd a @ [b])
+
+                                loop (Some flowAccum) flows
+
+                    loop None flows
+                )
+
+
+
+
+        
 
 [<AutoOpen>]
 module Operators =
