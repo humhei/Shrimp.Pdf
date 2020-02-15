@@ -18,7 +18,13 @@ module FlowModel =
 
 
 [<RequireQualifiedAccess>]
-type internal FlowName =
-    | Usable of string
-    | Overrided of string
-    | None 
+type FlowName =
+    | Default
+    | Override of string
+    | New of string
+    | Disable
+
+type FlowNameIndex =
+    { Index: int 
+      Name: string }
+

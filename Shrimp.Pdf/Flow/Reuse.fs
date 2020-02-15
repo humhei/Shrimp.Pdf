@@ -44,25 +44,28 @@ with
             } :> INamedReuse<_, _>
 
 
-type internal TupledNamedReuse<'oldUserState, 'middleUserState, 'newUserState, 'finalUserState> =
+type internal TupledNamedReuse<'a, 'oldUserState, 'middleUserState, 'newUserState, 'finalUserState> =
     { Reuse1: INamedReuse<'oldUserState, 'middleUserState>
       Reuse2: INamedReuse<'middleUserState, 'newUserState>
       FlowName: FlowName
       FlowIndex: int option
+      FMonadStateBack: 'a -> 'oldUserState
       FMonadState: ('middleUserState * 'newUserState) -> 'finalUserState }
 
 with
-    interface INamedReuse<'oldUserState, 'finalUserState> with 
+    interface INamedReuse<'a, 'finalUserState> with 
         member x.FlowName = x.FlowName
 
         member x.FlowIndex = x.FlowIndex
 
         member x.Value flowModel (document: SplitDocument) = 
+            let flowModel = FlowModel.mapM x.FMonadStateBack flowModel
             let middleUserState = x.Reuse1.Value flowModel document
             document.ReOpen()
             
             match x.FlowName with 
-            | FlowName.Usable name ->
+            | FlowName.Override name 
+            | FlowName.New name ->
                 match x.FlowIndex with 
                 | Some index ->
                     let targetPath = 
@@ -75,29 +78,33 @@ with
 
                 | None -> failwithf "FlowName is setted while flow index is empty"
 
-            | FlowName.Overrided _
-            | FlowName.None _ -> ()
+            | FlowName.Disable _
+            | FlowName.Default _ -> ()
 
             let newUserState = x.Reuse2.Value (flowModel |> FlowModel.mapM(fun _ -> middleUserState)) document
             x.FMonadState (middleUserState, newUserState)
 
         member x.MapState mapping = 
-            { FlowName = x.FlowName 
-              Value = 
-                fun flowModel document ->
-                    (x :> INamedReuse<_, _>).Value flowModel document
+            { Reuse1 = x.Reuse1
+              Reuse2 = x.Reuse2
+              FlowName = x.FlowName
+              FlowIndex = x.FlowIndex
+              FMonadStateBack = x.FMonadStateBack
+              FMonadState = 
+                fun (a, b) ->
+                    x.FMonadState (a, b)
                     |> mapping
-              FlowIndex  = x.FlowIndex
             } :> INamedReuse<_, _>
 
         member x.MapStateBack mapping = 
-            { FlowName = x.FlowName 
-              Value = 
-                fun flowModel document ->
-                    let flowModel = FlowModel.mapM mapping flowModel
-                    (x :> INamedReuse<_, _>).Value flowModel document
-              FlowIndex  = x.FlowIndex
+            { Reuse1 = x.Reuse1
+              Reuse2 = x.Reuse2
+              FlowName = x.FlowName
+              FlowIndex = x.FlowIndex
+              FMonadStateBack = mapping >> x.FMonadStateBack
+              FMonadState = x.FMonadState
             } :> INamedReuse<_, _>
+          
 
 type Reuse<'oldUserState, 'newUserState> internal (namedReuse: INamedReuse<'oldUserState, 'newUserState>) =
     member private x.AsNamedReuse = namedReuse
@@ -115,33 +122,45 @@ type Reuse<'oldUserState, 'newUserState> internal (namedReuse: INamedReuse<'oldU
     static member (<+>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
         { Reuse1 = reuse1.AsNamedReuse 
           Reuse2 = reuse2.AsNamedReuse 
-          FlowName = FlowName.None
+          FlowName = FlowName.Default
           FlowIndex = None 
+          FMonadStateBack = id
           FMonadState = snd }
         |> Reuse
 
     static member (<++>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
         { Reuse1 = reuse1.AsNamedReuse 
           Reuse2 = reuse2.AsNamedReuse 
-          FlowName = FlowName.None
+          FlowName = FlowName.Default
           FlowIndex = None 
+          FMonadStateBack = id
           FMonadState = id }
         |> Reuse
 
     static member (<.+>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
         { Reuse1 = reuse1.AsNamedReuse 
           Reuse2 = reuse2.AsNamedReuse 
-          FlowName = FlowName.None
+          FlowName = FlowName.Default
           FlowIndex = None 
+          FMonadStateBack = id
           FMonadState = fst }
         |> Reuse
+
+    new (f: FlowModel<'oldUserState> -> SplitDocument -> 'newUserState, ?flowName: FlowName) =
+         Reuse(
+            { FlowName = defaultArg flowName FlowName.Default
+              FlowIndex = None
+              Value = f
+            }
+         )
 
     new (f: FlowModel<'oldUserState> -> SplitDocument -> 'newUserState, ?name: string) =
          Reuse(
             { FlowName = 
                 match name with 
-                | None -> FlowName.None
-                | Some name -> FlowName.Usable name
+                | None -> FlowName.Default
+                | Some name -> FlowName.Override name
+
               FlowIndex = None
               Value = f
             }
