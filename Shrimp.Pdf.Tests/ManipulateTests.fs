@@ -357,7 +357,7 @@ let manipulateTests =
         )
         <+>
         Flow.Reuse (
-            Reuse.dummy
+            Reuse.dummy()
         )
         <+>
         Flow.Manipulate (

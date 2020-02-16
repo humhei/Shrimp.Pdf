@@ -51,7 +51,7 @@ type PageResizingRotatingOptions =
 
 [<AutoOpen>]
 module _Reuses =
-    let private reuse v = Reuse v 
+    let private reuse name v = Reuse(v, name = name)
 
     type PageInsertingOptions =
         | BeforePoint = 0
@@ -60,208 +60,205 @@ module _Reuses =
 
     type Reuses =
         static member Insert(insertingFile: string, ?insertingFilePageSelector: PageSelector, ?pageInsertingOptions: PageInsertingOptions, ?insertingPoint: SinglePageSelectorExpr) =
+            let insertingFilePageSelector = defaultArg insertingFilePageSelector PageSelector.All
+            let pageInsertingOptions = defaultArg pageInsertingOptions PageInsertingOptions.AfterPoint
+            let singlePageSelectorExpr = defaultArg insertingPoint (SinglePageSelectorExpr.End 1)
+
             fun flowModel (splitDocument: SplitDocument) ->
                 if Path.GetFullPath(insertingFile) = Path.GetFullPath(splitDocument.ReaderPath) 
                 then failwith "Cannot insert file to self"
 
-                let insertingFilePageSelector = defaultArg insertingFilePageSelector PageSelector.All
-                let pageInsertingOptions = defaultArg pageInsertingOptions PageInsertingOptions.AfterPoint
-                let singlePageSelectorExpr = defaultArg insertingPoint (SinglePageSelectorExpr.End 1)
-                Logger.infoWithStopWatch (sprintf "Insert file %s %A to %s %s %A" insertingFile insertingFilePageSelector splitDocument.ReaderPath (pageInsertingOptions.ToString()) singlePageSelectorExpr) (fun _ ->
-                    let numberOfPages = splitDocument.Reader.GetNumberOfPages()
-                    let pageNum =
-                        splitDocument.Reader.GetPageNumber singlePageSelectorExpr
+                let numberOfPages = splitDocument.Reader.GetNumberOfPages()
+                let pageNum =
+                    splitDocument.Reader.GetPageNumber singlePageSelectorExpr
 
-                    let tryCopyPages (reader: PdfDocument) pageFrom pageTo =
-                        if pageTo >= pageFrom
-                        then reader.CopyPagesTo(pageFrom, pageTo, splitDocument.Writer) |> ignore
+                let tryCopyPages (reader: PdfDocument) pageFrom pageTo =
+                    if pageTo >= pageFrom
+                    then reader.CopyPagesTo(pageFrom, pageTo, splitDocument.Writer) |> ignore
 
 
-                    match pageInsertingOptions with
-                    | PageInsertingOptions.AfterPoint ->
-                        tryCopyPages splitDocument.Reader 1 pageNum 
-                        
+                match pageInsertingOptions with
+                | PageInsertingOptions.AfterPoint ->
+                    tryCopyPages splitDocument.Reader 1 pageNum 
+                    
 
-                        let readerResource = new PdfDocument(new PdfReader(insertingFile))
-                        let readerResourcePageNumbers = readerResource.GetPageNumbers(insertingFilePageSelector)
+                    let readerResource = new PdfDocument(new PdfReader(insertingFile))
+                    let readerResourcePageNumbers = readerResource.GetPageNumbers(insertingFilePageSelector)
 
-                        for readerResourcePageNumber in readerResourcePageNumbers do
-                            let page = readerResource.GetPage(readerResourcePageNumber).CopyTo(splitDocument.Writer)
-                            splitDocument.Writer.AddPage(page) |> ignore
-                        readerResource.Close()
-
-
-                        tryCopyPages splitDocument.Reader (pageNum + 1) numberOfPages
-
-                    | PageInsertingOptions.BeforePoint ->
-                        tryCopyPages splitDocument.Reader 1 (pageNum - 1)
-                        
-
-                        let readerResource = new PdfDocument(new PdfReader(insertingFile))
-                        let readerResourcePageNumbers = readerResource.GetPageNumbers(insertingFilePageSelector)
-
-                        for readerResourcePageNumber in readerResourcePageNumbers do
-                            let page = readerResource.GetPage(readerResourcePageNumber).CopyTo(splitDocument.Writer)
-                            splitDocument.Writer.AddPage(page) |> ignore
-
-                        readerResource.Close()
+                    for readerResourcePageNumber in readerResourcePageNumbers do
+                        let page = readerResource.GetPage(readerResourcePageNumber).CopyTo(splitDocument.Writer)
+                        splitDocument.Writer.AddPage(page) |> ignore
+                    readerResource.Close()
 
 
-                        tryCopyPages splitDocument.Reader (pageNum) numberOfPages
-                )
+                    tryCopyPages splitDocument.Reader (pageNum + 1) numberOfPages
 
-            |> reuse
+                | PageInsertingOptions.BeforePoint ->
+                    tryCopyPages splitDocument.Reader 1 (pageNum - 1)
+                    
+
+                    let readerResource = new PdfDocument(new PdfReader(insertingFile))
+                    let readerResourcePageNumbers = readerResource.GetPageNumbers(insertingFilePageSelector)
+
+                    for readerResourcePageNumber in readerResourcePageNumbers do
+                        let page = readerResource.GetPage(readerResourcePageNumber).CopyTo(splitDocument.Writer)
+                        splitDocument.Writer.AddPage(page) |> ignore
+
+                    readerResource.Close()
+
+
+                    tryCopyPages splitDocument.Reader (pageNum) numberOfPages
+                
+
+            |> reuse 
+                (sprintf "Insert file %s %A to this %s %A" insertingFile insertingFilePageSelector (pageInsertingOptions.ToString()) singlePageSelectorExpr)
 
         static member Impose (fArgs) =
+            let imposingArguments = ImposingArguments.Create fArgs
+
             fun flowModel (splitDocument: SplitDocument) ->
-                let imposingArguments = ImposingArguments.Create fArgs
-                Logger.infoWithStopWatch (sprintf "IMPOSE %A" imposingArguments) (fun _ ->
-                    let imposingDocument = new ImposingDocument(splitDocument, imposingArguments)
-                    imposingDocument.Build()
+                let imposingDocument = new ImposingDocument(splitDocument, imposingArguments)
+                imposingDocument.Build()
 
-                    imposingDocument.Draw()
-                    (imposingDocument)
-                )
+                imposingDocument.Draw()
+                (imposingDocument)
 
-            |> reuse
+            |> reuse (sprintf "IMPOSE %A" imposingArguments)
 
         static member MovePageBoxToOrigin(pageSelector: PageSelector) =
+
             fun flowModel (splitDocument: SplitDocument) ->
                 let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
 
-                Logger.infoWithStopWatch (sprintf "MOVE %A pagebox to origin" selectedPageNumbers) (fun _ ->
-                    PdfDocument.getPages splitDocument.Reader
-                    |> List.iteri (fun i page ->
-                        let pageNum = i + 1
-                        if List.contains pageNum selectedPageNumbers 
-                        then 
-                            let pageBox = page.GetActualBox()
-                            let width = pageBox.GetWidthF()
-                            let height = pageBox.GetHeightF()
+                PdfDocument.getPages splitDocument.Reader
+                |> List.iteri (fun i page ->
+                    let pageNum = i + 1
+                    if List.contains pageNum selectedPageNumbers 
+                    then 
+                        let pageBox = page.GetActualBox()
+                        let width = pageBox.GetWidthF()
+                        let height = pageBox.GetHeightF()
 
-                            let xobject = page.CopyAsFormXObject(splitDocument.Writer)
-                            let newPage = splitDocument.Writer.AddNewPage(PageSize(Rectangle.create 0. 0. width height))
-                            let canvas = new PdfCanvas(newPage)
-                            canvas.AddXObject(xobject, -pageBox.GetX(), -pageBox.GetY())
-                            |> ignore
-                    )
+                        let xobject = page.CopyAsFormXObject(splitDocument.Writer)
+                        let newPage = splitDocument.Writer.AddNewPage(PageSize(Rectangle.create 0. 0. width height))
+                        let canvas = new PdfCanvas(newPage)
+                        canvas.AddXObject(xobject, -pageBox.GetX(), -pageBox.GetY())
+                        |> ignore
                 )
 
-            |> reuse
+            |> reuse(sprintf "MOVE %O pagebox to origin" pageSelector)
 
 
         static member Rotate (pageSelector: PageSelector, rotation: Rotation) =
+            let angle = Rotation.getAngle rotation
+
             fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
                 let angle = Rotation.getAngle rotation
                 let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
-                Logger.infoWithStopWatch (sprintf "ROTATE %A by angle %g" selectedPageNumbers angle) (fun _ ->
-                    PdfDocument.getPages splitDocument.Reader
-                    |> List.iteri (fun i page ->
-                        let pageNum = i + 1
-                        if List.contains pageNum selectedPageNumbers 
-                        then 
-                            let pageBox = page.GetActualBox()
+                PdfDocument.getPages splitDocument.Reader
+                |> List.iteri (fun i page ->
+                    let pageNum = i + 1
+                    if List.contains pageNum selectedPageNumbers 
+                    then 
+                        let pageBox = page.GetActualBox()
 
-                            let affineTransform =
-                                let x = pageBox.GetXF()
-                                let y = pageBox.GetYF()
-                                let affineTransfrom_Rotate = AffineTransform.GetRotateInstance(Math.PI / -180. * angle, x, y)
+                        let affineTransform =
+                            let x = pageBox.GetXF()
+                            let y = pageBox.GetYF()
+                            let affineTransfrom_Rotate = AffineTransform.GetRotateInstance(Math.PI / -180. * angle, x, y)
 
-                                let affineTransform_Translate = 
-                                    { ScaleX = 1. 
-                                      ScaleY = 1. 
-                                      TranslateX = -x
-                                      TranslateY = -y
-                                      ShearX = 0.
-                                      ShearY = 0. }
-                                    |> AffineTransformRecord.toAffineTransform
+                            let affineTransform_Translate = 
+                                { ScaleX = 1. 
+                                  ScaleY = 1. 
+                                  TranslateX = -x
+                                  TranslateY = -y
+                                  ShearX = 0.
+                                  ShearY = 0. }
+                                |> AffineTransformRecord.toAffineTransform
 
-                                affineTransfrom_Rotate.PreConcatenate(affineTransform_Translate)
-                                affineTransfrom_Rotate
+                            affineTransfrom_Rotate.PreConcatenate(affineTransform_Translate)
+                            affineTransfrom_Rotate
 
-                            let newPageSize =
-                                affineTransform.Transform(pageBox)
+                        let newPageSize =
+                            affineTransform.Transform(pageBox)
 
-                            let xobject = page.CopyAsFormXObject(splitDocument.Writer)
-                            let newPage = splitDocument.Writer.AddNewPage(PageSize(newPageSize))
-                            let canvas = new PdfCanvas(newPage)
+                        let xobject = page.CopyAsFormXObject(splitDocument.Writer)
+                        let newPage = splitDocument.Writer.AddNewPage(PageSize(newPageSize))
+                        let canvas = new PdfCanvas(newPage)
 
-                            canvas.AddXObject(xobject,AffineTransformRecord.ofAffineTransform affineTransform) |> ignore
+                        canvas.AddXObject(xobject,AffineTransformRecord.ofAffineTransform affineTransform) |> ignore
 
-                        else 
-                            let page = page.CopyTo(splitDocument.Writer)
-                            splitDocument.Writer.AddPage(page) |> ignore
-                    )
+                    else 
+                        let page = page.CopyTo(splitDocument.Writer)
+                        splitDocument.Writer.AddPage(page) |> ignore
                 )
 
-            |> reuse
+            |> reuse (sprintf "ROTATE %O by angle %g" pageSelector angle)
 
         static member Resize (pageSelector: PageSelector, pageBoxKind: PageBoxKind, size: FsSize) =
             fun flowModel (splitDocument: SplitDocument) ->
                 let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
 
-                Logger.infoWithStopWatch (sprintf "Resize %A %A to %A" selectedPageNumbers pageBoxKind size) (fun _ ->
-                    PdfDocument.getPages splitDocument.Reader
-                    |> List.iteri (fun i page ->
-                        let pageNum = i + 1
-                        if List.contains pageNum selectedPageNumbers 
-                        then 
-                            let actualBox = page.GetActualBox()
-                            let pageBox = page.GetPageBox(pageBoxKind)
+                PdfDocument.getPages splitDocument.Reader
+                |> List.iteri (fun i page ->
+                    let pageNum = i + 1
+                    if List.contains pageNum selectedPageNumbers 
+                    then 
+                        let actualBox = page.GetActualBox()
+                        let pageBox = page.GetPageBox(pageBoxKind)
 
-                            let affineTransform_Scale = 
-                                AffineTransform.GetScaleInstance(size.Width / pageBox.GetWidthF(), size.Height / pageBox.GetHeightF())
+                        let affineTransform_Scale = 
+                            AffineTransform.GetScaleInstance(size.Width / pageBox.GetWidthF(), size.Height / pageBox.GetHeightF())
 
-                            let affineTransform_Translate = AffineTransform.GetTranslateInstance(-actualBox.GetXF(), -actualBox.GetYF())
+                        let affineTransform_Translate = AffineTransform.GetTranslateInstance(-actualBox.GetXF(), -actualBox.GetYF())
 
-                            let affineTransform = affineTransform_Scale.Clone()
+                        let affineTransform = affineTransform_Scale.Clone()
 
-                            affineTransform.Concatenate(affineTransform_Translate)
+                        affineTransform.Concatenate(affineTransform_Translate)
 
-                            let xobject = page.CopyAsFormXObject(splitDocument.Writer)
-                            let newPage = 
-                                splitDocument.Writer.AddNewPage(
-                                    PageSize(
-                                        Rectangle.create 
-                                            0. 
-                                            0. 
-                                            (size.Width *  actualBox.GetWidthF() / pageBox.GetWidthF())
-                                            (size.Height * actualBox.GetHeightF() / pageBox.GetHeightF()) 
-                                    )
+                        let xobject = page.CopyAsFormXObject(splitDocument.Writer)
+                        let newPage = 
+                            splitDocument.Writer.AddNewPage(
+                                PageSize(
+                                    Rectangle.create 
+                                        0. 
+                                        0. 
+                                        (size.Width *  actualBox.GetWidthF() / pageBox.GetWidthF())
+                                        (size.Height * actualBox.GetHeightF() / pageBox.GetHeightF()) 
                                 )
-
-
-                            let canvas = new PdfCanvas(newPage)
-                            canvas.AddXObject(xobject, affineTransform)
-                            |> ignore
-
-                            [
-                                PageBoxKind.MediaBox
-                                PageBoxKind.CropBox
-                                PageBoxKind.ArtBox
-                                PageBoxKind.BleedBox
-                                PageBoxKind.TrimBox
-                            ] |> List.iter (fun pageBoxKind ->
-                                let pageBox = page.GetPageBox(pageBoxKind)
-                            
-                                let newPageBox = 
-                                    affineTransform.Transform(pageBox)
-
-                                PdfPage.setPageBox pageBoxKind newPageBox newPage
-                                |> ignore
                             )
-                    )
+
+
+                        let canvas = new PdfCanvas(newPage)
+                        canvas.AddXObject(xobject, affineTransform)
+                        |> ignore
+
+                        [
+                            PageBoxKind.MediaBox
+                            PageBoxKind.CropBox
+                            PageBoxKind.ArtBox
+                            PageBoxKind.BleedBox
+                            PageBoxKind.TrimBox
+                        ] |> List.iter (fun pageBoxKind ->
+                            let pageBox = page.GetPageBox(pageBoxKind)
+                            
+                            let newPageBox = 
+                                affineTransform.Transform(pageBox)
+
+                            PdfPage.setPageBox pageBoxKind newPageBox newPage
+                            |> ignore
+                        )
                 )
 
-            |> reuse
+            |> reuse (sprintf "Resize %O %A to %A" pageSelector pageBoxKind size)
 
         static member Resize (pageSelector: PageSelector, pageResizingRotatingOptions: PageResizingRotatingOptions, pageResizingScalingOptions: PageResizingScalingOptions, size: FsSize) =
             let tryRotate() =
                 match pageResizingRotatingOptions with
-                | PageResizingRotatingOptions.Keep -> Reuse.dummy ||>> ignore
+                | PageResizingRotatingOptions.Keep -> Reuse.dummy() ||>> ignore
                 | PageResizingRotatingOptions.ColckwiseIfNeeded 
                 | PageResizingRotatingOptions.CounterColckwiseIfNeeded ->
-                    Reuse(fun flowModel splitDocument ->
+                    Reuse.Factory(fun flowModel splitDocument ->
                         let proposedRotatedPageNumbers =
                             PdfDocument.getPages splitDocument.Reader
                             |> List.indexed
@@ -290,16 +287,14 @@ module _Reuses =
                                 | PageResizingRotatingOptions.ColckwiseIfNeeded -> Rotation.Clockwise
                                 | PageResizingRotatingOptions.Keep -> Rotation.None
 
-                            Reuses.Rotate(pageSelector, rotation).Value flowModel splitDocument
-
-                                
+                            Reuses.Rotate(pageSelector, rotation)
                     )
 
             let resize() =
                 match pageResizingScalingOptions with 
                 | PageResizingScalingOptions.Anamorphic -> 
-                    Reuse(fun flowModel splitDocument ->
-                        Reuses.Resize(pageSelector, PageBoxKind.ActualBox, size).Value flowModel splitDocument
+                    Reuses.Resize(pageSelector, PageBoxKind.ActualBox, size)
+                    |> Reuse.Append (fun splitDocument ->
                         PdfDocument.getPages splitDocument.Writer
                         |> List.iteri(fun i page ->
                             let actualBox = page.GetActualBox()
@@ -307,10 +302,13 @@ module _Reuses =
                             |> ignore
                         )
                     )
+
                 | PageResizingScalingOptions.Uniform ->
-                    Reuse(fun flowModel splitDocument ->
-                        let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
-                        Logger.infoWithStopWatch (sprintf "Resize %A to %A" selectedPageNumbers size) (fun _ ->
+                    Reuse(
+                        name = sprintf "Resize %O to %A" pageSelector size,
+                        f = 
+                            fun flowModel splitDocument ->
+                            let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
                             PdfDocument.getPages splitDocument.Reader
                             |> List.iteri (fun i page ->
                                 let pageNum = i + 1
@@ -351,9 +349,7 @@ module _Reuses =
                                     let canvas = new PdfCanvas(newPage)
                                     canvas.AddXObject(xobject, affineTransform)
                                     |> ignore
-
                             )
-                        )
                     )
 
             tryRotate()
@@ -363,34 +359,27 @@ module _Reuses =
         /// e.g. [1; 3; 5] will pick page1, page3, page5
         static member SequencePages (pageNumSequence: PageNumSequence) =
             fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
-                Logger.infoWithStopWatch (sprintf "SEQUENCEPAGES %A" pageNumSequence) (fun _ -> 
-                    let duplicatedReaderPages = 
-                        splitDocument.Reader
-                        |> PdfDocument.getPages
-                        |> List.mapi (fun i page ->
-                            let pageNum = i + 1
-                            pageNumSequence.Value
-                            |> List.filter ((=) pageNum)
-                            |> List.map (fun _ -> page)
-                        )|> List.concat
+                let duplicatedReaderPages = 
+                    splitDocument.Reader
+                    |> PdfDocument.getPages
+                    |> List.mapi (fun i page ->
+                        let pageNum = i + 1
+                        pageNumSequence.Value
+                        |> List.filter ((=) pageNum)
+                        |> List.map (fun _ -> page)
+                    )|> List.concat
 
-                    if duplicatedReaderPages.Length = 0 
-                    then failwithf "Invalid sequence %A, shoudl exists a sequence number >= 1 and <= %d" pageNumSequence (splitDocument.Reader.GetNumberOfPages())
+                if duplicatedReaderPages.Length = 0 
+                then failwithf "Invalid sequence %A, shoudl exists a sequence number >= 1 and <= %d" pageNumSequence (splitDocument.Reader.GetNumberOfPages())
 
-                    for page in duplicatedReaderPages do
-                        let writerPageResource = page.CopyTo(splitDocument.Writer)
-                        splitDocument.Writer.AddPage(writerPageResource) |> ignore
+                for page in duplicatedReaderPages do
+                    let writerPageResource = page.CopyTo(splitDocument.Writer)
+                    splitDocument.Writer.AddPage(writerPageResource) |> ignore
                 
-                )
-
-
-            |> reuse
+            |> reuse (sprintf "SEQUENCEPAGES %A" pageNumSequence)
 
         static member DuplicatePages (pageSelector: PageSelector, copiedNumbers: CopiedNumSequence) =
-
-            fun flowModel (splitDocument: SplitDocument) ->
-                Logger.info (sprintf "DUPLICATEPAGES %A" copiedNumbers) 
-
+            Reuse.Factory(fun flowModel splitDocument ->
                 let pageNumSequence = 
                     splitDocument.Reader.GetPageNumbers(pageSelector)
                     |> List.indexed
@@ -401,21 +390,24 @@ module _Reuses =
                     )
                     |> PageNumSequence.create
 
-                (Reuses.SequencePages pageNumSequence).Value flowModel splitDocument
-            |> reuse
+                (Reuses.SequencePages pageNumSequence)
+            )
+
+            |> Reuse.ReName (sprintf "DUPLICATEPAGES %O %A" pageSelector copiedNumbers) 
 
         static member DuplicatePages (pageSelector: PageSelector, copiedNumber: int)  =
             if copiedNumber <= 0 then failwithf "copied number %d should be bigger than 0" copiedNumber
 
-            fun flowModel (splitDocument: SplitDocument) ->
-                let pageNumSequence = 
-                    splitDocument.Reader.GetPageNumbers(pageSelector)
-                    |> List.map (fun _ -> copiedNumber
-                    )
-                    |> CopiedNumSequence.create
+            Reuse.Factory(
+                fun flowModel (splitDocument: SplitDocument) ->
+                    let pageNumSequence = 
+                        splitDocument.Reader.GetPageNumbers(pageSelector)
+                        |> List.map (fun _ -> copiedNumber
+                        )
+                        |> CopiedNumSequence.create
 
-                (Reuses.DuplicatePages (pageSelector, pageNumSequence)).Value flowModel splitDocument
-            |> reuse
+                    (Reuses.DuplicatePages (pageSelector, pageNumSequence))
+            )
 
 
 
@@ -423,10 +415,8 @@ module _Reuses =
 
             let colNum = tileTable.ColNum
             let rowNum = tileTable.RowNum
-
-            fun flowModel (splitDocument: SplitDocument) ->
-                Logger.info (sprintf "TILEPAGES %d*%d" tileTable.ColNum tileTable.RowNum) 
-                let userState = (Reuses.DuplicatePages (PageSelector.All, colNum * rowNum)).Value flowModel splitDocument
+            (Reuses.DuplicatePages (PageSelector.All, colNum * rowNum))
+            |> Reuse.Append(fun splitDocument ->
                 let tileTable = TileTable.create colNum rowNum
                 let writer = splitDocument.Writer
                 for i = 1 to writer.GetNumberOfPages() do
@@ -436,14 +426,11 @@ module _Reuses =
                     let tileBox = Rectangle.getTile tileIndexer actualBox
                     PdfPage.setPageBox PageBoxKind.AllBox tileBox page
                     |> ignore
-                
-                userState
-
-            |> reuse
+            )
+            |> Reuse.ReName (sprintf "TILEPAGES %d*%d" tileTable.ColNum tileTable.RowNum) 
 
         static member TilePages (selector: Selector<'userState>) =
             fun (flowModel: FlowModel<'userState>) (splitDocument: SplitDocument) ->
-                Logger.info (sprintf "TILEPAGES by selector %A" selector)
 
                 let reader = splitDocument.Reader
                 let parser = new NonInitialClippingPathPdfDocumentContentParser(reader)
@@ -465,7 +452,7 @@ module _Reuses =
                         writer.AddPage(writerPageResource)
                         |> ignore
 
-            |> reuse
+            |> reuse (sprintf "TILEPAGES by selector %A" selector)
 
 
 

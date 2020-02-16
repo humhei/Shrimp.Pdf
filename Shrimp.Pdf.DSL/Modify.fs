@@ -280,18 +280,16 @@ module ModifyOperators =
     module IntegratedDocument =
         type private Modifier = _SelectionModifierFixmentArguments -> list<PdfCanvas -> PdfCanvas>
         
-        let modify (name) (pageSelector: PageSelector) (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfo seq -> unit)>) (document: IntegratedDocument) =
+        let modify (pageSelector: PageSelector) (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfo seq -> unit)>) (document: IntegratedDocument) =
             let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
             let totalNumberOfPages = document.Value.GetNumberOfPages()
-            Logger.infoWithStopWatch (sprintf "MODIFY: \n%s" name) (fun _ ->
-                for i = 1 to totalNumberOfPages do
-                    if List.contains i selectedPageNumbers then
-                        let page = document.Value.GetPage(i)
-                        let selectorModifierMapping = selectorModifierPageInfosValidationMappingFactory (PageNumber i, page)
-                        for pair in selectorModifierMapping do
-                            let renderInfoSelector, modifier, pageInfosValidation = pair.Value
-                            pageInfosValidation (PageNumber i) (PdfPage.modify (Map.ofList[pair.Key, (renderInfoSelector, modifier)]) page)
-            )
+            for i = 1 to totalNumberOfPages do
+                if List.contains i selectedPageNumbers then
+                    let page = document.Value.GetPage(i)
+                    let selectorModifierMapping = selectorModifierPageInfosValidationMappingFactory (PageNumber i, page)
+                    for pair in selectorModifierMapping do
+                        let renderInfoSelector, modifier, pageInfosValidation = pair.Value
+                        pageInfosValidation (PageNumber i) (PdfPage.modify (Map.ofList[pair.Key, (renderInfoSelector, modifier)]) page)
     
 
     [<RequireQualifiedAccess>]
@@ -357,7 +355,6 @@ module ModifyOperators =
         let asyncManiputation  = 
             fun (totalNumberOfPages) (transformPageNum: PageNumber -> PageNumber) (flowModel: FlowModel<_>) (document: IntegratedDocument) ->
                 IntegratedDocument.modify
-                    (String.concat "\n" names)
                     pageSelector 
                     (
                         fun (pageNum, pdfPage) ->
@@ -381,6 +378,7 @@ module ModifyOperators =
                 
             
         Manipulate.runInAsync modifyingAsyncWorker asyncManiputation
+        |> Manipulate.ReName (String.concat "\n" names)
 
     /// async may doesn't make any sense for cpu bound computation?
     let modifyAsync (modifyingAsyncWorker, pageSelector, (modifiers: list<_SelectorAndModifiers<'userState>>)) =
@@ -431,42 +429,40 @@ type Modify =
             | FillOrStrokeOptions.Fill -> FillOrStrokeModifingOptions.Fill
             | FillOrStrokeOptions.Stroke -> FillOrStrokeModifingOptions.Stroke
         
-        Manipulate(fun flowModel splitDocument ->
+        modifyAndValidatePageInfos(
+            options.PageSelector,
+            [
+                { Name = defaultArg options.ModifierName (sprintf "replace colors by %A" picker)
+                  Selector = 
+                    let colorInfo = Info.ColorIs(fillOrStrokeOptions, fun color -> 
+                        match picker color with 
+                        | Some _ -> true
+                        | None -> false
+                    )
 
-            modifyAndValidatePageInfos(
-                options.PageSelector,
-                [
-                    { Name = defaultArg options.ModifierName (sprintf "replace colors by %A" picker)
-                      Selector = 
-                        let colorInfo = Info.ColorIs(fillOrStrokeOptions, fun color -> 
-                            match picker color with 
-                            | Some _ -> true
-                            | None -> false
-                        )
+                    let info =
+                        match options.Info_BoundIs_Args with 
+                        | None -> colorInfo
+                        | Some info_boundIs_args -> Info.BoundIs(info_boundIs_args) <&&> colorInfo
 
-                        let info =
-                            match options.Info_BoundIs_Args with 
-                            | None -> colorInfo
-                            | Some info_boundIs_args -> Info.BoundIs(info_boundIs_args) <&&> colorInfo
-
-                        match selectorTag with 
-                        | SelectorTag.PathOrText -> 
-                            PathOrText info
-                        | SelectorTag.Path -> Selector.Path info
-                        | SelectorTag.Text -> Text info
+                    match selectorTag with 
+                    | SelectorTag.PathOrText -> 
+                        PathOrText info
+                    | SelectorTag.Path -> Selector.Path info
+                    | SelectorTag.Text -> Text info
 
 
-                      Modifiers = [
-                        Modifier.ReplaceColor(
-                            fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
-                            picker = picker
-                        )
-                      ]
-                      PageInfosValidation = pageInfosValidation
-                    }
-                ]
+                  Modifiers = [
+                    Modifier.ReplaceColor(
+                        fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
+                        picker = picker
+                    )
+                  ]
+                  PageInfosValidation = pageInfosValidation
+                }
+            ]
+
                 
-            ).Value flowModel splitDocument
         )
 
 
@@ -489,9 +485,9 @@ type Modify =
 
 
     static member ReplaceColors (originColors: Color list, targetColor: FsSeparation, ?options: Modify_ReplaceColors_Options) =
-        Manipulate(fun flowModel splitDocument ->
+        Manipulate.Factory(fun flowModel splitDocument ->
             let seperationColor = splitDocument.Value.GetOrCreateColor(ResourceColor.CustomSeparation targetColor)
-            Modify.ReplaceColors(originColors, seperationColor, ?options = options).Value flowModel splitDocument
+            Modify.ReplaceColors(originColors, seperationColor, ?options = options)
         )
 
     static member ReplaceColors1 (originColors: Color list, targetColor: Color, ?options: Modify_ReplaceColors_Options) =

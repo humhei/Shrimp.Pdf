@@ -91,7 +91,7 @@ let removeNavigationInfo() =
 
 
 let getPageEdgeAndTitleArea(): Manipulate<ImposingDocument, _> =
-    Manipulate.dummy
+    Manipulate.dummy()
     <++>
     (
         readB255Bound()
@@ -135,7 +135,7 @@ let realSamplesTests =
         )
         <+> 
         Flow.Manipulate (
-            Manipulate.dummy
+            Manipulate.dummy()
             <.+>
             (ModifyPage.trimToVisible PageSelector.All (Margin.Create(mm 2.)))
             <+> (getPageEdgeAndTitleArea())

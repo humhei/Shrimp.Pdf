@@ -413,11 +413,27 @@ module ExtensionTypes =
         | Begin of int
         | End of int
 
+    with 
+        override x.ToString() =
+            match x with 
+            | SinglePageSelectorExpr.Begin i -> i.ToString()
+            | SinglePageSelectorExpr.End i -> i.ToString() + "R"
+
     [<RequireQualifiedAccess>]
     type PageSelectorExpr = 
         | SinglePage of SinglePageSelectorExpr
         | Between of SinglePageSelectorExpr * SinglePageSelectorExpr
         | Compose of PageSelectorExpr list
+
+    with 
+        override x.ToString() =
+            match x with 
+            | PageSelectorExpr.SinglePage expr -> expr.ToString()
+            | PageSelectorExpr.Between (expr1, expr2) -> expr1.ToString() + "-" + expr2.ToString()
+            | Compose exprs ->
+                exprs
+                |> List.map (fun m -> m.ToString())
+                |> String.concat ", "
 
     [<RequireQualifiedAccess>]
     module PageSelectorExpr = 
@@ -461,6 +477,16 @@ module ExtensionTypes =
         | All
         | Expr of PageSelectorExpr
         | Numbers of Set<int>
+    with 
+        override x.ToString() =
+            match x with 
+            | PageSelector.Last -> "1R"
+            | PageSelector.First -> "1"
+            | PageSelector.All -> "ALL"
+            | PageSelector.Expr expr -> expr.ToString()
+            | PageSelector.Numbers numbers -> numbers.ToString()
+
+
 
     type PdfDocument with
 

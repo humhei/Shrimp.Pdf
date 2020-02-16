@@ -51,7 +51,6 @@
     <Compile Include="Imposing.fs" />
     <Compile Include="Flow\FlowTypes.fs" />
     <Compile Include="Flow\ManipulateOrReuse.fs" />
-    <Compile Include="Flow\Manipulate.fs" />
     <Compile Include="Flow\Flow.fs" />
 
   </ItemGroup>

@@ -209,29 +209,32 @@ module ModifyPageOperators =
             let document = integratedDocument.Value
             let parser = new NonInitialClippingPathPdfDocumentContentParser(document)
             let selectedPageNumbers = document.GetPageNumbers(pageSelector) 
-            Logger.infoWithStopWatch (sprintf "MODIFYPAGE: %s" name) (fun _ ->
-                let newUserState = 
-                    document
-                    |> PdfDocument.getPages
-                    |> List.indexed
-                    |> List.choose(fun (i, page) ->
-                        let pageNum = (i + 1)
-                        if List.contains pageNum selectedPageNumbers then
-                            let args = 
-                                { UserState = flowModel.UserState;
-                                  Page = page
-                                  TotalNumberOfPages = document.GetNumberOfPages()
-                                  PageNum = pageNum }
 
-                            let renderInfoSelector = Selector.toRenderInfoSelector args selector
-                            let infos = NonInitialClippingPathPdfDocumentContentParser.parse pageNum renderInfoSelector parser
-                            Some (pageModifier args infos) 
-                        else None
-                    )
+            let newUserState = 
+                document
+                |> PdfDocument.getPages
+                |> List.indexed
+                |> List.choose(fun (i, page) ->
+                    let pageNum = (i + 1)
+                    if List.contains pageNum selectedPageNumbers then
+                        let args = 
+                            { UserState = flowModel.UserState;
+                              Page = page
+                              TotalNumberOfPages = document.GetNumberOfPages()
+                              PageNum = pageNum }
 
-                newUserState
-            )
+                        let renderInfoSelector = Selector.toRenderInfoSelector args selector
+                        let infos = NonInitialClippingPathPdfDocumentContentParser.parse pageNum renderInfoSelector parser
+                        Some (pageModifier args infos) 
+                    else None
+                )
+
+            newUserState
+
         |> Manipulate
+        |> Manipulate.ReName(
+            (sprintf "MODIFYPAGES %O: %s " pageSelector name)
+        )
 
 
     let modifyPage (name: string, pageSelector, (selector: Selector<'userState>), (pageModifier: PageModifier<_, _>)) =
