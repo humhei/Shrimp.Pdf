@@ -11,10 +11,15 @@ module internal rec ManipulateOrReuse =
         | SplitDocument of SplitDocument
         | IntegratedDocument of IntegratedDocument
     with 
-        member x.ReOpen() =
+        member x.Open() =
             match x with 
-            | SplitOrIntegratedDocument.SplitDocument document -> document.ReOpen()
-            | SplitOrIntegratedDocument.IntegratedDocument document -> document.ReOpen()
+            | SplitOrIntegratedDocument.SplitDocument document -> document.Open()
+            | SplitOrIntegratedDocument.IntegratedDocument document -> document.Open()
+    
+        member x.CloseAndDraft() =
+            match x with 
+            | SplitOrIntegratedDocument.SplitDocument document -> document.CloseAndDraft()
+            | SplitOrIntegratedDocument.IntegratedDocument document -> document.CloseAndDraft()
     
 
     type FlowModel<'userState> =
@@ -34,8 +39,9 @@ module internal rec ManipulateOrReuse =
               FlowName = flowModel.FlowName 
               FlowNameTupleBindedStatus = flowModel.FlowNameTupleBindedStatus }
 
-        member flowModel.TryBackupFile() =
-            flowModel.ToInternalFlowModel().TryBackupFile()
+
+
+
 
         member flowModel.CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero() =
             flowModel.ToInternalFlowModel().CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero()
@@ -79,7 +85,11 @@ module internal rec ManipulateOrReuse =
             let rec loop (flowModel: FlowModel<'userState>) flow =
                 match flow with 
                 | Flow.ManipulateOrReuse manipulateOrReuse -> 
+                    flowModel.Document.Open()
                     let newUserState = (manipulateOrReuse flowModel)
+                    flowModel.Document.CloseAndDraft()
+                    
+                    
                     FlowModel.mapTo newUserState flowModel
 
                 | Flow.TupledFlow flow -> flow.Invoke flowModel
@@ -109,10 +119,11 @@ module internal rec ManipulateOrReuse =
                             FlowName = Some flowName
                             FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.None }
 
-                    //flowModel.CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero()
+                    flowModel.CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero()
 
                     Logger.TryInfoWithFlowModel (flowModel, (fun _ ->
                         let userState = loop flowModel flow
+                        flowModel.ToInternalFlowModel().TryBackupFile()
                         userState
                     ))
 
@@ -290,11 +301,8 @@ module internal rec ManipulateOrReuse =
                     let middleFlowModel = Flow<_, _>.Invoke flowModel x.Flow1
                     
                     { middleFlowModel with 
-                        FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.Binding flowModel.FlowName
-                    }
+                        FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.Binding flowModel.FlowName }
 
-                middleFlowModel.Document.ReOpen()
-                middleFlowModel.TryBackupFile()
 
                 let newFlowModel = Flow<_, _>.Invoke middleFlowModel x.Flow2
                

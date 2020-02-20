@@ -54,27 +54,18 @@ module rec _FlowMutualTypes =
                     let file = flowModel.File
                     let writerFile = Path.changeExtension ".writer.pdf" file
 
-                    let draft() =
-                        File.Delete(file)
-                        File.Move(writerFile, file)
+
 
                     match flow with 
                     | Flow.Manipulate (manipulate) ->
                         let pdfDocument = IntegratedDocument.Create(file, writerFile)
                         let newFlowModel = manipulate.Invoke flowModel pdfDocument
-                        pdfDocument.Value.Close()
-                        draft()
-                        newFlowModel.TryBackupFile()
                         [newFlowModel]
 
 
                     | Flow.Reuse (reuse) ->
                         let pdfDocument = SplitDocument.Create(file, writerFile)
                         let newFlowModel = reuse.Invoke flowModel pdfDocument
-                        pdfDocument.Reader.Close()
-                        pdfDocument.Writer.Close()
-                        draft()
-                        newFlowModel.TryBackupFile()
                         [newFlowModel]
 
 
@@ -107,7 +98,7 @@ module rec _FlowMutualTypes =
                                 FlowName = Some flowName
                                 FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.None }
 
-                        //flowModel.CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero()
+                        flowModel.CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero()
 
                         Logger.TryInfoWithFlowModel (flowModel, (fun _ ->
                             let flowModels = Flow<_, _>.Run([flowModel], flow)
@@ -282,6 +273,10 @@ module rec _FlowMutualTypes =
                 let middleFlowModels = 
                     let middleFlowModels = Flow<_, _>.Run(flowModels, x.Flow1)
                     let files = flowModels |> List.map (fun m -> m.File)
+
+                    //for middleFlowModel in middleFlowModels do 
+                    //    middleFlowModel.TryBackupFile()
+
                     let middleFiles = middleFlowModels |> List.map (fun m -> m.File)
                     if files = middleFiles 
                     then 

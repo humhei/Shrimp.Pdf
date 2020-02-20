@@ -11,13 +11,13 @@ type NameAndParamters =
 
 
 type internal FlowNameIndex =
-    { Name: string 
-      Index: int
+    { Index: int
+      Name: string 
       ParamterMessages: list<string * string> }
 
 type internal FlowNameIndexes =
-    { DirectoryNames: FlowNameIndex list 
-      FileName: FlowNameIndex }
+    { FileName: FlowNameIndex
+      DirectoryNames: FlowNameIndex list }
 with 
     member x.FileNameIndex_Add_IndexValue (index: int) =
         { x with 
@@ -32,7 +32,7 @@ with
 type internal FlowNameKind =
     | Override of FlowNameIndexes
     | New of FlowNameIndexes
-    | Disable of previous: FlowNameIndexes option
+    | Disable of previous: FlowNameIndexes option * verticalIndex: int option
 
 [<Sealed>]
 type FlowName internal (flowNameKind: FlowNameKind) =
@@ -40,12 +40,12 @@ type FlowName internal (flowNameKind: FlowNameKind) =
 
     member internal x.Bind(flowName: FlowName) =
         match x.FlowNameKind, flowName.FlowNameKind with 
-        | FlowNameKind.Disable previous, _ -> 
-            FlowNameKind.Disable previous
+        | FlowNameKind.Disable (previous, verticalIndex), _ -> 
+            FlowNameKind.Disable (previous, verticalIndex)
             |> FlowName
 
         | FlowNameKind.Override flowNameIndexes, _ -> 
-            FlowNameKind.Disable (Some flowNameIndexes)
+            FlowNameKind.Disable (Some flowNameIndexes, None)
             |> FlowName
 
         | FlowNameKind.New flowNameIndexes1, FlowNameKind.New flowNameIndexes2 ->
@@ -71,7 +71,7 @@ type FlowName internal (flowNameKind: FlowNameKind) =
             |> FlowName
 
         | FlowNameKind.New flowNameIndexes, FlowNameKind.Disable _ -> 
-            (Some flowNameIndexes)
+            (Some flowNameIndexes, None)
             |> FlowNameKind.Disable 
             |> FlowName
 
@@ -102,7 +102,7 @@ type FlowName internal (flowNameKind: FlowNameKind) =
         |> FlowNameKind.New
         |> FlowName
 
-    static member Disable: FlowName = FlowName(FlowNameKind.Disable None)
+    static member Disable: FlowName = FlowName(FlowNameKind.Disable (None, None))
 
 [<RequireQualifiedAccess>]
 module internal FlowName =
@@ -120,24 +120,64 @@ module internal FlowName =
 
     let internal tupledFlow_Bind_FlowName (leftFlowName: FlowName option) (topFlowName: FlowName option) (rightFlowName: FlowName) =
         
+        let (|Non|New|Disable|Override|) (flowName: FlowName option) =
+            match flowName with 
+            | None -> Non
+            | Some flowName ->
+                match flowName.FlowNameKind with 
+                | FlowNameKind.New flowNameIndexes -> New flowNameIndexes
+                | FlowNameKind.Disable (previous, verticalIndex) -> Disable(previous, verticalIndex)
+                | FlowNameKind.Override (flowNameIndexes) -> Override flowNameIndexes
+
+
         match leftFlowName with 
-        | None ->
+        | Non | New _ ->
+            let leftFlowNameIndexes =
+                match leftFlowName with 
+                | Some leftFlowName ->
+                    match leftFlowName.FlowNameKind with 
+                    | FlowNameKind.New flowNameIndexes -> Some flowNameIndexes
+                    | _ -> failwith "Invalid token"
+
+                | None -> None
+
+            let leftDirectoryNames =
+                match leftFlowNameIndexes with 
+                | Some leftFlowNameIndexes -> leftFlowNameIndexes.DirectoryNames
+                | None -> []
+
+            let leftDirectoryAndFileNames =
+                match leftFlowNameIndexes with 
+                | Some leftFlowNameIndexes -> leftFlowNameIndexes.DirectoryNames @ [leftFlowNameIndexes.FileName]
+                | None -> []
+
             let index =
                 match topFlowName with 
                 | Some topFlowName ->
+                    let dirLength = leftDirectoryNames.Length
                     match topFlowName.FlowNameKind with 
                     | FlowNameKind.New flowNameIndexes
-                    | FlowNameKind.Override flowNameIndexes 
-                    | FlowNameKind.Disable (Some flowNameIndexes) -> 
-                        (flowNameIndexes.DirectoryNames @ [flowNameIndexes.FileName]).[0].Index + 1
-                      
-                    | FlowNameKind.Disable None -> failwith "Not implemented"
+                    | FlowNameKind.Override flowNameIndexes -> 
+                        (flowNameIndexes.DirectoryNames @ [flowNameIndexes.FileName]).[dirLength + 1].Index + 1
+                    | FlowNameKind.Disable (Some flowNameIndexes, verticalIndex) -> 
+                        if flowNameIndexes.DirectoryNames.Length = dirLength
+                        then 
+                            match verticalIndex with 
+                            | Some verticalIndex -> verticalIndex
+                            | None -> 0
+                        elif flowNameIndexes.DirectoryNames.Length > dirLength
+                        then 
+                            (flowNameIndexes.DirectoryNames @ [flowNameIndexes.FileName]).[dirLength + 1].Index + 1
+                        else failwith "Invalid token"
 
-                | None -> failwith "Not implemented"
+                    | FlowNameKind.Disable (None, Some verticalIndex) -> verticalIndex
+
+                    | FlowNameKind.Disable (None, None) -> 0
+                | None -> 0
 
             match rightFlowName.FlowNameKind with 
             | FlowNameKind.Disable _ -> 
-                FlowNameKind.Disable (None)
+                FlowNameKind.Disable (leftFlowNameIndexes, Some index)
                 |> FlowName
 
             | FlowNameKind.Override flowNameIndexes ->
@@ -145,7 +185,7 @@ module internal FlowName =
                     { flowNameIndexes.FileName with 
                         Index = index
                     }
-                  DirectoryNames = []
+                  DirectoryNames = leftDirectoryAndFileNames
                 }
                 |> FlowNameKind.Override 
                 |> FlowName
@@ -155,65 +195,16 @@ module internal FlowName =
                     { flowNameIndexes.FileName with 
                         Index = index
                     }
-                  DirectoryNames = []
+                  DirectoryNames = leftDirectoryAndFileNames
                 }
                 |> FlowNameKind.New
                 |> FlowName
 
-        | Some leftFlowName ->
-            match leftFlowName.FlowNameKind with 
-            | FlowNameKind.New leftFlowNameIndexes -> 
-                let index =
-                    match topFlowName with 
-                    | Some topFlowName ->
-                        let dirLength = leftFlowNameIndexes.DirectoryNames.Length
-                        match topFlowName.FlowNameKind with 
-                        | FlowNameKind.New flowNameIndexes
-                        | FlowNameKind.Override flowNameIndexes -> 
-                            (flowNameIndexes.DirectoryNames @ [flowNameIndexes.FileName]).[dirLength + 1].Index + 1
-                        | FlowNameKind.Disable (Some flowNameIndexes) -> 
-                            if flowNameIndexes.DirectoryNames.Length = dirLength
-                            then failwith "Not implemented"
-                            elif flowNameIndexes.DirectoryNames.Length > dirLength
-                            then 
-                                (flowNameIndexes.DirectoryNames @ [flowNameIndexes.FileName]).[dirLength + 1].Index
-                            else failwith "Invalid token"
+        | Override flowNameIndexes ->
+            FlowNameKind.Disable (Some flowNameIndexes, None)
+            |> FlowName
 
-                        | FlowNameKind.Disable None -> failwith "Invalid token"
-                    | None -> failwith "Invalid token"
-
-                match rightFlowName.FlowNameKind with 
-                | FlowNameKind.Disable _ -> 
-                    FlowNameKind.Disable (Some leftFlowNameIndexes)
-                    |> FlowName
-
-                | FlowNameKind.Override flowNameIndexes ->
-                    { FileName = 
-                        { flowNameIndexes.FileName with 
-                            Index = index
-                        }
-                      DirectoryNames = leftFlowNameIndexes.DirectoryNames @ [leftFlowNameIndexes.FileName]
-                    }
-                    |> FlowNameKind.Override 
-                    |> FlowName
-
-                | FlowNameKind.New flowNameIndexes ->
-                    { FileName = 
-                        { flowNameIndexes.FileName with 
-                            Index = index
-                        }
-                      DirectoryNames = leftFlowNameIndexes.DirectoryNames @ [leftFlowNameIndexes.FileName]
-                    }
-                    |> FlowNameKind.Override 
-                    |> FlowName
-
-
-            | FlowNameKind.Override flowNameIndexes -> 
-                FlowNameKind.Disable (Some flowNameIndexes)
-                |> FlowName
-
-            | FlowNameKind.Disable _ -> leftFlowName
-                
+        | Disable _ -> leftFlowName.Value
 
 
 
@@ -287,7 +278,11 @@ with
                 if flowNameIndexes.FileName.Index = 0
                 then 
                     match flowModel.TryGetBackupDirectory() with 
-                    | Some directory -> Shell.cleanDir directory
+                    | Some directory -> 
+                        try
+                            Shell.cleanDir directory
+                        with ex ->
+                            Logger.info (ex.Message)
                     | None -> ()
 
             | FlowNameKind.Disable _ -> ()

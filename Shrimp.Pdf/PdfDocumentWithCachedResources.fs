@@ -124,22 +124,33 @@ type PdfDocumentWithCachedResources =
 
 
 
-type IntegratedDocument private (reader: string, writer: string) =
-    let mutable pdfDocument = new PdfDocumentWithCachedResources(reader, writer)
+type IntegratedDocument internal (reader: string, writer: string) =
+    let mutable pdfDocument = None
 
     member x.ReaderPath = reader
 
     member x.WriterPath = writer
 
-    member x.Value = pdfDocument
+    member x.Value = 
+        match pdfDocument with 
+        | Some document -> document
+        | None -> failwith "document is not open yet please option it first"
 
-    member x.ReOpen() =
-        pdfDocument.Close()
+    member internal x.Open() =
+        match pdfDocument with 
+        | Some (oldPdfDocument: PdfDocumentWithCachedResources) ->
+            if oldPdfDocument.IsClosed()
+            then 
+                pdfDocument <- Some (new PdfDocumentWithCachedResources(reader, writer, oldPdfDocument))
+            else failwith "Old document is not closed yet"
+        | None ->
+            pdfDocument <- Some (new PdfDocumentWithCachedResources(reader, writer))
 
+    member internal x.CloseAndDraft() =
+        x.Value.Close()
         File.Delete(reader)
         File.Move(writer, reader)
 
-        pdfDocument <- new PdfDocumentWithCachedResources(reader, writer, pdfDocument)
 
     static member Create(reader, writer) = new IntegratedDocument(reader, writer)
 

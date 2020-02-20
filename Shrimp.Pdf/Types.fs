@@ -126,28 +126,52 @@ type ReaderDocument (reader: string) =
     member x.Reader = reader
 
 
-type SplitDocument (reader: string, writer: string) =
-    let mutable readerDocument = new PdfDocument(new PdfReader(reader))
+type SplitDocument internal (reader: string, writer: string) =
+    let mutable readerDocument: PdfDocument option = None
 
-    let mutable writerDocument = new PdfDocumentWithCachedResources(writer)
+    let mutable writerDocument: PdfDocumentWithCachedResources option = None
 
     member x.ReaderPath = reader
 
     member x.WriterPath = writer
 
-    member x.Reader = readerDocument
+    member x.Reader = 
+        match readerDocument with 
+        | Some reader -> reader
+        | None -> failwith "document is not open yet please option it first"
 
-    member x.Writer = writerDocument
+    member x.Writer = 
+        match writerDocument with 
+        | Some writer -> writer
+        | None -> failwith "document is not open yet please option it first"
 
-    member x.ReOpen() =
-        readerDocument.Close()
-        writerDocument.Close()
+    member internal x.Open() =
+        match readerDocument with 
+        | Some readerDocument1 ->
+            if readerDocument1.IsClosed() 
+            then
+                readerDocument <- Some (new PdfDocument(new PdfReader(reader)))
+            else 
+                failwith "Old document is not closed yet"
+
+        | None -> readerDocument <- Some (new PdfDocument(new PdfReader(reader)))
+
+        match writerDocument with 
+        | Some writerDocument1 ->
+            if writerDocument1.IsClosed() 
+            then
+                writerDocument <- Some (new PdfDocumentWithCachedResources(writer))
+            else 
+                failwith "Old document is not closed yet"
+        | None ->
+            writerDocument <- Some(new PdfDocumentWithCachedResources(writer))
+
+    member internal x.CloseAndDraft() =
+        x.Reader.Close()
+        x.Writer.Close()
+
         File.Delete(reader)
         File.Copy(writer, reader, true)
-
-        readerDocument <- new PdfDocument(new PdfReader(reader))
-
-        writerDocument <- new PdfDocumentWithCachedResources(writer)
 
     static member Create(reader, writer) = new SplitDocument(reader, writer)
 
