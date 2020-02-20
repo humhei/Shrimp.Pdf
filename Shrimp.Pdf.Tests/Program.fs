@@ -20,6 +20,7 @@ let allTests =
             ManipulateTests.manipulateTests
             RealSampleTests.realSamplesTests
             FunctionTests.functionTests
+            FlowNameTests.flowNameTests
         ]
 
 [<EntryPoint>]

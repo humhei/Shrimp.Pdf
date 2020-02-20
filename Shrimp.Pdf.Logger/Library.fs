@@ -13,12 +13,16 @@ module Logger =
 
     let warning (message: string) =
         match logger.Value with 
-        | Some (logger: NLog.Logger) -> logger.Warn message
+        | Some (logger: NLog.Logger) -> 
+            logger.Warn message
+            printfn "WARNING: %s" message
         | None -> printfn "WARNING: %s" message
 
     let info (message: string) =
         match logger.Value with 
-        | Some (logger: NLog.Logger) -> logger.Info message
+        | Some (logger: NLog.Logger) -> 
+            logger.Info message
+            printfn "%s" message
         | None -> printfn "%s" message
 
     let unSupportedTextRenderMode(textRendingMode: int) =
@@ -31,3 +35,15 @@ module Logger =
         stopWatch.Stop()
         info (sprintf "%s in %O " message stopWatch.Elapsed)
         result
+
+    let infoWithStopWatchAndReturnFinalMessage beginMessage endMessage f =
+        let stopWatch = Stopwatch.StartNew()
+        info (beginMessage) 
+
+
+        let result = f()
+        stopWatch.Stop()
+        let endMessage =  endMessage stopWatch.Elapsed
+        info endMessage
+        result, beginMessage + "\n" + endMessage
+        

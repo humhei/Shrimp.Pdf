@@ -41,7 +41,7 @@ let reuseTests =
             Reuses.Impose
                 (fun args ->
                     { args with 
-                        DesiredSizeOp = Some { Width = mm 40.; Height = mm 30.}
+                        DesiredSizeOp = Some { Width = mm 30.; Height = mm 40.}
                         ColNums = [6]
                         RowNum = 12
                         Cropmark = Some Cropmark.defaultValue
@@ -169,7 +169,7 @@ let reuseTests =
 
     testCase "duplicate pages by page num sequence tests" <| fun _ -> 
         Flow.Reuse (Reuses.SequencePages (PageNumSequence.create [1;1;1;3;4;5;8]))
-        |> runTest "datas/reuse/duplicate pages by sequence.pdf" 
+        |> runTest "datas/reuse/duplicate pages by page num sequence.pdf" 
         |> ignore
 
     testCase "duplicate pages by page num sequence tests2" <| fun _ -> 

@@ -29,30 +29,29 @@ with
 
 [<RequireQualifiedAccess>]
 module FileOperations =
-
     /// expose this function for modifyAsync
     let internal mergeDocumentsInternal targetDocumentName (writer: PdfDocument)  =
         fun (flowModels: FlowModel<'userState> list) ->
-            Logger.infoWithStopWatch(sprintf "Merge files %A to %s" (flowModels |> List.map (fun m -> m.File)) targetDocumentName) (fun _ ->
-                for pageNum = 1 to writer.GetNumberOfPages() do
-                    writer.RemovePage(1)
+            for pageNum = 1 to writer.GetNumberOfPages() do
+                writer.RemovePage(1)
 
-                for flowModel in flowModels do
-                    let readerDocument = new ReaderDocument(flowModel.File)
-                    for pageNum = 1 to readerDocument.Reader.GetNumberOfPages() do
-                        let page = readerDocument.Reader.GetPage(pageNum)
-                        let writerPageResource = page.CopyTo(writer)
-                        writer.AddPage(writerPageResource) |> ignore
+            for flowModel in flowModels do
+                let readerDocument = new ReaderDocument(flowModel.File)
+                for pageNum = 1 to readerDocument.Reader.GetNumberOfPages() do
+                    let page = readerDocument.Reader.GetPage(pageNum)
+                    let writerPageResource = page.CopyTo(writer)
+                    writer.AddPage(writerPageResource) |> ignore
 
-                    readerDocument.Reader.Close()
+                readerDocument.Reader.Close()
 
-                { File = targetDocumentName 
-                  UserState = flowModels |> List.map (fun m -> m.UserState) }
-                |> List.singleton
-            )
+            { File = targetDocumentName 
+              UserState = flowModels |> List.map (fun m -> m.UserState)
+            }
+            |> List.singleton
 
 
         |> FileOperation
+
 
     let mergeDocuments (f) =
         let args = f DocumentMergingArguments.DefalutValue

@@ -11,7 +11,6 @@ open System.IO
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open iText.Kernel.Font
 open iText.IO.Font
-open Shrimp.Pdf.Manipulates
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.icms2
 
@@ -26,14 +25,14 @@ let manipulateTests =
             |> PdfCanvasColor.Separation
 
         Flow.Manipulate (
-            modify(
+            Modify.Create(
                 PageSelector.All,
                 [
-                    { Name = "change separation color of pdfFunction2 PageNumber to m100"
-                      Selector = 
-                        Text(Info.ColorIsOneOf (FillOrStrokeOptions.Fill, [PdfCanvasColor.Registration ;pageNumberSeparationColor]))
-                      Modifiers = [Modifier.SetFillColor(DeviceCmyk.MAGENTA)]
-                    }
+                    SelectorAndModifiers(
+                        "change separation color of pdfFunction2 PageNumber to m100",
+                        Text(Info.ColorIsOneOf (FillOrStrokeOptions.Fill, [PdfCanvasColor.Registration ;pageNumberSeparationColor])),
+                        [Modifier.SetFillColor(DeviceCmyk.MAGENTA)]
+                    )
                 ]
             ) 
         )
@@ -53,7 +52,7 @@ let manipulateTests =
             |> List.map PdfCanvasColor.Separation
 
         Flow.Manipulate (
-            modify(
+            Modify.Create(
                 PageSelector.All,
                 [
                     { Name = "remove specfic separation colors"
@@ -73,7 +72,7 @@ let manipulateTests =
             PdfCanvasColor.ColorCard (ColorCard.Pantone PantoneColorEnum.``PANTONE 100 C``)
 
         Flow.Manipulate (
-            modify(
+            Modify.Create(
                 PageSelector.All,
                 [
                     { Name = "change separation color of pdfFunction0 PageNumber to m100"
@@ -88,7 +87,7 @@ let manipulateTests =
 
     testCase "change separation color of pdfFunction0 Registration to m100" <| fun _ -> 
         Flow.Manipulate (
-            modify(
+            Modify.Create(
                 PageSelector.All,
                 [
                     { Name = "change separation color of pdfFunction0 Registration to m100"
@@ -103,7 +102,7 @@ let manipulateTests =
 
     testCase "change stroke color b255 to m100" <| fun _ -> 
         Flow.Manipulate (
-            modify(
+            Modify.Create(
                 PageSelector.First,
                 [
                     { Name = "change stroke color b255 to m100"
@@ -118,7 +117,7 @@ let manipulateTests =
 
     testCase "change red to black outside of trimbox" <| fun _ -> 
         Flow.Manipulate (
-            modify(
+            Modify.Create(
                 PageSelector.All,
                 [
                     { Name = "change red to black outside of trimbox"
@@ -133,7 +132,7 @@ let manipulateTests =
 
     testCase "xobject_change stroke color b255 to m100" <| fun _ -> 
         Flow.Manipulate (
-            modify (
+            Modify.Create (
                 PageSelector.First,
                 [
                     { Name = "xobject_change stroke color b255 to m100"
@@ -147,7 +146,7 @@ let manipulateTests =
 
     testCase "xobject_change stroke color b255 to m100 and then change m100 to c100" <| fun _ -> 
         Flow.Manipulate (
-            modify (
+            Modify.Create (
                 PageSelector.First,
                 [
                     { Name = "xobject_change stroke color b255 to m100"
@@ -156,7 +155,7 @@ let manipulateTests =
                 ]
             )
             <+>
-            modify (
+            Modify.Create (
                 PageSelector.First,
                 [
                     { Name = "xobject_change stroke color m100 to c100"
@@ -170,7 +169,7 @@ let manipulateTests =
 
     testCase "black or white" <| fun _ -> 
         Flow.Manipulate (
-            modify (
+            Modify.Create (
                 PageSelector.First,
                 [
                     { Name = "black or white"
@@ -184,7 +183,7 @@ let manipulateTests =
 
     testCase "add bound to text" <| fun _ -> 
         Flow.Manipulate (
-            modify(
+            Modify.Create(
                 PageSelector.All,
                 [
                     { Name = "add bound to text"
@@ -203,7 +202,7 @@ let manipulateTests =
 
     testCase "add line to position" <| fun _ -> 
         Flow.Manipulate (
-            modifyPage
+            ModifyPage.Create
                 ("add line to position",
                   PageSelector.All,
                   Dummy,
@@ -235,7 +234,7 @@ let manipulateTests =
 
     testCase "add colored texts to position" <| fun _ -> 
         Flow.Manipulate (
-            modifyPage
+            ModifyPage.Create
                 ("add colored texts to position",
                   PageSelector.All,
                   Dummy,
@@ -266,7 +265,7 @@ let manipulateTests =
 
     testCase "add colored texts to position2" <| fun _ -> 
         Flow.Manipulate (
-            modifyPage
+            ModifyPage.Create
                 ("add colored texts to position2",
                   PageSelector.All,
                   Dummy,
@@ -294,7 +293,7 @@ let manipulateTests =
 
     testCase "add text to position" <| fun _ -> 
         Flow.Manipulate (
-            modifyPage
+            ModifyPage.Create
                 ("add text to position",
                   PageSelector.All,
                   Dummy,
@@ -324,7 +323,7 @@ let manipulateTests =
 
     testCase "add text to position with cached fonts" <| fun _ -> 
         Flow.Manipulate (
-            modifyPage
+            ModifyPage.Create
                 ("add text to position with cached fonts1",
                   PageSelector.All,
                   Dummy,
@@ -340,7 +339,7 @@ let manipulateTests =
         )
         <+>
         Flow.Manipulate (
-            modifyPage
+            ModifyPage.Create
                 ("add text to position with cached fonts2",
                   PageSelector.All,
                   Dummy,
@@ -361,7 +360,7 @@ let manipulateTests =
         )
         <+>
         Flow.Manipulate (
-            modifyPage
+            ModifyPage.Create
                 ("add text to position with cached fonts3",
                   PageSelector.All,
                   Dummy,
@@ -380,7 +379,7 @@ let manipulateTests =
 
     testCase "add text to position and trimToVisible" <| fun _ -> 
         Flow.Manipulate (
-            modifyPage
+            ModifyPage.Create
                 ("add text to position",
                   PageSelector.All,
                   Dummy,
@@ -394,9 +393,9 @@ let manipulateTests =
                   ) 
                 )
             <+>
-            ModifyPage.trimToVisible(PageSelector.All) (Margin.Create (mm 6.))
+            ModifyPage.TrimToVisible(PageSelector.All, Margin.Create 6.)
             <+>
-            modifyPage
+            ModifyPage.Create
                 ("add text to position",
                   PageSelector.All,
                   Dummy,
@@ -417,7 +416,7 @@ let manipulateTests =
     
     testCase "add page-scaling text" <| fun _ -> 
         Flow.Manipulate(
-            modifyPage(
+            ModifyPage.Create(
                 "add page-scaling text",
                 PageSelector.All,
                 Dummy,
@@ -440,7 +439,7 @@ let manipulateTests =
         )
         <+>
         Flow.Manipulate(
-            modifyPage(
+            ModifyPage.Create(
                 "rotate page and add text to top left",
                 PageSelector.All,
                 Dummy,
@@ -459,14 +458,14 @@ let manipulateTests =
 
     testCase "add page-scaling multiLines-text" <| fun _ -> 
         Flow.Manipulate(
-            modifyPage(
+            ModifyPage.Create(
                 "setPageBox",
                 PageSelector.All,
                 Dummy,
                 PageModifier.SetPageBox (PageBoxKind.AllBox, Rectangle.create 0. 0. 500. 100.)
             )
             <+>
-            modifyPage(
+            ModifyPage.Create(
                 "add page-scaling multiLines-text",
                 PageSelector.All,
                 Dummy,
@@ -510,7 +509,7 @@ let manipulateTests =
 
     testCase "add rect to area" <| fun _ -> 
         Flow.Manipulate(
-            modifyPage(
+            ModifyPage.Create(
                 "add rect to area",
                 PageSelector.All,
                 Dummy,
@@ -522,14 +521,14 @@ let manipulateTests =
 
     testCase "trim to visible test" <| fun _ -> 
         Flow.Manipulate(
-            ModifyPage.trimToVisible PageSelector.All (Margin.Create(mm 6.)) 
+            ModifyPage.TrimToVisible (PageSelector.All, (Margin.Create(mm 6.)))
         )
         |> runTest "datas/manipulate/trim to visible.pdf" 
         |> ignore
 
     testCase "trim to visible test 2" <| fun _ -> 
         Flow.Manipulate(
-            ModifyPage.trimToVisible PageSelector.All (Margin.Create(mm 6.)) 
+            ModifyPage.TrimToVisible(PageSelector.All, (Margin.Create(mm 6.)))
         )
         |> runTest "datas/manipulate/trim to visible2.pdf" 
         |> ignore

@@ -203,40 +203,59 @@ type PageModifier =
 
 [<AutoOpen>]
 module ModifyPageOperators =
+    type ModifyPage =
+        static member Create(name, pageSelector: PageSelector, selector, pageModifier, ?parameters: list<string * string>, ?fullyOverrideParamters) =
+            let flowName = 
+                let parameters =
+                    match parameters with 
+                    | None ->
+                        defaultArg parameters [
+                            "selector" => selector.ToString()
+                            "pageSelctor" => pageSelector.ToString()
+                            "pageModifier" => pageModifier.ToString()
+                        ]
+                    | Some parameters ->
+                        match fullyOverrideParamters with 
+                        | Some true -> parameters
+                        | _ -> 
+                            [
+                                "selector" => selector.ToString()
+                                "pageSelctor" => pageSelector.ToString()
+                            ] @ parameters
 
-    let modifyPageCurried name (pageSelector: PageSelector) (selector: Selector<_>) (pageModifier: PageModifier<_, _>)  = 
-        fun (flowModel: FlowModel<_>) (integratedDocument: IntegratedDocument) ->
-            let document = integratedDocument.Value
-            let parser = new NonInitialClippingPathPdfDocumentContentParser(document)
-            let selectedPageNumbers = document.GetPageNumbers(pageSelector) 
-
-            let newUserState = 
-                document
-                |> PdfDocument.getPages
-                |> List.indexed
-                |> List.choose(fun (i, page) ->
-                    let pageNum = (i + 1)
-                    if List.contains pageNum selectedPageNumbers then
-                        let args = 
-                            { UserState = flowModel.UserState;
-                              Page = page
-                              TotalNumberOfPages = document.GetNumberOfPages()
-                              PageNum = pageNum }
-
-                        let renderInfoSelector = Selector.toRenderInfoSelector args selector
-                        let infos = NonInitialClippingPathPdfDocumentContentParser.parse pageNum renderInfoSelector parser
-                        Some (pageModifier args infos) 
-                    else None
+                FlowName.Override(name, 
+                    parameters
                 )
 
-            newUserState
+            let f =
+                fun (flowModel: FlowModel<_>) (integratedDocument: IntegratedDocument) ->
+                    
+                    let document = integratedDocument.Value
+                    let parser = new NonInitialClippingPathPdfDocumentContentParser(document)
+                    let selectedPageNumbers = document.GetPageNumbers(pageSelector) 
 
-        |> Manipulate
-        |> Manipulate.ReName(
-            (sprintf "MODIFYPAGES %O: %s " pageSelector name)
-        )
+                    let newUserState = 
+                        document
+                        |> PdfDocument.getPages
+                        |> List.indexed
+                        |> List.choose(fun (i, page) ->
+                            let pageNum = (i + 1)
+                            if List.contains pageNum selectedPageNumbers then
+                                let args = 
+                                    { UserState = flowModel.UserState;
+                                      Page = page
+                                      TotalNumberOfPages = document.GetNumberOfPages()
+                                      PageNum = pageNum }
 
+                                let renderInfoSelector = Selector.toRenderInfoSelector args selector
+                                let infos = NonInitialClippingPathPdfDocumentContentParser.parse pageNum renderInfoSelector parser
+                                Some (pageModifier args infos) 
+                            else None
+                        )
+                    newUserState
 
-    let modifyPage (name: string, pageSelector, (selector: Selector<'userState>), (pageModifier: PageModifier<_, _>)) =
-        modifyPageCurried (name) pageSelector selector pageModifier
+            Manipulate(
+                flowName = flowName,
+                f = f
+            )
 

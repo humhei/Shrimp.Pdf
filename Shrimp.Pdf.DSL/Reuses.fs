@@ -11,6 +11,7 @@ open System.IO
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf
 
+
 type PageNumSequence = private PageNumSequence of int list
 with 
     member x.Value = 
@@ -51,7 +52,8 @@ type PageResizingRotatingOptions =
 
 [<AutoOpen>]
 module _Reuses =
-    let private reuse name v = Reuse(v, name = name)
+
+    let private reuse name paramters f = Reuse(f = f, flowName = FlowName.Override(name, paramters))
 
     type PageInsertingOptions =
         | BeforePoint = 0
@@ -111,7 +113,12 @@ module _Reuses =
                 
 
             |> reuse 
-                (sprintf "Insert file %s %A to this %s %A" insertingFile insertingFilePageSelector (pageInsertingOptions.ToString()) singlePageSelectorExpr)
+                "Insert"
+                ["insertingFile" => insertingFile.ToString()
+                 "insertingFilePageSelector" => insertingFilePageSelector.ToString()
+                 "pageInsertingOptions" => pageInsertingOptions.ToString()
+                 "singlePageSelectorExpr" => singlePageSelectorExpr.ToString()]
+
 
         static member Impose (fArgs) =
             let imposingArguments = ImposingArguments.Create fArgs
@@ -123,7 +130,9 @@ module _Reuses =
                 imposingDocument.Draw()
                 (imposingDocument)
 
-            |> reuse (sprintf "IMPOSE %A" imposingArguments)
+            |> reuse 
+                "Impose"
+                ["imposingArguments" => imposingArguments.ToString()]
 
         static member MovePageBoxToOrigin(pageSelector: PageSelector) =
 
@@ -146,7 +155,9 @@ module _Reuses =
                         |> ignore
                 )
 
-            |> reuse(sprintf "MOVE %O pagebox to origin" pageSelector)
+            |> reuse
+                "MovePageBoxToOrigin"
+                ["pageSelector" => pageSelector.ToString()]
 
 
         static member Rotate (pageSelector: PageSelector, rotation: Rotation) =
@@ -193,7 +204,10 @@ module _Reuses =
                         splitDocument.Writer.AddPage(page) |> ignore
                 )
 
-            |> reuse (sprintf "ROTATE %O by angle %g" pageSelector angle)
+            |> reuse
+                "Rotate"
+                [ "pageSelector" => pageSelector.ToString()
+                  "rotation" => rotation.ToString() ]
 
         static member Resize (pageSelector: PageSelector, pageBoxKind: PageBoxKind, size: FsSize) =
             fun flowModel (splitDocument: SplitDocument) ->
@@ -250,7 +264,11 @@ module _Reuses =
                         )
                 )
 
-            |> reuse (sprintf "Resize %O %A to %A" pageSelector pageBoxKind size)
+            |> reuse 
+                "Resize"
+                ["pageSelector" => pageSelector.ToString()
+                 "pageBoxKind" => pageBoxKind.ToString() 
+                 "size" => size.ToString() ]
 
         static member Resize (pageSelector: PageSelector, pageResizingRotatingOptions: PageResizingRotatingOptions, pageResizingScalingOptions: PageResizingScalingOptions, size: FsSize) =
             let tryRotate() =
@@ -305,7 +323,14 @@ module _Reuses =
 
                 | PageResizingScalingOptions.Uniform ->
                     Reuse(
-                        name = sprintf "Resize %O to %A" pageSelector size,
+                        flowName = 
+                            FlowName.Override(
+                                "Resize,",
+                                [
+                                    "pageSelector" => pageSelector.ToString()
+                                    "size" => size.ToString()
+                                ]
+                            ),
                         f = 
                             fun flowModel splitDocument ->
                             let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
@@ -376,7 +401,9 @@ module _Reuses =
                     let writerPageResource = page.CopyTo(splitDocument.Writer)
                     splitDocument.Writer.AddPage(writerPageResource) |> ignore
                 
-            |> reuse (sprintf "SEQUENCEPAGES %A" pageNumSequence)
+            |> reuse 
+                ("SequencePages %A" )
+                [ "pageNumSequence" => pageNumSequence.ToString() ]
 
         static member DuplicatePages (pageSelector: PageSelector, copiedNumbers: CopiedNumSequence) =
             Reuse.Factory(fun flowModel splitDocument ->
@@ -393,7 +420,10 @@ module _Reuses =
                 (Reuses.SequencePages pageNumSequence)
             )
 
-            |> Reuse.ReName (sprintf "DUPLICATEPAGES %O %A" pageSelector copiedNumbers) 
+            |> Reuse.rename 
+                "DuplicatePages"
+                ["pageSelector" => pageSelector.ToString()
+                 "copiedNumbers" => copiedNumbers.ToString() ]
 
         static member DuplicatePages (pageSelector: PageSelector, copiedNumber: int)  =
             if copiedNumber <= 0 then failwithf "copied number %d should be bigger than 0" copiedNumber
@@ -427,7 +457,10 @@ module _Reuses =
                     PdfPage.setPageBox PageBoxKind.AllBox tileBox page
                     |> ignore
             )
-            |> Reuse.ReName (sprintf "TILEPAGES %d*%d" tileTable.ColNum tileTable.RowNum) 
+            |> Reuse.rename 
+                "TilePages"
+                ["tileTable" => tileTable.ToString()]
+            
 
         static member TilePages (selector: Selector<'userState>) =
             fun (flowModel: FlowModel<'userState>) (splitDocument: SplitDocument) ->
@@ -452,7 +485,9 @@ module _Reuses =
                         writer.AddPage(writerPageResource)
                         |> ignore
 
-            |> reuse (sprintf "TILEPAGES by selector %A" selector)
+            |> reuse 
+                "TilePages"
+                ["selector" => selector.ToString()]
 
 
 

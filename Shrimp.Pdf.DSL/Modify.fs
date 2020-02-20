@@ -255,18 +255,30 @@ type Modifier =
                 PdfCanvas.addRectangle border mapping
             ]
 
-type _SelectorAndModifiers<'userState> =
-    { Selector: Selector<'userState> 
+type SelectorAndModifiersRecord<'userState> =
+    { Name: string 
+      Selector: Selector<'userState> 
+      Modifiers: Modifier<'userState> list }
+
+type SelectorAndModifiersRecordEx<'userState> =
+    { Name: string 
+      Selector: Selector<'userState> 
       Modifiers: Modifier<'userState> list
-      Name: string }
+      PageInfosValidation: PageInfosValidation 
+      Paramters: list<string * string>}
 
-type _SelectorAndModifiersAndPageInfosValidation<'userState> =
-    { Selector: Selector<'userState> 
-      Modifiers: Modifier<'userState> list
-      Name: string 
-      PageInfosValidation: PageInfosValidation }
+type SelectorAndModifiers<'userState>(name, selector: Selector<'userState>, modifiers: Modifier<'userState> list, ?parameters: list<string * string>, ?pageInfosValidation) =
+    let pageInfosValidation = defaultArg pageInfosValidation PageInfosValidation.ignore
+    
+    member x.Name = name
 
+    member x.Selector = selector
 
+    member x.Modifiers = modifiers
+
+    member x.Paramters = parameters
+
+    member x.PageInfosValidation = pageInfosValidation
 
 [<AutoOpen>]
 module ModifyOperators =
@@ -303,7 +315,7 @@ module ModifyOperators =
                 | ModifyingAsyncWorker.PageNumberEveryWorker i, _ when i < 1 -> failwith "Async worker number should bigger than 1"
                 | ModifyingAsyncWorker.PageNumberEveryWorker i, j when i > 0 && j > 1 ->
                     let splitedFlowModels = 
-                        run flowModel (Flow.FileOperation (FileOperations.splitDocumentToMany (fun args -> { args with Override = true; ChunkSize = i})))
+                        runWithFlowModel flowModel (Flow.FileOperation (FileOperations.splitDocumentToMany (fun args -> { args with Override = true; ChunkSize = i})))
 
 
                     let flowModels = 
@@ -316,7 +328,7 @@ module ModifyOperators =
                                     |> List.mapi (fun memberIndex flowModel ->
                                         let pageNum = groupIndex * i + (memberIndex + 1)
                                         let manipuate = (Manipulate (f totalNumberOfPages (fun _ -> PageNumber pageNum)))
-                                        run flowModel (Flow.Manipulate manipuate)
+                                        runWithFlowModel flowModel (Flow.Manipulate manipuate)
                                     )
                                     |> List.concat
                             }
@@ -330,7 +342,7 @@ module ModifyOperators =
                             (FileOperations.mergeDocumentsInternal flowModel.File (document.Value))
 
 
-                    runMany flowModels mergeFlow
+                    runManyWithFlowModels flowModels mergeFlow
                     |> ignore
 
                     for flowModel in flowModels do
@@ -340,67 +352,91 @@ module ModifyOperators =
 
 
                 | _ -> failwith "Invalid token"
-                    
-
             |> Manipulate
 
+
     /// async may doesn't make any sense for cpu bound computation?
-    let modifyAsyncAndValidatePageInfos (modifyingAsyncWorker, pageSelector, (modifiers: list<_SelectorAndModifiersAndPageInfosValidation<'userState>>)) =
+    let private modify (modifyingAsyncWorker, pageSelector, (selectorAndModifiersList: list<SelectorAndModifiers<'userState>>)) =
         let names = 
-            modifiers
+            selectorAndModifiersList
             |> List.map (fun selectorAndModifier -> selectorAndModifier.Name)
 
-        if names.Length <> (List.distinct names).Length then failwithf "Duplicated keys in SelectorAndModifiers %A" modifiers
+        if names.Length <> (List.distinct names).Length then failwithf "Duplicated keys in SelectorAndModifiers %A" selectorAndModifiersList
 
-        let asyncManiputation  = 
+        let asyncManiputation (selectorAndModifiersList: SelectorAndModifiers<_> list) = 
             fun (totalNumberOfPages) (transformPageNum: PageNumber -> PageNumber) (flowModel: FlowModel<_>) (document: IntegratedDocument) ->
                 IntegratedDocument.modify
                     pageSelector 
                     (
                         fun (pageNum, pdfPage) ->
-                            modifiers 
-                            |> List.mapi (fun i (selectAndModifyAndPageInfosValidatioin) ->
+                            selectorAndModifiersList 
+                            |> List.mapi (fun i (selectorAndModifiers) ->
                                 let pageModifingArguments =
                                     { PageNum = (transformPageNum pageNum).Value
                                       UserState = flowModel.UserState
                                       Page = pdfPage
                                       TotalNumberOfPages = totalNumberOfPages }
-                                ( { Name = selectAndModifyAndPageInfosValidatioin.Name }, 
-                                    ( Selector.toRenderInfoSelector pageModifingArguments selectAndModifyAndPageInfosValidatioin.Selector,
-                                      Modifiers.toSelectionModifier pageModifingArguments selectAndModifyAndPageInfosValidatioin.Modifiers,
-                                      selectAndModifyAndPageInfosValidatioin.PageInfosValidation.Value
+                                ( { Name = selectorAndModifiers.Name }, 
+                                    ( Selector.toRenderInfoSelector pageModifingArguments selectorAndModifiers.Selector,
+                                      Modifiers.toSelectionModifier pageModifingArguments selectorAndModifiers.Modifiers,
+                                      selectorAndModifiers.PageInfosValidation.Value
                                     )
                                 )
                             )
                             |> Map.ofList
                     ) document
 
-                
-            
-        Manipulate.runInAsync modifyingAsyncWorker asyncManiputation
-        |> Manipulate.ReName (String.concat "\n" names)
+        selectorAndModifiersList
+        |> List.map (fun modifier ->
+            let paramters =
+                defaultArg modifier.Paramters [
+                    "modifyingAsyncWorker" => modifyingAsyncWorker.ToString()
+                    "pageSelctor" => pageSelector.ToString()
+                    "modifiers" => selectorAndModifiersList.ToString()
+                    "selector" => modifier.Selector.ToString()
+                    "pageInfosValidation" => modifier.PageInfosValidation.ToString()
+                ]
 
-    /// async may doesn't make any sense for cpu bound computation?
-    let modifyAsync (modifyingAsyncWorker, pageSelector, (modifiers: list<_SelectorAndModifiers<'userState>>)) =
-        modifyAsyncAndValidatePageInfos(modifyingAsyncWorker, pageSelector, (modifiers |> List.map (fun modifer ->
-            { Name = modifer.Name 
-              Selector = modifer.Selector
-              Modifiers = modifer.Modifiers 
-              PageInfosValidation = PageInfosValidation (fun _ _ -> ())}
-        )))
+            Manipulate.runInAsync modifyingAsyncWorker (asyncManiputation [modifier])
+            |> Manipulate.rename 
+                modifier.Name
+                paramters
+        )
+        |> Manipulate.Batch()
+        ||>> ignore
+        
 
-    let modifyAndValidatePageInfos (pageSelector, (modifiers: list<_SelectorAndModifiersAndPageInfosValidation<'userState>>)) =
-        modifyAsyncAndValidatePageInfos (ModifyingAsyncWorker.Sync, pageSelector, modifiers)
 
-    let modify (pageSelector, (modifiers: list<_SelectorAndModifiers<'userState>>)) =
-        modifyAsync (ModifyingAsyncWorker.Sync, pageSelector, modifiers)
+
+    type Modify =
+        static member Create(pageSelector, selectorAndModifiersList: SelectorAndModifiers<'userState> list, ?modifyingAsyncWorker) =
+            let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
+
+            modify(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
+
+        static member Create (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecord<'userState> list, ?modifyingAsyncWorker) =
+            let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
+            let selectorAndModifiersList =
+                selectorAndModifiersList
+                |> List.map (fun m ->
+                    SelectorAndModifiers(m.Name, m.Selector, m.Modifiers)
+                )
+            modify(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
+
+        static member Create (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecordEx<'userState> list, ?modifyingAsyncWorker) =
+            let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
+            let selectorAndModifiersList =
+                selectorAndModifiersList
+                |> List.map (fun m ->
+                    SelectorAndModifiers(m.Name, m.Selector, m.Modifiers, m.Paramters, m.PageInfosValidation)
+                )
+            modify(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
 
 
 
 type Modify_ReplaceColors_Options = 
     { FillOrStrokeOptions: FillOrStrokeOptions 
       PageInfosValidation: PageInfosValidation 
-      ModifierName: string option
       SelectorTag: SelectorTag
       Info_BoundIs_Args: Info_BoundIs_Args option
       PageSelector: PageSelector }
@@ -408,13 +444,12 @@ with
     static member DefaultValue =
         { FillOrStrokeOptions = FillOrStrokeOptions.FillOrStroke 
           PageInfosValidation = PageInfosValidation.ignore
-          ModifierName = None
           SelectorTag = SelectorTag.PathOrText 
           Info_BoundIs_Args = None
           PageSelector = PageSelector.All }
 
 type Modify =
-    static member ReplaceColors (picker, ?options: Modify_ReplaceColors_Options) =
+    static member ReplaceColors (picker, ?options: Modify_ReplaceColors_Options, ?nameAndParamters: NameAndParamters) =
         let options = defaultArg options Modify_ReplaceColors_Options.DefaultValue
         let fillOrStrokeOptions = options.FillOrStrokeOptions
 
@@ -429,59 +464,68 @@ type Modify =
             | FillOrStrokeOptions.Fill -> FillOrStrokeModifingOptions.Fill
             | FillOrStrokeOptions.Stroke -> FillOrStrokeModifingOptions.Stroke
         
-        modifyAndValidatePageInfos(
+        let nameAndParamters =
+            defaultArg 
+                nameAndParamters 
+                { Name = "ReplaceColors"
+                  Parameters = [ "Modify_ReplaceColors_Options" => options.ToString()] }
+
+        Modify.Create(
             options.PageSelector,
             [
-                { Name = defaultArg options.ModifierName (sprintf "replace colors by %A" picker)
-                  Selector = 
-                    let colorInfo = Info.ColorIs(fillOrStrokeOptions, fun color -> 
-                        match picker color with 
-                        | Some _ -> true
-                        | None -> false
-                    )
+                SelectorAndModifiers(
+                    name = nameAndParamters.Name,
+                    selector =
+                        (
+                            let colorInfo = Info.ColorIs(fillOrStrokeOptions, fun color -> 
+                                match picker color with 
+                                | Some _ -> true
+                                | None -> false
+                            )
 
-                    let info =
-                        match options.Info_BoundIs_Args with 
-                        | None -> colorInfo
-                        | Some info_boundIs_args -> Info.BoundIs(info_boundIs_args) <&&> colorInfo
+                            let info =
+                                match options.Info_BoundIs_Args with 
+                                | None -> colorInfo
+                                | Some info_boundIs_args -> Info.BoundIs(info_boundIs_args) <&&> colorInfo
 
-                    match selectorTag with 
-                    | SelectorTag.PathOrText -> 
-                        PathOrText info
-                    | SelectorTag.Path -> Selector.Path info
-                    | SelectorTag.Text -> Text info
-
-
-                  Modifiers = [
-                    Modifier.ReplaceColor(
-                        fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
-                        picker = picker
-                    )
-                  ]
-                  PageInfosValidation = pageInfosValidation
-                }
+                            match selectorTag with 
+                            | SelectorTag.PathOrText -> 
+                                PathOrText info
+                            | SelectorTag.Path -> Selector.Path info
+                            | SelectorTag.Text -> Text info
+                        ),
+                    modifiers = [
+                        Modifier.ReplaceColor(
+                            fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
+                            picker = picker
+                        )
+                    ],
+                    pageInfosValidation = pageInfosValidation,
+                    parameters = nameAndParamters.Parameters
+                )
             ]
-
-                
         )
 
 
     static member ReplaceColors (originColors: Color list, targetColor: Color, ?options: Modify_ReplaceColors_Options) =
-        let options =
-            options 
-            |> Option.map (fun options -> 
-                { options with 
-                    ModifierName = Some (sprintf "Replace color %A to %A" originColors targetColor)
-                }
-            )
+        let options = defaultArg options Modify_ReplaceColors_Options.DefaultValue
+        let nameAndParamters =
+            { Name = "ReplaceColors"
+              Parameters = 
+                ["originColors" => originColors.ToString() 
+                 "targetColor" => targetColor.ToString() 
+                 "options" => options.ToString() ]
+            }
+        
 
         Modify.ReplaceColors(
-            ?options = options,
+            options = options,
+            nameAndParamters = nameAndParamters,
             picker = fun color ->
                 if Colors.contains color originColors
                 then Some targetColor
                 else None
-        )
+        ) :> Manipulate<_, _>
 
 
     static member ReplaceColors (originColors: Color list, targetColor: FsSeparation, ?options: Modify_ReplaceColors_Options) =
@@ -512,13 +556,19 @@ type Modify =
 
 
     static member InvertColors(?predicate: Color -> bool, ?options: Modify_ReplaceColors_Options) =
-        let options =
-            options |> Option.map (fun options -> {options with ModifierName = Some "InvertColors"})
+        let options = defaultArg options Modify_ReplaceColors_Options.DefaultValue
+
+        let nameAndParamters =
+            { Name = "InvertColors" 
+              Parameters = 
+                ["predicate" => predicate.ToString()
+                 "options" => options.ToString() ]
+            }
 
         let predicate = defaultArg predicate (fun _ -> true)
 
         Modify.ReplaceColors(
-            ?options = options,
+            options = options,
             picker = 
                 fun color ->
                     if predicate color 

@@ -14,21 +14,21 @@ open iText.Kernel.Pdf
 open Fake.IO.FileSystemOperators
 
 
-let runTest path flow =
-    let newPath = Path.changeExtension ".tests.pdf" path
-    File.Copy(path, newPath, true)
+let runTest file flow =
+    let newPath = Path.changeExtension ".tests.pdf" file
+    File.Copy(file, newPath, true)
 
-    run { UserState = (); File = newPath } flow
+    run newPath flow
 
-let runManyWithBackup (paths: string list) outputDir flow =
+let runManyWithBackup (files: string list) outputDir flow =
     Directory.ensure outputDir
-    let flowModels =
-        paths 
+    let newPaths =
+        files 
         |> List.map (fun path ->
             let newPath = 
                 outputDir </> Path.GetFileName(path)
             File.Copy(path, newPath, true)
-            { UserState = (); File = newPath }
+            newPath
         )
 
-    runMany flowModels flow
+    runMany newPaths flow

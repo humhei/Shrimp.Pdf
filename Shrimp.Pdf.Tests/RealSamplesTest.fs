@@ -11,7 +11,7 @@ open Shrimp.Pdf.DSL
 open Shrimp.Pdf.icms2
 
 let readB255Bound() =
-    modifyPage ( 
+    ModifyPage.Create( 
         "read b255 bound",
         PageSelector.All,
         Path (
@@ -24,7 +24,7 @@ let readB255Bound() =
 let setTrimBoxToStrokeB255() = 
     readB255Bound()
     <+> 
-    modifyPage( 
+    ModifyPage.Create( 
         "setTrimBoxToStrokeB255",
         PageSelector.All,
         Dummy,
@@ -32,61 +32,61 @@ let setTrimBoxToStrokeB255() =
     ) ||>> ignore
 
 let retainTitleInfo (color: Color) = 
-    { Name = (sprintf "retain title info %O" color)
-      Selector = 
-          Factory(fun args ->
-            let pageEdge, titleArea = args.PageUserState()
-            OR [
-                PathOrText (
-                    Info.BoundIsInsideOf(AreaGettingOptions.Specfic pageEdge.TopMiddle)
-                    <&&> Info.BoundIsOutsideOf(AreaGettingOptions.Specfic titleArea)
-                )
-                PathOrText (
-                    Info.BoundIsInsideOf(AreaGettingOptions.Specfic titleArea)
-                    <&&> (!!(Info.FillColorIs color))
-                )
-            ])
-      Modifiers = [ Modifier.CancelFillAndStroke() ]
-    }
+    SelectorAndModifiers(
+        sprintf "retain title info %O" color,
+        Factory(fun args ->
+          let pageEdge, titleArea = args.PageUserState()
+          OR [
+              PathOrText (
+                  Info.BoundIsInsideOf(AreaGettingOptions.Specfic pageEdge.TopMiddle)
+                  <&&> Info.BoundIsOutsideOf(AreaGettingOptions.Specfic titleArea)
+              )
+              PathOrText (
+                  Info.BoundIsInsideOf(AreaGettingOptions.Specfic titleArea)
+                  <&&> (!!(Info.FillColorIs color))
+              )
+          ]),
+        [ Modifier.CancelFillAndStroke() ]
+    )
+ 
 
 let blackAndWhiteTitleInfo() =
-    { Name = "black and white title info"
-      Selector = 
+    SelectorAndModifiers(
+        "black and white title info",
         Factory (fun args ->
             let pageEdge, titleArea = args.PageUserState()
             PathOrText (
                 Info.BoundIsInsideOf(AreaGettingOptions.Specfic titleArea)
             )
-        )
-      Modifiers = 
-        [
-            Modifier.BlackOrWhite()
-        ]
-    }
+        ),
+        [ Modifier.BlackOrWhite() ]
+    )
+  
 
 let retainNavigationInfo (color: Color) =
-    { Name = (sprintf "retain navigation info %O" color)
-      Selector =
+    SelectorAndModifiers(
+        sprintf "retain navigation info %O" color,
         PathOrText (fun args ->
             let pageEdge, _ = args.PageUserState()
             ( Info.BoundIsInsideOf(AreaGettingOptions.Specfic pageEdge.LeftMiddle)
                 <&&> (!!(Info.FillColorIs color)) 
             ) args
-        )
-      Modifiers = [ Modifier.CancelFillAndStroke() ]
-    }
+        ),
+        [ Modifier.CancelFillAndStroke() ]
+    )
+   
 
 let removeNavigationInfo() =
-    { Name = (sprintf "remove navigation info")
-      Selector =
+    SelectorAndModifiers(
+        sprintf "remove navigation info",
         PathOrText (fun args ->
             let pageEdge, _ = args.PageUserState()
             ( Info.BoundIsCrossOf(AreaGettingOptions.Specfic pageEdge.LeftMiddle)
                 <&&> Info.FillColorIs DeviceRgb.MAGENTA
             ) args
-        )
-      Modifiers =[ Modifier.CancelFillAndStroke() ]
-    }
+        ),
+        [ Modifier.CancelFillAndStroke() ]
+    )
 
 
 
@@ -96,7 +96,7 @@ let getPageEdgeAndTitleArea(): Manipulate<ImposingDocument, _> =
     (
         readB255Bound()
         <+>
-        modifyPage(
+        ModifyPage.Create(
             "getPageEdge",
             PageSelector.All,
             Dummy,
@@ -137,10 +137,10 @@ let realSamplesTests =
         Flow.Manipulate (
             Manipulate.dummy()
             <.+>
-            (ModifyPage.trimToVisible PageSelector.All (Margin.Create(mm 2.)))
+            (ModifyPage.TrimToVisible (PageSelector.All, Margin.Create(mm 2.)))
             <+> (getPageEdgeAndTitleArea())
             <+> 
-            modify(
+            Modify.Create(
                 PageSelector.All,
                 [ retainTitleInfo DeviceRgb.RED
                   retainNavigationInfo DeviceRgb.MAGENTA ]
@@ -171,8 +171,7 @@ let realSamplesTests =
         Flow.Manipulate (
             (getPageEdgeAndTitleArea())
             <+> 
-            modifyAsync (
-                ModifyingAsyncWorker.Sync,
+            Modify.Create (
                 PageSelector.All,
                 [ retainTitleInfo DeviceRgb.MAGENTA
                   removeNavigationInfo() 
@@ -187,7 +186,7 @@ let realSamplesTests =
     testCase "add seam text and seam line test" <| fun _ -> 
 
         Flow.Manipulate (
-            modifyPage
+            ModifyPage.Create
                 ("add seam line",
                   PageSelector.All,
                   Dummy,
@@ -214,7 +213,7 @@ let realSamplesTests =
 
                 )
             <+>
-            modifyPage (
+            ModifyPage.Create(
                 "add seam text",
                 PageSelector.All,
                 Dummy,

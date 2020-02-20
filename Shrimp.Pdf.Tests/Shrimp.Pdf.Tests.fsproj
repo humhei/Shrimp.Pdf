@@ -16,6 +16,7 @@
     <Compile Include="RealSamplesTest.fs" />
     <Compile Include="ManipulateTests.fs" />
     <Compile Include="ReuseTests.fs" />
+    <Compile Include="FlowNameTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

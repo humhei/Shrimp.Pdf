@@ -24,13 +24,10 @@ let fileOperationTests =
     testCase "merge documents" <| fun _ -> 
         let targetFile = Path.GetFullPath("datas/file operation/merge documents/mergdDocuments.pdf")
         
-        let inputFlowModels = 
+        let inputFiles = 
             !! "datas/file operation/merge documents/*.pdf"
             |> List.ofSeq
-            |> List.map (fun file ->
-                { File = file 
-                  UserState = () }
-            )
+
 
         Flow.FileOperation (
             FileOperations.mergeDocuments (fun args ->
@@ -39,7 +36,7 @@ let fileOperationTests =
                     TargetDocumentPath = targetFile }
             )
         )
-        |> runMany inputFlowModels
+        |> runMany inputFiles
         |> ignore
 
     testCase "run many tests" <| fun _ -> 

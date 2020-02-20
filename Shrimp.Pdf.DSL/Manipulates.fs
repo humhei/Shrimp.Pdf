@@ -5,10 +5,10 @@ open Shrimp.Pdf.DSL
 
 [<AutoOpen>]
 module Manipulates =
-    [<RequireQualifiedAccess>]
-    module ModifyPage =
-        let trimToVisible pageSelector (margin: Margin)  =
-            modifyPage(
+    type ModifyPage with
+        static member TrimToVisible (pageSelector: PageSelector, ?margin: Margin)  =
+            let margin = defaultArg margin (Margin.Create 0.)
+            ModifyPage.Create(
                 "trim to visible",
                 pageSelector,
                 PathOrText (Info.IsVisible()),
@@ -19,5 +19,8 @@ module Manipulates =
                         |> Rectangle.ofRectangles
                     args.Page.SetActualBox(bound |> Rectangle.applyMargin margin)
                     |> ignore
-                ) 
+                ),
+                parameters = [
+                    "margin" => margin.ToString()
+                ]
             )  ||>> ignore

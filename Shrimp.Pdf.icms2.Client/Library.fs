@@ -334,8 +334,7 @@ module Client =
           FillOrStrokeOptions: FillOrStrokeOptions 
           PageInfosValidation: PageInfosValidation
           SelectorTag: SelectorTag
-          Info_BoundIs_Args: Info_BoundIs_Args option
-          ModifierName: string option }
+          Info_BoundIs_Args: Info_BoundIs_Args option }
 
     with 
         static member DefaultValue =
@@ -346,14 +345,12 @@ module Client =
               FillOrStrokeOptions = FillOrStrokeOptions.FillOrStroke
               PageInfosValidation = PageInfosValidation.ignore
               SelectorTag = SelectorTag.PathOrText
-              Info_BoundIs_Args = None
-              ModifierName = None }
+              Info_BoundIs_Args = None }
 
         member x.To_Modify_ReplaceColors_Options() : Modify_ReplaceColors_Options =
             { PageSelector = x.PageSelector 
               FillOrStrokeOptions = x.FillOrStrokeOptions 
               PageInfosValidation = x.PageInfosValidation 
-              ModifierName = x.ModifierName 
               Info_BoundIs_Args = x.Info_BoundIs_Args
               SelectorTag = x.SelectorTag }
 
@@ -363,8 +360,7 @@ module Client =
                 PageSelector = options.PageSelector  
                 SelectorTag = options.SelectorTag 
                 Info_BoundIs_Args = options.Info_BoundIs_Args 
-                PageInfosValidation = options.PageInfosValidation 
-                ModifierName = options.ModifierName }
+                PageInfosValidation = options.PageInfosValidation }
 
 
     type Modfy_ConvertColorsToDeviceGray_Options =
@@ -382,19 +378,22 @@ module Client =
 
     type Modify with
 
-        static member ConvertColorsTo(outputIcc: Icc, ?options: Modify_ConvertColorsTo_Options) =
+        static member ConvertColorsTo(outputIcc: Icc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParamters: NameAndParamters) =
             let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
-            let fillOrStrokeOptions = options.FillOrStrokeOptions
 
-            let modifierName = 
-                match options.InputIccModifyArgs with 
-                | Some inputIcc ->
-                    sprintf "Convert all %A %s colors to outputIcc %A" fillOrStrokeOptions inputIcc.InputIccName outputIcc
-                | None -> sprintf "Convert %A all colors to outputIcc %A" fillOrStrokeOptions outputIcc
-                |> defaultArg options.ModifierName
+            let nameAndParamters = 
+                { Name = "ConvertColorTo"
+                  Parameters =
+                    [
+                        "outputIcc" => outputIcc.ToString()
+                        "options" => options.ToString()
+                    ]
+                }
+                |> defaultArg nameAndParamters
 
             Modify.ReplaceColors(
-                options = { options.To_Modify_ReplaceColors_Options() with ModifierName = Some modifierName },
+                options = options.To_Modify_ReplaceColors_Options(),
+                nameAndParamters = nameAndParamters,
                 picker = 
                     fun color -> 
                         let inputIcc = 
@@ -411,13 +410,23 @@ module Client =
             )
 
 
-        static member ConvertColorsToDeviceGray(?options: Modfy_ConvertColorsToDeviceGray_Options) =
+        static member ConvertColorsToDeviceGray(?options: Modfy_ConvertColorsToDeviceGray_Options, ?nameAndParamters: NameAndParamters) =
             let options = defaultArg options Modfy_ConvertColorsToDeviceGray_Options.DefaultValue
+
+            let nameAndParamters = 
+                { Name = "ConvertColorToEeviceGray"
+                  Parameters =
+                    [
+                        "options" => options.ToString()
+                    ]
+                }
+                |> defaultArg nameAndParamters
 
             let modify_ConvertColorsTo_Options = options.Modify_ConvertColorsTo_Options
 
             Modify.ConvertColorsTo(
                 Icc.Gray options.OutputIcc,
+                nameAndParamters = nameAndParamters,
                 options = 
                     { modify_ConvertColorsTo_Options with 
                         Predicate = 
@@ -431,16 +440,27 @@ module Client =
                     }
                 )         
                 
-        static member BlackOrWhite(?labIcc, ?options: Modify_ConvertColorsTo_Options) =
+        static member BlackOrWhite(?labIcc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParamters: NameAndParamters) =
             let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
-            let options = {options with ModifierName = Some "BlackOrWhite"}
+            let labIcc = defaultArg labIcc defaultLabIcc.Value
+            let nameAndParamters = 
+                { Name = "BlackOrWhite"
+                  Parameters =
+                    [
+                        "options" => options.ToString()
+                        "labIcc" => labIcc.ToString()
+                    ]
+                }
+                |> defaultArg nameAndParamters
+
 
             Modify.ReplaceColors(
                 options = options.To_Modify_ReplaceColors_Options(),
+                nameAndParamters = nameAndParamters,
                 picker = 
                     fun color ->
                         let inputIccFactory = options.InputIccModifyArgs |> Option.map (fun m -> m.Factory)
-                        if options.Predicate color && Color.IsWhite(predicateCompose = not,?labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory) color
+                        if options.Predicate color && Color.IsWhite(predicateCompose = not,labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory) color
                         then Some (DeviceGray.BLACK :> Color)
                         else None
             )
