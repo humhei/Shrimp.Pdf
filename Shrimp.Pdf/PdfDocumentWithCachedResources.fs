@@ -44,10 +44,11 @@ type ResourceColor =
     | CustomSeparation of FsSeparation
     | Lab of FsLab
 
-type private PdfDocumentCache (pdfDocument: unit -> PdfDocument) =
-    let fontsCache = new ConcurrentDictionary<FsPdfFontFactory, PdfFont>()
-    let colorsCache = new ConcurrentDictionary<ResourceColor, Color>()
+type private PdfDocumentCache private (pdfDocument: unit -> PdfDocument, fontsCache: ConcurrentDictionary<FsPdfFontFactory, PdfFont>, colorsCache: ConcurrentDictionary<ResourceColor, Color>) =
     let mutable labColorSpace = None
+
+    member internal x.Spawn(pdfDocument: unit -> PdfDocument) =
+        PdfDocumentCache(pdfDocument, new ConcurrentDictionary<_, _>(), colorsCache)
 
     member internal x.GetOrCreateColor(resourceColor: ResourceColor) =
         colorsCache.GetOrAdd((resourceColor), fun (color) ->
@@ -97,6 +98,8 @@ type private PdfDocumentCache (pdfDocument: unit -> PdfDocument) =
             | pdfFont -> pdfFont
         )
 
+    new (pdfDocument: unit -> PdfDocument) =
+        PdfDocumentCache(pdfDocument, new ConcurrentDictionary<FsPdfFontFactory, PdfFont>(),  new ConcurrentDictionary<ResourceColor, Color>())
 
 type PdfDocumentWithCachedResources =
     inherit PdfDocument
@@ -116,8 +119,8 @@ type PdfDocumentWithCachedResources =
     new (reader: string, writer: string) as this =  
         { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = new PdfDocumentCache(fun _ -> this :> PdfDocument) }
 
-    new (reader: string, writer: string, oldDocument: PdfDocumentWithCachedResources) =  
-        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = oldDocument.cache }
+    new (reader: string, writer: string, oldDocument: PdfDocumentWithCachedResources) as this =  
+        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = oldDocument.cache.Spawn(fun _ -> this :> PdfDocument) }
 
 
 

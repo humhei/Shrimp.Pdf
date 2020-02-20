@@ -6,14 +6,21 @@ open System.IO
 [<AutoOpen>]
 module _FileOperation =
     type FileOperation<'oldUserState, 'newUserState> = 
-        FileOperation of (FlowModel<'oldUserState> list -> FlowModel<'newUserState> list)
+        | FileOperation of (FlowModel<'oldUserState> list -> FlowModel<'newUserState> list)
+
     with 
         member x.Value =
             let (FileOperation value) = x
             value
 
+
+
 [<AutoOpen>]
 module rec _FlowMutualTypes =
+    module PublicFlowModel = FlowModel
+
+    module FlowModel = InternalFlowModel
+
     [<RequireQualifiedAccess>]
     type Flow<'oldUserState, 'newUserState> =
         | Manipulate of (Manipulate<'oldUserState, 'newUserState>)
@@ -24,12 +31,23 @@ module rec _FlowMutualTypes =
         | FactoryByFlowModel of (FlowModel<'oldUserState> -> Flow<'oldUserState, 'newUserState>)
         | NamedFlow of (FlowName * Flow<'oldUserState, 'newUserState>)
     with 
-        static member internal Run(flowModels: FlowModel<'oldUserState> list, flow): FlowModel<'newUserState> list =
+        static member internal Run(flowModels: InternalFlowModel<'oldUserState> list, flow): InternalFlowModel<'newUserState> list =
             match flow with 
             | Flow.FileOperation flow -> 
-                flow.Value flowModels
+                flowModels
+                |> List.map InternalFlowModel.toFlowModel
+                |> flow.Value
+                |> List.map (fun flowModel ->
+                    { File = flowModel.File 
+                      FlowName = None 
+                      UserState = flowModel.UserState 
+                      FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.None }
+                )
+
             | Flow.TupledFlow flow ->
-                flow.Run flowModels
+                flow.Invoke (flowModels |> List.map InternalFlowModelWrapper)
+                |> List.map (fun m -> m.Value)
+
             | _ ->
                 flowModels
                 |> List.collect(fun flowModel ->
@@ -43,19 +61,21 @@ module rec _FlowMutualTypes =
                     match flow with 
                     | Flow.Manipulate (manipulate) ->
                         let pdfDocument = IntegratedDocument.Create(file, writerFile)
-                        let newUserState = manipulate.Invoke flowModel pdfDocument
+                        let newFlowModel = manipulate.Invoke flowModel pdfDocument
                         pdfDocument.Value.Close()
                         draft()
-                        [(flowModel |> FlowModel.mapM(fun _ -> newUserState))]
+                        newFlowModel.TryBackupFile()
+                        [newFlowModel]
 
 
                     | Flow.Reuse (reuse) ->
                         let pdfDocument = SplitDocument.Create(file, writerFile)
-                        let newUserState = reuse.Invoke flowModel pdfDocument
+                        let newFlowModel = reuse.Invoke flowModel pdfDocument
                         pdfDocument.Reader.Close()
                         pdfDocument.Writer.Close()
                         draft()
-                        [ (flowModel |> FlowModel.mapM(fun _ -> newUserState)) ]
+                        newFlowModel.TryBackupFile()
+                        [newFlowModel]
 
 
                     | Flow.Factory (factory) ->
@@ -63,58 +83,42 @@ module rec _FlowMutualTypes =
                         Flow<_, _>.Run([flowModel], flow)
 
                     | Flow.FactoryByFlowModel (factory) ->
-                        let flow = factory flowModel
+                        let flow = 
+                            flowModel
+                            |> InternalFlowModel.toFlowModel
+                            |> factory
+
                         Flow<_, _>.Run([flowModel], flow)
 
-                    | Flow.NamedFlow (flowName, flow) ->
-                        Logger.tryInfoWithFlowName flowName (fun _ ->
+                    | Flow.NamedFlow (flowName1, flow) ->
+                        let flowName0 = flowModel.FlowName
+
+                        let flowName =
+                            match flowModel.FlowNameTupleBindedStatus with 
+                            | FlowNameTupleBindedStatus.Binding previous ->
+                                FlowName.tupledFlow_Bind_FlowName previous flowName0 flowName1
+                            | FlowNameTupleBindedStatus.None ->
+                                match flowName0 with 
+                                | None -> flowName1
+                                | Some flowName0 -> flowName0.Bind(flowName1)
+
+                        let flowModel =
+                            { flowModel with 
+                                FlowName = Some flowName
+                                FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.None }
+
+                        //flowModel.CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero()
+
+                        Logger.TryInfoWithFlowModel (flowModel, (fun _ ->
                             let flowModels = Flow<_, _>.Run([flowModel], flow)
-                            flowModel.TryBackupFile(flowName)
+                            flowModel.TryBackupFile()
                             flowModels
-                        )
-                        
+                        ))
 
                     | Flow.FileOperation fileOperation -> failwith "Invalid token"
                     | Flow.TupledFlow _ ->  failwith "Invalid token"
                 )
 
-        static member FixFlowName(flowName: FlowName option) (flow: Flow<_, _>) =
-            let rec loop (flowName: FlowName option) flow =
-                match flow with 
-                | Flow.FileOperation _ -> flow
-                | Flow.Manipulate manipulate -> 
-                    manipulate.FixFlowName(flowName)
-                    |> Flow.Manipulate
-                
-                | Flow.Reuse reuse -> 
-                    reuse.FixFlowName(flowName)
-                    |> Flow.Reuse
-
-                | Flow.TupledFlow flow ->
-                    flow.FixFlowName flowName
-                    |> Flow.TupledFlow
-                
-                | Flow.Factory (factory) ->
-                    fun userState ->
-                        loop flowName (factory userState)
-                    |> Flow.Factory
-
-                | Flow.FactoryByFlowModel (factory) ->
-                    fun flowModel ->
-                        loop flowName (factory flowModel)
-                    |> Flow.FactoryByFlowModel
-
-                | Flow.NamedFlow (flowName1, flow) ->
-                    let newFlowName = 
-                        match flowName with 
-                        | None -> flowName1
-                        | Some flowName ->
-                            flowName.Bind(flowName1)
-
-                    (newFlowName, loop (Some newFlowName) flow)
-                    |> Flow.NamedFlow
-
-            loop flowName flow
 
         static member (<+>) (flow1: Flow<'originUserState, 'middleUserState>, flow2: Flow<'middleUserState, 'modifiedUserState>) =
             { Flow1 = flow1 
@@ -193,20 +197,20 @@ module rec _FlowMutualTypes =
 
                 | Flow.FactoryByFlowModel factory ->
                     fun flowModel ->
-                        FlowModel.mapM mapping flowModel
+                        PublicFlowModel.mapM mapping flowModel
                         |> factory
                         |> loop
                     |> Flow.FactoryByFlowModel
 
-                | Flow.NamedFlow (iFlowName, flow) ->
-                    (iFlowName, loop flow)
+                | Flow.NamedFlow (flowName, flow) ->
+                    (flowName, loop flow)
                     |> Flow.NamedFlow
 
                 | Flow.FileOperation fileOperation ->
                     _FileOperation.FileOperation(
                         fun flowModels ->
                             flowModels
-                            |> List.map (FlowModel.mapM mapping)
+                            |> List.map (PublicFlowModel.mapM mapping)
                             |> fileOperation.Value 
                     )
                     |> Flow.FileOperation
@@ -250,36 +254,49 @@ module rec _FlowMutualTypes =
                     _FileOperation.FileOperation(
                         fun flowModels ->
                             fileOperation.Value flowModels
-                            |> List.map (FlowModel.mapM mapping)
+                            |> List.map (PublicFlowModel.mapM mapping)
                     )
                     |> Flow.FileOperation
         
             loop flow
     
     type ITupledFlow<'oldUserState, 'newUserState> =
-        abstract member Run: FlowModel<'oldUserState> list -> FlowModel<'newUserState> list
+        abstract member Invoke: InternalFlowModelWrapper<'oldUserState> list -> InternalFlowModelWrapper<'newUserState> list
             
         abstract member MapState: ('newUserState -> 'a) -> ITupledFlow<'oldUserState, 'a>
 
         abstract member MapStateBack: ('a -> 'oldUserState) -> ITupledFlow<'a, 'newUserState>
-
-        abstract member FixFlowName: FlowName option -> ITupledFlow<'oldUserState, 'newUserState>
 
 
     type internal TupledFlow<'a, 'oldUserState, 'middleUserState, 'newUserState, 'finalUserState> =
         { Flow1: Flow<'oldUserState, 'middleUserState>
           Flow2: Flow<'middleUserState, 'newUserState>
           FMonadStateBack : 'a -> 'oldUserState
-          FMonadState: FlowModel<'middleUserState> list * FlowModel<'newUserState> list -> FlowModel<'finalUserState> list }
+          FMonadState: InternalFlowModel<'middleUserState> list * InternalFlowModel<'newUserState> list -> InternalFlowModel<'finalUserState> list }
     with 
         interface ITupledFlow<'a, 'finalUserState> with 
-            member x.Run(flowModels: FlowModel<_> list) =
+            member x.Invoke(flowModels: InternalFlowModelWrapper<_> list) =
+                let flowModels = flowModels |> List.map (fun m -> m.Value)
                 let flowModels = flowModels |> List.map (FlowModel.mapM x.FMonadStateBack)
 
-                let middleUserModels  = Flow<_, _>.Run(flowModels, x.Flow1)
+                let middleFlowModels = 
+                    let middleFlowModels = Flow<_, _>.Run(flowModels, x.Flow1)
+                    let files = flowModels |> List.map (fun m -> m.File)
+                    let middleFiles = middleFlowModels |> List.map (fun m -> m.File)
+                    if files = middleFiles 
+                    then 
+                        List.map2 (
+                            fun flowModel middleFlowModel ->
+                                { middleFlowModel with 
+                                    FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.Binding flowModel.FlowName }
 
-                let newUserModels = Flow<_, _>.Run(middleUserModels, x.Flow2)
-                x.FMonadState(middleUserModels, newUserModels)
+                        ) flowModels middleFlowModels
+                    else
+                        middleFlowModels
+
+                let newUserModels = Flow<_, _>.Run(middleFlowModels, x.Flow2)
+                x.FMonadState(middleFlowModels, newUserModels)
+                |> List.map InternalFlowModelWrapper
 
             member x.MapState(mapping) =
                 { Flow1 = x.Flow1 
@@ -299,12 +316,6 @@ module rec _FlowMutualTypes =
                   FMonadState = x.FMonadState
                 } :> ITupledFlow<_, _>
        
-            member x.FixFlowName(flowName: FlowName option) =
-                { Flow1 = Flow<_,_>.FixFlowName flowName x.Flow1
-                  Flow2 = Flow<_,_>.FixFlowName flowName x.Flow2
-                  FMonadStateBack = x.FMonadStateBack
-                  FMonadState = x.FMonadState
-                } :> ITupledFlow<_, _>
 
     [<RequireQualifiedAccess>]
     module Flow =
@@ -316,7 +327,7 @@ module rec _FlowMutualTypes =
     [<AutoOpen>]
     module FlowDSL =
         type Flow =
-            static member private Batch(flowName: FlowName option) =
+            static member Batch(?flowName: FlowName) =
                 fun (flows: seq<Flow<'originUserState,'newUserState>>) ->
                     let flow = 
                         match List.ofSeq flows with 
@@ -353,37 +364,64 @@ module rec _FlowMutualTypes =
                     | Some flowName ->
                         Flow.NamedFlow(flowName, flow)
 
-            static member Batch (flowName: FlowName) =
-                Flow.Batch(Some flowName)
 
-            static member Batch (?name: string) =
-                let flowName =
-                    name 
-                    |> Option.map FlowName.Override
+            static member Rename (name, ?parameters) =
 
-                Flow.Batch(flowName)
+                let flowName = 
+                    let parameters = defaultArg parameters []
+                    FlowName.Override(name, parameters)
+
+                fun (flow: Flow<_, _>) ->
+                    Flow.NamedFlow(
+                        flowName,
+                        flow
+                    )
+
 
         
 
 [<AutoOpen>]
 module Operators =
+    let (=>) a b = a,b
 
-
-    let runMany (flowModels: FlowModel<_> list) flow = 
-
-
+    let runManyWithFlowModels (flowModels: FlowModel<_> list) flow = 
         let filesListText =
             flowModels 
             |> List.map (fun m -> m.File)
             |> String.concat "\n"
 
+        let flowModels =
+            flowModels
+            |> List.map (fun m -> 
+                { File = m.File 
+                  UserState = m.UserState 
+                  FlowName = None 
+                  FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.None }
+            )
+
         Logger.infoWithStopWatch(sprintf "RUN: %s" filesListText) (fun _ ->
-            Flow<_, _>.Run(flowModels, Flow<_, _>.FixFlowName None flow)
+            Flow<_, _>.Run(flowModels, flow)
+            |> List.map InternalFlowModel.toFlowModel
         )
 
-    let run (flowModel: FlowModel<'userState>) flow = 
-        runMany [flowModel] flow
+    let runMany (files: string list) flow = 
+
+        let flowModels =
+            files 
+            |> List.map (fun file ->
+                { File = file 
+                  UserState = () }
+            )
+
+        runManyWithFlowModels flowModels flow
+
+    let run (file: string) flow = 
+        runMany [file] flow
+
+    let runWithFlowModel (flowModel: FlowModel<_>) flow = 
+        runManyWithFlowModels [flowModel] flow
  
-    let runWithBackup backupPath path flow =
-        File.Copy(path, backupPath, true)
-        run { UserState = (); File = backupPath } flow
+    let runWithBackup backupPath file flow =
+        File.Copy(file, backupPath, true)
+        run backupPath flow
+
