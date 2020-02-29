@@ -25,7 +25,7 @@ let fileOperationTests =
         let targetFile = Path.GetFullPath("datas/file operation/merge documents/mergdDocuments.pdf")
         
         let inputFiles = 
-            !! "datas/file operation/merge documents/*.pdf"
+            !! "datas/file operation/merge documents/inputs/*.pdf"
             |> List.ofSeq
 
 
@@ -63,7 +63,7 @@ let fileOperationTests =
                     TargetDocumentPath = targetFile }
             )
         )
-        |> runManyWithBackup  inputFiles "datas/file operation/merge documents/outputs/"
+        |> runManyWithBackup inputFiles "datas/file operation/merge documents/outputs/"
         |> ignore
 
   ]

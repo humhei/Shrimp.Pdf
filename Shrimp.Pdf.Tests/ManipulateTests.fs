@@ -1,16 +1,9 @@
 ﻿module ManipulateTests
 open Expecto
-open iText.Kernel.Geom
 open Shrimp.Pdf
-open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Colors
 open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
-open Fake.IO
-open System.IO
-open iText.Kernel.Pdf.Canvas.Parser.Data
-open iText.Kernel.Font
-open iText.IO.Font
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.icms2
 

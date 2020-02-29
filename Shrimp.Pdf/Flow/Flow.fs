@@ -27,8 +27,7 @@ module rec _FlowMutualTypes =
         | Reuse of (Reuse<'oldUserState, 'newUserState>)
         | FileOperation of FileOperation<'oldUserState, 'newUserState>
         | TupledFlow of ITupledFlow<'oldUserState, 'newUserState>
-        | Factory of ('oldUserState -> Flow<'oldUserState, 'newUserState>)
-        | FactoryByFlowModel of (FlowModel<'oldUserState> -> Flow<'oldUserState, 'newUserState>)
+        | Factory of (FlowModel<'oldUserState> -> Flow<'oldUserState, 'newUserState>)
         | NamedFlow of (FlowName * Flow<'oldUserState, 'newUserState>)
     with 
         static member internal Run(flowModels: InternalFlowModel<'oldUserState> list, flow): InternalFlowModel<'newUserState> list =
@@ -69,11 +68,8 @@ module rec _FlowMutualTypes =
                         [newFlowModel]
 
 
-                    | Flow.Factory (factory) ->
-                        let flow = factory flowModel.UserState
-                        Flow<_, _>.Run([flowModel], flow)
 
-                    | Flow.FactoryByFlowModel (factory) ->
+                    | Flow.Factory (factory) ->
                         let flow = 
                             flowModel
                             |> InternalFlowModel.toFlowModel
@@ -179,19 +175,11 @@ module rec _FlowMutualTypes =
                     |> Flow.TupledFlow
 
                 | Flow.Factory factory ->
-                    fun userState ->
-                        userState
-                        |> mapping
-                        |> factory 
-                        |> loop
-                    |> Flow.Factory
-
-                | Flow.FactoryByFlowModel factory ->
                     fun flowModel ->
                         PublicFlowModel.mapM mapping flowModel
                         |> factory
                         |> loop
-                    |> Flow.FactoryByFlowModel
+                    |> Flow.Factory
 
                 | Flow.NamedFlow (flowName, flow) ->
                     (flowName, loop flow)
@@ -224,18 +212,12 @@ module rec _FlowMutualTypes =
                 | Flow.TupledFlow (tupledFlow) ->
                     tupledFlow.MapState (mapping)
                     |> Flow.TupledFlow
-
-                | Flow.Factory factory ->
-                    fun userState ->
-                        factory userState
-                        |> loop
-                    |> Flow.Factory
                 
-                | Flow.FactoryByFlowModel factory ->
+                | Flow.Factory factory ->
                     fun flowModel ->
                         factory flowModel
                         |> loop
-                    |> Flow.FactoryByFlowModel
+                    |> Flow.Factory
 
                 | Flow.NamedFlow (iFlowName, flow) ->
                     (iFlowName, loop flow)
@@ -273,9 +255,6 @@ module rec _FlowMutualTypes =
                 let middleFlowModels = 
                     let middleFlowModels = Flow<_, _>.Run(flowModels, x.Flow1)
                     let files = flowModels |> List.map (fun m -> m.File)
-
-                    //for middleFlowModel in middleFlowModels do 
-                    //    middleFlowModel.TryBackupFile()
 
                     let middleFiles = middleFlowModels |> List.map (fun m -> m.File)
                     if files = middleFiles 
@@ -319,8 +298,18 @@ module rec _FlowMutualTypes =
             |> Flow.FileOperation 
 
 
+
+
+
+        
     [<AutoOpen>]
     module FlowDSL =
+
+        [<RequireQualifiedAccess>]
+        type FlowResponse<'originUserState, 'newUserState> =
+            | UserState of 'newUserState
+            | Flow of Flow<'originUserState, 'newUserState>
+
         type Flow =
             static member Batch(?flowName: FlowName) =
                 fun (flows: seq<Flow<'originUserState,'newUserState>>) ->
@@ -329,7 +318,8 @@ module rec _FlowMutualTypes =
                         | [] ->  Flow.dummy() ||>> fun _ -> []
 
                         | flows ->
-                            Flow.Factory(fun userState ->
+                            Flow.Factory(fun flowModel ->
+                                let userState = flowModel.UserState
                                 let rec loop (flowAccum: Flow<'originUserState, 'newUserState list> option) (flows: Flow<'originUserState, 'newUserState> list) =
                                     match flows with 
                                     | [] -> flowAccum.Value
@@ -343,10 +333,10 @@ module rec _FlowMutualTypes =
                                         | Some flowAccum -> 
 
                                             let flowAccum = flowAccum ||>> (fun newUserStates -> userState, newUserStates)
-                                
+                            
 
                                             let flow = fst <<|| flow
-                        
+                    
                                             let flowAccum = flowAccum <++> flow ||>> (fun (a, b) -> snd a @ [b])
 
                                             loop (Some flowAccum) flows
@@ -372,8 +362,20 @@ module rec _FlowMutualTypes =
                         flow
                     )
 
+            static member Func(factory: 'originUserState -> FlowResponse<'originUserState, 'newUserState>) =
+                fun (flowModel: FlowModel<_>) ->
+                    let response = factory flowModel.UserState
+                    match response with 
+                    | FlowResponse.UserState userState -> Flow.dummy() ||>> (fun _ -> userState)
+                    | FlowResponse.Flow flow -> flow
+                |> Flow.Factory
 
-        
+            static member Func(factory: 'originUserState -> Flow<'originUserState, 'newUserState>) =
+                fun (flowModel: FlowModel<_>) ->
+                    factory flowModel.UserState
+                |> Flow.Factory
+
+
 
 [<AutoOpen>]
 module Operators =
@@ -419,4 +421,9 @@ module Operators =
     let runWithBackup backupPath file flow =
         File.Copy(file, backupPath, true)
         run backupPath flow
+
+
+
+
+
 

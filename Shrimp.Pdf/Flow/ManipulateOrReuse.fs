@@ -40,9 +40,6 @@ module internal rec ManipulateOrReuse =
               FlowNameTupleBindedStatus = flowModel.FlowNameTupleBindedStatus }
 
 
-
-
-
         member flowModel.CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero() =
             flowModel.ToInternalFlowModel().CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero()
          
@@ -75,12 +72,50 @@ module internal rec ManipulateOrReuse =
     [<RequireQualifiedAccess>]
     type Flow<'oldUserState, 'newUserState> =
         | ManipulateOrReuse of (FlowModel<'oldUserState> -> 'newUserState)
-        | Factory of ('oldUserState -> Flow<'oldUserState, 'newUserState>)
-        | FactoryByFlowModel of (FlowModel<'oldUserState> -> Flow<'oldUserState, 'newUserState>)
+        | Func of ('oldUserState -> Flow<'oldUserState, 'newUserState>)
+        | Factory of (FlowModel<'oldUserState> -> Flow<'oldUserState, 'newUserState>)
         | NamedFlow of FlowName * Flow<'oldUserState, 'newUserState>
         | TupledFlow of ITupledFlow<'oldUserState, 'newUserState>
         | AppendedFlow of (SplitOrIntegratedDocument -> unit) * Flow<'oldUserState, 'newUserState>
     with 
+        static member internal AppendLastManipulate(appendix: (SplitOrIntegratedDocument -> unit), flow) =
+            let rec loop flow =
+                match flow with 
+                | Flow.ManipulateOrReuse transform -> 
+                    fun (flowModel: FlowModel<_>) ->
+                        appendix flowModel.Document
+                        transform flowModel
+                    |> Flow.ManipulateOrReuse
+
+                | Flow.Func factory ->
+                    fun userState ->
+                        userState
+                        |> factory
+                        |> loop
+
+                    |> Flow.Func
+
+                | Flow.Factory factory ->
+                    fun flowModel ->
+                        flowModel
+                        |> factory
+                        |> loop
+                    |> Flow.Factory
+
+                | Flow.TupledFlow (tupledFlow) ->
+                    tupledFlow.AppendLastManipulate(appendix)
+                    |> Flow.TupledFlow
+
+                | Flow.NamedFlow (flowName, flow) ->
+                    (flowName, loop flow)
+                    |> Flow.NamedFlow
+
+                | Flow.AppendedFlow (appendix, flow) ->
+                    (appendix, loop flow)
+                    |> Flow.AppendedFlow
+
+            loop flow
+
         static member internal Invoke(flowModel: FlowModel<'userState>) (flow) : FlowModel<'newUserState> =
             let rec loop (flowModel: FlowModel<'userState>) flow =
                 match flow with 
@@ -88,17 +123,16 @@ module internal rec ManipulateOrReuse =
                     flowModel.Document.Open()
                     let newUserState = (manipulateOrReuse flowModel)
                     flowModel.Document.CloseAndDraft()
-                    
-                    
                     FlowModel.mapTo newUserState flowModel
 
                 | Flow.TupledFlow flow -> flow.Invoke flowModel
                 
-                | Flow.Factory (factory) ->
+                | Flow.Func (factory) ->
                     let flow = factory flowModel.UserState
                     loop flowModel flow
 
-                | Flow.FactoryByFlowModel (factory) ->
+                | Flow.Factory (factory) ->
+                    flowModel.Document.Open()
                     let flow = factory flowModel
                     loop flowModel flow
 
@@ -128,9 +162,8 @@ module internal rec ManipulateOrReuse =
                     ))
 
                 | Flow.AppendedFlow (appendix, flow) ->
-                    let newUserState = loop flowModel flow
-                    appendix flowModel.Document
-                    newUserState
+                    loop flowModel (Flow<_, _>.AppendLastManipulate(appendix, flow))
+
 
             loop flowModel flow
 
@@ -153,21 +186,21 @@ module internal rec ManipulateOrReuse =
                         |> transform
                     |> Flow.ManipulateOrReuse
 
-                | Flow.Factory factory ->
+                | Flow.Func factory ->
                     fun userState ->
                         userState
                         |> mapping
                         |> factory
                         |> loop
 
-                    |> Flow.Factory
+                    |> Flow.Func
 
-                | Flow.FactoryByFlowModel factory ->
+                | Flow.Factory factory ->
                     fun flowModel ->
                         FlowModel.mapM mapping flowModel
                         |> factory
                         |> loop
-                    |> Flow.FactoryByFlowModel
+                    |> Flow.Factory
 
                 | Flow.TupledFlow (tupledFlow) ->
                     tupledFlow.MapStateBack (mapping)
@@ -193,21 +226,21 @@ module internal rec ManipulateOrReuse =
                         |> mapping
                     |> Flow.ManipulateOrReuse
 
-                | Flow.Factory factory ->
+                | Flow.Func factory ->
                     fun userState ->
                         userState
                         |> factory
                         |> loop
 
-                    |> Flow.Factory
+                    |> Flow.Func
                     
-                | Flow.FactoryByFlowModel factory ->
+                | Flow.Factory factory ->
                     fun flowModel ->
                         flowModel
                         |> factory
                         |> loop
 
-                    |> Flow.FactoryByFlowModel
+                    |> Flow.Factory
                 | Flow.TupledFlow (tupledFlow) ->
                     tupledFlow.MapState (mapping)
                     |> Flow.TupledFlow
@@ -240,7 +273,7 @@ module internal rec ManipulateOrReuse =
         static member Batch (?flowName: FlowName) =
             fun flows ->
                 let flow = 
-                    Flow.Factory(fun userState ->
+                    Flow.Func(fun userState ->
                         match flows with 
                         | [] -> Flow<_, _>.MapState(Flow<_, _>.Dummy(), fun _ -> [])
 
@@ -285,7 +318,9 @@ module internal rec ManipulateOrReuse =
     
         abstract member MapStateBack: ('a -> 'oldUserState) -> ITupledFlow<'a, 'newUserState>
     
-    type TupledFlow<'a, 'oldUserState, 'middleUserState, 'newUserState, 'finalUserState> =
+        abstract member AppendLastManipulate: (SplitOrIntegratedDocument -> unit) -> ITupledFlow<'oldUserState, 'newUserState>
+
+    type internal TupledFlow<'a, 'oldUserState, 'middleUserState, 'newUserState, 'finalUserState> =
         { Flow1: Flow<'oldUserState, 'middleUserState>
           Flow2: Flow<'middleUserState, 'newUserState>
           FMonadStateBack : 'a -> 'oldUserState
@@ -329,6 +364,13 @@ module internal rec ManipulateOrReuse =
                   FMonadState = x.FMonadState
                 } :> ITupledFlow<_, _>
 
+
+            member x.AppendLastManipulate(appendix) =
+                { Flow1 = x.Flow1 
+                  Flow2 = Flow<_, _>.AppendLastManipulate(appendix, x.Flow2)
+                  FMonadStateBack = x.FMonadStateBack
+                  FMonadState = x.FMonadState
+                } :> ITupledFlow<_, _>
 
 
 open ManipulateOrReuse
@@ -529,6 +571,12 @@ module Manipulate =
 
 [<AutoOpen>]
 module ManipulateOrReuseDSL =
+    
+    [<RequireQualifiedAccess>]
+    type ReuseResponse<'originUserState, 'newUserState> =
+        | UserState of 'newUserState
+        | Reuse of Reuse<'originUserState, 'newUserState>
+
     type Reuse =
      
         static member Rename (name, ?parameters) =
@@ -556,23 +604,71 @@ module ManipulateOrReuseDSL =
                 |> Reuse
 
 
-        static member Factory (factory: Shrimp.Pdf.FlowModel<_> -> SplitDocument -> Reuse<_, _>) =
-            Flow.FactoryByFlowModel(fun flowModel ->
+        static member private Factory<'oldUserState, 'newUserState> (factory: Shrimp.Pdf.FlowModel<'oldUserState> -> SplitDocument -> ReuseResponse<'oldUserState, 'newUserState>) =
+            Flow.Factory(fun flowModel ->
                 let document =
                     match flowModel.Document with 
                     | SplitOrIntegratedDocument.SplitDocument document -> document
-                    | SplitOrIntegratedDocument.IntegratedDocument _ -> failwith "Invalid token"
-                let reuse = 
-                    factory 
+                    | SplitOrIntegratedDocument.IntegratedDocument document -> failwith "Invalid token"
+
+                let response =
+                    (factory 
                         (flowModel.ToPublicFlowModel())
-                        document
+                        document) 
+
+                let reuse = 
+                    match response with 
+                    | ReuseResponse.UserState userState ->
+                        Reuse.dummy() ||>> (fun _ -> userState)
+                    | ReuseResponse.Reuse reuse ->
+                        reuse
+
                 reuse.Flow
             )
             |> Reuse
+
+        static member Factory<'oldUserState, 'newUserState> (factory: Shrimp.Pdf.FlowModel<'oldUserState> -> SplitDocument -> Reuse<'oldUserState, 'newUserState>) =
+            fun flowModel document ->
+                factory flowModel document
+                |> ReuseResponse.Reuse
+
+            |> Reuse.Factory
+
+        static member Func<'oldUserState, 'newUserState> (factory: 'oldUserState -> ReuseResponse<'oldUserState, 'newUserState>) =
+            Flow.Func(fun userState ->
+                let response = 
+                    (factory userState) 
+
+                let reuse = 
+                    match response with 
+                    | ReuseResponse.UserState userState ->
+                        Reuse.dummy() ||>> (fun _ -> userState)
+                    | ReuseResponse.Reuse reuse ->
+                        reuse
+
+                reuse.Flow
+            )
+            |> Reuse
+
+        static member Func<'oldUserState, 'newUserState> (factory: 'oldUserState -> Reuse<'oldUserState, 'newUserState>) =
+            Flow.Func(fun userState ->
+                let reuse = 
+                    (factory userState) 
+                reuse.Flow
+            )
+            |> Reuse
+
+
           
         static member Append (appendix: SplitDocument -> unit) (reuse: Reuse<_, _>) =
             reuse.Append(appendix)
 
+
+
+    [<RequireQualifiedAccess>]
+    type ManipulateResponse<'originUserState, 'newUserState> =
+        | UserState of 'newUserState
+        | Manipulate of Manipulate<'originUserState, 'newUserState>
 
     type Manipulate =
     
@@ -600,19 +696,59 @@ module ManipulateOrReuseDSL =
                |> Manipulate
 
 
-
-
-        static member Factory<'oldUserState, 'newUserState> (factory: Shrimp.Pdf.FlowModel<'oldUserState> -> IntegratedDocument -> Manipulate<'oldUserState, 'newUserState>) =
-            Flow.FactoryByFlowModel(fun flowModel ->
+        static member private Factory<'oldUserState, 'newUserState> (factory: Shrimp.Pdf.FlowModel<'oldUserState> -> IntegratedDocument -> ManipulateResponse<'oldUserState, 'newUserState>) =
+            Flow.Factory(fun flowModel ->
                 let document =
                     match flowModel.Document with 
                     | SplitOrIntegratedDocument.SplitDocument document -> failwith "Invalid token"
                     | SplitOrIntegratedDocument.IntegratedDocument document -> document
 
-                let mainpulate = 
+                let response =
                     (factory 
                         (flowModel.ToPublicFlowModel())
-                        document) :> Manipulate<_, _>
-                mainpulate.Flow
+                        document) 
+
+                let manipulate = 
+                    match response with 
+                    | ManipulateResponse.UserState userState ->
+                        Manipulate.dummy() ||>> (fun _ -> userState)
+                    | ManipulateResponse.Manipulate manipulate ->
+                        manipulate
+
+                manipulate.Flow
             )
             |> Manipulate
+
+        static member Factory<'oldUserState, 'newUserState> (factory: Shrimp.Pdf.FlowModel<'oldUserState> -> IntegratedDocument -> Manipulate<'oldUserState, 'newUserState>) =
+            fun flowModel document ->
+                factory flowModel document
+                |> ManipulateResponse.Manipulate
+
+            |> Manipulate.Factory
+
+        static member Func<'oldUserState, 'newUserState> (factory: 'oldUserState -> ManipulateResponse<'oldUserState, 'newUserState>) =
+            Flow.Func(fun userState ->
+                let response = 
+                    (factory userState) 
+
+                let manipulate = 
+                    match response with 
+                    | ManipulateResponse.UserState userState ->
+                        Manipulate.dummy() ||>> (fun _ -> userState)
+                    | ManipulateResponse.Manipulate manipulate ->
+                        manipulate
+
+                manipulate.Flow
+            )
+            |> Manipulate
+
+
+        static member Func<'oldUserState, 'newUserState> (factory: 'oldUserState -> Manipulate<'oldUserState, 'newUserState>) =
+            Flow.Func(fun userState ->
+                let manipulate = 
+                    (factory userState) 
+            
+                manipulate.Flow
+            )
+            |> Manipulate
+

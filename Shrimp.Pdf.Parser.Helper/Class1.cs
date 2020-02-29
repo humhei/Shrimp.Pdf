@@ -2,6 +2,10 @@
 using iText.Kernel.Pdf.Canvas;
 using System;
 using System.Runtime.CompilerServices;
+
+
+
+
 [assembly: InternalsVisibleTo("Shrimp.Pdf.Parser")]
 namespace Shrimp.Pdf.Parser.Helper
 {

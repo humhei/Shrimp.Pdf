@@ -91,6 +91,12 @@ type PageModifier =
             PdfPage.setPageBox pageBoxKind rect args.Page
             |> ignore
 
+    static member SetPageBoxes(pageBoxKindes: PageBoxKind list, rect: Rectangle) : PageModifier<_, _> =
+        fun (args: PageModifingArguments<_>) infos ->
+            for pageBoxKind in pageBoxKindes do
+                PdfPage.setPageBox pageBoxKind rect args.Page
+                |> ignore
+
     static member GetPageEdge (pageBoxKind: PageBoxKind, innerBox: Rectangle) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             args.Page.GetPageEdge(innerBox, pageBoxKind) 
@@ -199,29 +205,31 @@ type PageModifier =
             |> List.map(fun pageModifier ->
                 pageModifier args infos
             )
+            |> ignore
 
 
 [<AutoOpen>]
 module ModifyPageOperators =
     type ModifyPage =
-        static member Create(name, pageSelector: PageSelector, selector, pageModifier, ?parameters: list<string * string>, ?fullyOverrideParamters) =
+        static member Create(name, pageSelector: PageSelector, selector, pageModifier, ?parameters: list<string * string>) =
             let flowName = 
                 let parameters =
                     match parameters with 
                     | None ->
-                        defaultArg parameters [
-                            "selector" => selector.ToString()
+                        [
                             "pageSelctor" => pageSelector.ToString()
-                            "pageModifier" => pageModifier.ToString()
+                            "selector" => selector.ToString()
                         ]
                     | Some parameters ->
-                        match fullyOverrideParamters with 
-                        | Some true -> parameters
-                        | _ -> 
+                        (
                             [
-                                "selector" => selector.ToString()
                                 "pageSelctor" => pageSelector.ToString()
-                            ] @ parameters
+                                "selector" => selector.ToString()
+                            ]
+                            @ parameters
+                        )
+                        |> List.distinctBy(fun (key, _) -> key.Trim().ToLower())
+                   
 
                 FlowName.Override(name, 
                     parameters

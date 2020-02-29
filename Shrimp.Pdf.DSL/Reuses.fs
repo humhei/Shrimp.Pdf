@@ -1,4 +1,7 @@
 ﻿namespace Shrimp.Pdf
+
+open System.Collections.Generic
+
 #nowarn "0104"
 open Imposing
 open Shrimp.Pdf.Parser
@@ -12,32 +15,54 @@ open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf
 
 
-type PageNumSequence = private PageNumSequence of int list
+[<RequireQualifiedAccess>]
+type PageNumSequenceToken =
+    | PageNum of int
+    | PageNumWithRotation of int * Rotation
+with 
+    member x.PageNumValue = 
+        match x with 
+        | PageNumSequenceToken.PageNum pageNum -> pageNum
+        | PageNumSequenceToken.PageNumWithRotation (pageNum, _) -> pageNum
+
+type PageNumSequence = private PageNumSequence of PageNumSequenceToken list
 with 
     member x.Value = 
         let (PageNumSequence value) = x
         value
 
-
-[<RequireQualifiedAccess>]
-module PageNumSequence =
-    let create (sequence: int list) =
+    static member Create (sequence: int list) =
         if sequence.IsEmpty then failwith "page sequence cannot be empty"
         elif List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in page sequence %A must be bigger than 0" sequence
-        PageNumSequence sequence
+        PageNumSequence (List.map PageNumSequenceToken.PageNum sequence)
 
-type CopiedNumSequence = private CopiedNumSequence of int list
+    static member Create (sequence: (int * Rotation) list) =
+        let pageNumbers = List.map fst sequence
+        if sequence.IsEmpty then failwith "page sequence cannot be empty"
+        elif List.exists (fun pageNumber -> pageNumber <= 0) pageNumbers then failwithf "number in page sequence %A must be bigger than 0" sequence
+        PageNumSequence (List.map PageNumSequenceToken.PageNumWithRotation sequence)
+
+
+
+type CopiedNumSequence = private CopiedNumSequence of PageNumSequenceToken list
 with 
     member x.Value = 
         let (CopiedNumSequence value) = x
         value
 
-[<RequireQualifiedAccess>]
-module CopiedNumSequence =
-    let create (sequence: int list) =
+    static member Create(sequence: int list) =
         if sequence.IsEmpty then failwith "sequence cannot be empty"
         elif List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in sequence %A must be bigger than 0" sequence
-        CopiedNumSequence sequence
+        CopiedNumSequence (List.map PageNumSequenceToken.PageNum sequence)
+
+
+    static member Create(sequence: list<int * Rotation>) =
+        let pageNumbers = List.map fst sequence
+        if sequence.IsEmpty then failwith "page sequence cannot be empty"
+        elif List.exists (fun pageNumber -> pageNumber <= 0) pageNumbers then failwithf "number in page sequence %A must be bigger than 0" sequence
+        CopiedNumSequence (List.map PageNumSequenceToken.PageNumWithRotation sequence)
+
+
 
 type PageResizingScalingOptions =
     | Uniform = 0
@@ -160,51 +185,118 @@ module _Reuses =
                 ["pageSelector" => pageSelector.ToString()]
 
 
-        static member Rotate (pageSelector: PageSelector, rotation: Rotation) =
-            let angle = Rotation.getAngle rotation
-
+        /// e.g. [1; 3; 5] will pick page1, page3, page5
+        static member SequencePages (pageNumSequence: PageNumSequence) =
             fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
-                let angle = Rotation.getAngle rotation
-                let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
-                PdfDocument.getPages splitDocument.Reader
-                |> List.iteri (fun i page ->
-                    let pageNum = i + 1
-                    if List.contains pageNum selectedPageNumbers 
-                    then 
-                        let pageBox = page.GetActualBox()
+                let duplicatedReaderPages = 
+                    splitDocument.Reader
+                    |> PdfDocument.getPages
+                    |> List.mapi (fun i page ->
+                        let pageNum = i + 1
+                        pageNumSequence.Value
+                        |> List.filter (fun (token) -> token.PageNumValue = pageNum)
+                        |> List.map (fun token -> token, page)
+                    )|> List.concat
 
-                        let affineTransform =
-                            let x = pageBox.GetXF()
-                            let y = pageBox.GetYF()
-                            let affineTransfrom_Rotate = AffineTransform.GetRotateInstance(Math.PI / -180. * angle, x, y)
+                if duplicatedReaderPages.Length = 0 
+                then failwithf "Invalid sequence %A, shoudl exists a sequence number >= 1 and <= %d" pageNumSequence (splitDocument.Reader.GetNumberOfPages())
 
-                            let affineTransform_Translate = 
-                                { ScaleX = 1. 
-                                  ScaleY = 1. 
-                                  TranslateX = -x
-                                  TranslateY = -y
-                                  ShearX = 0.
-                                  ShearY = 0. }
-                                |> AffineTransformRecord.toAffineTransform
+                let pdfPageCache = new Dictionary<int, PdfPage>()
+                let xObjectCache = new Dictionary<int, Xobject.PdfFormXObject>()
 
-                            affineTransfrom_Rotate.PreConcatenate(affineTransform_Translate)
-                            affineTransfrom_Rotate
+                for (token, page) in duplicatedReaderPages do
+                    let rec loop token = 
+                        match token with 
+                        | PageNumSequenceToken.PageNum _ ->
+                            let page = 
+                                match pdfPageCache.TryGetValue token.PageNumValue with 
+                                | true, page -> page
+                                | false, _ ->
+                                    let writerPageResource = page.CopyTo(splitDocument.Writer)
+                                    pdfPageCache.Add(token.PageNumValue, writerPageResource)
+                                    writerPageResource
 
-                        let newPageSize =
-                            affineTransform.Transform(pageBox)
+                            splitDocument.Writer.AddPage(page) |> ignore
+                
+                        | PageNumSequenceToken.PageNumWithRotation (_ , rotation) ->
+                            match rotation with 
+                            | Rotation.None ->
+                                loop (PageNumSequenceToken.PageNum token.PageNumValue)
+                            | _ ->
+                                let xobject =
+                                    match xObjectCache.TryGetValue token.PageNumValue with 
+                                    | true, xobject -> xobject
+                                    | false, _ ->
+                                        let xobject = page.CopyAsFormXObject(splitDocument.Writer)
+                                        xObjectCache.Add(token.PageNumValue, xobject)
+                                        xobject
 
-                        let xobject = page.CopyAsFormXObject(splitDocument.Writer)
-                        let newPage = splitDocument.Writer.AddNewPage(PageSize(newPageSize))
-                        let canvas = new PdfCanvas(newPage)
+                                let pageBox = page.GetActualBox()
 
-                        canvas.AddXObject(xobject,AffineTransformRecord.ofAffineTransform affineTransform) |> ignore
+                                let affineTransform =
+                                    let angle = Rotation.getAngle rotation
+                                    let x = pageBox.GetXF()
+                                    let y = pageBox.GetYF()
+                                    let affineTransfrom_Rotate = AffineTransform.GetRotateInstance(Math.PI / -180. * angle, x, y)
 
-                    else 
-                        let page = page.CopyTo(splitDocument.Writer)
-                        splitDocument.Writer.AddPage(page) |> ignore
-                )
+                                    let affineTransform_Translate = 
+                                        { ScaleX = 1. 
+                                          ScaleY = 1. 
+                                          TranslateX = -x
+                                          TranslateY = -y
+                                          ShearX = 0.
+                                          ShearY = 0. }
+                                        |> AffineTransformRecord.toAffineTransform
 
-            |> reuse
+                                    affineTransfrom_Rotate.PreConcatenate(affineTransform_Translate)
+                                    affineTransfrom_Rotate
+
+
+
+                                let newPage = 
+                                    let newPageSize =
+                                        affineTransform.Transform(pageBox)
+
+                                    splitDocument.Writer.AddNewPage(PageSize(newPageSize))
+
+                                let canvas = new PdfCanvas(newPage)
+
+                                canvas.AddXObject(xobject,AffineTransformRecord.ofAffineTransform affineTransform) |> ignore
+
+                                [
+                                    PageBoxKind.MediaBox
+                                    PageBoxKind.CropBox
+                                    PageBoxKind.ArtBox
+                                    PageBoxKind.BleedBox
+                                    PageBoxKind.TrimBox
+                                ] |> List.iter (fun pageBoxKind ->
+                                    let pageBox = page.GetPageBox(pageBoxKind)
+                            
+                                    let newPageBox = 
+                                        affineTransform.Transform(pageBox)
+
+                                    PdfPage.setPageBox pageBoxKind newPageBox newPage
+                                    |> ignore
+                                )
+                    loop token
+
+            |> reuse 
+                ("SequencePages" )
+                [ "pageNumSequence" => pageNumSequence.ToString() ]
+
+
+        static member Rotate (pageSelector: PageSelector, rotation: Rotation) =
+            Reuse.Factory(fun flowModel splitDocument ->
+                let pageNums = splitDocument.Reader.GetPageNumbers(pageSelector)
+                let pageNumSequence = 
+                    pageNums
+                    |> List.map (fun pageNum -> pageNum, rotation)
+                    |> PageNumSequence.Create
+
+                Reuses.SequencePages(pageNumSequence)
+            )
+
+            |> Reuse.rename
                 "Rotate"
                 [ "pageSelector" => pageSelector.ToString()
                   "rotation" => rotation.ToString() ]
@@ -381,29 +473,6 @@ module _Reuses =
             <+>
             resize()
 
-        /// e.g. [1; 3; 5] will pick page1, page3, page5
-        static member SequencePages (pageNumSequence: PageNumSequence) =
-            fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
-                let duplicatedReaderPages = 
-                    splitDocument.Reader
-                    |> PdfDocument.getPages
-                    |> List.mapi (fun i page ->
-                        let pageNum = i + 1
-                        pageNumSequence.Value
-                        |> List.filter ((=) pageNum)
-                        |> List.map (fun _ -> page)
-                    )|> List.concat
-
-                if duplicatedReaderPages.Length = 0 
-                then failwithf "Invalid sequence %A, shoudl exists a sequence number >= 1 and <= %d" pageNumSequence (splitDocument.Reader.GetNumberOfPages())
-
-                for page in duplicatedReaderPages do
-                    let writerPageResource = page.CopyTo(splitDocument.Writer)
-                    splitDocument.Writer.AddPage(writerPageResource) |> ignore
-                
-            |> reuse 
-                ("SequencePages %A" )
-                [ "pageNumSequence" => pageNumSequence.ToString() ]
 
         static member DuplicatePages (pageSelector: PageSelector, copiedNumbers: CopiedNumSequence) =
             Reuse.Factory(fun flowModel splitDocument ->
@@ -412,10 +481,10 @@ module _Reuses =
                     |> List.indexed
                     |> List.collect (fun (index, pageNum) ->
                         if index < copiedNumbers.Value.Length then
-                            List.replicate copiedNumbers.Value.[pageNum - 1] pageNum
+                            List.replicate copiedNumbers.Value.[pageNum - 1].PageNumValue pageNum
                         else []
                     )
-                    |> PageNumSequence.create
+                    |> PageNumSequence.Create
 
                 (Reuses.SequencePages pageNumSequence)
             )
@@ -434,7 +503,7 @@ module _Reuses =
                         splitDocument.Reader.GetPageNumbers(pageSelector)
                         |> List.map (fun _ -> copiedNumber
                         )
-                        |> CopiedNumSequence.create
+                        |> CopiedNumSequence.Create
 
                     (Reuses.DuplicatePages (pageSelector, pageNumSequence))
             )

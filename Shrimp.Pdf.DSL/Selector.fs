@@ -75,34 +75,8 @@ type Info =
             IIntegratedRenderInfo.isVisible info
 
     static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, predicate: Color -> bool, ?predicateCompose) =
-        let predicate =
-            match predicateCompose with 
-            | Some predicateCompose -> predicate >> predicateCompose 
-            | None -> predicate
-
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            match fillOrStrokeOptions with 
-            | FillOrStrokeOptions.FillOrStroke ->
-                IAbstractRenderInfo.hasStroke info
-                && predicate(info.Value.GetStrokeColor()) 
-                || 
-                    IAbstractRenderInfo.hasFill info
-                    && predicate(info.Value.GetFillColor())
-
-            | FillOrStrokeOptions.Fill ->
-                IAbstractRenderInfo.hasFill info
-                && predicate(info.Value.GetFillColor())
-
-            | FillOrStrokeOptions.FillAndStroke ->
-                IAbstractRenderInfo.hasStroke info
-                && predicate(info.Value.GetStrokeColor()) 
-                && 
-                    IAbstractRenderInfo.hasFill info
-                    && predicate (info.Value.GetFillColor())
-
-            | FillOrStrokeOptions.Stroke ->
-                IAbstractRenderInfo.hasStroke info
-                && predicate(info.Value.GetStrokeColor())
+            IAbstractRenderInfo.ColorIs(fillOrStrokeOptions, predicate, ?predicateCompose = predicateCompose) info
 
 
     static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, color: Color) =

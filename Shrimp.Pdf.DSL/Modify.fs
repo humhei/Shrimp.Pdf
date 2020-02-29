@@ -388,19 +388,29 @@ module ModifyOperators =
 
         selectorAndModifiersList
         |> List.map (fun modifier ->
-            let paramters =
-                defaultArg modifier.Paramters [
-                    "modifyingAsyncWorker" => modifyingAsyncWorker.ToString()
-                    "pageSelctor" => pageSelector.ToString()
-                    "modifiers" => selectorAndModifiersList.ToString()
-                    "selector" => modifier.Selector.ToString()
-                    "pageInfosValidation" => modifier.PageInfosValidation.ToString()
-                ]
+            let parameters =
+                match modifier.Paramters with 
+                | None ->
+                    [
+                        "pageSelctor" => pageSelector.ToString()
+                        "selector" => modifier.Selector.ToString()
+                    ]
+
+                | Some parameters ->
+                    (
+                        [
+                            "pageSelctor" => pageSelector.ToString()
+                            "selector" => modifier.Selector.ToString()
+                        ]
+                        @ parameters
+                    )
+                    |> List.distinctBy(fun (key, _) -> key.Trim().ToLower())
+
 
             Manipulate.runInAsync modifyingAsyncWorker (asyncManiputation [modifier])
             |> Manipulate.rename 
                 modifier.Name
-                paramters
+                parameters
         )
         |> Manipulate.Batch()
         ||>> ignore

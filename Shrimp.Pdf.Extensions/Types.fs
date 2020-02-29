@@ -158,6 +158,21 @@ module ExtensionTypes =
               Right = right 
               Bottom = bottom }
 
+        static member Create(values: float list) =
+            match values with 
+            | [ left; top; right; bottom ] ->
+                { Left = left
+                  Top = top
+                  Right = right
+                  Bottom = bottom }
+
+            | _ -> failwithf "values' length %d is not equal to 4" values.Length
+
+    [<RequireQualifiedAccess>]
+    module Margin =
+        let getValues (margin: Margin) =
+            [ margin.Left; margin.Top; margin.Right; margin.Bottom]
+
     type TileTable = private TileTable of colNum: int * rowNum: int
     with 
         member x.ColNum =

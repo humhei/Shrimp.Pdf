@@ -9,6 +9,19 @@ type NameAndParamters =
     { Name: string 
       Parameters: list<string * string>}
 
+type FlowModel<'userState> =
+    { File: string 
+      UserState: 'userState }
+
+[<RequireQualifiedAccess>]
+module FlowModel =
+    let mapM mapping flowModel =
+        { File = flowModel.File 
+          UserState = mapping flowModel.UserState }
+
+    let mapTo userState flowModel =
+        { File = flowModel.File 
+          UserState = userState }
 
 type internal FlowNameIndex =
     { Index: int
@@ -158,7 +171,7 @@ module internal FlowName =
                     match topFlowName.FlowNameKind with 
                     | FlowNameKind.New flowNameIndexes
                     | FlowNameKind.Override flowNameIndexes -> 
-                        (flowNameIndexes.DirectoryNames @ [flowNameIndexes.FileName]).[dirLength + 1].Index + 1
+                        (flowNameIndexes.DirectoryNames @ [flowNameIndexes.FileName]).[dirLength].Index + 1
                     | FlowNameKind.Disable (Some flowNameIndexes, verticalIndex) -> 
                         if flowNameIndexes.DirectoryNames.Length = dirLength
                         then 
@@ -167,13 +180,15 @@ module internal FlowName =
                             | None -> 0
                         elif flowNameIndexes.DirectoryNames.Length > dirLength
                         then 
-                            (flowNameIndexes.DirectoryNames @ [flowNameIndexes.FileName]).[dirLength + 1].Index + 1
+                            (flowNameIndexes.DirectoryNames @ [flowNameIndexes.FileName]).[dirLength].Index + 1
                         else failwith "Invalid token"
 
                     | FlowNameKind.Disable (None, Some verticalIndex) -> verticalIndex
 
                     | FlowNameKind.Disable (None, None) -> 0
+                    
                 | None -> 0
+
 
             match rightFlowName.FlowNameKind with 
             | FlowNameKind.Disable _ -> 
@@ -215,19 +230,7 @@ type internal FlowNameTupleBindedStatus =
     | None
 
 
-type FlowModel<'userState> =
-    { File: string 
-      UserState: 'userState }
 
-[<RequireQualifiedAccess>]
-module FlowModel =
-    let mapM mapping flowModel =
-        { File = flowModel.File 
-          UserState = mapping flowModel.UserState }
-
-    let mapTo userState flowModel =
-        { File = flowModel.File 
-          UserState = userState }
 
 
 type internal InternalFlowModel<'userState> =
@@ -282,7 +285,7 @@ with
                         try
                             Shell.cleanDir directory
                         with ex ->
-                            Logger.info (ex.Message)
+                            Logger.warning (ex.Message)
                     | None -> ()
 
             | FlowNameKind.Disable _ -> ()

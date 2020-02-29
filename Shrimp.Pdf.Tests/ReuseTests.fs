@@ -168,17 +168,23 @@ let reuseTests =
         |> ignore
 
     testCase "duplicate pages by page num sequence tests" <| fun _ -> 
-        Flow.Reuse (Reuses.SequencePages (PageNumSequence.create [1;1;1;3;4;5;8]))
+        Flow.Reuse (Reuses.SequencePages (PageNumSequence.Create [1;1;1;3;4;5;8]))
         |> runTest "datas/reuse/duplicate pages by page num sequence.pdf" 
         |> ignore
 
     testCase "duplicate pages by page num sequence tests2" <| fun _ -> 
-        Flow.Reuse (Reuses.SequencePages (PageNumSequence.create [1;1;1;3;4;5;8]))
-        |> runTest "datas/reuse/duplicate pages by sequence2.pdf" 
+        Flow.Reuse (Reuses.SequencePages (PageNumSequence.Create [1;1;1;3;4;5;8]))
+        |> runTest "datas/reuse/duplicate pages by page num sequence2.pdf" 
         |> ignore
 
+    ftestCase "duplicate pages by page num sequence tests3" <| fun _ -> 
+        Flow.Reuse (Reuses.SequencePages (PageNumSequence.Create [1, Rotation.Clockwise; 1, Rotation.Counterclockwise; 5, Rotation.Counterclockwise]))
+        |> runTest "datas/reuse/duplicate pages by page num sequence3.pdf" 
+        |> ignore
+
+
     testCase "duplicate pages by copied num sequence tests3" <| fun _ -> 
-        Flow.Reuse (Reuses.DuplicatePages (PageSelector.All, CopiedNumSequence.create [15;15;15;15]))
+        Flow.Reuse (Reuses.DuplicatePages (PageSelector.All, CopiedNumSequence.Create [15;15;15;15]))
         |> runTest "datas/reuse/duplicate pages by copied num sequence.pdf" 
         |> ignore
 

@@ -131,6 +131,8 @@ type SplitDocument internal (reader: string, writer: string) =
 
     let mutable writerDocument: PdfDocumentWithCachedResources option = None
 
+    let mutable isOpend = false
+
     member x.ReaderPath = reader
 
     member x.WriterPath = writer
@@ -146,25 +148,29 @@ type SplitDocument internal (reader: string, writer: string) =
         | None -> failwith "document is not open yet please option it first"
 
     member internal x.Open() =
-        match readerDocument with 
-        | Some readerDocument1 ->
-            if readerDocument1.IsClosed() 
-            then
-                readerDocument <- Some (new PdfDocument(new PdfReader(reader)))
-            else 
-                failwith "Old document is not closed yet"
+        if not isOpend 
+        then
+            match readerDocument with 
+            | Some readerDocument1 ->
+                if readerDocument1.IsClosed() 
+                then
+                    readerDocument <- Some (new PdfDocument(new PdfReader(reader)))
+                else 
+                    failwith "Old document is not closed yet"
 
-        | None -> readerDocument <- Some (new PdfDocument(new PdfReader(reader)))
+            | None -> readerDocument <- Some (new PdfDocument(new PdfReader(reader)))
 
-        match writerDocument with 
-        | Some writerDocument1 ->
-            if writerDocument1.IsClosed() 
-            then
-                writerDocument <- Some (new PdfDocumentWithCachedResources(writer))
-            else 
-                failwith "Old document is not closed yet"
-        | None ->
-            writerDocument <- Some(new PdfDocumentWithCachedResources(writer))
+            match writerDocument with 
+            | Some writerDocument1 ->
+                if writerDocument1.IsClosed() 
+                then
+                    writerDocument <- Some (new PdfDocumentWithCachedResources(writer))
+                else 
+                    failwith "Old document is not closed yet"
+            | None ->
+                writerDocument <- Some(new PdfDocumentWithCachedResources(writer))
+
+        isOpend <- true
 
     member internal x.CloseAndDraft() =
         x.Reader.Close()
@@ -172,6 +178,7 @@ type SplitDocument internal (reader: string, writer: string) =
 
         File.Delete(reader)
         File.Copy(writer, reader, true)
+        isOpend <- false
 
     static member Create(reader, writer) = new SplitDocument(reader, writer)
 

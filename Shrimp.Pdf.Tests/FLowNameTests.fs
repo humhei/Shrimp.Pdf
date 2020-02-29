@@ -43,7 +43,7 @@ let flowNameTests =
         |> runTest "datas/flowName/oneLevel.pdf" 
         |> ignore
 
-    ftestCase "multipleLevels tests" <| fun _ ->
+    testCase "multipleLevels tests" <| fun _ ->
         let flow = 
             Flow.Manipulate(
                 Manipulate(

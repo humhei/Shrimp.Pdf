@@ -690,6 +690,38 @@ module iText =
         let boundIsInsideOf  boundGettingOptions rect (info: IAbstractRenderInfo) =
             (getBound boundGettingOptions info).IsInsideOf(rect)
 
+    type IAbstractRenderInfo with 
+        static member ColorIs(fillOrStrokeOptions: FillOrStrokeOptions, predicate: Color -> bool, ?predicateCompose) =
+            let predicate =
+                match predicateCompose with 
+                | Some predicateCompose -> predicate >> predicateCompose 
+                | None -> predicate
+
+            fun (info: #IAbstractRenderInfo) ->
+                match fillOrStrokeOptions with 
+                | FillOrStrokeOptions.FillOrStroke ->
+                    IAbstractRenderInfo.hasStroke info
+                    && predicate(info.Value.GetStrokeColor()) 
+                    || 
+                        IAbstractRenderInfo.hasFill info
+                        && predicate(info.Value.GetFillColor())
+
+                | FillOrStrokeOptions.Fill ->
+                    IAbstractRenderInfo.hasFill info
+                    && predicate(info.Value.GetFillColor())
+
+                | FillOrStrokeOptions.FillAndStroke ->
+                    IAbstractRenderInfo.hasStroke info
+                    && predicate(info.Value.GetStrokeColor()) 
+                    && 
+                        IAbstractRenderInfo.hasFill info
+                        && predicate (info.Value.GetFillColor())
+
+                | FillOrStrokeOptions.Stroke ->
+                    IAbstractRenderInfo.hasStroke info
+                    && predicate(info.Value.GetStrokeColor())
+
+
     [<RequireQualifiedAccess>]
     module IIntegratedRenderInfo =
         [<RequireQualifiedAccess>]

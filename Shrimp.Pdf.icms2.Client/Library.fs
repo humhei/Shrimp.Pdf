@@ -20,20 +20,6 @@ module Client =
 
     type private AssemblyFinder = AssemblyFinder
 
-    [<AutoOpen>]
-    module ClientCluster =
-        let mutable private client: option<Client<unit, ServerMsg>> = None
-        let SetClientContext() = 
-            match client with 
-            | None -> client <- Some (Client.create())
-            | Some _ -> ()
-
-        let GetClient() = 
-            match client with
-            | Some client -> client
-            | None -> failwith "Please run SetClientContext() first to aceess icm server"
-
-
     let private referenceConfig = 
         lazy
             ConfigurationFactory.FromResource<AssemblyFinder>("Shrimp.Pdf.icms2.Client.reference.conf")
@@ -48,7 +34,6 @@ module Client =
             |> unbox
         | None -> failwithf "avaliableIccs %A not include %s" avaliableIccs cmykIccText 
      
-
 
     let defaultCmykIcc: Lazy<CmykIcc> = 
         lazy
@@ -73,6 +58,30 @@ module Client =
     let defaultMaxCmsGrayDeviation: Lazy<float32> =
         lazy
             referenceConfig.Value.GetFloat("shrimp.pdf.icms2.client.maxCmsGrayDeviation")
+
+    [<AutoOpen>]
+    module ClientCluster =
+        let mutable private client: option<Client<unit, ServerMsg>> = None
+        let SetClientContext() = 
+            match client with 
+            | None -> 
+                let actorClient = Client.create()
+                actorClient.WarmUp(fun _ ->
+                    actorClient <! ServerMsg.CalcColor (Icc.Rgb defaultRgbIcc.Value, [|0.5f; 0.5f; 0.5f|], Icc.Cmyk defaultCmykIcc.Value, defaultIntent.Value)
+                )
+                client <- Some (actorClient)
+            | Some _ -> ()
+
+        let GetClient() = 
+            match client with
+            | Some client -> client
+            | None -> failwith "Please run SetClientContext() first to aceess icm server"
+
+
+
+
+
+
 
     let private msgCache = new ConcurrentDictionary<ServerMsg, float32[]>()
 

@@ -294,7 +294,7 @@ module _Colors =
     [<RequireQualifiedAccess>]
     module DeviceRgb =
         let fromKnownColor(knownColor: KnownColor) =
-            let color = Color.FromKnownColor(knownColor)
+            let color = Color.FromName(knownColor.ToString())
             new DeviceRgb(int color.R, int color.G, int color.B)
     
     
