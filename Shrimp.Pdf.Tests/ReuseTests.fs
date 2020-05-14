@@ -208,12 +208,13 @@ let reuseTests =
         |> runTest "datas/reuse/move pagebox to origin.pdf" 
         |> ignore
 
-    testCase "resize pageSize to 7x4cm tests" <| fun _ -> 
+    ftestCase "resize pageSize to 7x4cm tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.Resize(PageSelector.All, PageBoxKind.ActualBox, {Width = mm 70.; Height = mm 40.})
         )
         |> runTest "datas/reuse/resize pageSize to 7x4cm.pdf" 
         |> ignore
+
 
     testCase "resize pageSize to 7x4cm by trimbox tests" <| fun _ -> 
         Flow.Reuse (
@@ -235,5 +236,6 @@ let reuseTests =
         )
         |> runTest "datas/reuse/insertPages.pdf" 
         |> ignore
+
 
 ]

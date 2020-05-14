@@ -13,6 +13,7 @@ open System
 open System.IO
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf
+open Shrimp.FSharp.Plus
 
 
 [<RequireQualifiedAccess>]
@@ -25,42 +26,39 @@ with
         | PageNumSequenceToken.PageNum pageNum -> pageNum
         | PageNumSequenceToken.PageNumWithRotation (pageNum, _) -> pageNum
 
-type PageNumSequence = private PageNumSequence of PageNumSequenceToken list
+type PageNumSequence = private PageNumSequence of AtLeastOneList<PageNumSequenceToken>
 with 
     member x.Value = 
         let (PageNumSequence value) = x
-        value
+        value.AsList
 
     static member Create (sequence: int list) =
-        if sequence.IsEmpty then failwith "page sequence cannot be empty"
-        elif List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in page sequence %A must be bigger than 0" sequence
-        PageNumSequence (List.map PageNumSequenceToken.PageNum sequence)
+        if List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in page sequence %A must be bigger than 0" sequence
+        sequence
+        |> List.map PageNumSequenceToken.PageNum
+        |> AtLeastOneList.Create
+        |> PageNumSequence
 
     static member Create (sequence: (int * Rotation) list) =
         let pageNumbers = List.map fst sequence
-        if sequence.IsEmpty then failwith "page sequence cannot be empty"
-        elif List.exists (fun pageNumber -> pageNumber <= 0) pageNumbers then failwithf "number in page sequence %A must be bigger than 0" sequence
-        PageNumSequence (List.map PageNumSequenceToken.PageNumWithRotation sequence)
+        if List.exists (fun pageNumber -> pageNumber <= 0) pageNumbers then failwithf "number in page sequence %A must be bigger than 0" sequence
+        sequence
+        |> List.map PageNumSequenceToken.PageNumWithRotation
+        |> AtLeastOneList.Create
+        |> PageNumSequence
 
 
-
-type CopiedNumSequence = private CopiedNumSequence of PageNumSequenceToken list
+type CopiedNumSequence = private CopiedNumSequence of AtLeastOneList<int>
 with 
     member x.Value = 
         let (CopiedNumSequence value) = x
-        value
+        value.AsList
 
     static member Create(sequence: int list) =
-        if sequence.IsEmpty then failwith "sequence cannot be empty"
-        elif List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in sequence %A must be bigger than 0" sequence
-        CopiedNumSequence (List.map PageNumSequenceToken.PageNum sequence)
-
-
-    static member Create(sequence: list<int * Rotation>) =
-        let pageNumbers = List.map fst sequence
-        if sequence.IsEmpty then failwith "page sequence cannot be empty"
-        elif List.exists (fun pageNumber -> pageNumber <= 0) pageNumbers then failwithf "number in page sequence %A must be bigger than 0" sequence
-        CopiedNumSequence (List.map PageNumSequenceToken.PageNumWithRotation sequence)
+        if List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in sequence %A must be bigger than 0" sequence
+        sequence
+        |> AtLeastOneList.Create
+        |> CopiedNumSequence 
 
 
 
@@ -178,6 +176,9 @@ module _Reuses =
                         let canvas = new PdfCanvas(newPage)
                         canvas.AddXObject(xobject, -pageBox.GetX(), -pageBox.GetY())
                         |> ignore
+                    else 
+                        let page = page.CopyTo(splitDocument.Writer)
+                        splitDocument.Writer.AddPage(page) |> ignore
                 )
 
             |> reuse
@@ -199,7 +200,7 @@ module _Reuses =
                     )|> List.concat
 
                 if duplicatedReaderPages.Length = 0 
-                then failwithf "Invalid sequence %A, shoudl exists a sequence number >= 1 and <= %d" pageNumSequence (splitDocument.Reader.GetNumberOfPages())
+                then failwithf "Invalid sequence %A, should exists a sequence number >= 1 and <= %d" pageNumSequence (splitDocument.Reader.GetNumberOfPages())
 
                 let pdfPageCache = new Dictionary<int, PdfPage>()
                 let xObjectCache = new Dictionary<int, Xobject.PdfFormXObject>()
@@ -287,10 +288,14 @@ module _Reuses =
 
         static member Rotate (pageSelector: PageSelector, rotation: Rotation) =
             Reuse.Factory(fun flowModel splitDocument ->
-                let pageNums = splitDocument.Reader.GetPageNumbers(pageSelector)
+                let selectedPageNums = splitDocument.Reader.GetPageNumbers(pageSelector)
+
                 let pageNumSequence = 
-                    pageNums
-                    |> List.map (fun pageNum -> pageNum, rotation)
+                    [ 1 .. splitDocument.Reader.GetNumberOfPages() ]
+                    |> List.map (fun pageNum -> 
+                        if List.contains pageNum selectedPageNums
+                        then (pageNum, rotation)
+                        else (pageNum, Rotation.None))
                     |> PageNumSequence.Create
 
                 Reuses.SequencePages(pageNumSequence)
@@ -354,6 +359,10 @@ module _Reuses =
                             PdfPage.setPageBox pageBoxKind newPageBox newPage
                             |> ignore
                         )
+
+                    else 
+                        let page = page.CopyTo(splitDocument.Writer)
+                        splitDocument.Writer.AddPage(page) |> ignore
                 )
 
             |> reuse 
@@ -388,16 +397,19 @@ module _Reuses =
                             (Set.ofList (splitDocument.Reader.GetPageNumbers(pageSelector))) 
                             (Set.ofList proposedRotatedPageNumbers)
                         |> fun pageNumbers ->
-                            let pageSelector = 
-                                PageSelector.Numbers (pageNumbers)
 
-                            let rotation = 
-                                match pageResizingRotatingOptions with 
-                                | PageResizingRotatingOptions.CounterColckwiseIfNeeded -> Rotation.Counterclockwise
-                                | PageResizingRotatingOptions.ColckwiseIfNeeded -> Rotation.Clockwise
-                                | PageResizingRotatingOptions.Keep -> Rotation.None
+                            if pageNumbers.IsEmpty then Reuse.dummy()
+                            else
+                                let pageSelector = 
+                                    PageSelector.Numbers (AtLeastOneSet.Create pageNumbers)
 
-                            Reuses.Rotate(pageSelector, rotation)
+                                let rotation = 
+                                    match pageResizingRotatingOptions with 
+                                    | PageResizingRotatingOptions.CounterColckwiseIfNeeded -> Rotation.Counterclockwise
+                                    | PageResizingRotatingOptions.ColckwiseIfNeeded -> Rotation.Clockwise
+                                    | PageResizingRotatingOptions.Keep -> Rotation.None
+
+                                Reuses.Rotate(pageSelector, rotation)
                     )
 
             let resize() =
@@ -481,7 +493,7 @@ module _Reuses =
                     |> List.indexed
                     |> List.collect (fun (index, pageNum) ->
                         if index < copiedNumbers.Value.Length then
-                            List.replicate copiedNumbers.Value.[pageNum - 1].PageNumValue pageNum
+                            List.replicate copiedNumbers.Value.[pageNum - 1] pageNum
                         else []
                     )
                     |> PageNumSequence.Create

@@ -49,19 +49,15 @@ let run() =
                 let indent = enum<Indent> (int indent)
                 match Map.tryFind (inputIcc, outputIcc, indent) model with 
                 | Some icms2 -> 
-                    ctx.RespondSafely(fun _ ->
-                        let outputValues = icms2.DoTransfrom(inputValues)
-                        logger.Info (sprintf "[SHRIMP SERVER Pdf ICMS2] Convert %O %A to %O %A" inputIcc inputValues outputIcc outputValues) 
-                        box outputValues
-                    )
+                    let outputValues = icms2.DoTransfrom(inputValues)
+                    logger.Info (sprintf "[SHRIMP SERVER Pdf ICMS2] Convert %O %A to %O %A" inputIcc inputValues outputIcc outputValues) 
+                    ctx.Sender() <! outputValues
 
                 | None ->
-                    ctx.RespondSafely(fun _ ->
-                        let icms2 = new Icms("Icc" </> Icc.fileName inputIcc, Icc.format inputIcc,"Icc" </> Icc.fileName outputIcc, Icc.format outputIcc, indent, 0u)
-                        let outputValues = icms2.DoTransfrom(inputValues)
-                        logger.Info (sprintf "[SHRIMP SERVER Pdf ICMS2] Convert %O %A to %O %A" inputIcc inputValues outputIcc outputValues) 
-                        box outputValues 
-                    )
+                    let icms2 = new Icms("Icc" </> Icc.fileName inputIcc, Icc.format inputIcc,"Icc" </> Icc.fileName outputIcc, Icc.format outputIcc, indent, 0u)
+                    let outputValues = icms2.DoTransfrom(inputValues)
+                    logger.Info (sprintf "[SHRIMP SERVER Pdf ICMS2] Convert %O %A to %O %A" inputIcc inputValues outputIcc outputValues) 
+                    ctx.Sender() <! outputValues 
         }
         loop Map.empty
     )

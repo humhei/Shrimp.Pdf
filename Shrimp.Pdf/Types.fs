@@ -177,7 +177,7 @@ type SplitDocument internal (reader: string, writer: string) =
         x.Writer.Close()
 
         File.Delete(reader)
-        File.Copy(writer, reader, true)
+        File.Move(writer, reader)
         isOpend <- false
 
     static member Create(reader, writer) = new SplitDocument(reader, writer)

@@ -121,9 +121,14 @@ module internal rec ManipulateOrReuse =
                 match flow with 
                 | Flow.ManipulateOrReuse manipulateOrReuse -> 
                     flowModel.Document.Open()
-                    let newUserState = (manipulateOrReuse flowModel)
-                    flowModel.Document.CloseAndDraft()
-                    FlowModel.mapTo newUserState flowModel
+                    try 
+                        let newUserState = (manipulateOrReuse flowModel)
+                        flowModel.Document.CloseAndDraft()
+                        FlowModel.mapTo newUserState flowModel
+
+                    with ex ->
+                        flowModel.Document.CloseAndDraft()
+                        raise ex
 
                 | Flow.TupledFlow flow -> flow.Invoke flowModel
                 

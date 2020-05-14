@@ -5,24 +5,31 @@ open System.IO
 
 [<RequireQualifiedAccess>]
 module Logger =
-    let logger: Lazy<NLog.Logger option> = 
-        lazy 
-            match NLog.LogManager.GetCurrentClassLogger() with 
+    let private logger: Lazy<NLog.Logger> = 
+        lazy (NLog.LogManager.GetCurrentClassLogger())
+      
+    let private configuration =
+        lazy
+            match NLog.LogManager.Configuration with 
             | null -> None
-            | logger -> Some logger
+            | conf -> Some conf
 
     let warning (message: string) =
-        match logger.Value with 
-        | Some (logger: NLog.Logger) -> 
-            logger.Warn message
-            printfn "WARNING: %s" message
+        match configuration.Value with 
+        | Some (_) -> 
+            logger.Value.Warn message
         | None -> printfn "WARNING: %s" message
 
+    let error (message: string) =
+        match configuration.Value with 
+        | Some (_) -> 
+            logger.Value.Error message
+        | None -> printfn "ERROR: %s" message
+
     let info (message: string) =
-        match logger.Value with 
-        | Some (logger: NLog.Logger) -> 
-            logger.Info message
-            printfn "%s" message
+        match configuration.Value with 
+        | Some (_) -> 
+            logger.Value.Info message
         | None -> printfn "%s" message
 
     let unSupportedTextRenderMode(textRendingMode: int) =

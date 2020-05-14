@@ -3,6 +3,7 @@ open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open FParsec
 open iText.Kernel.Pdf
+open Shrimp.FSharp.Plus
 
 
 [<AutoOpen>]
@@ -485,13 +486,15 @@ module ExtensionTypes =
 
             | Failure (errorMsg, _, _) -> failwithf "%s" errorMsg
 
+
+
     [<RequireQualifiedAccess>]
     type PageSelector =
         | Last
         | First
         | All
         | Expr of PageSelectorExpr
-        | Numbers of Set<int>
+        | Numbers of AtLeastOneSet<int>
     with 
         override x.ToString() =
             match x with 
@@ -537,7 +540,7 @@ module ExtensionTypes =
             | PageSelector.Numbers numbers -> 
                 let intersectedNumbers =
                     Set.intersect
-                        numbers
+                        numbers.Value
                         (Set.ofList [1..numberOfPages])
                     |> Set.toList
 
