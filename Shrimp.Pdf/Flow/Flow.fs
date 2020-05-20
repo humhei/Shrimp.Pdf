@@ -33,15 +33,37 @@ module rec _FlowMutualTypes =
         static member internal Run(flowModels: InternalFlowModel<'oldUserState> list, flow): InternalFlowModel<'newUserState> list =
             match flow with 
             | Flow.FileOperation flow -> 
-                flowModels
-                |> List.map InternalFlowModel.toFlowModel
-                |> flow.Value
-                |> List.map (fun flowModel ->
-                    { File = flowModel.File 
-                      FlowName = None 
-                      UserState = flowModel.UserState 
-                      FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.None }
-                )
+                let inputFiles = 
+                    flowModels
+                    |> List.map (fun m -> m.File)
+
+                let newFlowModels = 
+                    flowModels
+                    |> List.map InternalFlowModel.toFlowModel
+                    |> flow.Value
+
+                let newFiles =
+                    newFlowModels
+                    |> List.map (fun m -> m.File)
+
+                if inputFiles = newFiles 
+                then
+                    ( flowModels, newFlowModels )
+                    ||> List.map2 (fun flowModel newFlowModel ->
+                        { File = flowModel.File 
+                          FlowName = flowModel.FlowName
+                          UserState = newFlowModel.UserState
+                          FlowNameTupleBindedStatus = flowModel.FlowNameTupleBindedStatus }
+                    )
+
+                else 
+                    newFlowModels
+                    |> List.map (fun flowModel ->
+                        { File = flowModel.File 
+                          FlowName = None 
+                          UserState = flowModel.UserState 
+                          FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.None }
+                    )
 
             | Flow.TupledFlow flow ->
                 flow.Invoke (flowModels |> List.map InternalFlowModelWrapper)

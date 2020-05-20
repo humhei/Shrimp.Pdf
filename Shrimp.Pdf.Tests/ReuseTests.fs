@@ -12,6 +12,8 @@ let reuseTests =
   testList "Reuse Tests" [
     testCase "imposing N-UP tests" <| fun _ -> 
         Flow.Reuse (
+            Reuse.dummy()
+            <+>
             Reuses.Impose
                 (fun args ->
                     { args with 
@@ -25,7 +27,7 @@ let reuseTests =
                         Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 30., mm 30., mm 30., mm 40.))
                         UseBleed = true
                     }
-                )
+                ) ||>> fun imposingDocument -> imposingDocument.GetSheets()
         )
         |> runTest "datas/reuse/Imposing N-UP.pdf" 
         |> ignore
@@ -177,7 +179,7 @@ let reuseTests =
         |> runTest "datas/reuse/duplicate pages by page num sequence2.pdf" 
         |> ignore
 
-    ftestCase "duplicate pages by page num sequence tests3" <| fun _ -> 
+    testCase "duplicate pages by page num sequence tests3" <| fun _ -> 
         Flow.Reuse (Reuses.SequencePages (PageNumSequence.Create [1, Rotation.Clockwise; 1, Rotation.Counterclockwise; 5, Rotation.Counterclockwise]))
         |> runTest "datas/reuse/duplicate pages by page num sequence3.pdf" 
         |> ignore
@@ -208,7 +210,7 @@ let reuseTests =
         |> runTest "datas/reuse/move pagebox to origin.pdf" 
         |> ignore
 
-    ftestCase "resize pageSize to 7x4cm tests" <| fun _ -> 
+    testCase "resize pageSize to 7x4cm tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.Resize(PageSelector.All, PageBoxKind.ActualBox, {Width = mm 70.; Height = mm 40.})
         )

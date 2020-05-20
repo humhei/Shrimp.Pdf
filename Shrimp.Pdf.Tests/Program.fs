@@ -21,6 +21,7 @@ let allTests =
             RealSampleTests.realSamplesTests
             FunctionTests.functionTests
             FlowNameTests.flowNameTests
+            BugFixmentTests.bugFixmentTests
         ]
 
 [<EntryPoint>]

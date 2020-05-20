@@ -12,7 +12,7 @@ open Shrimp.Pdf.Colors
 let flowNameTests =
   let addText text position =
     ModifyPage.Create
-        (text,
+        ( text,
           PageSelector.First,
           Dummy,
           PageModifier.Batch [
@@ -22,7 +22,7 @@ let flowNameTests =
                   CanvasFontSize = CanvasFontSize.Numeric 25. 
                   FontColor = PdfCanvasColor.Separation (FsSeparation.Create("专色1", DeviceRgb.BLUE))
                   FontRotation = Rotation.None 
-                  Position = Position.LeftTop(0., 0.)}
+                  Position = position}
             )
           ]
         )
@@ -32,18 +32,51 @@ let flowNameTests =
         Flow.Manipulate(
             addText "add text to left top" (Position.LeftTop(0., 0.))
             <+>
-            addText "add text to top middle" (Position.TopMiddle(0., 0.))
-            <+>
-            addText "add text to right top" (Position.RightTop(0., 0.))
+            (
+                addText "add text to top middle" (Position.TopMiddle(0., 0.))
+                <+>
+                addText "add text to right top" (Position.RightTop(0., 0.))
+            )
         )
         <+>
-        Flow.Reuse(
-            Reuses.Rotate(PageSelector.All, Rotation.Counterclockwise)
+        (
+            Flow.dummy()
+            <+>
+            Flow.Reuse(
+                Reuses.Rotate(PageSelector.All, Rotation.Counterclockwise)
+            )
         )
         |> runTest "datas/flowName/oneLevel.pdf" 
         |> ignore
 
-    testCase "multipleLevels tests" <| fun _ ->
+    testCase "multipleLevels tests1" <| fun _ ->
+        let flow = 
+            Flow.NamedFlow(
+                FlowName.New "rotates flow1",
+                Flow.NamedFlow(
+                    FlowName.New "rotates flow2",
+                    Flow.Reuse(
+                        Reuses.Rotate(PageSelector.All, Rotation.Counterclockwise)
+                        <+>
+                        Reuses.Rotate(PageSelector.All, Rotation.Clockwise)
+
+                    )
+                    <+>
+                    Flow.Reuse(
+                        Reuses.Rotate(PageSelector.All, Rotation.Clockwise)
+                    )
+                )
+            )
+
+        Flow.NamedFlow(
+            FlowName.New "flow flowName",
+            flow
+        )
+
+        |> runTest "datas/flowName/multipleLevels1.pdf" 
+        |> ignore
+
+    testCase "multipleLevels tests2" <| fun _ ->
         let flow = 
             Flow.Manipulate(
                 Manipulate(
@@ -105,6 +138,6 @@ let flowNameTests =
             flow
         )
 
-        |> runTest "datas/flowName/multipleLevels.pdf" 
+        |> runTest "datas/flowName/multipleLevels2.pdf" 
         |> ignore
   ]

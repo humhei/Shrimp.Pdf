@@ -676,3 +676,42 @@ module _Colors =
         member x.IsInColorSpace(colorSpace: ColorSpace) =
             x.GetFsColorSpace() = colorSpace
          
+
+    [<RequireQualifiedAccess>]
+    type FsItextPersistableColor =
+        | Value of Color
+        | Separation of FsSeparation
+
+    with 
+        static member OfItextColor(color: Color) =
+            match color with 
+            | :? Separation as separationColor ->
+                FsSeparation.OfSeparation separationColor
+                |> FsItextPersistableColor.Separation
+
+            | _ -> FsItextPersistableColor.Value (color)
+
+        
+        static member IsEqual (color1: FsItextPersistableColor, color2: FsItextPersistableColor, valueEqualOptions) =
+            match color1, color2 with 
+            | FsItextPersistableColor.Value color1, FsItextPersistableColor.Value color2 ->
+                FsValueColor.IsEqual(FsValueColor.OfItextColor color1, FsValueColor.OfItextColor color2, valueEqualOptions)
+         
+            | FsItextPersistableColor.Separation color1, FsItextPersistableColor.Separation color2 ->
+                FsSeparation.IsEqual (color1, color2, valueEqualOptions)
+
+            | _ -> false
+
+        static member Contains(valueEqualOptions) =
+            fun (color: FsItextPersistableColor) (colors: FsItextPersistableColor list) ->
+                colors 
+                |> List.exists(fun color1 ->
+                    FsItextPersistableColor.IsEqual(color, color1, valueEqualOptions)
+                )
+
+        static member Except valueEqualOptions =
+            fun (excepts: FsItextPersistableColor list) (colors: FsItextPersistableColor list) ->
+                colors 
+                |> List.filter(fun color ->
+                    not (FsItextPersistableColor.Contains valueEqualOptions color excepts)
+                )

@@ -339,9 +339,11 @@ module internal rec ManipulateOrReuse =
                 let middleFlowModel =
 
                     let middleFlowModel = Flow<_, _>.Invoke flowModel x.Flow1
-                    
-                    { middleFlowModel with 
-                        FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.Binding flowModel.FlowName }
+                    let newMiddleFlowModel = 
+                        { middleFlowModel with 
+                            FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.Binding flowModel.FlowName }
+
+                    newMiddleFlowModel
 
 
                 let newFlowModel = Flow<_, _>.Invoke middleFlowModel x.Flow2

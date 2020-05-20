@@ -9,9 +9,9 @@
     <Folder Include="datas\real samples\" />
     <None Include="datas\**\*.pdf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <Compile Include="FunctionTests.fs" />
+    </None>    <Compile Include="FunctionTests.fs" />
     <Compile Include="Types.fs" />
+    <Compile Include="BugFixmentTests.fs" />
     <Compile Include="FileOperationTests.fs" />
     <Compile Include="RealSamplesTest.fs" />
     <Compile Include="ManipulateTests.fs" />

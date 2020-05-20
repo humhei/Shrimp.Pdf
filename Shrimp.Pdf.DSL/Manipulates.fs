@@ -17,8 +17,10 @@ module Manipulates =
                         renderInfos
                         |> Seq.choose (IIntegratedRenderInfo.tryGetVisibleBound BoundGettingStrokeOptions.WithStrokeWidth)
                         |> Rectangle.ofRectangles
+
                     args.Page.SetActualBox(bound |> Rectangle.applyMargin margin)
                     |> ignore
+
                 ),
                 parameters = [
                     "margin" => margin.ToString()
