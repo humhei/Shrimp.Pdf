@@ -49,28 +49,25 @@ let flowNameTests =
         |> runTest "datas/flowName/oneLevel.pdf" 
         |> ignore
 
-    testCase "multipleLevels tests1" <| fun _ ->
-        let flow = 
+    ftestCase "multipleLevels tests1" <| fun _ ->
+        Flow.NamedFlow(
+            FlowName.New "flow flowName0",
             Flow.NamedFlow(
-                FlowName.New "rotates flow1",
-                Flow.NamedFlow(
-                    FlowName.New "rotates flow2",
-                    Flow.Reuse(
-                        Reuses.Rotate(PageSelector.All, Rotation.Counterclockwise)
-                        <+>
-                        Reuses.Rotate(PageSelector.All, Rotation.Clockwise)
-
-                    )
-                    <+>
-                    Flow.Reuse(
-                        Reuses.Rotate(PageSelector.All, Rotation.Clockwise)
-                    )
+                FlowName.New "flow flowName1",
+                Flow.Reuse(
+                    Reuses.Rotate(PageSelector.All, Rotation.Counterclockwise)
                 )
             )
-
-        Flow.NamedFlow(
-            FlowName.New "flow flowName",
-            flow
+            <+>
+            Flow.Manipulate(
+                addText "add text to left top" (Position.LeftTop(0., 0.))
+                <+>
+                (
+                    addText "add text to top middle" (Position.TopMiddle(0., 0.))
+                    <+>
+                    addText "add text to right top" (Position.RightTop(0., 0.))
+                )
+            )
         )
 
         |> runTest "datas/flowName/multipleLevels1.pdf" 

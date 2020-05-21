@@ -26,7 +26,7 @@ module internal rec ManipulateOrReuse =
         { File: string 
           Document: SplitOrIntegratedDocument 
           FlowName: FlowName option
-          FlowNameTupleBindedStatus: FlowNameTupleBindedStatus
+          OperatedFlowNames: FlowName list
           UserState: 'userState }
     with 
         member flowModel.ToPublicFlowModel() =
@@ -36,13 +36,8 @@ module internal rec ManipulateOrReuse =
         member flowModel.ToInternalFlowModel() =
             { File = flowModel.File 
               UserState = flowModel.UserState 
-              FlowName = flowModel.FlowName 
-              FlowNameTupleBindedStatus = flowModel.FlowNameTupleBindedStatus }
-
-
-        member flowModel.CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero() =
-            flowModel.ToInternalFlowModel().CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero()
-         
+              FlowName = flowModel.FlowName
+              OperatedFlowNames = flowModel.OperatedFlowNames }
 
 
     [<RequireQualifiedAccess>]
@@ -52,22 +47,18 @@ module internal rec ManipulateOrReuse =
               UserState = mapping flowModel.UserState
               FlowName = flowModel.FlowName
               Document = flowModel.Document
-              FlowNameTupleBindedStatus = flowModel.FlowNameTupleBindedStatus }
+              OperatedFlowNames = flowModel.OperatedFlowNames }
 
         let mapTo userState (flowModel: FlowModel<_>) =
-            { File = flowModel.File 
-              UserState = userState
-              FlowName = flowModel.FlowName
-              Document = flowModel.Document 
-              FlowNameTupleBindedStatus = flowModel.FlowNameTupleBindedStatus}
+            mapM (fun _ -> userState) flowModel
 
     type Logger with
-        static member TryInfoWithFlowModel (flowModel: FlowModel<_>, f) =
+        static member TryInfoWithFlowModel (flowNameIndex, flowModel: FlowModel<_>, f) =
             Logger.TryInfoWithFlowModel(
+                flowNameIndex,
                 flowModel.ToInternalFlowModel(),
                 f = f
             )
-
 
     [<RequireQualifiedAccess>]
     type Flow<'oldUserState, 'newUserState> =
@@ -116,6 +107,54 @@ module internal rec ManipulateOrReuse =
 
             loop flow
 
+        static member internal SetParentFlowName(parentFlowName, flow) =
+            let rec loop parentFlowName flow =
+                match flow with 
+                | Flow.ManipulateOrReuse transform -> 
+                    transform
+                    |> Flow.ManipulateOrReuse
+
+                | Flow.Func factory ->
+                    fun userState ->
+                        userState
+                        |> factory
+                        |> loop parentFlowName
+
+                    |> Flow.Func
+
+                | Flow.Factory factory ->
+                    fun flowModel ->
+                        flowModel
+                        |> factory
+                        |> loop parentFlowName
+                    |> Flow.Factory
+
+                | Flow.TupledFlow (tupledFlow) ->
+                    tupledFlow.SetParentFlowName(parentFlowName)
+                    |> Flow.TupledFlow
+
+                | Flow.NamedFlow (flowName, flow) ->
+                    let flowName = 
+                        match parentFlowName with 
+                        | Some parentFlowName ->
+                            match parentFlowName with 
+                            | FlowName.New _ ->
+                                flowName.SetParentFlowName(parentFlowName)
+                            | FlowName.Disable _ ->
+                                FlowName.Disable
+
+                            | FlowName.Override _ -> FlowName.Disable
+                        | None -> flowName
+
+                    (flowName, loop (Some flowName) flow)
+                    |> Flow.NamedFlow
+
+                | Flow.AppendedFlow (appendix, flow) ->
+                    (appendix, loop parentFlowName flow)
+                    |> Flow.AppendedFlow
+
+            loop parentFlowName flow
+
         static member internal Invoke(flowModel: FlowModel<'userState>) (flow) : FlowModel<'newUserState> =
             let rec loop (flowModel: FlowModel<'userState>) flow =
                 match flow with 
@@ -141,30 +180,25 @@ module internal rec ManipulateOrReuse =
                     let flow = factory flowModel
                     loop flowModel flow
 
-                | Flow.NamedFlow (flowName1, flow) ->
-                    let flowName0 = flowModel.FlowName
-
-                    let flowName =
-                        match flowModel.FlowNameTupleBindedStatus with 
-                        | FlowNameTupleBindedStatus.Binding previous ->
-                            FlowName.tupledFlow_Bind_FlowName previous flowName0 flowName1
-                        | FlowNameTupleBindedStatus.None ->
-                            match flowName0 with 
-                            | None -> flowName1
-                            | Some flowName0 -> flowName0.Bind(flowName1)
+                | Flow.NamedFlow (flowName0, flow) ->
+                    let index =
+                        flowModel.OperatedFlowNames
+                        |> List.filter(fun m -> m.RelativeDirectory = flowName0.RelativeDirectory)
+                        |> List.length
 
                     let flowModel =
-                        { flowModel with 
-                            FlowName = Some flowName
-                            FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.None }
+                        { flowModel with FlowName = Some flowName0; OperatedFlowNames = flowName0 :: flowModel.OperatedFlowNames }
 
-                    flowModel.CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero()
+                    Logger.TryInfoWithFlowModel(index, flowModel, fun _ ->
+                        let newFlowModel = loop flowModel flow
+                        flowModel
+                            .ToInternalFlowModel()
+                            .TryBackupFile(index)
 
-                    Logger.TryInfoWithFlowModel (flowModel, (fun _ ->
-                        let userState = loop flowModel flow
-                        flowModel.ToInternalFlowModel().TryBackupFile()
-                        userState
-                    ))
+                        newFlowModel
+                    )
+
+                    
 
                 | Flow.AppendedFlow (appendix, flow) ->
                     loop flowModel (Flow<_, _>.AppendLastManipulate(appendix, flow))
@@ -244,8 +278,8 @@ module internal rec ManipulateOrReuse =
                         flowModel
                         |> factory
                         |> loop
-
                     |> Flow.Factory
+
                 | Flow.TupledFlow (tupledFlow) ->
                     tupledFlow.MapState (mapping)
                     |> Flow.TupledFlow
@@ -324,6 +358,8 @@ module internal rec ManipulateOrReuse =
         abstract member MapStateBack: ('a -> 'oldUserState) -> ITupledFlow<'a, 'newUserState>
     
         abstract member AppendLastManipulate: (SplitOrIntegratedDocument -> unit) -> ITupledFlow<'oldUserState, 'newUserState>
+        
+        abstract member SetParentFlowName: (FlowName option) -> ITupledFlow<'oldUserState, 'newUserState>
 
     type internal TupledFlow<'a, 'oldUserState, 'middleUserState, 'newUserState, 'finalUserState> =
         { Flow1: Flow<'oldUserState, 'middleUserState>
@@ -336,15 +372,7 @@ module internal rec ManipulateOrReuse =
 
                 let flowModel = FlowModel.mapM x.FMonadStateBack flowModel
 
-                let middleFlowModel =
-
-                    let middleFlowModel = Flow<_, _>.Invoke flowModel x.Flow1
-                    let newMiddleFlowModel = 
-                        { middleFlowModel with 
-                            FlowNameTupleBindedStatus = FlowNameTupleBindedStatus.Binding flowModel.FlowName }
-
-                    newMiddleFlowModel
-
+                let middleFlowModel = Flow<_, _>.Invoke flowModel x.Flow1
 
                 let newFlowModel = Flow<_, _>.Invoke middleFlowModel x.Flow2
                
@@ -379,11 +407,22 @@ module internal rec ManipulateOrReuse =
                   FMonadState = x.FMonadState
                 } :> ITupledFlow<_, _>
 
+            member x.SetParentFlowName(parentFlowName) =
+                { Flow1 = Flow<_, _>.SetParentFlowName(parentFlowName, x.Flow1)
+                  Flow2 = Flow<_, _>.SetParentFlowName(parentFlowName, x.Flow2)
+                  FMonadStateBack = x.FMonadStateBack
+                  FMonadState = x.FMonadState
+                } :> ITupledFlow<_, _>
+
 
 open ManipulateOrReuse
 
 type Reuse<'oldUserState, 'newUserState> internal 
     (flow: Flow<'oldUserState, 'newUserState>) =
+
+    member internal x.SetParentFlowName(parentFlowName) =
+        Flow<_, _>.SetParentFlowName (parentFlowName, flow)
+        |> Reuse
 
     member x.Append(appendix) =
         let appendix = 
@@ -404,7 +443,7 @@ type Reuse<'oldUserState, 'newUserState> internal
               Document = SplitOrIntegratedDocument.SplitDocument document
               UserState = flowModel.UserState
               FlowName = flowModel.FlowName
-              FlowNameTupleBindedStatus = flowModel.FlowNameTupleBindedStatus }
+              OperatedFlowNames = flowModel.OperatedFlowNames }
         )
         |> fun flowModel ->
             flowModel.ToInternalFlowModel()
@@ -488,6 +527,11 @@ module Reuse =
 
 
 type Manipulate<'oldUserState, 'newUserState> internal (flow: Flow<'oldUserState, 'newUserState>) =
+    
+    member internal x.SetParentFlowName(parentFlowName) =
+        Flow<_, _>.SetParentFlowName (parentFlowName, flow)
+        |> Manipulate
+
     member internal x.Flow = flow
 
     member internal x.Invoke (flowModel: Shrimp.Pdf.InternalFlowModel<_>) (document: IntegratedDocument) = 
@@ -497,7 +541,7 @@ type Manipulate<'oldUserState, 'newUserState> internal (flow: Flow<'oldUserState
               Document = SplitOrIntegratedDocument.IntegratedDocument document
               UserState = flowModel.UserState
               FlowName = flowModel.FlowName
-              FlowNameTupleBindedStatus = flowModel.FlowNameTupleBindedStatus }
+              OperatedFlowNames = flowModel.OperatedFlowNames }
         ) 
         |> fun flowModel ->
             flowModel.ToInternalFlowModel()
@@ -586,6 +630,15 @@ module ManipulateOrReuseDSL =
 
     type Reuse =
      
+        static member Name (flowName) =
+            fun (manipulate: Manipulate<_, _>) ->
+                Manipulate(
+                    Flow.NamedFlow(
+                        flowName,
+                        manipulate.Flow
+                    )
+                )
+
         static member Rename (name, ?parameters) =
             let flowName = 
                 let parameters = defaultArg parameters []
@@ -679,6 +732,14 @@ module ManipulateOrReuseDSL =
 
     type Manipulate =
     
+        static member Name (flowName) =
+            fun (manipulate: Manipulate<_, _>) ->
+                Manipulate(
+                    Flow.NamedFlow(
+                        flowName,
+                        manipulate.Flow
+                    )
+                )
 
         static member Rename (name, ?parameters) =
             let flowName = 
@@ -692,6 +753,7 @@ module ManipulateOrReuseDSL =
                         manipulate.Flow
                     )
                 )
+
 
         static member Batch (?flowName: FlowName) =
            fun (manipulates: list<Manipulate<_, _>>) ->

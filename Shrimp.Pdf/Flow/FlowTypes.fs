@@ -23,99 +23,89 @@ module FlowModel =
         { File = flowModel.File 
           UserState = userState }
 
-type internal FlowNameIndex =
-    { Index: int
-      Name: string 
-      ParamterMessages: list<string * string> }
-
-type internal FlowNameIndexes =
-    { FileName: FlowNameIndex
-      DirectoryNames: FlowNameIndex list }
-with 
-    member x.FileNameIndex_Add_IndexValue (index: int) =
-        { x with 
-            FileName = 
-                { x.FileName with   
-                    Index = x.FileName.Index + index }
-        }
-
 
 
 [<RequireQualifiedAccess>]
 type internal FlowNameKind =
-    | Override of FlowNameIndexes
-    | New of FlowNameIndexes
-    | Disable of previous: FlowNameIndexes option * verticalIndex: int option
+    | Override of string * list<string * string>
+    | New of string * list<string * string>
+    | Disable
+with 
+    member x.Name =
+        match x with 
+        | FlowNameKind.New (name, _) 
+        | FlowNameKind.Override (name, _) -> Some name
+        | FlowNameKind.Disable -> None
+
+    member x.NameAndParameters =
+        match x with 
+        | FlowNameKind.New (name, parameters) 
+        | FlowNameKind.Override (name, parameters) -> Some (name, parameters)
+        | FlowNameKind.Disable -> None
+
 
 [<Sealed>]
-type FlowName internal (flowNameKind: FlowNameKind) =
+type FlowName internal (flowNameKind: FlowNameKind, ?parentFlowName) =
+
+    let parentFlowName: FlowName option = parentFlowName
+
     member internal x.FlowNameKind = flowNameKind
 
-    member internal x.Bind(flowName: FlowName) =
-        match x.FlowNameKind, flowName.FlowNameKind with 
-        | FlowNameKind.Disable (previous, verticalIndex), _ -> 
-            FlowNameKind.Disable (previous, verticalIndex)
-            |> FlowName
+    member private x.ParentFlowName = parentFlowName
 
-        | FlowNameKind.Override flowNameIndexes, _ -> 
-            FlowNameKind.Disable (Some flowNameIndexes, None)
-            |> FlowName
+    member private x.RelativeDirectoryNamesOp =
+        match x.FlowNameKind with 
+        | FlowNameKind.New _ 
+        | FlowNameKind.Override _ ->
+            let rec loop names flowName =
+                match flowName with 
+                | None -> Some names
+                | Some (flowName: FlowName) -> 
+                    let name = flowName.FlowNameKind.Name
+                    match name with 
+                    | Some name ->
+                        loop (name :: names) flowName.ParentFlowName
 
-        | FlowNameKind.New flowNameIndexes1, FlowNameKind.New flowNameIndexes2 ->
-            let directoryNames = 
-                flowNameIndexes1.DirectoryNames 
-                @ [flowNameIndexes1.FileName]
-                @ flowNameIndexes2.DirectoryNames
-            { DirectoryNames = directoryNames
+                    | None -> None
 
-              FileName = flowNameIndexes2.FileName
-            }
-            |> FlowNameKind.New
-            |> FlowName
+            loop [] x.ParentFlowName
 
-        | FlowNameKind.New flowNameIndexes1, FlowNameKind.Override flowNameIndexes2 -> 
-            { DirectoryNames = 
-                flowNameIndexes1.DirectoryNames 
-                @ [flowNameIndexes1.FileName]
-                @ flowNameIndexes2.DirectoryNames
-              FileName = flowNameIndexes2.FileName
-            }
-            |> FlowNameKind.Override
-            |> FlowName
+        | FlowNameKind.Disable _ -> None
 
-        | FlowNameKind.New flowNameIndexes, FlowNameKind.Disable _ -> 
-            (Some flowNameIndexes, None)
-            |> FlowNameKind.Disable 
-            |> FlowName
+    member internal x.RelativeDirectoryNames =
+        match x.RelativeDirectoryNamesOp with 
+        | Some names -> names
+        | None -> []
 
+    member internal x.RelativeDirectory =
+        match x.RelativeDirectoryNamesOp with 
+        | Some names ->
+            (names)
+            |> String.concat (string System.IO.Path.DirectorySeparatorChar)
+            |> Some
+
+        | None -> None
+     
     static member Override (name: string, ?paramters) = 
         let paramters = defaultArg paramters []
         if name.IndexOfAny(Path.GetInvalidPathChars()) > 0 then failwithf "Invalid path %s" name
         if name.Length > 60 then failwithf "flowName %s 's length is bigger 60" name
-        { DirectoryNames = []
-          FileName = 
-            { Name = name 
-              Index = 0
-              ParamterMessages = paramters }
-        }
+        (name, paramters)
         |> FlowNameKind.Override
         |> FlowName
 
+    member internal x.SetParentFlowName(parentFlowName) = 
+        FlowName(x.FlowNameKind, parentFlowName)
 
     static member New (name: string, ?paramters) = 
         let paramters = defaultArg paramters []
         if name.IndexOfAny(Path.GetInvalidPathChars()) > 0 then failwithf "Invalid path %s" name
         if name.Length > 60 then failwithf "flowName %s 's length is bigger 60" name
-        { DirectoryNames = []
-          FileName = 
-            { Name = name 
-              Index = 0
-              ParamterMessages = paramters }
-        }
+        (name, paramters)
         |> FlowNameKind.New
         |> FlowName
 
-    static member Disable: FlowName = FlowName(FlowNameKind.Disable (None, None))
+    static member Disable: FlowName = FlowName(FlowNameKind.Disable)
 
 [<RequireQualifiedAccess>]
 module internal FlowName =
@@ -131,97 +121,6 @@ module internal FlowName =
         | Disable -> true
         | _ -> false
 
-    let internal tupledFlow_Bind_FlowName (leftFlowName: FlowName option) (topFlowName: FlowName option) (rightFlowName: FlowName) =
-        
-        let (|Non|New|Disable|Override|) (flowName: FlowName option) =
-            match flowName with 
-            | None -> Non
-            | Some flowName ->
-                match flowName.FlowNameKind with 
-                | FlowNameKind.New flowNameIndexes -> New flowNameIndexes
-                | FlowNameKind.Disable (previous, verticalIndex) -> Disable(previous, verticalIndex)
-                | FlowNameKind.Override (flowNameIndexes) -> Override flowNameIndexes
-
-
-        match leftFlowName with 
-        | Non | New _ ->
-            let leftFlowNameIndexes =
-                match leftFlowName with 
-                | Some leftFlowName ->
-                    match leftFlowName.FlowNameKind with 
-                    | FlowNameKind.New flowNameIndexes -> Some flowNameIndexes
-                    | _ -> failwith "Invalid token"
-
-                | None -> None
-
-            let leftDirectoryNames =
-                match leftFlowNameIndexes with 
-                | Some leftFlowNameIndexes -> leftFlowNameIndexes.DirectoryNames
-                | None -> []
-
-            let leftDirectoryAndFileNames =
-                match leftFlowNameIndexes with 
-                | Some leftFlowNameIndexes -> leftFlowNameIndexes.DirectoryNames @ [leftFlowNameIndexes.FileName]
-                | None -> []
-
-            let index =
-                match topFlowName with 
-                | Some topFlowName ->
-                    let dirLength = leftDirectoryNames.Length
-                    match topFlowName.FlowNameKind with 
-                    | FlowNameKind.New flowNameIndexes
-                    | FlowNameKind.Override flowNameIndexes -> 
-                        (flowNameIndexes.DirectoryNames @ [flowNameIndexes.FileName]).[dirLength].Index + 1
-                    | FlowNameKind.Disable (Some flowNameIndexes, verticalIndex) -> 
-                        if flowNameIndexes.DirectoryNames.Length = dirLength
-                        then 
-                            match verticalIndex with 
-                            | Some verticalIndex -> verticalIndex
-                            | None -> 0
-                        elif flowNameIndexes.DirectoryNames.Length > dirLength
-                        then 
-                            (flowNameIndexes.DirectoryNames @ [flowNameIndexes.FileName]).[dirLength].Index + 1
-                        else failwith "Invalid token"
-
-                    | FlowNameKind.Disable (None, Some verticalIndex) -> verticalIndex
-
-                    | FlowNameKind.Disable (None, None) -> 0
-                    
-                | None -> 0
-
-
-            match rightFlowName.FlowNameKind with 
-            | FlowNameKind.Disable _ -> 
-                FlowNameKind.Disable (leftFlowNameIndexes, Some index)
-                |> FlowName
-
-            | FlowNameKind.Override flowNameIndexes ->
-                { FileName = 
-                    { flowNameIndexes.FileName with 
-                        Index = index
-                    }
-                  DirectoryNames = leftDirectoryAndFileNames
-                }
-                |> FlowNameKind.Override 
-                |> FlowName
-
-            | FlowNameKind.New flowNameIndexes ->
-                { FileName = 
-                    { flowNameIndexes.FileName with 
-                        Index = index
-                    }
-                  DirectoryNames = leftDirectoryAndFileNames
-                }
-                |> FlowNameKind.New
-                |> FlowName
-
-        | Override flowNameIndexes ->
-            FlowNameKind.Disable (Some flowNameIndexes, None)
-            |> FlowName
-
-        | Disable _ -> leftFlowName.Value
-
-
 
 
 [<RequireQualifiedAccess>]
@@ -236,8 +135,8 @@ type internal FlowNameTupleBindedStatus =
 type internal InternalFlowModel<'userState> =
     { File: string 
       UserState: 'userState 
-      FlowNameTupleBindedStatus: FlowNameTupleBindedStatus
-      FlowName: FlowName option }
+      FlowName: FlowName option
+      OperatedFlowNames: FlowName list }
 
 with
 
@@ -245,84 +144,50 @@ with
         match flowModel.FlowName with 
         | None -> None
         | Some flowName ->
-            let flowNameKind = flowName.FlowNameKind
-            match flowNameKind with 
-            | FlowNameKind.Override flowNameIndexes
-            | FlowNameKind.New flowNameIndexes ->
-                let rootDir = Path.getDirectory flowModel.File </> ".shrimp.pdf" </> Path.GetFileNameWithoutExtension flowModel.File
-                Directory.ensure rootDir
-                match flowNameIndexes.DirectoryNames with 
-                | [] -> Some rootDir
-                | flowNameIndexes ->
-                    let headerDirNames =
-                        flowNameIndexes
-                            |> List.map(fun flowNameIndex ->
-                                sprintf "%d_%s" flowNameIndex.Index flowNameIndex.Name
-                            )
+            match flowName.RelativeDirectory with 
+            | Some relativeDir ->
+                let dir = 
+                    Path.getDirectory flowModel.File 
+                    </> ".shrimp.pdf" 
+                    </> (Path.GetFileNameWithoutExtension flowModel.File) 
+                    </> relativeDir 
 
+                Directory.ensure dir
 
-                    let directory = 
-                        (rootDir :: headerDirNames)
-                        |> List.reduce ((</>))
+                Some dir
                 
-                    Directory.ensure directory
-                
-                    Some directory
 
-            | _ -> None
-
-    member internal flowModel.CleanBackupDirectoryWhenFlowName_FileName_Index_IsZero() =
-        match flowModel.FlowName with 
-        | Some flowName ->
-            let flowNameKind = flowName.FlowNameKind
-            match flowNameKind with 
-            | FlowNameKind.Override flowNameIndexes
-            | FlowNameKind.New flowNameIndexes ->
-                if flowNameIndexes.FileName.Index = 0
-                then 
-                    match flowModel.TryGetBackupDirectory() with 
-                    | Some directory -> 
-                        try
-                            Shell.cleanDir directory
-                        with ex ->
-                            Logger.warning (ex.Message)
-                    | None -> ()
-
-            | FlowNameKind.Disable _ -> ()
-        | None -> ()
+            | None -> None
 
 
-
-    member internal flowModel.TryBackupFile() =
-        match flowModel.FlowName with 
-        | None -> ()
-        | Some flowName ->
-            let flowNameKind = flowName.FlowNameKind
-
-            match flowNameKind with 
-            | FlowNameKind.Override flowNameIndexes
-            | FlowNameKind.New flowNameIndexes ->
-                match flowModel.TryGetBackupDirectory() with 
-                | Some directory ->
-
-                    let fileFlowNameIndex = flowNameIndexes.FileName
-
+    member internal flowModel.TryBackupFile(index: int) =
+        match flowModel.TryGetBackupDirectory() with 
+        | Some directory ->
+            match flowModel.FlowName with 
+            | Some flowName ->
+                match flowName.FlowNameKind.Name with 
+                | Some fileName ->
                     let targetPath = 
-                        directory </> sprintf "%d_%s.pdf" fileFlowNameIndex.Index fileFlowNameIndex.Name
+                        directory </> sprintf "%d_%s.pdf" index fileName
 
                     File.Copy(flowModel.File, targetPath, true)
 
                 | None -> ()
 
-            | FlowNameKind.Disable _ -> ()
+            | None -> ()
+
+        | None -> ()
+
+
+
 
 [<RequireQualifiedAccess>]
 module internal InternalFlowModel =
     let mapM mapping (flowModel: InternalFlowModel<_>) =
         { File = flowModel.File 
           UserState = mapping flowModel.UserState 
-          FlowName = flowModel.FlowName 
-          FlowNameTupleBindedStatus = flowModel.FlowNameTupleBindedStatus }
+          FlowName = flowModel.FlowName
+          OperatedFlowNames = flowModel.OperatedFlowNames }
 
     let toFlowModel (internalFlowModel: InternalFlowModel<_>): FlowModel<_> =
         { File = internalFlowModel.File 
@@ -330,26 +195,21 @@ module internal InternalFlowModel =
 
 
     let mapTo userState (flowModel: InternalFlowModel<_>) =
-        { File = flowModel.File 
-          UserState = userState
-          FlowName = flowModel.FlowName 
-          FlowNameTupleBindedStatus = flowModel.FlowNameTupleBindedStatus }
+        mapM (fun _ -> userState) flowModel
 
 
 type InternalFlowModelWrapper<'userState> internal (internalFlowModel: InternalFlowModel<'userState>) =
     member internal x.Value = internalFlowModel
 
-
 [<AutoOpen>]
 module internal Logger_FlowModel =
     type Logger =
-        static member TryInfoWithFlowModel (flowModel: InternalFlowModel<_>, f) =
+        static member TryInfoWithFlowModel (flowNameIndex, flowModel: InternalFlowModel<_>, f) =
             match flowModel.FlowName with 
             | Some flowName ->
-                match flowName.FlowNameKind with 
-                | FlowNameKind.Override flowNameIndexes
-                | FlowNameKind.New flowNameIndexes ->
-                    let indentsCount = flowNameIndexes.DirectoryNames.Length
+                match flowName.FlowNameKind.NameAndParameters with 
+                | Some (name, paramters) ->
+                    let indentsCount = flowName.RelativeDirectoryNames.Length
 
                     let indentText =
                         List.replicate indentsCount "    "
@@ -359,16 +219,16 @@ module internal Logger_FlowModel =
                         let splitLine = 
                             if indentsCount = 0
                             then
-                                sprintf "[%d]------------------------------------------------------------------\n" flowNameIndexes.FileName.Index
+                                sprintf "[%d]------------------------------------------------------------------\n" flowNameIndex
                             else ""
 
                         let message =
                             [ 
                           
-                              sprintf "Name: %s" flowNameIndexes.FileName.Name
+                              sprintf "Name: %s" name
                               "Paramters:" ]
                             @ (
-                                flowNameIndexes.FileName.ParamterMessages
+                                paramters
                                 |> List.map (fun (paramter, paramterValue) ->
                                     sprintf "    %s: %s" paramter paramterValue
                                 )
@@ -382,7 +242,7 @@ module internal Logger_FlowModel =
 
 
 
-                        let message = sprintf "\n%sEND %s" indentText flowNameIndexes.FileName.Name
+                        let message = sprintf "\n%sEND %s" indentText name
                         sprintf "%s in %O \n" message elapsed
 
                     let (result, message) = Logger.infoWithStopWatchAndReturnFinalMessage (beginMessage) endMessage f
@@ -390,7 +250,7 @@ module internal Logger_FlowModel =
                     match flowModel.TryGetBackupDirectory() with 
                     | Some directory ->
                         let file = directory </> "Log.txt"
-                        match flowNameIndexes.FileName.Index with 
+                        match flowNameIndex with 
                         | 0 -> File.delete file
                         | _ -> ()
                         File.AppendAllText(file, message + "\n", System.Text.Encoding.UTF8)
@@ -399,5 +259,5 @@ module internal Logger_FlowModel =
 
                     result
 
-                | FlowNameKind.Disable _ -> f ()
+                | None -> f ()
             | None -> f()
