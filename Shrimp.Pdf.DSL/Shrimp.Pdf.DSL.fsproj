@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Types.fs" />
+    <Compile Include="Selector.fs" />
+    <Compile Include="FileOperations.fs" />
+    <Compile Include="Reuses.fs" />
+    <Compile Include="ModifyPage.fs" />
+    <Compile Include="Modify.fs" />
+    <Compile Include="Manipulates.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Shrimp.Pdf\Shrimp.Pdf.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.7.1" />
+  </ItemGroup>
+
+</Project>

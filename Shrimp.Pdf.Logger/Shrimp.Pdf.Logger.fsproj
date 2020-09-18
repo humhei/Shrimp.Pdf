@@ -9,7 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="4.7.0" />
+    <PackageReference Include="NLog" Version="4.6.8" />
   </ItemGroup>
 
 </Project>

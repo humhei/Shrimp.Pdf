@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="reference.conf">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <Compile Include="Library.fs" />
+  </ItemGroup>
+
+  <ItemGroup />
+
+  <ItemGroup>
+    <ProjectReference Include="..\Shrimp.Pdf.DSL\Shrimp.Pdf.DSL.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.icms2\Shrimp.Pdf.icms2.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf\Shrimp.Pdf.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.7.1" />
+  </ItemGroup>
+
+</Project>

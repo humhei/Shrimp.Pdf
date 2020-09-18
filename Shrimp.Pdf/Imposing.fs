@@ -1,42 +1,86 @@
 ﻿
 namespace Shrimp.Pdf
+#nowarn "0104"
 open iText.Kernel.Pdf
+open Shrimp.Pdf.Colors
 open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf.Extensions
 open System.Linq
 open System
+open System.Collections.Concurrent
+
+
 
 module Imposing =
 
     type Cropmark = 
         { Length: float
           Distance: float
-          Width: float }
+          Width: float
+          Color: PdfCanvasColor }
 
     [<RequireQualifiedAccess>]
     module Cropmark =
         let defaultValue = 
             { Length = mm 3.8
               Distance = mm 3.2
-              Width = mm 0.2 }
+              Width = mm 0.1
+              Color = PdfCanvasColor.Registration }
+
 
     [<RequireQualifiedAccess>]
     type Sheet_PlaceTable =
-        | Trim_CenterTable
+        | Trim_CenterTable of Margin
         | At of Position
+
+
+    type BackgroundFile = private BackgroundFile of string
+    with 
+        static member Create(pdfPath: string) =
+            if System.IO.File.Exists pdfPath && pdfPath.EndsWith ".pdf"
+            then BackgroundFile pdfPath
+            else failwithf "Cannot create backGroundFile from pdf path %s" pdfPath
+
+        member x.Value =
+            let (BackgroundFile value) = x
+            value
+
+    [<RequireQualifiedAccess>]
+    module BackgroundFile =
+        let getPageBoxes = 
+            let backgroundFilePageBoxCache = new ConcurrentDictionary<BackgroundFile, Rectangle list>()
+            fun (backGroundFile: BackgroundFile) ->
+                backgroundFilePageBoxCache.GetOrAdd(backGroundFile, fun backGroundFile ->
+                    let reader = new PdfDocument(new PdfReader(backGroundFile.Value))
+                    PdfDocument.getPages reader
+                    |> List.map (fun page ->
+                        let pageBox = (page.GetActualBox())
+                        reader.Close()
+                        pageBox
+                    )
+                )
+
+        let getSize (backgroundFile) =
+            getPageBoxes backgroundFile
+            |> function
+                | [pageBox] -> FsSize.ofRectangle pageBox
+                | h :: t -> failwithf "Cannot get background size as more than 1 pages founded in file %A" backgroundFile
+                | [] -> failwithf "Cannot get background size as no pages founded in file %A" backgroundFile
+
+
 
     [<RequireQualifiedAccess>]
     type Background =
         | Size of FsSize
-        | File of string
+        | File of BackgroundFile
 
     [<RequireQualifiedAccess>]
     module Background =
-        let getSize (backgrounp: Background) =
-            match backgrounp with 
+        let getSize = function
             | Background.Size pageSize -> pageSize
-            | _ -> failwith "Not implemented"
+            | Background.File backgroundFile -> BackgroundFile.getSize backgroundFile
+
 
     type NumericFillingMode =
         { ColNums: int list 
@@ -73,42 +117,12 @@ module Imposing =
             | _ -> None
 
 
-    type PageOrientation =
-        | Landscape  = 0
-        | Portrait = 1
+
 
     type DesiredPageOrientation =
         | Landscape  = 0
         | Portrait = 1
         | Automatic = 2
-
-
-    type FsPageSize = private FsPageSize of size: FsSize * orientation: PageOrientation
-    with 
-        member x.PageOrientation = 
-            let (FsPageSize (size, pageOrientation)) = x
-            pageOrientation
-
-        member x.Size = 
-            let (FsPageSize (size, pageOrientation)) = x
-            size
-
-        member x.Width = x.Size.Width
-
-        member x.Height = x.Size.Height
-
-
-    [<RequireQualifiedAccess>]
-    module FsPageSize =
-        let create (size: FsSize) pageOrientation =
-            match pageOrientation with 
-            | PageOrientation.Landscape -> 
-                FsPageSize (FsSize.landscape size, pageOrientation)
-            | PageOrientation.Portrait ->
-                FsPageSize (FsSize.portrait size, pageOrientation)
-            | _ -> failwith "Invalid token"
-
-
 
 
     [<RequireQualifiedAccess>]
@@ -118,8 +132,12 @@ module Imposing =
             | DesiredPageOrientation.Landscape -> Some PageOrientation.Landscape
             | DesiredPageOrientation.Portrait -> Some PageOrientation.Portrait
             | DesiredPageOrientation.Automatic -> None
-            | _ -> failwith "Invalid token"
 
+    [<RequireQualifiedAccess>]
+    type CellRotation =
+        | None
+        | R180WhenColNumIsEven 
+        | R180WhenRowNumIsEven 
 
     type _ImposingArguments =
         {
@@ -128,17 +146,18 @@ module Imposing =
             Cropmark: Cropmark option
             HSpaces: float list
             VSpaces: float list
-            Margin: Margin
             UseBleed: bool
             Background: Background
             DesiredPageOrientation: DesiredPageOrientation
             Sheet_PlaceTable: Sheet_PlaceTable
-            XObjectRotation: Rotation
             DesiredSizeOp: FsSize option
+            CellRotation: CellRotation
             IsRepeated: bool
         }
 
     with 
+
+
         static member DefaultValue =
             {
                 ColNums = [0]
@@ -146,13 +165,12 @@ module Imposing =
                 Cropmark = None
                 HSpaces = [0.]
                 VSpaces = [0.]
-                Margin = Margin.Create(0.)
                 UseBleed = false
-                XObjectRotation = Rotation.None
                 Background = Background.Size FsSize.A4
-                Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable
+                Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(0.))
                 DesiredSizeOp = None
                 IsRepeated = false
+                CellRotation = CellRotation.None
                 DesiredPageOrientation = DesiredPageOrientation.Automatic
             }
 
@@ -168,6 +186,24 @@ module Imposing =
 
         static member Create(mapping: _ImposingArguments -> _ImposingArguments) = 
             let args = mapping _ImposingArguments.DefaultValue
+            
+            let isValidSheet_PlaceTable = 
+                match args.Sheet_PlaceTable with 
+                | Sheet_PlaceTable.Trim_CenterTable margin -> 
+                    [ margin.Left; margin.Top; margin.Right; margin.Bottom ]
+                    |> List.forall(fun m -> m >= 0.)
+                | Sheet_PlaceTable.At position ->
+                    match position with
+                    | Position.Left (x, _) -> x >= 0.
+                    | Position.Right (x, _) -> x <= 0.
+                    | Position.XCenter (x, y) -> true
+                    && 
+                        match position with
+                        | Position.Top (_, y) -> y <= 0.
+                        | Position.Bottom (_, y) -> y >= 0.
+                        | Position.YCenter _ -> true
+
+            if not isValidSheet_PlaceTable then failwithf "Invalid Sheet_PlaceTable %A" args.Sheet_PlaceTable
 
             let fillingMode =
                 match List.distinct args.ColNums, args.RowNum with
@@ -198,6 +234,7 @@ module Imposing =
           Size: FsSize
           X: float
           Y: float
+          RowIndex: int
           ImposingRow: ImposingRow }
 
     with 
@@ -207,42 +244,194 @@ module Imposing =
 
         member private x.SplitDocument = x.ImposingDocument.SplitDocument
 
+
         member x.ImposingArguments: ImposingArguments = x.ImposingDocument.ImposingArguments
         
+        member x.HSpaces = x.ImposingArguments.Value.HSpaces
+
+        member x.VSpaces = x.ImposingArguments.Value.VSpaces
+
         member x.Cropmark = x.ImposingArguments.Value.Cropmark
 
         member x.UseBleed = x.ImposingArguments.Value.UseBleed
 
-        member x.Rotation = x.ImposingArguments.Value.XObjectRotation
+        member private cell.GetXObjectContentBox() =
+            let xObjectContentBox = 
+                if cell.UseBleed
+                then PdfPage.getTrimBox cell.Page
+                else cell.Page.GetActualBox()
 
+            xObjectContentBox
+
+        member private cell.GetScale() =
+            let xObjectContentBox = cell.GetXObjectContentBox()
+                
+
+            let scaleX = cell.Size.Width / xObjectContentBox.GetWidthF() 
+            let scaleY = cell.Size.Height / xObjectContentBox.GetHeightF() 
+            scaleX, scaleY
+
+        member private cell.GetClippedXObject() =
+            let scaleX, scaleY = cell.GetScale()
+
+            let xobject = cell.Page.CopyAsFormXObject(cell.SplitDocument.Writer)
+            if cell.UseBleed
+            then 
+                let trimBox = PdfPage.getTrimBox cell.Page
+                        
+                let actualBox = cell.Page.GetActualBox()
+
+                if Rectangle.equal trimBox actualBox then xobject
+                else 
+                    let (|ColumnFirst|ColumnLast|ColumnMiddle|ColumnFirstAndLast|) (cell: ImposingCell) =
+                        let cells = cell.ImposingRow.Cells
+                        let index = cell.ImposingRow.Cells.IndexOf(cell)
+                        if cells.Count = 1 then ColumnFirstAndLast
+                        else
+                            match index with 
+                            | 0 -> ColumnFirst
+                            | index when index = cells.Count - 1 -> ColumnLast
+                            | _ -> ColumnMiddle 
+
+                    let (|RowFirst|RowLast|RowMiddle|RowFirstAndLast|) (row: ImposingRow) =
+                        let rows = row.ImposingSheet.Rows
+                        let index = rows.IndexOf(row)
+                        if rows.Count = 1 then RowFirstAndLast
+                        else
+                            match  index with 
+                            | 0 -> RowFirst
+                            | index when index = rows.Count - 1 -> RowLast
+                            | _ -> RowMiddle
+                    let bbox = 
+                        let x, width =
+
+                            let index = cell.ImposingRow.Cells.IndexOf(cell)
+                            match cell with 
+                            | ColumnFirst ->
+                                let x = actualBox.GetXF()
+                                
+                                let width = 
+                                    let nextHSpace = cell.HSpaces.[(index) % cell.HSpaces.Length] / scaleX
+                                    trimBox.GetRightF() - actualBox.GetLeftF() + nextHSpace / 2.
+
+                                x, width
+
+                            | ColumnFirstAndLast ->  actualBox.GetXF() ,actualBox.GetWidthF()
+
+                            | ColumnMiddle ->
+                                let preHSpace = cell.HSpaces.[(index - 1) % cell.HSpaces.Length] / scaleX
+                                let nextHSpace = cell.HSpaces.[(index) % cell.HSpaces.Length] / scaleX
+
+                                let x = trimBox.GetXF() - preHSpace / 2.
+                                let width = trimBox.GetWidthF() + nextHSpace / 2. + preHSpace / 2.
+                                x, width
+
+                            | ColumnLast ->
+                                let preHSpace = cell.HSpaces.[(index - 1) % cell.HSpaces.Length] / scaleX
+
+                                let x = trimBox.GetXF() - preHSpace / 2.
+
+                                let width = trimBox.GetWidthF() + preHSpace / 2.
+
+                                x,width
+
+                        let y, height = 
+                            let row = cell.ImposingRow
+                            let rows = row.ImposingSheet.Rows
+                            let index = rows.IndexOf(row)
+
+                            match row with 
+                            | RowFirst ->
+                                let nextVSpace = cell.VSpaces.[(index) % cell.VSpaces.Length] / scaleY
+
+                                let y = trimBox.GetYF() - nextVSpace / 2.
+
+                                let height = actualBox.GetTopF() - trimBox.GetBottomF() + nextVSpace / 2.
+                                y, height
+
+                            | RowMiddle ->
+                                let preVSpace = cell.VSpaces.[(index - 1) % cell.VSpaces.Length] / scaleY
+
+                                let nextVSpace = cell.VSpaces.[(index) % cell.VSpaces.Length] / scaleY
+
+                                let y = trimBox.GetYF() - nextVSpace / 2.
+                                let height = trimBox.GetHeightF() + nextVSpace / 2. + preVSpace / 2.
+                                y, height
+
+                            | RowFirstAndLast -> actualBox.GetYF(), actualBox.GetHeightF()
+                            | RowLast -> 
+                                let y = actualBox.GetYF()
+
+                                let preVSpace = cell.VSpaces.[(index - 1) % cell.VSpaces.Length] / scaleY
+
+                                let height = trimBox.GetTopF() - actualBox.GetBottomF() + preVSpace / 2.
+
+                                y, height
+
+                        Rectangle.create x y width height
+
+                    let resetBBoxWhenTrimBoxIsNotInsideActualBox (bbox: Rectangle) =
+                        let x = max (actualBox.GetXF()) (bbox.GetXF())
+                        let width = min (actualBox.GetWidthF()) (bbox.GetWidthF())
+
+                        let y = max (actualBox.GetYF()) (bbox.GetYF())
+                        let height = min (actualBox.GetHeightF()) (bbox.GetHeightF())
+
+                        Rectangle.create x y width height
+
+                    let bbox = resetBBoxWhenTrimBoxIsNotInsideActualBox bbox
+
+                    xobject.SetBBox(Rectangle.toPdfArray bbox) 
+
+            else xobject
 
         static member AddToPdfCanvas (cellContentAreas_ExtendByCropmarkDistance: Rectangle list) (pdfCanvas: PdfCanvas) (cell: ImposingCell) =
             let addXObject (pdfCanvas: PdfCanvas) = 
-                let xObject = cell.Page.CopyAsFormXObject(cell.SplitDocument.Writer)
-                let xObjectContentBox = 
-                    if cell.UseBleed
-                    then 
-                        match PdfFormXObject.tryGetTrimBox xObject with 
-                        | Some trimBox -> trimBox
-                        | None -> cell.Page.GetActualBox()
-                    else cell.Page.GetActualBox()
+                let xObject = cell.GetClippedXObject()
+                let xObjectContentBox = cell.GetXObjectContentBox()
+                let scaleX, scaleY = cell.GetScale()
 
-                let scaleX = cell.Size.Width / xObjectContentBox.GetWidthF() 
-                let scaleY = cell.Size.Height / xObjectContentBox.GetHeightF() 
+                let affineTransform_Rotate =
+                    match cell.ImposingArguments.Value.CellRotation with 
+                    | CellRotation.None -> AffineTransform.GetTranslateInstance(0., 0.)
+                    | CellRotation.R180WhenColNumIsEven ->
+                        let index = cell.RowIndex
+                        if (index + 1) % 2 = 0 
+                        then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + xObjectContentBox.GetWidthF() / 2., xObjectContentBox.GetYF() + xObjectContentBox.GetHeightF() / 2.  )
+                        //then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., cell.Size.Width / 2., cell.Size.Height / 2.  )
+                        else AffineTransform.GetTranslateInstance(0., 0.)
+                    | CellRotation.R180WhenRowNumIsEven ->
+                        let index = cell.ImposingRow.RowIndex
+                        if (index + 1) % 2 = 0
+                        then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + xObjectContentBox.GetWidthF() / 2., xObjectContentBox.GetYF() + xObjectContentBox.GetHeightF() / 2.  )
+                        //then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + xObjectContentBox.GetWidthF() / 2., xObjectContentBox.GetYF() + xObjectContentBox.GetHeightF() / 2.  )
+                        else AffineTransform.GetTranslateInstance(0., 0.)
 
-                let affineTransfromRecord: AffineTransformRecord =
-                    { ScaleX = scaleX
-                      ScaleY = scaleY
-                      TranslateX = cell.X - xObjectContentBox.GetXF() * scaleX
-                      TranslateY = -(cell.Size.Height + cell.Y) - xObjectContentBox.GetYF() * scaleY
-                      ShearX = 0. 
-                      ShearY = 0. }
+                let affineTransform_Scale =
+                    AffineTransform.GetScaleInstance(scaleX, scaleY)
 
-                pdfCanvas.AddXObject(xObject, affineTransfromRecord)
+                let affineTransform_Translate0 =
+                    AffineTransform.GetTranslateInstance(-xObjectContentBox.GetXF(), -xObjectContentBox.GetYF())
+
+                let affineTransform_Translate1 =
+                    AffineTransform.GetTranslateInstance(cell.X, -(cell.Size.Height + cell.Y) )
+
+
+                let affineTransform = affineTransform_Translate0.Clone()
+                affineTransform.Concatenate(affineTransform_Rotate)
+                affineTransform.PreConcatenate(affineTransform_Scale)
+                affineTransform.PreConcatenate(affineTransform_Translate1)
+
+                pdfCanvas.AddXObject(xObject, affineTransform)
 
             let addCropmarks (pdfCanvas: PdfCanvas) =
                 match cell.Cropmark with 
                 | Some cropmark ->
+                    pdfCanvas
+                        .SetLineWidth(float32 cropmark.Width) 
+                        .SetStrokeColor(cropmark.Color)
+                        |> ignore
+
                     let height = cell.Size.Height
 
                     let allCropmarkLines = 
@@ -282,13 +471,15 @@ module Imposing =
             |> addXObject
             |> addCropmarks
 
-    and ImposingRow(sheet: ImposingSheet) = 
+    and ImposingRow(sheet: ImposingSheet, rowIndex: int) = 
         let cells = ResizeArray<ImposingCell>()
         let mutable x = 0.
 
         member private x.ImposingArguments : ImposingArguments  = sheet.ImposingDocument.ImposingArguments
 
         member internal x.ImposingSheet = sheet
+
+        member internal x.RowIndex = rowIndex
 
         member private x.PageSize = sheet.PageSize
 
@@ -305,11 +496,16 @@ module Imposing =
                 { Page = readerPage 
                   Size = match args.DesiredSizeOp with 
                           | Some size -> size 
-                          | None -> FsSize.ofRectangle(readerPage.GetActualBox()) 
+                          | None -> 
+                                if args.UseBleed then FsSize.ofRectangle(readerPage.GetTrimBox())
+                                else FsSize.ofRectangle(readerPage.GetActualBox()) 
                   X = x
                   Y = sheet.Y
+                  RowIndex = cells.Count
                   ImposingRow = this }
 
+            if newCell.Size.Width > this.PageSize.Width || newCell.Size.Height > this.PageSize.Height 
+            then failwithf "desired size is exceeded %A to sheet page size %A" newCell.Size this.PageSize
                   
             let addNewCell_UpdateState() =
                 x <- x + newCell.Size.Width + args.HSpaces.[cells.Count % args.HSpaces.Length]
@@ -319,7 +515,17 @@ module Imposing =
 
             let willWidthExceedPageWidth = 
                 let pageSize = this.PageSize
-                newCell.X + newCell.Size.Width + args.Margin.Left + args.Margin.Right > pageSize.Width
+                let marginX =
+                    match args.Sheet_PlaceTable with 
+                    | Sheet_PlaceTable.Trim_CenterTable margin ->
+                        margin.Left + margin.Right
+                    | Sheet_PlaceTable.At position ->
+                        match position with 
+                        | Position.Left (x, _) -> x
+                        | Position.Right (x, _) -> -x
+                        | Position.XCenter(x, _) -> abs x
+
+                newCell.X + newCell.Size.Width + marginX > pageSize.Width
 
             if willWidthExceedPageWidth then false
             else 
@@ -332,21 +538,26 @@ module Imposing =
 
                 | _ -> addNewCell_UpdateState()
 
-        member internal this.Cells = cells
+        member internal this.Cells: ResizeArray<ImposingCell> = cells
 
-        member internal this.Height = 
+        member this.Height = 
             if cells.Count = 0 then 0.
             else
                 cells
                 |> Seq.map (fun cell -> cell.Size.Height)
                 |> Seq.max
 
-
-        member internal this.Width =
+        member this.Width =
             match Seq.tryLast cells with 
             | Some cell -> cell.X + cell.Size.Width
             | None -> 0.
 
+        member this.Y =
+            match Seq.tryHead cells with 
+            | Some cell -> cell.Y
+            | None -> 0.
+
+        member x.GetCells() = List.ofSeq cells
 
 
     and ImposingSheet(imposingDocument: ImposingDocument, pageOrientation: PageOrientation) =
@@ -361,9 +572,9 @@ module Imposing =
 
         member private x.SplitDocument : SplitDocument = imposingDocument.SplitDocument
 
-        member private x.ImposingArguments : ImposingArguments  = imposingDocument.ImposingArguments
+        member x.ImposingArguments : ImposingArguments  = imposingDocument.ImposingArguments
 
-        member internal x.PageSize: FsPageSize = pageSize
+        member x.PageSize: FsPageSize = pageSize
 
         member internal x.ImposingDocument: ImposingDocument = imposingDocument
 
@@ -378,9 +589,11 @@ module Imposing =
                 match Seq.tryLast rows with 
                 | None -> ()
                 | Some lastRow -> 
+                    if lastRow.Cells.Count = 0 then
+                        failwithf "Cannot push page to imposing sheet,please check your imposing arguments %A" x.ImposingArguments
                     y <- lastRow.Height + y + args.VSpaces.[(rows.Count - 1) % args.VSpaces.Length]
 
-                let newRow = new ImposingRow(x)
+                let newRow = new ImposingRow(x, rows.Count)
                 rows.Add(newRow)
                 x.Push(readerPage)
 
@@ -400,7 +613,18 @@ module Imposing =
 
                     let heightExeedPageHeight =
                         match Seq.tryLast rows with 
-                        | Some row -> row.Height + y + args.Margin.Top + args.Margin.Bottom > pageSize.Height
+                        | Some row -> 
+                            let marginY =
+                                match args.Sheet_PlaceTable with 
+                                | Sheet_PlaceTable.Trim_CenterTable margin ->
+                                    margin.Left + margin.Right
+                                | Sheet_PlaceTable.At position ->
+                                    match position with 
+                                    | Position.Top (_, y) -> -y
+                                    | Position.Bottom (_, y) -> y
+                                    | Position.YCenter(_, y) -> abs y
+
+                            row.Height + y + marginY > pageSize.Height
 
                         | None -> false
 
@@ -428,15 +652,70 @@ module Imposing =
                 else addNewRow_UpdateState_PushAgain()
 
 
+        member this.Margin =
+            let args = this.ImposingArguments.Value
+            match args.Sheet_PlaceTable with 
+            | Sheet_PlaceTable.Trim_CenterTable margin -> margin
+            | Sheet_PlaceTable.At position ->
+                let left = 
+                    match position with 
+                    | Position.Left (x, _) -> x
+                    | Position.Right (x, _) -> this.Width - this.TableWidth + x
+                    | Position.XCenter(x, _) -> (this.Width - this.TableWidth) / 2. + x
+
+                let right = this.Width - this.TableWidth - left
+
+                let bottom = 
+                    match position with 
+                    | Position.Top (_, y) -> this.Height - this.TableHeight + y
+                    | Position.Bottom (_, y) -> y
+                    | Position.YCenter(_, y) -> (this.Height - this.TableHeight) / 2. + y
+
+                let top = this.Height - this.TableHeight - bottom
+
+                Margin.Create(left, top, right, bottom)
 
 
-        member internal x.Draw() =
-            let args = x.ImposingArguments.Value
+        member internal this.Draw() =
+            let args = this.ImposingArguments.Value
 
-            let newPage = x.SplitDocument.Writer.AddNewPage()
+            let newPage = this.SplitDocument.Writer.AddNewPage()
             
-            let pdfCanvas = 
-                PdfCanvas(newPage)
+            let pdfCanvas = PdfCanvas(newPage)
+
+            let height = this.Height
+            let width = this.Width
+
+            let pageBox = 
+                match args.Sheet_PlaceTable with 
+                | Sheet_PlaceTable.Trim_CenterTable margin ->
+                    (Rectangle.create -margin.Left -(height - margin.Top) width height)
+
+                | Sheet_PlaceTable.At position ->
+                    let x =
+                        match position with
+                        | Position.Left (x, _) -> x
+                        | Position.Right (x, _) -> x + (width - this.TableWidth)
+                        | Position.XCenter (x, _) -> (width - this.TableWidth) / 2. + x
+                 
+                    let y =
+                        match position with 
+                        | Position.Top (_, y) -> -y
+                        | Position.Bottom (_, y) -> -y + height - this.TableHeight
+                        | Position.YCenter(_, y) -> -y + (height - this.TableHeight) / 2.
+
+
+                    (Rectangle.create -x (-height + y) width height) 
+
+            PdfPage.setPageBox (PageBoxKind.AllBox) pageBox newPage |> ignore
+
+            match args.Background with 
+            | Background.File backgroudFile ->
+                let reader = new PdfDocument(new PdfReader(backgroudFile.Value))
+                let xobject = reader.GetPage(1).CopyAsFormXObject(this.SplitDocument.Writer)
+                pdfCanvas.AddXObject(xobject, pageBox.GetX(), pageBox.GetY()) |> ignore
+                reader.Close()
+            | _ -> ()
 
             let cellContentAreas_ExtendByCropmarkDistance = 
                 match args.Cropmark with 
@@ -448,9 +727,10 @@ module Imposing =
                     |> List.ofSeq
                     |> List.map (fun cell ->
                         let rect = Rectangle.create cell.X cell.Y cell.Size.Width cell.Size.Height
-                        Rectangle.applyMargin (Margin.Create (cropmark.Distance - tolerance)) rect
+                        Rectangle.applyMargin (Margin.Create (cropmark.Distance - tolerance.Value)) rect
                     )
                 | _ -> []
+
 
             (pdfCanvas, rows)
             ||> Seq.fold (fun pdfCanvas row -> 
@@ -458,48 +738,52 @@ module Imposing =
             )
             |> ignore
 
-            let height = x.Height
 
 
 
-            PdfPage.setPageBox (PageBoxKind.AllBox) (Rectangle.create -args.Margin.Left -(height - args.Margin.Top) x.Width height) newPage
-            |> ignore
-
-
-        member internal x.TableWidth = 
+        member x.TableWidth = 
             let args = x.ImposingArguments.Value
-            match args.Sheet_PlaceTable with
-            | Sheet_PlaceTable.Trim_CenterTable ->
-                if rows.Count = 0 then 0.
-                else 
-                    rows
-                    |> Seq.map (fun row -> row.Width)
-                    |> Seq.max
+            if rows.Count = 0 then 0.
+            else 
+                rows
+                |> Seq.map (fun row -> row.Width)
+                |> Seq.max
+
+
+        member x.Width = 
+            let args = x.ImposingArguments.Value
+            match args.Sheet_PlaceTable with 
+            | Sheet_PlaceTable.Trim_CenterTable margin ->
+                margin.Left + margin.Right + x.TableWidth
 
             | Sheet_PlaceTable.At _ ->
                 pageSize.Width
 
-        member internal x.Width = 
-            let margin = x.ImposingArguments.Value.Margin
-            margin.Left + margin.Right + x.TableWidth
-
-
-        member internal x.TableHeight =
+        member x.TableHeight =
             let args = x.ImposingArguments.Value
-            match args.Sheet_PlaceTable with
-            | Sheet_PlaceTable.Trim_CenterTable ->
-                match Seq.tryLast rows with 
-                | Some row -> row.Height + x.Y
-                | None -> 0.
+            match Seq.tryLast rows with 
+            | Some row -> row.Height + x.Y
+            | None -> 0.
+
+
+        member x.Height = 
+            let args = x.ImposingArguments.Value
+            match args.Sheet_PlaceTable with 
+            | Sheet_PlaceTable.Trim_CenterTable margin ->
+                x.TableHeight + margin.Bottom + margin.Top
 
             | Sheet_PlaceTable.At _ ->
                 pageSize.Height
 
-        member internal x.Height = 
-            let margin = x.ImposingArguments.Value.Margin
-            x.TableHeight + margin.Bottom + margin.Top
+            
+
+        member internal x.Rows: ResizeArray<ImposingRow> = rows
+        
+        member x.GetRows() = List.ofSeq rows
 
         member x.RowsCount = rows.Count 
+
+        member x.GetCellsCount() = rows |> Seq.sumBy(fun row -> row.Cells.Count)
 
     /// Build() -> Draw()
     and ImposingDocument (splitDocument: SplitDocument, imposingArguments: ImposingArguments) =  
@@ -521,13 +805,12 @@ module Imposing =
 
             let reader = splitDocument.Reader
 
-
-
             let readerPages = PdfDocument.getPages reader
 
             let rec produceSheet readerPages (sheet: ImposingSheet) =
                 match readerPages with 
-                | readerPage :: t ->
+                | (readerPage : PdfPage) :: t ->
+
                     if sheet.Push(readerPage) 
                     then 
                         if args.IsRepeated 
@@ -565,9 +848,11 @@ module Imposing =
                             let producedSheet2, leftPages2 = 
                                 produceSheet readerPages (new ImposingSheet(x, PageOrientation.Portrait))
                         
-                            if leftPages1.Length >= leftPages2.Length 
-                            then producedSheet2, leftPages2
-                            else producedSheet1, leftPages1
+                            if 
+                                (args.IsRepeated && producedSheet1.GetCellsCount() > producedSheet2.GetCellsCount())
+                                || (not args.IsRepeated && leftPages1.Length < leftPages2.Length)
+                            then producedSheet1, leftPages1
+                            else producedSheet2, leftPages2
 
                         produceSheets leftPages (producedSheet :: sheets)
 
@@ -577,3 +862,13 @@ module Imposing =
             let producedSheets = produceSheets readerPages []
 
             sheets.AddRange(List.rev producedSheets)
+
+        member x.GetFirstCell() = sheets.[0].Rows.[0].Cells.[0]
+
+        member x.GetFirstSheet() = sheets.[0]
+
+        member x.GetFirstRow() = sheets.[0].Rows.[0]
+
+        member x.GetSheets() = List.ofSeq sheets
+
+        member x.GetSheet(index) = sheets.[index]

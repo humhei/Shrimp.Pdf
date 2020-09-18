@@ -3,12 +3,14 @@
 open System
 open Expecto
 open Expecto.Logging
+open System.Threading
+open Shrimp.Pdf.icms2
 
 
 let testConfig =  
     { Expecto.Tests.defaultConfig with 
-         parallelWorkers = 1
-         verbosity = LogLevel.Debug }
+         verbosity = LogLevel.Debug
+         parallelWorkers = 1 }
 
 let allTests =
     testList "All Tests"
@@ -17,9 +19,12 @@ let allTests =
             FileOperationTests.fileOperationTests
             ManipulateTests.manipulateTests
             RealSampleTests.realSamplesTests
+            FunctionTests.functionTests
+            FlowNameTests.flowNameTests
+            BugFixmentTests.bugFixmentTests
         ]
 
 [<EntryPoint>]
 let main argv =
+    SetClientContext()
     runTests testConfig allTests
-    Console.Read()

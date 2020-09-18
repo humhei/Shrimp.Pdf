@@ -1,44 +1,13 @@
 ﻿namespace Shrimp.Pdf
+#nowarn "0104"
 open iText.Kernel.Pdf
 open iText.Kernel.Geom
 open Shrimp.Pdf.Extensions
+open System.IO
 
-
-
-type Margin = 
-    { Left: float
-      Top: float
-      Right: float
-      Bottom: float }
-with   
-    static member Create(value) =
-        { Left = value 
-          Top = value 
-          Right = value 
-          Bottom = value }
-
-    static member Create(left, top, right, bottom) =
-        { Left = left 
-          Top = top 
-          Right = right 
-          Bottom = bottom }
-           
-
-[<RequireQualifiedAccess>]
-module Rectangle = 
-    let applyMargin (margin:Margin) (rect: Rectangle) =
-        let left = margin.Left
-        let top = margin.Top
-        let right = margin.Right
-        let bottom = margin.Bottom
-        let x = rect.GetXF() - left
-        let y = rect.GetYF() - bottom
-        let width = rect.GetWidthF() + left + right 
-        let height = rect.GetHeightF() + top + bottom
-        Rectangle.create x y width height
-
-
-
+type PageOrientation =
+    | Landscape  = 0
+    | Portrait = 1
 
 type FsSize =
     { Width: float 
@@ -46,6 +15,14 @@ type FsSize =
 
 [<RequireQualifiedAccess>]
 module FsSize =
+    let (|Portrait|Landscape|Uniform|) (fsSize: FsSize) =
+        let width = fsSize.Width
+        let height = fsSize.Height
+        if width > height 
+        then Portrait
+        elif width = height then Uniform
+        else Landscape
+
     let create width height =
         { Width = width
           Height = height }
@@ -78,7 +55,10 @@ module FsSize =
               Width = size.Height }
         | _ -> failwith "Invalid token"
 
-
+    let rotateTo (pageOrientation: PageOrientation) size =
+        match pageOrientation with
+        | PageOrientation.Landscape -> landscape size
+        | PageOrientation.Portrait -> portrait size
 
     let clockwise size = 
         rotate Rotation.Clockwise size
@@ -102,31 +82,43 @@ module FsSize =
 
     let A4 = ofPageSize PageSize.A4
 
+    let MAXIMUN = { Width = mm 5080.; Height = mm 5080. }
 
-type ContentResizeMode =
-    | CropOrAdd = 0
-    | Anamorphic = 1
-    | Uniform = 2
+
+type FsPageSize(originSize: FsSize, pageOrientation) =
+    let size = FsSize.rotateTo pageOrientation originSize
+    member x.PageOrientation = pageOrientation
+
+    member x.Size = size
+
+    member x.Width = size.Width
+
+    member x.Height = size.Height
+
+    override x.Equals(y) =
+        match y with 
+        | :? FsPageSize as pageSize -> pageSize.Size = x.Size
+        | _ -> failwithf "Cannot compare different types"
+
+    override x.GetHashCode() =
+        x.Size.GetHashCode()
+
+    interface System.IComparable with 
+        member x.CompareTo(y) =
+            match y with 
+            | :? FsPageSize as pageSize -> (x.Size :> System.IComparable).CompareTo(pageSize.Size)
+            | _ -> failwithf "Cannot compare different types"
+
 
 [<RequireQualifiedAccess>]
-module PdfPage =
-    let increaseHeight 
-        (origin: Position)
-        (pageboxKind: PageBoxKind)
-        (contentResizeMode: ContentResizeMode)
-        (length: float)
-        (page: PdfPage) =
-
-        let newRect = 
-            page 
-            |> PdfPage.getPageBox pageboxKind
-            |> Rectangle.increaseHeight origin length
-            
-        match contentResizeMode with 
-        | ContentResizeMode.CropOrAdd ->
-            PdfPage.setPageBox PageBoxKind.AllBox newRect page 
-        | _ -> failwith "not implemented"
-
+module FsPageSize =
+    let create (size: FsSize) pageOrientation =
+        match pageOrientation with 
+        | PageOrientation.Landscape -> 
+            FsPageSize (FsSize.landscape size, pageOrientation)
+        | PageOrientation.Portrait ->
+            FsPageSize (FsSize.portrait size, pageOrientation)
+        | _ -> failwith "Invalid token"
 
 type ReaderDocument (reader: string) =
     let reader = new PdfDocument(new PdfReader(reader))
@@ -134,15 +126,60 @@ type ReaderDocument (reader: string) =
     member x.Reader = reader
 
 
-type SplitDocument (reader: string, writer: string) =
-    let reader = new PdfDocument(new PdfReader(reader))
+type SplitDocument internal (reader: string, writer: string) =
+    let mutable readerDocument: PdfDocument option = None
 
-    let writer = new PdfDocumentWithCachedResources(writer)
+    let mutable writerDocument: PdfDocumentWithCachedResources option = None
 
-    member x.Reader = reader
+    let mutable isOpend = false
 
-    member x.Writer = writer
-        
+    member x.ReaderPath = reader
+
+    member x.WriterPath = writer
+
+    member x.Reader = 
+        match readerDocument with 
+        | Some reader -> reader
+        | None -> failwith "document is not open yet please option it first"
+
+    member x.Writer = 
+        match writerDocument with 
+        | Some writer -> writer
+        | None -> failwith "document is not open yet please option it first"
+
+    member internal x.Open() =
+        if not isOpend 
+        then
+            match readerDocument with 
+            | Some readerDocument1 ->
+                if readerDocument1.IsClosed() 
+                then
+                    readerDocument <- Some (new PdfDocument(new PdfReader(reader)))
+                else 
+                    failwith "Old document is not closed yet"
+
+            | None -> readerDocument <- Some (new PdfDocument(new PdfReader(reader)))
+
+            match writerDocument with 
+            | Some writerDocument1 ->
+                if writerDocument1.IsClosed() 
+                then
+                    writerDocument <- Some (new PdfDocumentWithCachedResources(writer))
+                else 
+                    failwith "Old document is not closed yet"
+            | None ->
+                writerDocument <- Some(new PdfDocumentWithCachedResources(writer))
+
+        isOpend <- true
+
+    member internal x.CloseAndDraft() =
+        x.Reader.Close()
+        x.Writer.Close()
+
+        File.Delete(reader)
+        File.Move(writer, reader)
+        isOpend <- false
+
     static member Create(reader, writer) = new SplitDocument(reader, writer)
 
 
