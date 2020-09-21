@@ -20,7 +20,7 @@
     </None>
 ```
 2. Multiple startup projects
-`Shrimp.Pdf.icms2.Server`
+`Shrimp.Pdf.icms2.Server`(Windows only as i didn't port icm2 c++ dll to linux)
 `Shrimp.Pdf.Tests`
 
 3. Press F5 In vs2019
