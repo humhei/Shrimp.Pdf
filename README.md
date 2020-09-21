@@ -1,3 +1,4 @@
+# run tests
 1.  Replace contents in  Shrimp.pdf.fsproj `Never` to `PreserveNewest`
 ```
     <None Include="Resources\Marks\*.pdf">
