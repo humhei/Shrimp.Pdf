@@ -19,9 +19,9 @@ module FsSize =
         let width = fsSize.Width
         let height = fsSize.Height
         if width > height 
-        then Portrait
+        then Landscape
         elif width = height then Uniform
-        else Landscape
+        else Portrait
 
     let create width height =
         { Width = width

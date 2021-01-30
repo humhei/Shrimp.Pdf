@@ -9,6 +9,10 @@ open Shrimp.FSharp.Plus
 [<AutoOpen>]
 module ExtensionTypes =
 
+    type Direction =
+        | Vertical = 0
+        | Horizontal = 1
+
     type BoundGettingStrokeOptions =
         | WithStrokeWidth = 0
         | WithoutStrokeWidth = 1
@@ -174,45 +178,64 @@ module ExtensionTypes =
         let getValues (margin: Margin) =
             [ margin.Left; margin.Top; margin.Right; margin.Bottom]
 
-    type TileTable = private TileTable of colNum: int * rowNum: int
+    type TileTable = 
+        private TileTable of colNum: int * rowNum: int * hSpacing: float list * vSpacing: float list
     with 
         member x.ColNum =
-            let (TileTable (colNum, rowNum)) = x
+            let (TileTable (colNum, rowNum, hSpacing, vSpacing)) = x
             colNum
 
         member x.RowNum = 
-            let (TileTable (colNum, rowNum)) = x
+            let (TileTable (colNum, rowNum, hSpacing, vSpacing)) = x
             rowNum
 
-    [<RequireQualifiedAccess>]
-    module TileTable = 
-        let create colNum rowNum = 
+        member x.HSpacing = 
+            let (TileTable (colNum, rowNum, hSpacing, vSpacing)) = x
+            hSpacing
+
+        member x.VSpacing = 
+            let (TileTable (colNum, rowNum, hSpacing, vSpacing)) = x
+            vSpacing
+
+        static member Create(colNum, rowNum, ?HSpacing, ?VSpacing) =
             if not (colNum > 0 && rowNum > 0) then failwithf "colNum %d and rowNum %d should bigger than 0" colNum rowNum 
 
-            TileTable(colNum, rowNum)
+            TileTable(colNum, rowNum, defaultArg HSpacing [0.], defaultArg VSpacing [0.])
+
 
 
     /// zero-based index
-    type TileIndexer = private TileIndexer of TileTable * index: int
+    type TileIndexer = private TileIndexer of TileTable * Direction * index: int
     with 
         member x.ColNum =
-            let (TileIndexer (tileTable, index)) = x
+            let (TileIndexer (tileTable, direction, index)) = x
             tileTable.ColNum
 
         member x.RowNum = 
-            let (TileIndexer (tileTable, index)) = x
+            let (TileIndexer (tileTable, direction, index)) = x
             tileTable.RowNum
 
         member x.Index = 
-            let (TileIndexer (tileArguments, index)) = x
+            let (TileIndexer (tileTable, direction, index)) = x
             index
+
+        member x.Direction = 
+            let (TileIndexer (tileTable, direction, index)) = x
+            direction
+
+        member x.TileTable =
+            let (TileIndexer (tileTable, direction, index)) = x
+            tileTable
+
 
     [<RequireQualifiedAccess>]
     module TileIndexer = 
         /// zero-based index
-        let create (tileTable: TileTable) index =
+        let create (tileTable: TileTable) direction index =
             if index < 0 then failwithf "pieceIndex %d should >= 0" index
-            TileIndexer(tileTable, index)
+            TileIndexer(tileTable, direction, index)
+
+
 
 
     [<RequireQualifiedAccess>]

@@ -69,13 +69,14 @@ module internal rec ManipulateOrReuse =
         | TupledFlow of ITupledFlow<'oldUserState, 'newUserState>
         | AppendedFlow of (SplitOrIntegratedDocument -> unit) * Flow<'oldUserState, 'newUserState>
     with 
-        static member internal AppendLastManipulate(appendix: (SplitOrIntegratedDocument -> unit), flow) =
+        static member internal Append(appendix: (SplitOrIntegratedDocument -> unit), flow) =
             let rec loop flow =
                 match flow with 
                 | Flow.ManipulateOrReuse transform -> 
                     fun (flowModel: FlowModel<_>) ->
+                        let userState = transform flowModel
                         appendix flowModel.Document
-                        transform flowModel
+                        userState
                     |> Flow.ManipulateOrReuse
 
                 | Flow.Func factory ->
@@ -201,7 +202,7 @@ module internal rec ManipulateOrReuse =
                     
 
                 | Flow.AppendedFlow (appendix, flow) ->
-                    loop flowModel (Flow<_, _>.AppendLastManipulate(appendix, flow))
+                    loop flowModel (Flow<_, _>.Append(appendix, flow))
 
 
             loop flowModel flow
@@ -402,7 +403,7 @@ module internal rec ManipulateOrReuse =
 
             member x.AppendLastManipulate(appendix) =
                 { Flow1 = x.Flow1 
-                  Flow2 = Flow<_, _>.AppendLastManipulate(appendix, x.Flow2)
+                  Flow2 = Flow<_, _>.Append(appendix, x.Flow2)
                   FMonadStateBack = x.FMonadStateBack
                   FMonadState = x.FMonadState
                 } :> ITupledFlow<_, _>

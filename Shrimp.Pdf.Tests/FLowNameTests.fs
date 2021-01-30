@@ -49,7 +49,7 @@ let flowNameTests =
         |> runTest "datas/flowName/oneLevel.pdf" 
         |> ignore
 
-    ftestCase "multipleLevels tests1" <| fun _ ->
+    testCase "multipleLevels tests1" <| fun _ ->
         Flow.NamedFlow(
             FlowName.New "flow flowName0",
             Flow.NamedFlow(

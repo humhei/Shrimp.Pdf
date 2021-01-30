@@ -19,7 +19,7 @@ module SelectorOperators =
             a args renderInfo
             || b args renderInfo
 
-    let (!!) (a: PageModifingArguments<_> -> #IAbstractRenderInfo -> bool) =
+    let (!!!) (a: PageModifingArguments<_> -> #IAbstractRenderInfo -> bool) =
         fun args renderInfo ->
             not (a args renderInfo)
 
@@ -31,6 +31,71 @@ type SelectorTag =
     | Path = 0
     | Text = 1
     | PathOrText = 2
+
+[<RequireQualifiedAccess>]
+type SelectionSorter =
+    | None
+    | Plane of tolerance: float * direction: Direction 
+with    
+    /// (SelectionSorter.Plane (mm 3., Direction.Horizontal))
+    static member DefaultValue =
+        (SelectionSorter.Plane (mm 3., Direction.Horizontal))
+
+    member sorter.Sort(rects: iText.Kernel.Geom.Rectangle list) =
+        match sorter with 
+        | SelectionSorter.None -> rects
+
+        | SelectionSorter.Plane(tolerance, direction) ->
+            let rec sortRects accum (rects: iText.Kernel.Geom.Rectangle list) =
+                match rects with 
+                | _ :: _ -> 
+                    match direction with 
+                    | Direction.Horizontal ->
+                        let maxY = 
+                            rects
+                            |> List.map(fun m -> m.GetYF())
+                            |> List.max
+
+                        let (index, leftTopRect) = 
+                            rects
+                            |> List.indexed
+                            |> List.filter(fun (index, m) -> 
+                                abs(m.GetYF() - maxY) <= tolerance
+                            )
+                            |> List.minBy(fun (index, m) ->
+                                m.GetX()
+                            )
+
+                        let leftRects = rects.[0 .. (index-1)] @ rects.[(index+1) .. (rects.Length-1)]
+
+                        sortRects (leftTopRect :: accum) leftRects
+
+                    | Direction.Vertical ->
+                        let minX = 
+                            rects
+                            |> List.map(fun m -> m.GetXF())
+                            |> List.min
+
+                        let (index, leftTopRect) = 
+                            rects
+                            |> List.indexed
+                            |> List.filter(fun (_, m) -> 
+                                abs(m.GetXF() - minX) <= tolerance
+                            )
+                            |> List.maxBy(fun (_, m) ->
+                                m.GetY()
+                            )
+
+                        let leftRects = rects.[0 .. (index-1)] @ rects.[(index+1) .. (rects.Length-1)]
+
+                        sortRects (leftTopRect :: accum) leftRects
+
+                | [] -> accum
+
+            sortRects [] rects
+            |> List.rev
+
+
 
 type Selector<'userState> =
     | Path of (PageModifingArguments<'userState> -> IntegratedPathRenderInfo -> bool)

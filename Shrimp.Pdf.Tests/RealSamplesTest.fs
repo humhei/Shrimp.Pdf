@@ -43,7 +43,7 @@ let retainTitleInfo (color: Color) =
               )
               PathOrText (
                   Info.BoundIsInsideOf(AreaGettingOptions.Specfic titleArea)
-                  <&&> (!!(Info.FillColorIs color))
+                  <&&> (!!!(Info.FillColorIs color))
               )
           ]),
         [ Modifier.CancelFillAndStroke() ]
@@ -69,7 +69,7 @@ let retainNavigationInfo (color: Color) =
         PathOrText (fun args ->
             let pageEdge, _ = args.PageUserState()
             ( Info.BoundIsInsideOf(AreaGettingOptions.Specfic pageEdge.LeftMiddle)
-                <&&> (!!(Info.FillColorIs color)) 
+                <&&> (!!!(Info.FillColorIs color)) 
             ) args
         ),
         [ Modifier.CancelFillAndStroke() ]
@@ -235,5 +235,7 @@ let realSamplesTests =
         
         |> runTest "datas/real samples/add seam text and seam line.pdf" 
         |> ignore
+
+
 
   ]

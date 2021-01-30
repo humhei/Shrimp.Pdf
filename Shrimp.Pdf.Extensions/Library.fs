@@ -222,9 +222,9 @@ module iText =
             let width = rect.GetWidth()
             let height = rect.GetHeight()
             if width > height 
-            then Portrait
+            then Landscape
             elif width = height then Uniform
-            else Landscape
+            else Portrait
 
         let isInsideOf (paramRect) (rect: Rectangle) =
             rect.IsInsideOf(paramRect)
@@ -242,7 +242,7 @@ module iText =
             let height = float32 height
             new Rectangle(x,y,width,height)
             
-        /// <param name="points" at least two unique points></param>
+        // <param name="points" at least two unique points></param>
         let ofPoints (points: Point seq) =
             let xs,ys = 
                 points 
@@ -257,7 +257,7 @@ module iText =
             (create x y width height)
 
 
-        /// <param name="rects" at least one rectange></param>
+        // <param name="rects" at least one rectange></param>
         let ofRectangles (rects: Rectangle seq) =
             rects |> Seq.collect (fun rect ->
                 let x = rect.GetXF()
@@ -378,18 +378,68 @@ module iText =
         let getTile (tileIndexer: TileIndexer) (rect: Rectangle) =
             let colNum= tileIndexer.ColNum
             let rowNum = tileIndexer.RowNum
-            let index = tileIndexer.Index
+            let index = tileIndexer.Index % (colNum * rowNum)
+            let direction = tileIndexer.Direction
 
-            let width = rect.GetWidthF() / float colNum
-            let height = rect.GetHeightF() / float rowNum
-
-            let x = 
-                let colIndex = index % colNum
-                rect.GetXF() + float colIndex * width
             
-            let y =
-                let rowIndex = (index / colNum) % rowNum
-                rect.GetTopF() - height - float rowIndex * height
+            let getHSpacingAccum colIndex = 
+                let baseHSpacing = tileIndexer.TileTable.HSpacing
+                baseHSpacing
+                |> List.replicate ((colIndex / baseHSpacing.Length) + 2)
+                |> List.concat
+                |> List.take (colIndex)
+                |> List.sum
+
+            let getVSpacingAccum rowIndex = 
+                let baseHSpacing = tileIndexer.TileTable.VSpacing
+                baseHSpacing
+                |> List.replicate ((rowIndex / baseHSpacing.Length) + 2)
+                |> List.concat
+                |> List.take (rowIndex)
+                |> List.sum
+
+            let width = (rect.GetWidthF() - getHSpacingAccum (colNum - 1)) / float colNum
+
+            let height = (rect.GetHeightF() - getVSpacingAccum (rowNum - 1)) / float rowNum
+
+            let (x, y) = 
+
+
+                match direction with 
+                | Direction.Horizontal ->
+                    let x = 
+                        let colIndex = index % colNum
+
+                        let hSpacingAccum = getHSpacingAccum colIndex
+
+                        rect.GetXF() + float colIndex * width + hSpacingAccum
+            
+                    let y =
+                        let rowIndex = (index / colNum) 
+
+                        let vSpacingAccum = getVSpacingAccum rowIndex
+
+                        rect.GetTopF() - height - float rowIndex * height - vSpacingAccum
+
+                    (x, y)
+
+                | Direction.Vertical ->
+                    let y = 
+                        let rowIndex = index % rowNum
+
+                        let vSpacingAccum = getVSpacingAccum rowIndex
+
+                        rect.GetTopF() - height - float rowIndex * height - vSpacingAccum
+            
+                    let x =
+                        let colIndex = (index / rowNum) 
+
+                        let hSpacingAccum = getHSpacingAccum colIndex
+
+                        rect.GetXF() + float colIndex * width + hSpacingAccum
+
+                    (x, y)
+
 
             create x y width height
 

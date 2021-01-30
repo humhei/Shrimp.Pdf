@@ -16,9 +16,10 @@ open iText.Kernel.Pdf
 open Shrimp.FSharp.Plus
 
 
+// number in page sequence must be bigger than 0
 [<RequireQualifiedAccess>]
 type PageNumSequenceToken =
-    | PageNum of int
+    | PageNum of int 
     | PageNumWithRotation of int * Rotation
 with 
     member x.PageNumValue = 
@@ -26,6 +27,7 @@ with
         | PageNumSequenceToken.PageNum pageNum -> pageNum
         | PageNumSequenceToken.PageNumWithRotation (pageNum, _) -> pageNum
 
+// number in page sequence must be bigger than 0
 type PageNumSequence = private PageNumSequence of AtLeastOneList<PageNumSequenceToken>
 with 
     member x.Value = 
@@ -47,7 +49,7 @@ with
         |> AtLeastOneList.Create
         |> PageNumSequence
 
-
+// number in page sequence must be bigger than 0
 type CopiedNumSequence = private CopiedNumSequence of AtLeastOneList<int>
 with 
     member x.Value = 
@@ -72,6 +74,13 @@ type PageResizingRotatingOptions =
     | CounterColckwiseIfNeeded = 2
 
 
+
+
+type PageTilingResultCount = PageTilingResultCount of int
+with 
+    member x.Value = 
+        let (PageTilingResultCount count) = x
+        count
 
 [<AutoOpen>]
 module _Reuses =
@@ -522,54 +531,104 @@ module _Reuses =
 
 
 
-        static member TilePages (tileTable: TileTable) =
-
+        static member TilePages (tileTable: TileTable, ?direction: Direction) =
+            let direction = defaultArg direction Direction.Horizontal
             let colNum = tileTable.ColNum
             let rowNum = tileTable.RowNum
             (Reuses.DuplicatePages (PageSelector.All, colNum * rowNum))
-            |> Reuse.Append(fun splitDocument ->
-                let tileTable = TileTable.create colNum rowNum
+            <+>
+            Reuse(fun _ splitDocument ->
+                let reader = splitDocument.Reader
                 let writer = splitDocument.Writer
-                for i = 1 to writer.GetNumberOfPages() do
-                    let page = writer.GetPage(i)
-                    let actualBox = page.GetActualBox()
-                    let tileIndexer = TileIndexer.create tileTable (i - 1)
+
+
+
+                for i = 1 to reader.GetNumberOfPages() do
+                    let readerPage = reader.GetPage(i)
+                    let actualBox = readerPage.GetActualBox()
+                    let tileIndexer = TileIndexer.create tileTable (direction) (i - 1)
                     let tileBox = Rectangle.getTile tileIndexer actualBox
-                    PdfPage.setPageBox PageBoxKind.AllBox tileBox page
+
+                    let writerPage = readerPage.CopyTo(writer)
+                    writer.AddPage(writerPage) |> ignore
+
+                    PdfPage.setPageBox PageBoxKind.AllBox tileBox writerPage
                     |> ignore
-            )
+
+                PageTilingResultCount (colNum * rowNum)
+                |> List.replicate (reader.GetNumberOfPages())
+                |> AtLeastOneList.Create
+
+            ) 
             |> Reuse.rename 
                 "TilePages"
                 ["tileTable" => tileTable.ToString()]
             
 
-        static member TilePages (selector: Selector<'userState>) =
+        static member TilePages (selector: Selector<'userState>, ?sorter: SelectionSorter) =
+            let sorter = defaultArg sorter (SelectionSorter.DefaultValue)
+
             fun (flowModel: FlowModel<'userState>) (splitDocument: SplitDocument) ->
 
                 let reader = splitDocument.Reader
                 let parser = new NonInitialClippingPathPdfDocumentContentParser(reader)
-                for i = 1 to reader.GetNumberOfPages() do
-                    let readerPage = reader.GetPage(i)
-                    let args =
-                        { Page = readerPage
-                          UserState = flowModel.UserState 
-                          TotalNumberOfPages = splitDocument.Reader.GetNumberOfPages() 
-                          PageNum = i }
+                [
+                    for i = 1 to reader.GetNumberOfPages() do
+                        let readerPage = reader.GetPage(i)
+                        let args =
+                            { Page = readerPage
+                              UserState = flowModel.UserState 
+                              TotalNumberOfPages = splitDocument.Reader.GetNumberOfPages() 
+                              PageNum = i }
                     
-                    let selector = (Selector.toRenderInfoSelector args selector)
-                    let infos = NonInitialClippingPathPdfDocumentContentParser.parse i selector parser
-                    for info in infos do
-                        let bound = IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth info
-                        let writer = splitDocument.Writer
-                        let writerPageResource = readerPage.CopyTo(writer)
-                        PdfPage.setPageBox PageBoxKind.AllBox bound writerPageResource |> ignore
-                        writer.AddPage(writerPageResource)
-                        |> ignore
+                        let selector = (Selector.toRenderInfoSelector args selector)
+
+                        let bounds = 
+                            let rects = 
+                                NonInitialClippingPathPdfDocumentContentParser.parse i selector parser
+                                |> List.ofSeq
+                                |> List.map (fun info -> 
+                                    IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth info
+                                )
+
+                            sorter.Sort (rects)
+
+
+
+                        for bound in bounds do
+                            let writer = splitDocument.Writer
+                            let writerPageResource = readerPage.CopyTo(writer)
+                            PdfPage.setPageBox PageBoxKind.AllBox bound writerPageResource |> ignore
+                            writer.AddPage(writerPageResource)
+                            |> ignore
+
+                        yield PageTilingResultCount bounds.Length 
+
+                ]
+                |> AtLeastOneList.Create
 
             |> reuse 
                 "TilePages"
                 ["selector" => selector.ToString()]
 
+        static member PickFromPageTilingResult(pageTilingResults: AtLeastOneList<PageTilingResultCount>, picker: PageNumSequence) =
+            let pageNumSequence = 
+                ([], pageTilingResults.AsList)
+                ||> List.scan(fun accum m -> 
+                    let maxValue = 
+                        match List.tryLast accum with 
+                        | Some last -> last 
+                        | None -> 0
 
+                    [(maxValue + 1) .. (m.Value + maxValue)]
+                ) 
+                |> List.tail
+                |> List.collect (fun m ->
+                    picker.Value
+                    |> List.choose (fun n -> List.tryItem (n.PageNumValue - 1) m)
+                )
+                |> PageNumSequence.Create
+
+            Reuses.SequencePages(pageNumSequence)
 
 

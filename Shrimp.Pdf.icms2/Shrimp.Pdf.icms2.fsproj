@@ -17,8 +17,5 @@
     <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="4.7.1" />
-  </ItemGroup>
 
 </Project>

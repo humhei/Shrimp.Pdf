@@ -10,7 +10,7 @@ open Shrimp.Pdf.DSL
 
 let reuseTests =
   testList "Reuse Tests" [
-    testCase "imposing N-UP tests" <| fun _ -> 
+    ftestCase "imposing N-UP tests" <| fun _ -> 
         Flow.Reuse (
             Reuse.dummy()
             <+>
@@ -113,7 +113,7 @@ let reuseTests =
         |> runTest "datas/reuse/Imposing when use bleed and bleedBox bigger than actualbox.pdf" 
         |> ignore
 
-    testCase "Imposing when cell roation is setted" <| fun _ -> 
+    ftestCase "Imposing when cell roation is setted" <| fun _ -> 
         Flow.Reuse (
             Reuses.Impose(fun args ->
                 { args with 
@@ -191,16 +191,74 @@ let reuseTests =
         |> ignore
 
     testCase "tile pages by colNum and rowNum tests" <| fun _ -> 
-        Flow.Reuse (Reuses.TilePages (TileTable.create 3 2))
+        Flow.Reuse (Reuses.TilePages (TileTable.Create (colNum = 3, rowNum = 2), Direction.Vertical))
         |> runTest "datas/reuse/tile pages by colNum and rowNum.pdf" 
+        |> ignore
+
+    testCase "tile pages by colNum and rowNum tests2" <| fun _ -> 
+        let tileTable = 
+            TileTable.Create (
+                colNum = 6,
+                rowNum = 4,
+                HSpacing = [mm 1.; mm 2.],
+                VSpacing = [mm 3.; mm 6.; mm 9.]
+            )
+        Flow.Reuse (Reuses.TilePages (tileTable, Direction.Vertical))
+        |> runTest "datas/reuse/tile pages by colNum and rowNum2.pdf" 
         |> ignore
 
     testCase "tile pages by selector tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.TilePages
-                (Path(Info.StrokeColorIs DeviceRgb.BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)))
+                (Path(Info.StrokeColorIs DeviceRgb.BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                 SelectionSorter.Plane(mm 3., Direction.Vertical)
+            )
+            <.+>
+            (Reuse.Func(fun userState ->
+                Reuses.PickFromPageTilingResult(userState, PageNumSequence.Create [1])
+            ))
         )
         |> runTest "datas/reuse/tile pages by selector.pdf" 
+        |> ignore
+
+    testCase "trim to first stroke color" <| fun _ -> 
+        let strokeColor = new DeviceRgb(0.498f, 0.616f, 0.725f)
+        let pageBoxKind = PageBoxKind.AllBox
+        Flow.Manipulate(
+            ModifyPage.Create( 
+                sprintf "Set %O to cuttingLineColors" pageBoxKind,
+                PageSelector.All,
+                Path (Info.StrokeColorIs strokeColor),
+                (fun args infos -> 
+                    let rects = 
+                        infos
+                        |> Seq.map (IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth)
+                        |> List.ofSeq
+
+                    let maxY = 
+                        rects 
+                        |> List.map (fun m -> m.GetYF())
+                        |> List.max
+                            
+                    let minX = 
+                        rects 
+                        |> List.map (fun m -> m.GetXF())
+                        |> List.min
+
+                    let rect = 
+                        rects
+                        |> List.filter(fun m -> m.GetYF() @= maxY)
+                        |> List.minBy(fun m -> m.GetX())
+
+                    if (rect.GetXF() @= minX)
+                    then
+                        PageModifier.SetPageBox(pageBoxKind, rect) args infos
+                    else failwithf "Cannot trim to the leftTop item, the top rect is %A, minX is %f" rect minX 
+                )
+            )
+        )
+      
+        |> runTest "datas/reuse/trim to first stroke color.pdf" 
         |> ignore
 
     testCase "move pagebox to origin tests" <| fun _ -> 

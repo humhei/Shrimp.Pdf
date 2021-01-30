@@ -316,7 +316,7 @@ module Imposing =
 
                                 x, width
 
-                            | ColumnFirstAndLast ->  actualBox.GetXF() ,actualBox.GetWidthF()
+                            | ColumnFirstAndLast ->  actualBox.GetXF() , actualBox.GetWidthF()
 
                             | ColumnMiddle ->
                                 let preHSpace = cell.HSpaces.[(index - 1) % cell.HSpaces.Length] / scaleX
@@ -331,7 +331,7 @@ module Imposing =
 
                                 let x = trimBox.GetXF() - preHSpace / 2.
 
-                                let width = trimBox.GetWidthF() + preHSpace / 2.
+                                let width = actualBox.GetRightF() - trimBox.GetLeftF() + preHSpace / 2. 
 
                                 x,width
 

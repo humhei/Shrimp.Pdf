@@ -3,10 +3,12 @@ open Fake.IO
 open Shrimp.Pdf.Extensions
 open iText.Kernel.Pdf
 open System.IO
+open Fake.IO.FileSystemOperators
 
 [<RequireQualifiedAccess>]
 type DocumentSplitOutputDirectoryOptions =
-    | ReaderDirectoryPath
+    | ReaderDirectoryPath_Current
+    | ReaderDirectoryPath_Next
     | CustomDirectoryPath of string
 
 type DocumentSplitArguments =
@@ -16,7 +18,7 @@ type DocumentSplitArguments =
 with 
     static member DefalutValue =
         { ChunkSize = 1 
-          OutputDirectory = DocumentSplitOutputDirectoryOptions.ReaderDirectoryPath 
+          OutputDirectory = DocumentSplitOutputDirectoryOptions.ReaderDirectoryPath_Next
           Override = false }
     
 type DocumentMergingArguments =
@@ -81,13 +83,16 @@ module FileOperations =
 
                 let outputDirectory =
                     match args.OutputDirectory with 
-                    | DocumentSplitOutputDirectoryOptions.ReaderDirectoryPath -> 
+                    | DocumentSplitOutputDirectoryOptions.ReaderDirectoryPath_Current ->
                         Path.getDirectory flowModel.File
 
+                    | DocumentSplitOutputDirectoryOptions.ReaderDirectoryPath_Next -> 
+                        Path.getDirectory flowModel.File </> Path.GetFileNameWithoutExtension flowModel.File
+
                     | DocumentSplitOutputDirectoryOptions.CustomDirectoryPath directory ->
-                        let directoryFullName = Path.GetFullPath directory
-                        Directory.ensure directoryFullName
-                        directoryFullName
+                        Path.GetFullPath directory
+
+                Directory.ensure outputDirectory
 
                 let fileNameWithoutExtension = Path.GetFileNameWithoutExtension(flowModel.File)
 
