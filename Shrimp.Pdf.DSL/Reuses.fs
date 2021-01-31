@@ -315,18 +315,19 @@ module _Reuses =
                 [ "pageSelector" => pageSelector.ToString()
                   "rotation" => rotation.ToString() ]
 
-        static member Resize (pageSelector: PageSelector, pageBoxKind: PageBoxKind, size: FsSize) =
+        static member private Resize (pageSelector: PageSelector, pageBoxKind: PageBoxKind, fSize: PageNumber -> FsSize) =
             fun flowModel (splitDocument: SplitDocument) ->
                 let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
 
                 PdfDocument.getPages splitDocument.Reader
                 |> List.iteri (fun i page ->
                     let pageNum = i + 1
+                    let size = fSize (PageNumber pageNum)
+
                     if List.contains pageNum selectedPageNumbers 
                     then 
                         let actualBox = page.GetActualBox()
                         let pageBox = page.GetPageBox(pageBoxKind)
-
                         let affineTransform_Scale = 
                             AffineTransform.GetScaleInstance(size.Width / pageBox.GetWidthF(), size.Height / pageBox.GetHeightF())
 
@@ -373,8 +374,15 @@ module _Reuses =
                         let page = page.CopyTo(splitDocument.Writer)
                         splitDocument.Writer.AddPage(page) |> ignore
                 )
-
-            |> reuse 
+            |> Reuse
+            
+        static member Resize (pageSelector: PageSelector, pageBoxKind: PageBoxKind, size: FsSize) =
+            Reuses.Resize(
+                pageSelector = pageSelector,
+                pageBoxKind = pageBoxKind,
+                fSize = (fun _ -> size)
+            )
+            |> Reuse.rename
                 "Resize"
                 ["pageSelector" => pageSelector.ToString()
                  "pageBoxKind" => pageBoxKind.ToString() 
@@ -407,7 +415,7 @@ module _Reuses =
                             (Set.ofList proposedRotatedPageNumbers)
                         |> fun pageNumbers ->
 
-                            if pageNumbers.IsEmpty then Reuse.dummy()
+                            if pageNumbers.IsEmpty then Reuse.dummy() ||>> ignore
                             else
                                 let pageSelector = 
                                     PageSelector.Numbers (AtLeastOneSet.Create pageNumbers)
@@ -492,7 +500,37 @@ module _Reuses =
 
             tryRotate()
             <+>
-            resize()
+            (resize())
+           
+           
+        static member Scale (pageSelector, scaleX: float, scaleY: float) =
+            Reuse.Factory(fun _ splitDocument ->
+                let reader = splitDocument.Reader
+                
+                let pageSizes = 
+                    PdfDocument.getPages reader
+                    |> List.map (PdfPage.getActualBox)
+
+                let newPageSizes =
+                    pageSizes
+                    |> List.map (fun pageSize ->
+                        { Width = pageSize.GetWidthF() * scaleX 
+                          Height = pageSize.GetHeightF() * scaleY }
+                    )
+                Reuses.Resize(
+                    pageSelector = pageSelector,
+                    pageBoxKind = PageBoxKind.ActualBox,
+                    fSize = (fun pageNum ->
+                        newPageSizes.[pageNum.Value - 1]
+                    )
+                )
+            )
+            |> Reuse.rename
+                "Scale"
+                ["pageSelector" => pageSelector.ToString()
+                 "scaleX" =>scaleX.ToString() 
+                 "scaleY" => scaleY.ToString() ]
+
 
 
         static member DuplicatePages (pageSelector: PageSelector, copiedNumbers: CopiedNumSequence) =

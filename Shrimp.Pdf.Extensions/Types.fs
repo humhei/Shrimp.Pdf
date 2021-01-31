@@ -173,10 +173,18 @@ module ExtensionTypes =
 
             | _ -> failwithf "values' length %d is not equal to 4" values.Length
 
+
     [<RequireQualifiedAccess>]
     module Margin =
         let getValues (margin: Margin) =
             [ margin.Left; margin.Top; margin.Right; margin.Bottom]
+
+        let mapValues f (margin: Margin) =
+            { Left = f margin.Left
+              Top = f margin.Top
+              Bottom = f margin.Bottom
+              Right = f margin.Right
+            }
 
     type TileTable = 
         private TileTable of colNum: int * rowNum: int * hSpacing: float list * vSpacing: float list

@@ -167,7 +167,9 @@ module internal rec ManipulateOrReuse =
                         FlowModel.mapTo newUserState flowModel
 
                     with ex ->
-                        flowModel.Document.CloseAndDraft()
+                        try 
+                            flowModel.Document.CloseAndDraft()
+                        with _ -> ()
                         raise ex
 
                 | Flow.TupledFlow flow -> flow.Invoke flowModel

@@ -10,7 +10,7 @@ open Shrimp.Pdf.DSL
 
 let reuseTests =
   testList "Reuse Tests" [
-    ftestCase "imposing N-UP tests" <| fun _ -> 
+    testCase "imposing N-UP tests" <| fun _ -> 
         Flow.Reuse (
             Reuse.dummy()
             <+>
@@ -288,6 +288,13 @@ let reuseTests =
             Reuses.Resize(PageSelector.All, PageResizingRotatingOptions.Keep, PageResizingScalingOptions.Uniform , FsSize.landscape {Width = mm 210.; Height = mm 297.})
         )
         |> runTest "datas/reuse/resize pageSize to 29.7×21cm uniform.pdf" 
+        |> ignore
+
+    testCase "scaling page 0.8 tests" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.Scale(PageSelector.All, 0.8, 0.8)
+        )
+        |> runTest "datas/reuse/scaling page 0.8.pdf" 
         |> ignore
         
     testCase "insert pages tests" <| fun _ -> 
