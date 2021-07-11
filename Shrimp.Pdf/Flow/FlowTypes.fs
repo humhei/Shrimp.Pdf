@@ -3,24 +3,26 @@
 open Fake.IO
 open Fake.IO.FileSystemOperators
 open System.IO
-
+open Shrimp.FSharp.Plus
 
 type NameAndParamters =
     { Name: string 
       Parameters: list<string * string>}
 
 type FlowModel<'userState> =
-    { File: string 
+    { PdfFile: PdfFile 
       UserState: 'userState }
+    with 
+        member x.File = x.PdfFile.Path
 
 [<RequireQualifiedAccess>]
 module FlowModel =
     let mapM mapping flowModel =
-        { File = flowModel.File 
+        { PdfFile = flowModel.PdfFile 
           UserState = mapping flowModel.UserState }
 
     let mapTo userState flowModel =
-        { File = flowModel.File 
+        { PdfFile = flowModel.PdfFile 
           UserState = userState }
 
 
@@ -190,7 +192,7 @@ module internal InternalFlowModel =
           OperatedFlowNames = flowModel.OperatedFlowNames }
 
     let toFlowModel (internalFlowModel: InternalFlowModel<_>): FlowModel<_> =
-        { File = internalFlowModel.File 
+        { PdfFile = PdfFile internalFlowModel.File 
           UserState = internalFlowModel.UserState }
 
 

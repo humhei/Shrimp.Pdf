@@ -1,16 +1,14 @@
 ﻿namespace Shrimp.Pdf
 
 open iText.Kernel.Pdf
-open System.Reflection
 open System.IO
-open System.Text
 open Akka.Configuration
 open Fake.IO.FileSystemOperators
-open iText.Kernel.Pdf.Canvas.Parser
 open Shrimp.Pdf.Parser
 open iText.Kernel.Colors
 open iText.Kernel.Pdf.Colorspace
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
+open Shrimp.FSharp.Plus
 
 //open Shrimp.Pdf.Parser
 
@@ -39,7 +37,11 @@ module Resources =
         /// then invoke it: e.g. obtainCmykMarkFromResource "CMYK" writer 
         let obtainMarkFromResources (fileNameWithoutExtension: string) (writer: PdfDocument) =
 
-            let file = resourceDirectory.Value </> "Marks" </> fileNameWithoutExtension + ".pdf"
+            let file = 
+                resourceDirectory.Value </> "Marks" </> fileNameWithoutExtension + ".pdf"
+
+            PdfFile file |> ignore
+
             lock writer (fun _ ->
                 let doc = new PdfDocument(new PdfReader(file))
                 let markPage = 
@@ -55,6 +57,9 @@ module Resources =
         /// e.g. obtainColorFromResource @"Pantone+ Solid Coated/PANTONE 100 C" writer 
         let obtainSperationColorFromResources (fileNameWithoutExtension: string) (writer: PdfDocument) =
             let file = resourceDirectory.Value </> "Colors" </> fileNameWithoutExtension + ".pdf"
+            
+            PdfFile file |> ignore
+
             lock writer (fun _ ->
                 let doc = new PdfDocument(new PdfReader(file))
 

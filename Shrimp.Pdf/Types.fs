@@ -23,6 +23,7 @@ module FsSize =
         elif width = height then Uniform
         else Portrait
 
+
     let create width height =
         { Width = width
           Height = height }
@@ -71,6 +72,11 @@ module FsSize =
     let toPageSize (size: FsSize) =
         new PageSize(float32 size.Width,float32 size.Height)
 
+    let applyMargin margin (size: FsSize) =
+        toPageSize size
+        |> Rectangle.applyMargin margin
+        |> ofRectangle
+
 
     let A0 = ofPageSize PageSize.A0
 
@@ -84,6 +90,18 @@ module FsSize =
 
     let MAXIMUN = { Width = mm 5080.; Height = mm 5080. }
 
+type FsSize with    
+    member x.OppositeDirection(targetSize: FsSize) =
+        match targetSize with 
+        | FsSize.Portrait _ -> FsSize.portrait x
+        | FsSize.Landscape _ -> FsSize.landscape x
+        | FsSize.Uniform _ -> x
+
+    member x.OppositeDirection(targetSize: iText.Kernel.Geom.Rectangle) =
+        match FsSize.ofRectangle targetSize with 
+        | FsSize.Portrait _ -> FsSize.portrait x
+        | FsSize.Landscape _ -> FsSize.landscape x
+        | FsSize.Uniform _ -> x
 
 type FsPageSize(originSize: FsSize, pageOrientation) =
     let size = FsSize.rotateTo pageOrientation originSize

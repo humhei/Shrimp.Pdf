@@ -57,6 +57,7 @@
 
   <ItemGroup>
     <PackageReference Include="Fake.IO.FileSystem" Version="5.16.1" />
+    <PackageReference Include="shrimp.litedb" Version="5.99.104" />
   </ItemGroup>
 
   <ItemGroup>
@@ -66,6 +67,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="5.0.1-beta.20607.1" />
     <PackageReference Update="System.ValueTuple" Version="4.5.0" />
   </ItemGroup>
 

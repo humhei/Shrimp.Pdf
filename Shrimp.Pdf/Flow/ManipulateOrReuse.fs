@@ -1,8 +1,5 @@
 ﻿namespace Shrimp.Pdf
-open Fake.IO
-open Fake.IO.FileSystemOperators
-open System.IO
-
+open Shrimp.FSharp.Plus
 
 module internal rec ManipulateOrReuse =
 
@@ -23,14 +20,14 @@ module internal rec ManipulateOrReuse =
     
 
     type FlowModel<'userState> =
-        { File: string 
+        { File: string
           Document: SplitOrIntegratedDocument 
           FlowName: FlowName option
           OperatedFlowNames: FlowName list
           UserState: 'userState }
     with 
         member flowModel.ToPublicFlowModel() =
-            { File = flowModel.File 
+            { PdfFile = PdfFile flowModel.File 
               UserState = flowModel.UserState }
 
         member flowModel.ToInternalFlowModel() =

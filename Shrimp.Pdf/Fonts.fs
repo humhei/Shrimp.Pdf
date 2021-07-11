@@ -3,13 +3,14 @@
 open iText.IO.Font
 open System.IO
 open Resources
-
+open Shrimp.FSharp.Plus
 
 type RegisterableFont =
     { PdfEncodings: string
-      Path: string 
+      File: FsFileInfo 
       FontFamily: string }
-
+with 
+    member x.Path = x.File.Path
 
 [<RequireQualifiedAccess>]
 module RegisterableFonts =
@@ -25,7 +26,7 @@ module RegisterableFonts =
         let weightText =  weight.ToString()
         { PdfEncodings = PdfEncodings.IDENTITY_H
           FontFamily = "阿里巴巴普惠体-" + (weightText.Substring(0,1).ToUpper())
-          Path = Path.Combine(resourceDirectory.Value, @"Fonts/Alibaba-PuHuiTi-" + weightText + ".otf") }
+          File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/Alibaba-PuHuiTi-" + weightText + ".otf")) }
 
 
     let AlibabaPuHuiTiLight = alibabaPuHuiTi FontWeight.Light

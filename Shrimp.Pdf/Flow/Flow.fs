@@ -2,6 +2,7 @@
 open Fake.IO
 open Fake.IO.FileSystemOperators
 open System.IO
+open Shrimp.FSharp.Plus
 
 [<AutoOpen>]
 module _FileOperation =
@@ -440,7 +441,7 @@ module Operators =
         let flowModels =
             flowModels
             |> List.map (fun m -> 
-                { File = m.File 
+                { File = m.PdfFile.Path 
                   UserState = m.UserState 
                   FlowName = None
                   OperatedFlowNames = [] }
@@ -456,7 +457,7 @@ module Operators =
         let flowModels =
             files 
             |> List.map (fun file ->
-                { File = file 
+                { PdfFile = PdfFile file 
                   UserState = () }
             )
 

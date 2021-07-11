@@ -19,5 +19,9 @@
     <ProjectReference Include="..\Shrimp.Pdf\Shrimp.Pdf.fsproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="5.0.1-beta.20607.1" />
+  </ItemGroup>
+
 
 </Project>

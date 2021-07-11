@@ -113,7 +113,7 @@ let reuseTests =
         |> runTest "datas/reuse/Imposing when use bleed and bleedBox bigger than actualbox.pdf" 
         |> ignore
 
-    ftestCase "Imposing when cell roation is setted" <| fun _ -> 
+    testCase "Imposing when cell roation is setted" <| fun _ -> 
         Flow.Reuse (
             Reuses.Impose(fun args ->
                 { args with 

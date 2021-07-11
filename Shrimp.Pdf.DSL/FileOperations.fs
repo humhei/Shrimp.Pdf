@@ -4,6 +4,7 @@ open Shrimp.Pdf.Extensions
 open iText.Kernel.Pdf
 open System.IO
 open Fake.IO.FileSystemOperators
+open Shrimp.FSharp.Plus
 
 [<RequireQualifiedAccess>]
 type DocumentSplitOutputDirectoryOptions =
@@ -32,7 +33,7 @@ with
 [<RequireQualifiedAccess>]
 module FileOperations =
     /// expose this function for modifyAsync
-    let internal mergeDocumentsInternal targetDocumentName (writer: PdfDocument)  =
+    let internal mergeDocumentsInternal (targetDocumentName: string) (writer: PdfDocument)  =
         fun (flowModels: FlowModel<'userState> list) ->
             for pageNum = 1 to writer.GetNumberOfPages() do
                 writer.RemovePage(1)
@@ -46,7 +47,7 @@ module FileOperations =
 
                 readerDocument.Reader.Close()
 
-            { File = targetDocumentName 
+            { PdfFile = PdfFile targetDocumentName 
               UserState = flowModels |> List.map (fun m -> m.UserState)
             }
             |> List.singleton
@@ -116,7 +117,7 @@ module FileOperations =
                             writer.AddPage(writerPageResource) |> ignore
                         writer.Close()
 
-                        { File = fileFullPath 
+                        { PdfFile = PdfFile fileFullPath 
                           UserState = flowModel.UserState }
                     )
                 let newFiles = 

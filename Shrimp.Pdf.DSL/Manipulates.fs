@@ -6,6 +6,7 @@ open Shrimp.Pdf.DSL
 [<AutoOpen>]
 module Manipulates =
     type ModifyPage with
+        
         static member TrimToVisible (pageSelector: PageSelector, ?margin: Margin)  =
             let margin = defaultArg margin (Margin.Create 0.)
             ModifyPage.Create(

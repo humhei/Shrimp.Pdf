@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="KnownColor.fs" />
     <Compile Include="Read.fs" />
     <Compile Include="Edit.fs" />
   </ItemGroup>

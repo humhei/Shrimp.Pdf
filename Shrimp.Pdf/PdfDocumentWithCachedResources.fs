@@ -13,12 +13,13 @@ module private FontExtensions =
     let private fontRegisterCache = new ConcurrentDictionary<string, RegisterableFont>()
 
     type PdfFontFactory with
-        static member Register(registerableFont: RegisterableFont) =
+        static member private Register(registerableFont: RegisterableFont) =
             fontRegisterCache.GetOrAdd(registerableFont.Path, fun path ->
                 PdfFontFactory.Register(path)
                 registerableFont
             ) |> ignore
 
+        /// NoNeed to invoke PdfFontFactory.Register first
         static member CreateFont(registerableFont: RegisterableFont) =
             PdfFontFactory.Register(registerableFont)
             PdfFontFactory.CreateRegisteredFont(registerableFont.FontFamily, registerableFont.PdfEncodings)
@@ -104,7 +105,6 @@ type private PdfDocumentCache private (pdfDocument: unit -> PdfDocument, fontsCa
 type PdfDocumentWithCachedResources =
     inherit PdfDocument
     val private cache: PdfDocumentCache
-    //let fontsCache = new ConcurrentDictionary<PdfFontFactory, PdfFont>()
 
     member x.GetOrCreatePdfFont(fontFactory: FsPdfFontFactory) =
         x.cache.GetOrCreateFont(fontFactory)

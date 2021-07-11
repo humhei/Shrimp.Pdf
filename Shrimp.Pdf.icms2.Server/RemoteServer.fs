@@ -40,6 +40,8 @@ module Icc =
 
 let run() =
 
+
+
     Server.createAgent (fun ctx ->
         let logger = ctx.Log.Value
         let rec loop (model: Map<Icc * Icc * Indent, Icms>) = actor {
@@ -59,7 +61,18 @@ let run() =
                     logger.Info (sprintf "[SHRIMP SERVER Pdf ICMS2] Convert %O %A to %O %A" inputIcc inputValues outputIcc outputValues) 
                     ctx.Sender() <! outputValues 
         }
+
+        let calcColor (inputIcc, inputValues, outputIcc, indent) =
+            let icms2 = new Icms("Icc" </> Icc.fileName inputIcc, Icc.format inputIcc,"Icc" </> Icc.fileName outputIcc, Icc.format outputIcc, indent, 0u)
+            let outputValues = icms2.DoTransfrom(inputValues)
+            outputValues 
+
+        let msg =
+            calcColor (Icc.Rgb RgbIcc.``SRGB Color Space Profile``, [|0.5f; 0.5f; 0.5f|], Icc.Cmyk CmykIcc.JapanColor2001Coated, Indent.INTENT_PERCEPTUAL)
+
         loop Map.empty
+
+
     )
     |> ignore
 

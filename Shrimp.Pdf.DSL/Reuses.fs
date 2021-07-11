@@ -315,7 +315,7 @@ module _Reuses =
                 [ "pageSelector" => pageSelector.ToString()
                   "rotation" => rotation.ToString() ]
 
-        static member private Resize (pageSelector: PageSelector, pageBoxKind: PageBoxKind, fSize: PageNumber -> FsSize) =
+        static member Resize (pageSelector: PageSelector, pageBoxKind: PageBoxKind, fSize: PageNumber -> FsSize) =
             fun flowModel (splitDocument: SplitDocument) ->
                 let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
 
@@ -374,7 +374,11 @@ module _Reuses =
                         let page = page.CopyTo(splitDocument.Writer)
                         splitDocument.Writer.AddPage(page) |> ignore
                 )
-            |> Reuse
+            |> reuse
+                "Resize"
+                ["pageSelector" => pageSelector.ToString()
+                 "pageBoxKind" => pageBoxKind.ToString() 
+                 "size" => fSize.ToString() ]
             
         static member Resize (pageSelector: PageSelector, pageBoxKind: PageBoxKind, size: FsSize) =
             Reuses.Resize(
@@ -502,8 +506,8 @@ module _Reuses =
             <+>
             (resize())
            
-           
-        static member Scale (pageSelector, scaleX: float, scaleY: float) =
+
+        static member Scale (pageSelector, fScaleX: PageNumber -> float, fScaleY: PageNumber -> float) =
             Reuse.Factory(fun _ splitDocument ->
                 let reader = splitDocument.Reader
                 
@@ -513,7 +517,10 @@ module _Reuses =
 
                 let newPageSizes =
                     pageSizes
-                    |> List.map (fun pageSize ->
+                    |> List.mapi (fun i pageSize ->
+                        let pageNumber = PageNumber (i + 1)
+                        let scaleX = fScaleX pageNumber
+                        let scaleY = fScaleY pageNumber
                         { Width = pageSize.GetWidthF() * scaleX 
                           Height = pageSize.GetHeightF() * scaleY }
                     )
@@ -528,8 +535,20 @@ module _Reuses =
             |> Reuse.rename
                 "Scale"
                 ["pageSelector" => pageSelector.ToString()
-                 "scaleX" =>scaleX.ToString() 
-                 "scaleY" => scaleY.ToString() ]
+                 "fScaleX" => fScaleX.ToString() 
+                 "fScaleY" => fScaleY.ToString() ]
+
+        static member Scale(pageSelector, scaleX, scaleY) =
+            Reuses.Scale(
+                pageSelector = pageSelector,
+                fScaleX = (fun _ -> scaleX),
+                fScaleY = (fun _ -> scaleY)
+            )
+            |> Reuse.rename
+                "Scale"
+                ["pageSelector" => pageSelector.ToString()
+                 "fScaleX" => scaleX.ToString() 
+                 "fScaleY" => scaleY.ToString() ]
 
 
 

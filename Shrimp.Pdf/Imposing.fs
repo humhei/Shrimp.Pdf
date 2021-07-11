@@ -1,5 +1,6 @@
-﻿
-namespace Shrimp.Pdf
+﻿namespace Shrimp.Pdf
+
+
 #nowarn "0104"
 open iText.Kernel.Pdf
 open Shrimp.Pdf.Colors
@@ -9,6 +10,7 @@ open Shrimp.Pdf.Extensions
 open System.Linq
 open System
 open System.Collections.Concurrent
+open Shrimp.FSharp.Plus
 
 
 
@@ -35,24 +37,24 @@ module Imposing =
         | At of Position
 
 
-    type BackgroundFile = private BackgroundFile of string
-    with 
-        static member Create(pdfPath: string) =
-            if System.IO.File.Exists pdfPath && pdfPath.EndsWith ".pdf"
-            then BackgroundFile pdfPath
-            else failwithf "Cannot create backGroundFile from pdf path %s" pdfPath
-
+    type BackgroundFile = BackgroundFile of PdfFile
+    with
         member x.Value =
             let (BackgroundFile value) = x
             value
 
+        static member Create(path: string) =
+            PdfFile path
+            |> BackgroundFile
+
     [<RequireQualifiedAccess>]
     module BackgroundFile =
+        let private backgroundFilePageBoxCache = new ConcurrentDictionary<BackgroundFile, Rectangle list>()
+
         let getPageBoxes = 
-            let backgroundFilePageBoxCache = new ConcurrentDictionary<BackgroundFile, Rectangle list>()
             fun (backGroundFile: BackgroundFile) ->
                 backgroundFilePageBoxCache.GetOrAdd(backGroundFile, fun backGroundFile ->
-                    let reader = new PdfDocument(new PdfReader(backGroundFile.Value))
+                    let reader = new PdfDocument(new PdfReader(backGroundFile.Value.Path))
                     PdfDocument.getPages reader
                     |> List.map (fun page ->
                         let pageBox = (page.GetActualBox())
@@ -711,7 +713,7 @@ module Imposing =
 
             match args.Background with 
             | Background.File backgroudFile ->
-                let reader = new PdfDocument(new PdfReader(backgroudFile.Value))
+                let reader = new PdfDocument(new PdfReader(backgroudFile.Value.Path))
                 let xobject = reader.GetPage(1).CopyAsFormXObject(this.SplitDocument.Writer)
                 pdfCanvas.AddXObject(xobject, pageBox.GetX(), pageBox.GetY()) |> ignore
                 reader.Close()
