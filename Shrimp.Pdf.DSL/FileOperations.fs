@@ -69,6 +69,7 @@ module FileOperations =
 
             let result = 
                 flow.Value flowModels
+
             writer.Close()
             result
         |> FileOperation

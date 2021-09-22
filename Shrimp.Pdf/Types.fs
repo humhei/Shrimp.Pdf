@@ -12,6 +12,31 @@ type PageOrientation =
 type FsSize =
     { Width: float 
       Height: float }
+with 
+    member internal x.MMValues =
+        { Width = userUnitToMM x.Width 
+          Height = userUnitToMM x.Height}
+
+    member internal x.Round() =
+        { Width = x.Width
+          Height = x.Height }
+
+type RoundedSize = private RoundedSize of FsSize
+with 
+    member x.Value =
+        let (RoundedSize v) = x
+        v
+
+    member x.Width = x.Value.Width
+
+    member x.Height = x.Value.Height
+
+    member internal x.MMValues = x.Value.MMValues
+
+    static member Create(size: FsSize) =
+        size.Round()
+        |> RoundedSize
+
 
 [<RequireQualifiedAccess>]
 module FsSize =
@@ -91,17 +116,21 @@ module FsSize =
     let MAXIMUN = { Width = mm 5080.; Height = mm 5080. }
 
 type FsSize with    
-    member x.OppositeDirection(targetSize: FsSize) =
+    member private x.OppositeDirection(targetSize: FsSize) =
         match targetSize with 
         | FsSize.Portrait _ -> FsSize.portrait x
         | FsSize.Landscape _ -> FsSize.landscape x
         | FsSize.Uniform _ -> x
 
-    member x.OppositeDirection(targetSize: iText.Kernel.Geom.Rectangle) =
+    member private x.OppositeDirection(targetSize: iText.Kernel.Geom.Rectangle) =
         match FsSize.ofRectangle targetSize with 
         | FsSize.Portrait _ -> FsSize.portrait x
         | FsSize.Landscape _ -> FsSize.landscape x
         | FsSize.Uniform _ -> x
+
+    member x.AlignDirection(targetSize: FsSize) = x.OppositeDirection(targetSize)
+
+    member x.AlignDirection(targetSize: iText.Kernel.Geom.Rectangle) = x.OppositeDirection(targetSize)
 
 type FsPageSize(originSize: FsSize, pageOrientation) =
     let size = FsSize.rotateTo pageOrientation originSize
@@ -202,4 +231,19 @@ type SplitDocument internal (reader: string, writer: string) =
 
 
              
+[<AutoOpen>]
+module _Types_Ex =
+    type PdfPage with 
+        member x.GetPageEdge(innerBox: FsSize, pageBoxKind: PageBoxKind) =
+            let pageBox = x.GetPageBox(pageBoxKind)
 
+            let margin = 
+                let width = pageBox.GetWidthF() - innerBox.Width
+                let height = pageBox.GetHeightF() - innerBox.Height
+
+                let width_div_2 = -width / 2.
+                let height_div_2 = -height / 2.
+
+                Margin.Create(width_div_2, height_div_2, width_div_2, height_div_2)
+
+            x.GetPageEdge(Rectangle.applyMargin margin pageBox, pageBoxKind)

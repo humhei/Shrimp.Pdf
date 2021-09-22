@@ -173,6 +173,8 @@ module ExtensionTypes =
 
             | _ -> failwithf "values' length %d is not equal to 4" values.Length
 
+        member x.LoggingText = 
+            sprintf "Margin: %.1f %.1f %.1f %.1f" x.Left x.Top x.Right x.Bottom
 
     [<RequireQualifiedAccess>]
     module Margin =
@@ -185,6 +187,9 @@ module ExtensionTypes =
               Bottom = f margin.Bottom
               Right = f margin.Right
             }
+
+      
+
 
     type TileTable = 
         private TileTable of colNum: int * rowNum: int * hSpacing: float list * vSpacing: float list
@@ -464,7 +469,7 @@ module ExtensionTypes =
         override x.ToString() =
             match x with 
             | SinglePageSelectorExpr.Begin i -> i.ToString()
-            | SinglePageSelectorExpr.End i -> i.ToString() + "R"
+            | SinglePageSelectorExpr.End i -> "R" + i.ToString()
 
     [<RequireQualifiedAccess>]
     type PageSelectorExpr = 
@@ -559,6 +564,22 @@ module ExtensionTypes =
                 compose
                 |> List.collect (pdfDocument.GetPageNumbers)
                 |> List.distinct
+
+        member pdfDocument.GetPages() =
+            [
+                for i = 1 to pdfDocument.GetNumberOfPages() do
+                    pdfDocument.GetPage(i)
+            ]
+
+        member pdfDocument.GetPages(pageSelectorExpr: PageSelectorExpr) =
+            let pages = pdfDocument.GetPages()
+            let numbers = pdfDocument.GetPageNumbers(pageSelectorExpr)
+            pages 
+            |> List.indexed
+            |> List.filter(fun (i, page) ->
+                List.contains (i+1) (numbers)
+            )
+            |> List.map snd
 
         member pdfDocument.GetPageNumbers(pageSelector) =
             let numberOfPages = pdfDocument.GetNumberOfPages()

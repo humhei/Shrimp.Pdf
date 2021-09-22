@@ -42,23 +42,38 @@ module RenderInfoSelector =
 
     let toRenderInfoPredication (selector) =
         let rec loop selector =
+     
             match selector with 
 
             | RenderInfoSelector.Path prediate ->
                 fun (renderInfo: IIntegratedRenderInfo) -> 
                     match renderInfo with 
                     | IIntegratedRenderInfo.Text _ -> false
-                    | IIntegratedRenderInfo.Path renderInfo -> prediate renderInfo
+                    | IIntegratedRenderInfo.Path renderInfo -> 
+                        match Seq.length(IPathRenderInfo.toActualPoints renderInfo) with 
+                        | 0 -> false
+                        | _ -> prediate renderInfo
 
-            | RenderInfoSelector.PathOrText prediate -> 
-                fun (renderInfo: IIntegratedRenderInfo) ->
-                    prediate renderInfo
 
             | RenderInfoSelector.Text prediate ->
                 fun (renderInfo: IIntegratedRenderInfo) ->
                     match renderInfo with 
                     | IIntegratedRenderInfo.Text renderInfo -> prediate renderInfo
                     | IIntegratedRenderInfo.Path _ -> false
+
+            | RenderInfoSelector.PathOrText prediate -> 
+                fun (renderInfo: IIntegratedRenderInfo) ->
+                    match renderInfo with 
+                    | IIntegratedRenderInfo.Path renderInfo -> 
+                        match renderInfo with 
+                        | IIntegratedRenderInfo.Text _ -> false
+                        | IIntegratedRenderInfo.Path renderInfo -> 
+                            match Seq.length(IPathRenderInfo.toActualPoints renderInfo) with 
+                            | 0 -> false
+                            | _ -> prediate renderInfo
+
+                    | IIntegratedRenderInfo.Text renderInfo -> prediate renderInfo
+
 
             | RenderInfoSelector.Dummy _ -> fun _ -> false
 

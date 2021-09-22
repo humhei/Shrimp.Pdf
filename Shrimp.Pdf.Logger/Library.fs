@@ -33,8 +33,9 @@ module Logger =
         | None -> printfn "%s" message
 
     let unSupportedTextRenderMode(textRendingMode: int) =
-        let stackTrace = new System.Diagnostics.StackTrace();
-        warning (sprintf "Unsupported text render mode %d \n %s" textRendingMode (stackTrace.ToString()))
+        //let stackTrace = new System.Diagnostics.StackTrace();
+        //()
+        warning (sprintf "Unsupported text render mode %d" textRendingMode) (*(stackTrace.ToString()))*)
 
     let infoWithStopWatch message f =
         let stopWatch = Stopwatch.StartNew()

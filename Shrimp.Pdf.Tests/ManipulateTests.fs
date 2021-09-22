@@ -6,6 +6,7 @@ open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.icms2
+open Shrimp.Pdf.RegisterableFonts.YaHei
 
 
 let manipulateTests =
@@ -234,21 +235,23 @@ let manipulateTests =
                   PageModifier.AddColoredTexts(
                     AreaGettingOptions.PageBox PageBoxKind.ActualBox,
                     [ 
-                        { Text = "C"
+                        { Text = "你好天气很好"
                           Color = PdfCanvasColor.ITextColor DeviceCmyk.CYAN }
 
                         { Text = "M"
                           Color = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA }
 
-                        { Text = "Y"
+                        { Text = "是的啊"
                           Color = PdfCanvasColor.ITextColor DeviceCmyk.YELLOW }
 
-                        { Text = "K"
+                        { Text = "Unicode"
                           Color = PdfCanvasColor.ITextColor DeviceCmyk.BLACK }
                     ],
                     fun args -> 
                         { args with 
                             Position = Position.Center(0., 0.)
+                            PdfFontFactory = FsPdfFontFactory.Registerable 
+                                (RegisterableFonts.YaHei.yaHei RegisterableFonts.YaHei.FontWeight.Light)
                         }
                   )
                 )
@@ -275,7 +278,7 @@ let manipulateTests =
                     fun args -> 
                         { args with 
                             Position = Position.Center(0., 0.)
-                            PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                            PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                             HorizontalTextAlignment = Some iText.Layout.Properties.TextAlignment.RIGHT
                         }
                   )
@@ -293,7 +296,7 @@ let manipulateTests =
                   PageModifier.Batch [
                     PageModifier.AddText(PageBoxKind.ActualBox, "你好Separation", fun args ->
                       { args with 
-                          PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                          PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                           CanvasFontSize = CanvasFontSize.Numeric 25. 
                           FontColor = PdfCanvasColor.Separation (FsSeparation.Create("专色1", DeviceRgb.BLUE))
                           FontRotation = Rotation.None 
@@ -302,11 +305,24 @@ let manipulateTests =
 
                     PageModifier.AddText(PageBoxKind.ActualBox, "你好LAB", fun args ->
                       { args with 
-                          PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                          PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                           CanvasFontSize = CanvasFontSize.Numeric 25. 
                           FontColor = PdfCanvasColor.Lab {L = 50.f; a = 50.f; b = 50.f}
                           FontRotation = Rotation.None 
                           Position = Position.TopMiddle(0., 0.)}
+                    )
+                    PageModifier.AddText(
+                        PageBoxKind.ActualBox,
+                        "咬口正",
+                        (fun args ->
+                            { args with 
+                                Position = Position.BottomMiddle (mm -5., mm 0.)
+                                PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Regular)
+                                //CanvasFontSize = CanvasFontSize.Numeric 8. 
+                                //FontColor = PdfCanvasColor.Registration
+                                //HorizontalTextAlignment = Some TextAlignment.RIGHT
+                            }
+                        )
                     )
                   ]
                 )
@@ -322,7 +338,7 @@ let manipulateTests =
                   Dummy,
                   PageModifier.AddText(PageBoxKind.ActualBox, "你好", fun args ->
                     { args with 
-                        PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                        PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
                         FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
@@ -339,7 +355,7 @@ let manipulateTests =
                   fun args ->
                       PageModifier.AddText(PageBoxKind.ActualBox, "你好2", fun args ->
                         { args with 
-                            PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                            PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                             CanvasFontSize = CanvasFontSize.Numeric 25. 
                             FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                             FontRotation = Rotation.None 
@@ -359,7 +375,7 @@ let manipulateTests =
                   Dummy,
                   PageModifier.AddText(PageBoxKind.ActualBox, "你好3", fun args ->
                     { args with 
-                        PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                        PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
                         FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
@@ -378,7 +394,7 @@ let manipulateTests =
                   Dummy,
                   PageModifier.AddText(PageBoxKind.ActualBox, "你", fun args ->
                     { args with 
-                        PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                        PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
                         FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
@@ -394,7 +410,7 @@ let manipulateTests =
                   Dummy,
                   PageModifier.AddText(PageBoxKind.ActualBox, "你好", fun args ->
                     { args with 
-                        PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                        PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
                         FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
@@ -415,7 +431,7 @@ let manipulateTests =
                 Dummy,
                 PageModifier.AddText(PageBoxKind.ActualBox, "你好", fun args ->
                 { args with 
-                    PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                    PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                     CanvasFontSize = CanvasFontSize.OfRootArea 0.8 
                     FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                     FontRotation = Rotation.None 
@@ -438,7 +454,7 @@ let manipulateTests =
                 Dummy,
                 PageModifier.AddText(PageBoxKind.ActualBox, "你好", fun args ->
                 { args with 
-                    PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                    PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                     CanvasFontSize = CanvasFontSize.Numeric 12.
                     FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
                     FontRotation = Rotation.None 
@@ -464,7 +480,7 @@ let manipulateTests =
                 Dummy,
                 fun args ->
 
-                    let pdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                    let pdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
 
                     let text = "你好你好\n你好\n你好"
 

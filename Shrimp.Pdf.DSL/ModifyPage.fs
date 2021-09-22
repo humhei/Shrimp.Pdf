@@ -101,6 +101,11 @@ type PageModifier =
         fun (args: PageModifingArguments<_>) infos ->
             args.Page.GetPageEdge(innerBox, pageBoxKind) 
 
+    static member GetPageEdge (pageBoxKind: PageBoxKind, innerBox: FsSize) : PageModifier<_, _> =
+        fun (args: PageModifingArguments<_>) infos ->
+            args.Page.GetPageEdge(innerBox, pageBoxKind) 
+
+
     static member AddText(canvasAreaOptions, text, mapping) : PageModifier<_, _> =
         PageModifier.AddNew (canvasAreaOptions, (fun args ->
             [ Canvas.addText text (mapping) ]

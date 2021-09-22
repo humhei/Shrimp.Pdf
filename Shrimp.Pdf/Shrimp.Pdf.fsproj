@@ -23,9 +23,34 @@
     <None Include="Resources\Marks\*.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
+    <Content Include="Resources\Fonts\微软雅黑\msyh.ttc" />
+    <Content Include="Resources\Fonts\微软雅黑\msyhbd.ttc" />
+    <Content Include="Resources\Fonts\微软雅黑\msyhl.ttc" />
+    <None Include="Resources\Fonts\Adobe\AdobeHeitiStd-Regular.otf" />
+    <Content Include="Resources\Fonts\方正\方正黑体简体.TTF" />
+    <Content Include="Resources\Fonts\方正\方正大黑简体.ttf" />
+    <Content Include="Resources\Fonts\Arial-Unicode\arial unicode ms.ttf" />
+    <Content Include="Resources\Fonts\Arial-Unicode\arial unicode ms bold.ttf" />
     <None Include="Resources\Fonts\*.otf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
+    <None Include="Resources\Fonts\Alibaba-PuHuiTi\Alibaba-PuHuiTi-Bold.otf" />
+    <None Include="Resources\Fonts\Alibaba-PuHuiTi\Alibaba-PuHuiTi-Heavy.otf" />
+    <None Include="Resources\Fonts\Alibaba-PuHuiTi\Alibaba-PuHuiTi-Light.otf" />
+    <None Include="Resources\Fonts\Alibaba-PuHuiTi\Alibaba-PuHuiTi-Medium.otf">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+    <None Include="Resources\Fonts\Alibaba-PuHuiTi\Alibaba-PuHuiTi-Regular.otf" />
+    <Content Include="Resources\Fonts\思源黑体\LICENSE_CJK.txt" />
+    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-Black.otf" />
+    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-Bold.otf" />
+    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-DemiLight.otf" />
+    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-Light.otf" />
+    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-Medium.otf" />
+    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-Regular.otf" />
+    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-Thin-Windows.otf" />
+    <Content Include="Resources\Fonts\思源黑体\数英免责申明.txt" />
+    <Content Include="Resources\Fonts\黑体.ttf" />
 
     <None Include="Resources\Colors\*.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
@@ -56,6 +81,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Fake.Core.Environment" Version="5.16.1" />
     <PackageReference Include="Fake.IO.FileSystem" Version="5.16.1" />
     <PackageReference Include="shrimp.litedb" Version="5.99.104" />
   </ItemGroup>
@@ -69,10 +95,6 @@
   <ItemGroup>
     <PackageReference Update="FSharp.Core" Version="5.0.1-beta.20607.1" />
     <PackageReference Update="System.ValueTuple" Version="4.5.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Resources\Fonts\" />
   </ItemGroup>
 
 </Project>

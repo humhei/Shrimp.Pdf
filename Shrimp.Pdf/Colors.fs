@@ -39,12 +39,24 @@ module _Colors =
         { R: float32 
           G: float32 
           B: float32 }
+    with 
+        member x.Range255 =
+            {| R = x.R * 255.f 
+               G = x.G * 255.f
+               B = x.B * 255.f |}
+
+        member x.LoggingText = 
+            let range255 = x.Range255
+            sprintf "RGB %.1f %.1f %.1f" (range255.R) range255.G range255.B
 
     type FsLab =
         { L: float32 
           a: float32
           b: float32 }
     with 
+
+        member x.LoggingText = 
+            sprintf "LAB %.1f %.1f %.1f" (x.L) x.a x.b
 
         member x.ToItextColor(?colorSpace: PdfCieBasedCs.Lab) =
             match colorSpace with 
@@ -82,8 +94,15 @@ module _Colors =
           M: float32
           Y: float32 
           K: float32 }
+    with 
+        member x.LoggingText = 
+            sprintf "CMYK %.1f %.1f %.1f %.1f" (x.C) x.M x.Y x.K
 
     type FsGray = FsGray of float32
+    with 
+        member x.LoggingText = 
+            let (FsGray v) = x
+            sprintf "K %.1f" v
 
     [<RequireQualifiedAccess>]
     type FsValueColor =
@@ -92,6 +111,16 @@ module _Colors =
         | Lab of FsLab
         | Gray of FsGray
     with 
+
+        member x.LoggingText = 
+            match x with
+            | FsValueColor.Rgb rgbColor -> rgbColor.LoggingText
+
+            | FsValueColor.Cmyk cmykColor -> cmykColor.LoggingText
+
+            | FsValueColor.Gray grayColor -> grayColor.LoggingText
+
+            | FsValueColor.Lab (labColor) -> labColor.LoggingText
 
         member x.MapColorValue(mapping) =
             match x with

@@ -8,6 +8,7 @@ open Shrimp.Pdf.Extensions
 open iText.Kernel.Colors
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.Colors
+open Shrimp.Pdf.RegisterableFonts.YaHei
 
 let flowNameTests =
   let addText text position =
@@ -18,7 +19,7 @@ let flowNameTests =
           PageModifier.Batch [
             PageModifier.AddText(PageBoxKind.ActualBox, text, fun args ->
               { args with 
-                  PdfFontFactory = FsPdfFontFactory.Registerable (RegisterableFonts.AlibabaPuHuiTiBold)
+                  PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                   CanvasFontSize = CanvasFontSize.Numeric 25. 
                   FontColor = PdfCanvasColor.Separation (FsSeparation.Create("专色1", DeviceRgb.BLUE))
                   FontRotation = Rotation.None 

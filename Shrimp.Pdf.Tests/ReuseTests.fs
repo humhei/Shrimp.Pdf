@@ -164,6 +164,11 @@ let reuseTests =
         |> runTest "datas/reuse/clockwise all pages3.pdf" 
         |> ignore
 
+    testCase "duplicate all pages 5x tests" <| fun _ -> 
+        Flow.Reuse (Reuses.DuplicatePages(PageSelector.All, 5))
+        |> runTest "datas/reuse/duplicate all pages 5x.pdf" 
+        |> ignore
+
     testCase "duplicate all pages 15x tests" <| fun _ -> 
         Flow.Reuse (Reuses.DuplicatePages(PageSelector.All, 15))
         |> runTest "datas/reuse/duplicate all pages 15x.pdf" 
@@ -172,6 +177,21 @@ let reuseTests =
     testCase "duplicate pages by page num sequence tests" <| fun _ -> 
         Flow.Reuse (Reuses.SequencePages (PageNumSequence.Create [1;1;1;3;4;5;8]))
         |> runTest "datas/reuse/duplicate pages by page num sequence.pdf" 
+        |> ignore
+
+    testCase "duplicate pages by page num sequence with emptyPages tests" <| fun _ -> 
+        let sequence =
+            [
+                EmptablePageNumSequenceToken.Create 2
+                EmptablePageNumSequenceToken.Create 3
+                EmptablePageNumSequenceToken.EmptyPage
+                EmptablePageNumSequenceToken.Create 1
+            ]
+            |> EmptablePageNumSequence.Create
+
+
+        Flow.Reuse (Reuses.SequencePages (sequence))
+        |> runTest "datas/reuse/duplicate pages by page num sequence with empty Pages.pdf" 
         |> ignore
 
     testCase "duplicate pages by page num sequence tests2" <| fun _ -> 
@@ -276,9 +296,9 @@ let reuseTests =
         |> ignore
 
 
-    testCase "resize pageSize to 7x4cm by trimbox tests" <| fun _ -> 
+    ftestCase "resize pageSize to 5x3cm by trimbox tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.Resize(PageSelector.All, PageBoxKind.TrimBox , { Width = mm 70.; Height = mm 40. })
+            Reuses.Resize(PageSelector.All, PageBoxKind.TrimBox , { Width = mm 105.; Height = mm 145. })
         )
         |> runTest "datas/reuse/resize pageSize to 7x4cm by trimbox.pdf" 
         |> ignore
@@ -304,5 +324,18 @@ let reuseTests =
         |> runTest "datas/reuse/insertPages.pdf" 
         |> ignore
 
+    testCase "insert empty pages tests" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.InsertEmptyPagesToMultiple(4)
+        )
+        |> runTest "datas/reuse/insertEmptyPagesTo4X.pdf" 
+        |> ignore
+
+    testCase "change page orientation tests" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.ChangePageOrientation(PageSelector.All, PageOrientation.Landscape)
+        )
+        |> runTest "datas/reuse/change page orientation.pdf" 
+        |> ignore
 
 ]

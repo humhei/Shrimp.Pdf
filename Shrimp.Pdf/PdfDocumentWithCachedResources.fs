@@ -94,7 +94,10 @@ type private PdfDocumentCache private (pdfDocument: unit -> PdfDocument, fontsCa
                 | FsPdfFontFactory.StandardFonts fontName -> PdfFontFactory.CreateFont(fontName)
                 | FsPdfFontFactory.Registerable registerableFont ->
                     if File.Exists(registerableFont.Path)
-                    then PdfFontFactory.CreateFont(registerableFont)
+                    then 
+                        match PdfFontFactory.CreateFont(registerableFont) with 
+                        | null -> failwithf "Cannot create font %s by %A" registerableFont.Path registerableFont
+                        | font -> font
                     else failwithf "Cannot find font %s" registerableFont.Path
             | pdfFont -> pdfFont
         )

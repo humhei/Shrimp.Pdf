@@ -9,6 +9,7 @@ open Shrimp.Pdf.Manipulates
 open Shrimp.Pdf.Colors
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.icms2
+open Shrimp.Pdf.RegisterableFonts.YaHei
 
 let readB255Bound() =
     ModifyPage.Create( 
@@ -224,7 +225,7 @@ let realSamplesTests =
                     (fun args ->
                         { args with 
                             Position = Position.BottomMiddle (mm -15., mm 0.)
-                            PdfFontFactory = FsPdfFontFactory.Registerable RegisterableFonts.AlibabaPuHuiTiBold 
+                            PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                             CanvasFontSize = CanvasFontSize.Numeric 8. 
                             FontColor = PdfCanvasColor.Registration }
                     )

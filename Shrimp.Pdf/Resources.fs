@@ -25,10 +25,17 @@ module internal Config =
 
 module Resources =
     open Fake.IO
+    open Fake.Core
     let internal resourceDirectory = 
+        
         lazy
-            Path.GetFullPath (config.Value.GetString("shrimp.pdf.resourcesDirectory"))
-
+            match Environment.environVarOrNone "ShrimpPdfResources" with 
+            | Some dir ->
+                match FsDirectoryInfo.tryCreate dir with 
+                | Some dir -> dir.Path
+                | None ->
+                    Path.GetFullPath (config.Value.GetString("shrimp.pdf.resourcesDirectory"))
+            | None -> Path.GetFullPath (config.Value.GetString("shrimp.pdf.resourcesDirectory"))
 
     [<RequireQualifiedAccess>]
     module PdfDocument =

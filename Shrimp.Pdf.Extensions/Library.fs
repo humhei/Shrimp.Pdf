@@ -1013,8 +1013,14 @@ module iText =
 
             
     type PdfPage with
-
-
+        member x.SetPageBoxToPage(targetPdfPage: PdfPage) =
+            x
+                .SetCropBox(targetPdfPage.GetCropBox())
+                .SetMediaBox(targetPdfPage.GetMediaBox())
+                .SetArtBox(targetPdfPage.GetArtBox())
+                .SetBleedBox(targetPdfPage.GetBleedBox())
+                .SetTrimBox(targetPdfPage.GetTrimBox())
+            
 
 
         member x.GetPageEdge (innerBox: Rectangle, pageBoxKind) =
@@ -1089,6 +1095,7 @@ module iText =
 
             else failwithf "innerBox %O is not inside pageBox %O" innerBox pageBox
 
+
         member this.GetActualBox() = 
             let crop = this.GetCropBox()
             let media = this.GetMediaBox()
@@ -1109,6 +1116,9 @@ module iText =
             | PageBoxKind.ActualBox -> page.GetActualBox()
             | PageBoxKind.AllBox -> failwith "PageBoxKind.AllBox is settable only"
             | PageBoxKind.MediaBox -> page.GetMediaBox()
+
+
+            
 
         member page.SetActualBox(rect: Rectangle) =
             page
@@ -1200,11 +1210,7 @@ module iText =
 
     [<RequireQualifiedAccess>]
     module PdfDocument =
-        let getPages (doc: PdfDocument) =
-            [
-                for i = 1 to doc.GetNumberOfPages() do
-                    yield doc.GetPage(i)
-            ]
+        let getPages (doc: PdfDocument) = doc.GetPages()
 
 
 

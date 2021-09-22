@@ -158,8 +158,6 @@ module Imposing =
         }
 
     with 
-
-
         static member DefaultValue =
             {
                 ColNums = [0]
@@ -188,7 +186,26 @@ module Imposing =
 
         static member Create(mapping: _ImposingArguments -> _ImposingArguments) = 
             let args = mapping _ImposingArguments.DefaultValue
-            
+            let args = 
+                { 
+                    args with 
+                        ColNums = 
+                            match args.ColNums with 
+                            | [] -> [0]
+                            | _ -> args.ColNums
+
+                        HSpaces = 
+                            match args.HSpaces with 
+                            | [] -> [0.]
+                            | _ -> args.HSpaces
+
+                        VSpaces = 
+                            match args.VSpaces with 
+                            | [] -> [0.]
+                            | _ -> args.VSpaces
+                }
+
+
             let isValidSheet_PlaceTable = 
                 match args.Sheet_PlaceTable with 
                 | Sheet_PlaceTable.Trim_CenterTable margin -> 
@@ -212,21 +229,21 @@ module Imposing =
                 | [0], 0 ->
                     FillingMode.Automatic
 
-                | uniqueValues, 0 when List.exists (fun m -> m > 0) uniqueValues ->
+                | uniqueValues, 0 when List.forall (fun m -> m > 0) uniqueValues ->
                     FillingMode.RowAutomatic { ColNums =  args.ColNums }
 
                 | [0], rowNum when rowNum > 0 ->
                     FillingMode.ColumnAutomatic { RowNum =  args.RowNum }
 
-                | uniqueValues, rowNum when List.exists (fun m -> m > 0) uniqueValues && rowNum > 0 ->
+                | uniqueValues, rowNum when List.forall (fun m -> m > 0) uniqueValues && rowNum > 0 ->
                     FillingMode.Numeric { ColNums = args.ColNums; RowNum = rowNum }
 
-                | [], _ ->
-                    failwith "colNums cannot be empty"
+                | [], _ -> failwith "colNums cannot be empty"
 
                 | _ -> failwith "Invalid token"
 
             ImposingArguments(fillingMode, args)
+
 
 
     /// coordinate origin is left top of table
@@ -268,9 +285,10 @@ module Imposing =
         member private cell.GetScale() =
             let xObjectContentBox = cell.GetXObjectContentBox()
                 
-
-            let scaleX = cell.Size.Width / xObjectContentBox.GetWidthF() 
-            let scaleY = cell.Size.Height / xObjectContentBox.GetHeightF() 
+            let size = RoundedSize.Create cell.Size
+            //let size = cell.Size
+            let scaleX = size.Width / xObjectContentBox.GetWidthF() 
+            let scaleY = size.Height / xObjectContentBox.GetHeightF() 
             scaleX, scaleY
 
         member private cell.GetClippedXObject() =
@@ -501,6 +519,7 @@ module Imposing =
                           | None -> 
                                 if args.UseBleed then FsSize.ofRectangle(readerPage.GetTrimBox())
                                 else FsSize.ofRectangle(readerPage.GetActualBox()) 
+                          
                   X = x
                   Y = sheet.Y
                   RowIndex = cells.Count
@@ -791,16 +810,18 @@ module Imposing =
     and ImposingDocument (splitDocument: SplitDocument, imposingArguments: ImposingArguments) =  
         let sheets = new ResizeArray<ImposingSheet>()
             
-        member x.SplitDocument: SplitDocument = splitDocument
+        member internal x.SplitDocument: SplitDocument = splitDocument
 
         member x.ImposingArguments: ImposingArguments = imposingArguments
 
+        /// NOTE: Internal Use
         member x.Draw() =
             if sheets.Count = 0 then failwith "cannot draw documents, sheets is empty, please invoke Build() first"
 
             for sheet in sheets do
                 sheet.Draw()
 
+        /// NOTE: Internal Use
         member x.Build() =
             let args = x.ImposingArguments.Value
             sheets.Clear()
