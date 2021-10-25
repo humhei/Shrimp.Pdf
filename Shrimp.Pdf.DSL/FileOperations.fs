@@ -15,12 +15,14 @@ type DocumentSplitOutputDirectoryOptions =
 type DocumentSplitArguments =
     { ChunkSize: int 
       OutputDirectory: DocumentSplitOutputDirectoryOptions
+      PartText: string
       Override: bool }
 with 
     static member DefalutValue =
         { ChunkSize = 1 
           OutputDirectory = DocumentSplitOutputDirectoryOptions.ReaderDirectoryPath_Next
-          Override = false }
+          Override = false
+          PartText = "部分"}
     
 type DocumentMergingArguments =
     { TargetDocumentPath: string 
@@ -59,7 +61,8 @@ module FileOperations =
     let mergeDocuments (f) =
         let args = f DocumentMergingArguments.DefalutValue
 
-        fun flowModels ->
+        fun (flowModels: _ list) ->
+            if flowModels.Length < 2 then failwithf "Cannot mergeDocuments when input page count %A < 2" flowModels.Length
 
             if File.exists args.TargetDocumentPath && not args.Override then failwithf "target file %s already exists" args.TargetDocumentPath
             else File.delete args.TargetDocumentPath 
@@ -67,11 +70,11 @@ module FileOperations =
             let writer = new PdfDocument(new PdfWriter(args.TargetDocumentPath))
             let flow = mergeDocumentsInternal (args.TargetDocumentPath) writer
 
-            let result = 
-                flow.Value flowModels
+            let result = flow.Value flowModels
 
             writer.Close()
             result
+
         |> FileOperation
 
     let splitDocumentToMany (f: DocumentSplitArguments -> DocumentSplitArguments)  =
@@ -104,7 +107,7 @@ module FileOperations =
                     |> List.chunkBySize(args.ChunkSize)
                     |> List.mapi(fun i pages ->
                         let number = i + 1
-                        let fileName = sprintf "%s_%d.pdf" fileNameWithoutExtension number
+                        let fileName = sprintf "%s_%s%d.pdf" fileNameWithoutExtension args.PartText number
                         let fileFullPath = Path.Combine(outputDirectory, fileName)
                         match File.exists fileFullPath, args.Override with 
                         | true, false -> failwithf "File %s already exists" fileFullPath
@@ -132,4 +135,32 @@ module FileOperations =
                 newModels
         )
         |> FileOperation
+
+
+type PdfRunner =
+    static member MergeDocuments (inputs: PdfFile AtLeastTwoList, ?fArgs) =
+        
+        let flow =
+            FileOperations.mergeDocuments (defaultArg fArgs id)
+            |> Flow.FileOperation
+
+        let flowModels = 
+            inputs.AsList
+            |> List.map (fun m -> {PdfFile = m; UserState = ()})
+
+
+        runManyWithFlowModels flowModels flow
+        |> List.exactlyOne
+        |> fun m -> m.PdfFile
+
+    static member SplitDocumentToMany (inputPdfFile: PdfFile, ?fArgs) =
+        
+        let flow =
+            FileOperations.splitDocumentToMany (defaultArg fArgs id)
+            |> Flow.FileOperation
+
+        let flowModel =  {PdfFile = inputPdfFile; UserState = () }
+
+        runWithFlowModel flowModel flow
+
 

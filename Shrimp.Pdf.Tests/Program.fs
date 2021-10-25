@@ -28,3 +28,5 @@ let allTests =
 let main argv =
     SetClientContext()
     runTests testConfig allTests
+    Console.Read()
+    0

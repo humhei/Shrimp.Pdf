@@ -45,34 +45,36 @@ module RenderInfoSelector =
      
             match selector with 
 
-            | RenderInfoSelector.Path prediate ->
+            | RenderInfoSelector.Path predicate ->
                 fun (renderInfo: IIntegratedRenderInfo) -> 
                     match renderInfo with 
                     | IIntegratedRenderInfo.Text _ -> false
                     | IIntegratedRenderInfo.Path renderInfo -> 
                         match Seq.length(IPathRenderInfo.toActualPoints renderInfo) with 
                         | 0 -> false
-                        | _ -> prediate renderInfo
+                        | _ -> predicate renderInfo
 
 
-            | RenderInfoSelector.Text prediate ->
+            | RenderInfoSelector.Text predicate ->
                 fun (renderInfo: IIntegratedRenderInfo) ->
                     match renderInfo with 
-                    | IIntegratedRenderInfo.Text renderInfo -> prediate renderInfo
+                    | IIntegratedRenderInfo.Text renderInfo -> predicate renderInfo
                     | IIntegratedRenderInfo.Path _ -> false
 
-            | RenderInfoSelector.PathOrText prediate -> 
+            | RenderInfoSelector.PathOrText predicate -> 
                 fun (renderInfo: IIntegratedRenderInfo) ->
                     match renderInfo with 
                     | IIntegratedRenderInfo.Path renderInfo -> 
+                        //loop (RenderInfoSelector.Text (fun info -> predicate(info :> IIntegratedRenderInfo))) (renderInfo :> IIntegratedRenderInfo)
                         match renderInfo with 
                         | IIntegratedRenderInfo.Text _ -> false
                         | IIntegratedRenderInfo.Path renderInfo -> 
                             match Seq.length(IPathRenderInfo.toActualPoints renderInfo) with 
                             | 0 -> false
-                            | _ -> prediate renderInfo
+                            | _ -> predicate renderInfo
 
-                    | IIntegratedRenderInfo.Text renderInfo -> prediate renderInfo
+                    | IIntegratedRenderInfo.Text renderInfo -> 
+                        predicate renderInfo
 
 
             | RenderInfoSelector.Dummy _ -> fun _ -> false

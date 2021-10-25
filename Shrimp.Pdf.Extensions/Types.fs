@@ -173,8 +173,10 @@ module ExtensionTypes =
 
             | _ -> failwithf "values' length %d is not equal to 4" values.Length
 
+        static member Zero = Margin.Create(0.)
+
         member x.LoggingText = 
-            sprintf "Margin: %.1f %.1f %.1f %.1f" x.Left x.Top x.Right x.Bottom
+            sprintf "Margin %.1f %.1f %.1f %.1f" x.Left x.Top x.Right x.Bottom
 
     [<RequireQualifiedAccess>]
     module Margin =

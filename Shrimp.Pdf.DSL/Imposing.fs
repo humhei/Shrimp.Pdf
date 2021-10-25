@@ -11,8 +11,7 @@ open System.Linq
 open System
 open System.Collections.Concurrent
 open Shrimp.FSharp.Plus
-
-
+open Shrimp.FSharp.Plus.Math
 
 module Imposing =
 
@@ -253,7 +252,7 @@ module Imposing =
           Size: FsSize
           X: float
           Y: float
-          RowIndex: int
+          Index: int
           ImposingRow: ImposingRow }
 
     with 
@@ -262,7 +261,6 @@ module Imposing =
         member private x.ImposingDocument: ImposingDocument = x.ImposingSheet.ImposingDocument
 
         member private x.SplitDocument = x.ImposingDocument.SplitDocument
-
 
         member x.ImposingArguments: ImposingArguments = x.ImposingDocument.ImposingArguments
         
@@ -294,6 +292,7 @@ module Imposing =
         member private cell.GetClippedXObject() =
             let scaleX, scaleY = cell.GetScale()
 
+
             let xobject = cell.Page.CopyAsFormXObject(cell.SplitDocument.Writer)
             if cell.UseBleed
             then 
@@ -301,11 +300,16 @@ module Imposing =
                         
                 let actualBox = cell.Page.GetActualBox()
 
+                let cells = cell.ImposingRow.Cells
+                let colIndex = cell.ImposingRow.Cells.IndexOf(cell)
+                let rowIndex = cell.ImposingRow.RowIndex
+
+
                 if Rectangle.equal trimBox actualBox then xobject
                 else 
                     let (|ColumnFirst|ColumnLast|ColumnMiddle|ColumnFirstAndLast|) (cell: ImposingCell) =
                         let cells = cell.ImposingRow.Cells
-                        let index = cell.ImposingRow.Cells.IndexOf(cell)
+                        let index = colIndex
                         if cells.Count = 1 then ColumnFirstAndLast
                         else
                             match index with 
@@ -315,19 +319,23 @@ module Imposing =
 
                     let (|RowFirst|RowLast|RowMiddle|RowFirstAndLast|) (row: ImposingRow) =
                         let rows = row.ImposingSheet.Rows
-                        let index = rows.IndexOf(row)
+                        let index = rowIndex
                         if rows.Count = 1 then RowFirstAndLast
                         else
                             match  index with 
                             | 0 -> RowFirst
                             | index when index = rows.Count - 1 -> RowLast
                             | _ -> RowMiddle
+
+
+
                     let bbox = 
                         let x, width =
+                            
+                            let index = colIndex
 
-                            let index = cell.ImposingRow.Cells.IndexOf(cell)
                             match cell with 
-                            | ColumnFirst ->
+                            | ColumnFirst   ->
                                 let x = actualBox.GetXF()
                                 
                                 let width = 
@@ -346,6 +354,8 @@ module Imposing =
                                 let width = trimBox.GetWidthF() + nextHSpace / 2. + preHSpace / 2.
                                 x, width
 
+             
+
                             | ColumnLast ->
                                 let preHSpace = cell.HSpaces.[(index - 1) % cell.HSpaces.Length] / scaleX
 
@@ -355,10 +365,11 @@ module Imposing =
 
                                 x,width
 
+
+
                         let y, height = 
                             let row = cell.ImposingRow
-                            let rows = row.ImposingSheet.Rows
-                            let index = rows.IndexOf(row)
+                            let index = rowIndex
 
                             match row with 
                             | RowFirst ->
@@ -379,7 +390,7 @@ module Imposing =
                                 y, height
 
                             | RowFirstAndLast -> actualBox.GetYF(), actualBox.GetHeightF()
-                            | RowLast -> 
+                            | RowLast  -> 
                                 let y = actualBox.GetYF()
 
                                 let preVSpace = cell.VSpaces.[(index - 1) % cell.VSpaces.Length] / scaleY
@@ -387,6 +398,7 @@ module Imposing =
                                 let height = trimBox.GetTopF() - actualBox.GetBottomF() + preVSpace / 2.
 
                                 y, height
+
 
                         Rectangle.create x y width height
 
@@ -411,21 +423,21 @@ module Imposing =
                 let xObjectContentBox = cell.GetXObjectContentBox()
                 let scaleX, scaleY = cell.GetScale()
 
-                let affineTransform_Rotate =
-                    match cell.ImposingArguments.Value.CellRotation with 
-                    | CellRotation.None -> AffineTransform.GetTranslateInstance(0., 0.)
-                    | CellRotation.R180WhenColNumIsEven ->
-                        let index = cell.RowIndex
-                        if (index + 1) % 2 = 0 
-                        then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + xObjectContentBox.GetWidthF() / 2., xObjectContentBox.GetYF() + xObjectContentBox.GetHeightF() / 2.  )
-                        //then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., cell.Size.Width / 2., cell.Size.Height / 2.  )
-                        else AffineTransform.GetTranslateInstance(0., 0.)
-                    | CellRotation.R180WhenRowNumIsEven ->
-                        let index = cell.ImposingRow.RowIndex
-                        if (index + 1) % 2 = 0
-                        then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + xObjectContentBox.GetWidthF() / 2., xObjectContentBox.GetYF() + xObjectContentBox.GetHeightF() / 2.  )
-                        //then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + xObjectContentBox.GetWidthF() / 2., xObjectContentBox.GetYF() + xObjectContentBox.GetHeightF() / 2.  )
-                        else AffineTransform.GetTranslateInstance(0., 0.)
+                //let affineTransform_Rotate =
+                //    match cell.ImposingArguments.Value.CellRotation with 
+                //    | CellRotation.None -> AffineTransform.GetTranslateInstance(0., 0.)
+                //    | CellRotation.R180WhenColNumIsEven ->
+                //        let index = cell.Index
+                //        if (index + 1) % 2 = 0 
+                //        then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + xObjectContentBox.GetWidthF() / 2., xObjectContentBox.GetYF() + xObjectContentBox.GetHeightF() / 2.  )
+                //        //then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., cell.Size.Width / 2., cell.Size.Height / 2.  )
+                //        else AffineTransform.GetTranslateInstance(0., 0.)
+                //    | CellRotation.R180WhenRowNumIsEven ->
+                //        let index = cell.ImposingRow.RowIndex
+                //        if (index + 1) % 2 = 0
+                //        then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + xObjectContentBox.GetWidthF() / 2., xObjectContentBox.GetYF() + xObjectContentBox.GetHeightF() / 2.  )
+                //        //then AffineTransform.GetRotateInstance(- Math.PI / 180. * 180., xObjectContentBox.GetXF() + xObjectContentBox.GetWidthF() / 2., xObjectContentBox.GetYF() + xObjectContentBox.GetHeightF() / 2.  )
+                //        else AffineTransform.GetTranslateInstance(0., 0.)
 
                 let affineTransform_Scale =
                     AffineTransform.GetScaleInstance(scaleX, scaleY)
@@ -438,7 +450,7 @@ module Imposing =
 
 
                 let affineTransform = affineTransform_Translate0.Clone()
-                affineTransform.Concatenate(affineTransform_Rotate)
+                //affineTransform.Concatenate(affineTransform_Rotate)
                 affineTransform.PreConcatenate(affineTransform_Scale)
                 affineTransform.PreConcatenate(affineTransform_Translate1)
 
@@ -522,7 +534,7 @@ module Imposing =
                           
                   X = x
                   Y = sheet.Y
-                  RowIndex = cells.Count
+                  Index = cells.Count
                   ImposingRow = this }
 
             if newCell.Size.Width > this.PageSize.Width || newCell.Size.Height > this.PageSize.Height 
@@ -810,19 +822,26 @@ module Imposing =
     and ImposingDocument (splitDocument: SplitDocument, imposingArguments: ImposingArguments) =  
         let sheets = new ResizeArray<ImposingSheet>()
             
+        let mutable imposingArguments = imposingArguments
+
         member internal x.SplitDocument: SplitDocument = splitDocument
 
         member x.ImposingArguments: ImposingArguments = imposingArguments
 
+        /// 
+        member internal x.ReSetIsRepeated(isRepeated) =
+            imposingArguments <- 
+                ImposingArguments.Create(fun _ -> { imposingArguments.Value with IsRepeated = isRepeated})
+
         /// NOTE: Internal Use
-        member x.Draw() =
+        member internal x.Draw() =
             if sheets.Count = 0 then failwith "cannot draw documents, sheets is empty, please invoke Build() first"
 
             for sheet in sheets do
                 sheet.Draw()
 
         /// NOTE: Internal Use
-        member x.Build() =
+        member internal x.Build() =
             let args = x.ImposingArguments.Value
             sheets.Clear()
 
@@ -833,7 +852,7 @@ module Imposing =
             let rec produceSheet readerPages (sheet: ImposingSheet) =
                 match readerPages with 
                 | (readerPage : PdfPage) :: t ->
-
+                    
                     if sheet.Push(readerPage) 
                     then 
                         if args.IsRepeated 

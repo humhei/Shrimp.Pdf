@@ -7,6 +7,7 @@ open Shrimp.Pdf.Extensions
 open iText.Kernel.Colors
 open Fake.IO.Globbing.Operators
 open System.IO
+open Shrimp.FSharp.Plus
 
 let fileOperationTests =
   testList "FileOperation Tests" [
@@ -19,6 +20,10 @@ let fileOperationTests =
             )
         )
         |> runTest "datas/file operation/split document.pdf" 
+        |> ignore
+
+    testCase "split document PdfRunner" <| fun _ ->
+        PdfRunner.SplitDocumentToMany(PdfFile "datas/file operation/split document.pdf")
         |> ignore
 
     testCase "merge documents" <| fun _ -> 
@@ -37,6 +42,21 @@ let fileOperationTests =
             )
         )
         |> runMany inputFiles
+        |> ignore
+
+    ftestCase "merge documents PdfRunner" <| fun _ ->
+        let inputFiles = 
+            !! "datas/file operation/merge documents/inputs/*.pdf"
+            |> List.ofSeq
+            |> List.map PdfFile
+            |> AtLeastTwoList.Create
+
+        let targetFile = Path.GetFullPath("datas/file operation/merge documents/mergdDocuments.pdf")
+        PdfRunner.MergeDocuments(inputFiles, fArgs = fun args ->
+            { args with 
+                Override = true
+                TargetDocumentPath = targetFile }
+        )
         |> ignore
 
     testCase "run many tests" <| fun _ -> 

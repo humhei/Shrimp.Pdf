@@ -10,7 +10,33 @@ open Shrimp.Pdf.DSL
 
 let reuseTests =
   testList "Reuse Tests" [
+    testCase "impose cell rotation tests" <| fun _ -> 
+
+        Flow.Reuse (
+            Reuse.dummy()
+            <+>
+            Reuses.Impose
+                (fun args ->
+                    { args with 
+                        DesiredSizeOp = Some { Width = mm 35.; Height = mm 82.}
+                        ColNums = [10]
+                        RowNum = 5
+                        Cropmark = Some Cropmark.defaultValue
+                        Background = Background.Size FsSize.A0
+                        Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 6.))
+                        HSpaces = [mm 3.; mm 9.]
+                        VSpaces = [mm 3.; mm 9.]
+                        UseBleed = true
+                        IsRepeated = true
+                        CellRotation = CellRotation.R180WhenRowNumIsEven
+                    }
+                ) ||>> fun imposingDocument -> imposingDocument.GetSheets()
+        )
+        |> runTest "datas/reuse/impose cell rotation.pdf" 
+        |> ignore
+
     testCase "imposing N-UP tests" <| fun _ -> 
+
         Flow.Reuse (
             Reuse.dummy()
             <+>
@@ -296,9 +322,9 @@ let reuseTests =
         |> ignore
 
 
-    ftestCase "resize pageSize to 5x3cm by trimbox tests" <| fun _ -> 
+    testCase "resize pageSize to 5x3cm by trimbox tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.Resize(PageSelector.All, PageBoxKind.TrimBox , { Width = mm 105.; Height = mm 145. })
+            Reuses.Resize(PageSelector.All, PageBoxKind.ActualBox , { Width = mm 105.8; Height = mm 155. })
         )
         |> runTest "datas/reuse/resize pageSize to 7x4cm by trimbox.pdf" 
         |> ignore

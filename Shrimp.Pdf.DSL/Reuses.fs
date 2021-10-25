@@ -14,6 +14,9 @@ open System.IO
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf
 open Shrimp.FSharp.Plus
+open Fake.IO
+open Fake.IO.FileSystemOperators
+open Shrimp.FSharp.Plus.Math
 
 
 // number in page sequence must be bigger than 0
@@ -26,6 +29,11 @@ with
         match x with 
         | PageNumSequenceToken.PageNum pageNum -> pageNum
         | PageNumSequenceToken.PageNumWithRotation (pageNum, _) -> pageNum
+
+    member x.Rotation =
+        match x with 
+        | PageNumSequenceToken.PageNum _ -> Rotation.None
+        | PageNumSequenceToken.PageNumWithRotation (_, rotation) -> rotation
 
     member x.ShuffingText =
         match x with 
@@ -65,6 +73,11 @@ with
         |> AtLeastOneList.Create
         |> PageNumSequence
 
+    static member Create(tokens: PageNumSequenceToken list) =   
+        tokens
+        |> List.map (fun m -> m.PageNumValue, m.Rotation)
+        |> PageNumSequence.Create
+
 [<RequireQualifiedAccess>]
 type EmptablePageNumSequenceToken =
     | EmptyPage 
@@ -80,6 +93,8 @@ with
 
     static member Create(pageNum: int, rotation) =
         EmptablePageNumSequenceToken.PageNumSequenceToken (PageNumSequenceToken.PageNumWithRotation(pageNum, rotation))
+
+        
 
 // number in page sequence must be bigger than 0
 type EmptablePageNumSequence = private EmptablePageNumSequence of AtLeastOneList<EmptablePageNumSequenceToken>
@@ -152,6 +167,50 @@ type PageResizingRotatingOptions =
     | ColckwiseIfNeeded = 1
     | CounterColckwiseIfNeeded = 2
 
+type RegularImposingSheet<'T> private (userState: 'T, imposingSheet: ImposingSheet) =
+    let rowCount, columnCount =
+        let rows = imposingSheet.GetRows()
+
+        let columnCount =
+            rows
+            |> List.map (fun row -> row.GetCells().Length)
+            |> List.distinct
+            |> function
+            | [ columnCount ] -> columnCount
+            | columnsCount -> failwithf "Cannot create RegularImposingSheet when columnsCount are %A" columnsCount
+
+        rows.Length, columnCount
+
+    member x.UserState = userState
+
+    member x.SetUserState(userState) = RegularImposingSheet(userState, imposingSheet)
+
+    member x.RowCount = rowCount
+
+    member x.ColumnCount = columnCount
+
+    member x.ImposingSheet = imposingSheet
+
+    member x.LandscapedSheetSize: FsSize = 
+        { Width = imposingSheet.TableWidth 
+          Height = imposingSheet.TableHeight }
+        |> FsSize.landscape
+
+    member x.RawImposingArguments = imposingSheet.ImposingArguments
+
+    member x.ConvertedImposingArguments: _ImposingArguments =
+        let rawArgs = x.RawImposingArguments
+        { rawArgs.Value with 
+            ColNums = [x.ColumnCount]
+            RowNum = x.RowCount
+            }
+
+    member x.CellsCount = x.ColumnCount * x.RowCount
+
+    static member Create(imposingSheet: ImposingSheet) = RegularImposingSheet<unit>((), imposingSheet)
+
+type RegularImposingSheet = RegularImposingSheet<unit>
+
 
 
 
@@ -164,6 +223,20 @@ with
 [<AutoOpen>]
 module _Reuses =
 
+    let private emptyPdf =
+        lazy
+            (let path = Path.GetTempPath() </> "empty.pdf"
+
+             if File.exists path then
+                 path
+             else
+                 let doc = new PdfDocument(new PdfWriter(path))
+                 doc.AddNewPage() |> ignore
+                 doc.Close()
+                 path)
+
+
+
     type private PageSequeningUnion =
         | EmptyPage of targetPage: PdfPage option
         | Token of PageNumSequenceToken * PdfPage
@@ -174,6 +247,11 @@ module _Reuses =
         | BeforePoint = 0
         | AfterPoint = 1
 
+
+    type private CellIndex =
+        { ColIndex: int 
+          RowIndex: int 
+          PageNum: int }
 
     type Reuses =
         static member Insert(insertingFile: string, ?insertingFilePageSelector: PageSelector, ?pageInsertingOptions: PageInsertingOptions, ?insertingPoint: SinglePageSelectorExpr) =
@@ -292,19 +370,7 @@ module _Reuses =
  
 
 
-        static member Impose (fArgs) =
-            let imposingArguments = ImposingArguments.Create fArgs
 
-            fun flowModel (splitDocument: SplitDocument) ->
-                let imposingDocument = new ImposingDocument(splitDocument, imposingArguments)
-                imposingDocument.Build()
-
-                imposingDocument.Draw()
-                (imposingDocument)
-
-            |> reuse 
-                "Impose"
-                ["imposingArguments" => imposingArguments.ToString()]
 
         static member MovePageBoxToOrigin(pageSelector: PageSelector) =
 
@@ -520,8 +586,10 @@ module _Reuses =
                 PdfDocument.getPages splitDocument.Reader
                 |> List.mapi (fun i page ->
                     let pageNum = i + 1
-                    let unroundSize =  (fSize (PageNumber pageNum))
-                    let size = RoundedSize.Create unroundSize
+                    
+                    let size = 
+                        let unroundSize =  (fSize (PageNumber pageNum))
+                        RoundedSize.Create unroundSize
 
                     if List.contains pageNum selectedPageNumbers 
                     then 
@@ -530,13 +598,16 @@ module _Reuses =
                         let affineTransform_Scale = 
                             AffineTransform.GetScaleInstance(size.Width / pageBox.GetWidthF(), size.Height / pageBox.GetHeightF())
 
+
+
+                        let xobject = page.CopyAsFormXObject(splitDocument.Writer)
+
                         let affineTransform_Translate = AffineTransform.GetTranslateInstance(-actualBox.GetXF(), -actualBox.GetYF())
 
                         let affineTransform = affineTransform_Scale.Clone()
 
                         affineTransform.Concatenate(affineTransform_Translate)
 
-                        let xobject = page.CopyAsFormXObject(splitDocument.Writer)
                         let newPage = 
                             splitDocument.Writer.AddNewPage(
                                 PageSize(
@@ -932,3 +1003,184 @@ module _Reuses =
                 "ChangePageOrientation"
                 ["pageSelector" => pageSelector.ToString()
                  "orientation" => orientation.ToString() ]
+
+
+    
+        static member private Impose_Raw (fArgs) =
+            let imposingArguments = ImposingArguments.Create fArgs
+
+            fun flowModel (splitDocument: SplitDocument) ->
+                let imposingDocument = new ImposingDocument(splitDocument, imposingArguments)
+                imposingDocument.Build()
+
+                imposingDocument.Draw()
+                (imposingDocument)
+
+            |> reuse 
+                "Impose"
+                ["imposingArguments" => imposingArguments.ToString()]
+
+        
+        static member PreImpose_Repeated_One(baseFArgs: _ImposingArguments) =
+                let preImposeFlow =
+                    Reuses.Impose_Raw
+                        (fun _ ->
+                            let args = (baseFArgs)
+
+                            { args with
+                                  IsRepeated = true })
+                    |> Flow.Reuse
+
+                runWithBackup
+                    (Path.GetTempFileName()
+                     |> Path.changeExtension ".pdf")
+                    emptyPdf.Value
+                    preImposeFlow
+                |> List.exactlyOne
+                |> fun flowModel -> 
+                    match flowModel.UserState.GetSheets() with 
+                    | [ sheet ] -> RegularImposingSheet<_>.Create sheet
+                    | sheets -> failwithf "PreImpose_Repeated_One should generate one imposing sheet, but here is %d" sheets.Length
+
+        static member Impose(fArgs) =
+            let args = (ImposingArguments.Create fArgs)
+            let cellRotation = args.Value.CellRotation
+            match cellRotation with 
+            | CellRotation.None -> Reuses.Impose_Raw(fArgs)
+            | _ ->
+                Reuse.Factory(fun flowModel doc ->
+                    let doc = ImposingDocument(doc, args)
+                    doc.Build()
+                    let args = args.Value
+                    let sequence = 
+                        let baseSequence = 
+                            match args.IsRepeated with 
+                            | true -> 
+                                doc.GetSheets()
+                                |> List.mapi (fun i sheet -> 
+                                    let colNum_perRow = sheet.Rows.[0].Cells.Count
+                                    let rowsCount = sheet.RowsCount
+                                    let sequence = List.replicate (sheet.GetCellsCount()) (i+1)
+                                    sequence
+                                    |> List.mapi (fun i pageNum ->
+                                        let index = i
+                                        { ColIndex = (index % colNum_perRow) 
+                                          RowIndex = (index / colNum_perRow) 
+                                          PageNum = pageNum
+                                        }
+                                    )
+                                )
+                                |> List.concat
+
+                            | false ->
+
+                                let sequence =
+                                    let rec loop sheets accum previous_LastPageNum =
+                                        match sheets with 
+                                        | [] -> accum 
+                                        | (sheet: ImposingSheet) :: t ->
+                                            let rec loop2 rows accum previous_LastPageNum =
+                                                match rows with 
+                                                | [] -> accum
+                                                | (row: ImposingRow) :: t ->
+                                                    let cells =
+                                                        row.Cells
+                                                        |> Seq.mapi(fun  i cell ->
+                                                            { ColIndex = cell.Index
+                                                              RowIndex = cell.ImposingRow.RowIndex
+                                                              PageNum = previous_LastPageNum + i + 1
+                                                            }
+                                                        )
+                                                        |> List.ofSeq
+
+                                                    loop2 t (accum @ cells) (previous_LastPageNum + cells.Length)
+
+                                            let cells = loop2 (List.ofSeq sheet.Rows) [] previous_LastPageNum
+                                            loop t (accum @ cells) (previous_LastPageNum + cells.Length)
+
+                                    loop (doc.GetSheets()) [] 0
+
+                                sequence
+
+                        let sequence_applyCellRotation =
+                            baseSequence
+                            |> List.map (fun cellIndex ->
+                                match cellRotation, cellIndex.ColIndex+1, cellIndex.RowIndex+1 with 
+                                | CellRotation.R180WhenColNumIsEven, Even, _ -> 
+                                    PageNumSequenceToken.PageNumWithRotation(cellIndex.PageNum, Rotation.R180)
+
+                                | CellRotation.R180WhenRowNumIsEven, _, Even ->
+                                    PageNumSequenceToken.PageNumWithRotation(cellIndex.PageNum, Rotation.R180)
+                                    
+                                | _ -> PageNumSequenceToken.PageNum cellIndex.PageNum
+                            )
+
+                        sequence_applyCellRotation
+                        |> PageNumSequence.Create
+
+                    Reuses.SequencePages sequence
+                    <+>
+                    Reuses.Impose_Raw(fun _ -> 
+                        { args with IsRepeated = false }
+                    ) 
+                    ||>> fun doc -> 
+                        doc.ReSetIsRepeated(args.IsRepeated)
+                        doc
+                )
+                
+        static member OneColumn(?margin, ?useBleed, ?hspaces, ?vspaces) =
+            Reuses.Impose(fun args -> 
+                {args with 
+                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (defaultArg margin Margin.Zero)
+                    HSpaces = defaultArg hspaces [0.]
+                    VSpaces = defaultArg vspaces [0.]
+                    ColNums = [1]
+                    RowNum = 0
+                    IsRepeated = false
+                    UseBleed = defaultArg useBleed false
+                    Background = Background.Size FsSize.MAXIMUN})
+
+        static member OneRow(?margin, ?useBleed, ?hspaces, ?vspaces) =
+            Reuses.Impose(fun args -> 
+                {args with 
+                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (defaultArg margin Margin.Zero)
+                    HSpaces = defaultArg hspaces [0.]
+                    VSpaces = defaultArg vspaces [0.]
+                    ColNums = [0]
+                    RowNum = 1
+                    IsRepeated = false
+                    UseBleed = defaultArg useBleed false
+                    Background = Background.Size FsSize.MAXIMUN})
+
+    type PdfRunner with 
+        static member Reuse(reuse: Reuse<_, _>, ?targetPdfFile) = 
+            fun (inputPdfFile: PdfFile) ->
+                let targetPdfFile = defaultArg targetPdfFile inputPdfFile.Path 
+
+                match inputPdfFile.Path = targetPdfFile with 
+                | false -> File.Copy(inputPdfFile.Path, targetPdfFile, true)
+                | true -> ()
+
+                run targetPdfFile (Flow.Reuse reuse) 
+                |> List.exactlyOne 
+                |> fun m -> m.PdfFile
+
+        static member OneColumn(?targetPdfFile, ?margin, ?useBleed, ?hspaces, ?vspaces) =
+            let reuse =
+                Reuses.OneColumn(?margin = margin, ?useBleed = useBleed, ?hspaces = hspaces, ?vspaces = vspaces)
+
+            PdfRunner.Reuse(
+                reuse = reuse,
+                ?targetPdfFile = targetPdfFile
+            )
+    
+        static member OneRow(?targetPdfFile, ?margin, ?useBleed, ?hspaces, ?vspaces) =
+            let reuse =
+                Reuses.OneRow(?margin = margin, ?useBleed = useBleed, ?hspaces = hspaces, ?vspaces = vspaces)
+
+
+            PdfRunner.Reuse(
+                reuse = reuse,
+                ?targetPdfFile = targetPdfFile
+            )
+    
