@@ -91,7 +91,13 @@ type _SelectionModifierFixmentArguments =
 
 type private Modifier = _SelectionModifierFixmentArguments -> list<PdfCanvas -> PdfCanvas>
 
+type internal ModifierPdfCanvas(contentStream, resources, document) =
+    inherit CanvasGraphicsStateSettablePdfCanvas(contentStream, resources, document)
 
+    override x.Rectangle(rect) =
+        let affineTransform = AffineTransform.ofMatrix(x.GetGraphicsState().GetCtm())
+        let rect = affineTransform.InverseTransform(rect)
+        base.Rectangle(rect)
 
 and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * Modifier>, document: PdfDocument) =
     inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(Map.map (fun _ -> fst) selectorModifierMapping))
@@ -105,7 +111,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
         |> RenderInfoSelector.toEventTypes
     
     let mutable eventListener: FilteredEventListenerEx = null
-    let pdfCanvasStack = new Stack<CanvasGraphicsStateSettablePdfCanvas>()
+    let pdfCanvasStack = new Stack<ModifierPdfCanvas>()
     let resourcesStack = new Stack<PdfResources>()
 
     let (|Path|_|) operatorName =
@@ -135,9 +141,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
     override this.InvokeOperatorRange (operatorRange: OperatorRange) =
         
         let currentPdfCanvas = pdfCanvasStack.Peek()
-
         let operatorName = operatorRange.Operator.ToString()
-
 
         match operatorName with 
         | "Do" ->
@@ -206,7 +210,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
         match pdfObject with 
         | :? PdfStream as stream -> 
-            let pdfCanvas = new CanvasGraphicsStateSettablePdfCanvas(new PdfStream(), resources, document)
+            let pdfCanvas = new ModifierPdfCanvas(new PdfStream(), resources, document)
 
             let bytes = stream.GetBytes()
             pdfCanvasStack.Push(pdfCanvas)

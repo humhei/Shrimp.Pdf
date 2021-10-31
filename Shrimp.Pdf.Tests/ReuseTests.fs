@@ -7,9 +7,26 @@ open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Extensions
 open iText.Kernel.Colors
 open Shrimp.Pdf.DSL
+open Shrimp.FSharp.Plus
 
 let reuseTests =
   testList "Reuse Tests" [
+    ftestCase "add background tests" <| fun _ -> 
+
+        Flow.Reuse (
+            Reuses.AddBackground(PdfFile @"datas/reuse/backgroundFile.pdf")
+        )
+        |> runTest "datas/reuse/add background.pdf" 
+        |> ignore
+
+    ftestCase "add foreground tests" <| fun _ -> 
+
+        Flow.Reuse (
+            Reuses.AddForeground(PdfFile @"datas/reuse/backgroundFile.pdf")
+        )
+        |> runTest "datas/reuse/add foreground.pdf" 
+        |> ignore
+
     testCase "impose cell rotation tests" <| fun _ -> 
 
         Flow.Reuse (
@@ -33,6 +50,16 @@ let reuseTests =
                 ) ||>> fun imposingDocument -> imposingDocument.GetSheets()
         )
         |> runTest "datas/reuse/impose cell rotation.pdf" 
+        |> ignore
+
+    testCase "Clipping Contents To PageBox" <| fun _ -> 
+
+        Flow.Reuse (
+            Reuse.dummy()
+            <+>
+            Reuses.ClippingContentsToPageBox(PageBoxKind.TrimBox, Margin.Create (mm 1., mm 2., mm 3., mm 4.))
+        )
+        |> runTest "datas/reuse/Clipping Contents To PageBox.pdf" 
         |> ignore
 
     testCase "imposing N-UP tests" <| fun _ -> 

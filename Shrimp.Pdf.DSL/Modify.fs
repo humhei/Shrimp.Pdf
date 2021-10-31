@@ -248,7 +248,7 @@ type Modifier =
         )
 
     static member AddRectangleToBound(mapping) : Modifier<'userState> =
-        fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
+        fun (args: _SelectionModifierFixmentArguments<'userState>) ->
             let border = IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithStrokeWidth args.CurrentRenderInfo
             [
                 PdfCanvas.writeOperatorRange args.Close

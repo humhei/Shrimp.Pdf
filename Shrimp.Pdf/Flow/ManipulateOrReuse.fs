@@ -459,6 +459,7 @@ type Reuse<'oldUserState, 'newUserState> internal
     static member (<<||) (mapping, reuse: Reuse<_, _>) =
         Flow<_, _>.MapStateBack(mapping, reuse.Flow)
         |> Reuse
+
     
     static member (<+>) (reuse1: Reuse<'originUserState,'middleUserState>, reuse2: Reuse<'middleUserState,'modifiedUserState>) =
         Flow<_, _>.Bind(reuse1.Flow, reuse2.Flow, snd)

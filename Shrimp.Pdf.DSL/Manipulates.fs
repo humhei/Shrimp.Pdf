@@ -2,11 +2,24 @@
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
+open Shrimp.FSharp.Plus
+open iText.Kernel.Pdf
+open System.IO
 
 [<AutoOpen>]
 module Manipulates =
+    type PdfRunner with 
+        static member Manipulate(manipulate: Manipulate<_, _>, ?targetPdfFile) = 
+            PdfRunner.OneFileFlow(Flow.Manipulate manipulate, ?targetPdfFile = targetPdfFile)
+            
+
     type ModifyPage with
         
+
+
+
+
+
         static member TrimToVisible (pageSelector: PageSelector, ?margin: Margin)  =
             let margin = defaultArg margin (Margin.Create 0.)
             ModifyPage.Create(

@@ -544,11 +544,8 @@ module _Colors =
 
     [<RequireQualifiedAccess>]
     module Separation =
-        let equal (c1: Separation) (c2: Separation) =
-            let c1ColorSpace = c1.GetColorSpace().GetPdfObject() :?> PdfArray |> Seq.map string |> String.concat "-"
-            let c2ColorSpace = c2.GetColorSpace().GetPdfObject() :?> PdfArray |> Seq.map string |> String.concat "-"
-            let b = c1ColorSpace = c2ColorSpace && c1.GetColorValue() = c2.GetColorValue()
-            b
+        let equal valueEqualOptions (c1: Separation) (c2: Separation) =
+            FsSeparation.OfSeparation(c1).IsEqualTo(c2, valueEqualOptions)
     
     [<RequireQualifiedAccess>]
     module Color =
@@ -582,14 +579,17 @@ module _Colors =
             | _ -> None
     
         let equal (c1: Color) (c2: Color) =
-            let isSeparationEqual = 
-                match c1 with 
-                | :? Colors.Separation as c1 ->
-                    match c2 with 
-                    | :? Colors.Separation as c2 -> Separation.equal c1 c2
-                    | _ -> false
-                | _ -> false
-            isSeparationEqual || c1 = c2
+            
+            let isValueEqual() = 
+                (FsValueColor.OfItextColor c1).IsEqualTo(FsValueColor.OfItextColor(c2), ValueEqualOptions.DefaultRoundedValue)
+
+            match c1, c2 with 
+            | :? Colors.Separation as c1, (:? Colors.Separation as c2) -> 
+                Separation.equal ValueEqualOptions.DefaultRoundedValue c1 c2
+            | :? Colors.Separation , _
+            | _, :? Colors.Separation -> false
+            | _ -> isValueEqual()
+
     
         let pantoneSolidCoated (pantoneEnum: PantoneColorEnum) writer =
             PdfDocument.obtainSperationColorFromResources (@"Pantone+ Solid Coated/" + pantoneEnum.ToString()) writer

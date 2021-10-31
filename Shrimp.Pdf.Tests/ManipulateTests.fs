@@ -7,6 +7,7 @@ open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.icms2
 open Shrimp.Pdf.RegisterableFonts.YaHei
+open Imposing
 
 
 let manipulateTests =
@@ -192,6 +193,29 @@ let manipulateTests =
             )
         )
         |> runTest "datas/manipulate/add bound to text.pdf" 
+        |> ignore
+
+    testCase "add bound to text2" <| fun _ -> 
+        Flow.Reuse(
+            Reuses.ClearDirtyInfos()
+        )
+        <+>
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "add bound to text"
+                      Selector = Text(fun _ _ -> true) 
+                      Modifiers = [
+                        Modifier.AddRectangleToBound(fun args -> 
+                            { args with StrokeColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA}
+                        )
+                      ]
+                    }
+                ]
+            )
+        )
+        |> runTest "datas/manipulate/add bound to text2.pdf" 
         |> ignore
 
     testCase "add line to position" <| fun _ -> 

@@ -108,7 +108,7 @@ type Selector<'userState> =
 
 [<RequireQualifiedAccess>]
 module Selector =
-    let rec internal toRenderInfoSelector (args: PageModifingArguments<_>) selector =
+    let rec toRenderInfoSelector (args: PageModifingArguments<_>) selector =
         match selector with 
         | Selector.Path factory -> factory args |> RenderInfoSelector.Path
         | Selector.Text factory -> factory args |> RenderInfoSelector.Text 

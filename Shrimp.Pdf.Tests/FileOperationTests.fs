@@ -44,7 +44,7 @@ let fileOperationTests =
         |> runMany inputFiles
         |> ignore
 
-    ftestCase "merge documents PdfRunner" <| fun _ ->
+    testCase "merge documents PdfRunner" <| fun _ ->
         let inputFiles = 
             !! "datas/file operation/merge documents/inputs/*.pdf"
             |> List.ofSeq

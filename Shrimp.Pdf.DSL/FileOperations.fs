@@ -16,13 +16,15 @@ type DocumentSplitArguments =
     { ChunkSize: int 
       OutputDirectory: DocumentSplitOutputDirectoryOptions
       PartText: string
+      CleanOutputFirst: bool
       Override: bool }
 with 
     static member DefalutValue =
         { ChunkSize = 1 
           OutputDirectory = DocumentSplitOutputDirectoryOptions.ReaderDirectoryPath_Next
           Override = false
-          PartText = "部分"}
+          PartText = "部分"
+          CleanOutputFirst = false }
     
 type DocumentMergingArguments =
     { TargetDocumentPath: string 
@@ -79,6 +81,8 @@ module FileOperations =
 
     let splitDocumentToMany (f: DocumentSplitArguments -> DocumentSplitArguments)  =
         let args = f DocumentSplitArguments.DefalutValue
+
+
         if args.ChunkSize <= 0 then failwithf "Page num %d per document must be bigger than 1" args.ChunkSize
         fun (flowModels: FlowModel<'userState> list)  ->
             flowModels
@@ -96,6 +100,10 @@ module FileOperations =
 
                     | DocumentSplitOutputDirectoryOptions.CustomDirectoryPath directory ->
                         Path.GetFullPath directory
+
+                match args.CleanOutputFirst with 
+                | true -> Shell.cleanDir outputDirectory
+                | _ -> ()
 
                 Directory.ensure outputDirectory
 
@@ -162,5 +170,5 @@ type PdfRunner =
         let flowModel =  {PdfFile = inputPdfFile; UserState = () }
 
         runWithFlowModel flowModel flow
-
+        |> List.map (fun m -> m.PdfFile)
 

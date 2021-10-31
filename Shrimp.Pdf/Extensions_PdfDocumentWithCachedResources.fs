@@ -8,6 +8,8 @@ open Shrimp.Pdf
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Colors
 open iText.Kernel.Pdf
+open Shrimp.Pdf.Extensions
+open iText.Kernel.Geom
 
 [<AutoOpen>]
 module PdfDocumentWithCachedResources =
@@ -148,7 +150,7 @@ module PdfDocumentWithCachedResources =
             |> close
 
 
-        let addRectangle rect (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
+        let addRectangle (rect: Rectangle) (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
             let args = mapping PdfCanvasAddRectangleArguments.DefaultValue
             let close =
                 match args.FillColor, args.StrokeColor with 

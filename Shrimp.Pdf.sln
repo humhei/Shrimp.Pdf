@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
-VisualStudioVersion = 16.0.29519.181
+VisualStudioVersion = 16.0.31005.135
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf", "Shrimp.Pdf\Shrimp.Pdf.fsproj", "{5DF441EB-3466-4DB3-9C0A-E01F7C7867EC}"
 EndProject

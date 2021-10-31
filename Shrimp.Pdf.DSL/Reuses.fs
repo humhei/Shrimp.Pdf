@@ -19,6 +19,8 @@ open Fake.IO.FileSystemOperators
 open Shrimp.FSharp.Plus.Math
 
 
+
+
 // number in page sequence must be bigger than 0
 [<RequireQualifiedAccess>]
 type PageNumSequenceToken =
@@ -223,6 +225,10 @@ with
 [<AutoOpen>]
 module _Reuses =
 
+    type private BackgroundOrForeground =
+        | Background = 0
+        | Foreground = 1
+
     let private emptyPdf =
         lazy
             (let path = Path.GetTempPath() </> "empty.pdf"
@@ -368,8 +374,6 @@ module _Reuses =
                  "singlePageSelectorExpr" => singlePageSelectorExpr.ToString() ]
 
  
-
-
 
 
         static member MovePageBoxToOrigin(pageSelector: PageSelector) =
@@ -1022,25 +1026,63 @@ module _Reuses =
 
         
         static member PreImpose_Repeated_One(baseFArgs: _ImposingArguments) =
-                let preImposeFlow =
-                    Reuses.Impose_Raw
-                        (fun _ ->
-                            let args = (baseFArgs)
+            let preImposeFlow =
+                Reuses.Impose_Raw
+                    (fun _ ->
+                        let args = (baseFArgs)
 
-                            { args with
-                                  IsRepeated = true })
-                    |> Flow.Reuse
+                        { args with
+                              IsRepeated = true })
+                |> Flow.Reuse
 
-                runWithBackup
-                    (Path.GetTempFileName()
-                     |> Path.changeExtension ".pdf")
-                    emptyPdf.Value
-                    preImposeFlow
-                |> List.exactlyOne
-                |> fun flowModel -> 
-                    match flowModel.UserState.GetSheets() with 
-                    | [ sheet ] -> RegularImposingSheet<_>.Create sheet
-                    | sheets -> failwithf "PreImpose_Repeated_One should generate one imposing sheet, but here is %d" sheets.Length
+            runWithBackup
+                (Path.GetTempFileName()
+                 |> Path.changeExtension ".pdf")
+                emptyPdf.Value
+                preImposeFlow
+            |> List.exactlyOne
+            |> fun flowModel -> 
+                match flowModel.UserState.GetSheets() with 
+                | [ sheet ] -> RegularImposingSheet<_>.Create sheet
+                | sheets -> failwithf "PreImpose_Repeated_One should generate one imposing sheet, but here is %d" sheets.Length
+
+        static member ClippingContentsToPageBox(pageBoxKind: PageBoxKind, ?margin: Margin) =
+            let margin = defaultArg margin Margin.Zero
+
+            fun flowModel (splitDocument: SplitDocument) ->
+                let pages = PdfDocument.getPages <| splitDocument.Reader
+                let writer = splitDocument.Writer
+                for page in pages do 
+                    let clippingPageBox = page.GetPageBox(pageBoxKind)
+                    let actualBox = page.GetActualBox()
+
+                    let xobject = 
+                        
+                        Rectangle.applyMargin margin clippingPageBox 
+                        |> Rectangle.toPdfArray
+                        |> page.CopyAsFormXObject(writer).SetBBox
+
+                    let newPage = 
+                        splitDocument.Writer.AddNewPage(
+                            PageSize(actualBox)
+                        )
+
+
+                    let canvas = new PdfCanvas(newPage)
+                    newPage.SetPageBoxToPage(page) |> ignore
+
+                    //let clippingBoxToActualPage =  - clippingPageBox.GetX()
+                        
+
+                    canvas.AddXObject(xobject, -actualBox.GetX(), -actualBox.GetY())
+                    |> ignore
+
+
+            |> reuse 
+                "ClippingContentsToPageBox"
+                ["PageBoxKind" => pageBoxKind.ToString() 
+                 "margin" => margin.LoggingText ]
+
 
         static member Impose(fArgs) =
             let args = (ImposingArguments.Create fArgs)
@@ -1152,18 +1194,98 @@ module _Reuses =
                     UseBleed = defaultArg useBleed false
                     Background = Background.Size FsSize.MAXIMUN})
 
+        static member ClearDirtyInfos() =
+            Reuse.Factory(fun flowModel doc ->
+                let rotateFlow =
+                    let pageNumberSequence = 
+                        PdfDocument.getPages doc.Reader
+                        |> List.mapi(fun i page ->
+                            let pageNum = i + 1
+                            let rotation = 
+                                match page.GetFsRotation() with
+                                | Rotation.None -> Rotation.None
+                                | Rotation.Counterclockwise -> Rotation.Counterclockwise
+                                | Rotation.R180 -> Rotation.R180
+                                | Rotation.Clockwise -> Rotation.Clockwise
+                            PageNumSequenceToken.PageNumWithRotation(pageNum, rotation)
+                        )
+
+                    pageNumberSequence
+                    |> List.tryFind(fun m -> Rotation.notNon m.Rotation)
+                    |> function
+                        | Some _ ->
+                            Reuses.SequencePages(PageNumSequence.Create pageNumberSequence)
+                            |> Some
+                        | None -> None
+
+                match rotateFlow with 
+                | Some rotateFlow ->
+                    rotateFlow
+                    <+>
+                    Reuses.MovePageBoxToOrigin(PageSelector.All)
+                | None -> 
+                    Reuses.MovePageBoxToOrigin(PageSelector.All)
+            )
+            |> Reuse.rename
+                "ClearDirtyInfos"
+                []
+     
+
+        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground) =
+            (fun flowModel (doc: SplitDocument) ->
+                let useBackground (f) =
+                    let pageBoxs = BackgroundFile.getPageBoxes backgroundFile
+                    let reader = new PdfDocument(new PdfReader(backgroundFile.Value.Path))
+
+                    let backgroundXObject = 
+                        reader.GetPage(1).CopyAsFormXObject(doc.Writer)
+
+                    let r = f backgroundXObject pageBoxs.[0]
+                    reader.Close()
+                    r
+
+                useBackground (fun backgroundXObject backgroundPageBox ->
+                    let reader = doc.Reader
+                    PdfDocument.getPages reader
+                    |> List.map (fun readerPage ->
+                        let readerPageBox = readerPage.GetActualBox()
+                        let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
+
+                        let pageSize = 
+                            readerPage.GetPageSize()
+                            |> PageSize
+
+                        let writerPage = doc.Writer.AddNewPage(pageSize)
+                        let pdfCanvas = new PdfCanvas(writerPage)
+                        match choice with 
+                        | BackgroundOrForeground.Background ->
+                            pdfCanvas
+                                .AddXObject(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
+                                .AddXObject(readerXObject, -readerPageBox.GetX(), -readerPageBox.GetY())
+
+                        | BackgroundOrForeground.Foreground -> 
+                            pdfCanvas
+                                .AddXObject(readerXObject, -readerPageBox.GetX(), -readerPageBox.GetY())
+                                .AddXObject(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
+                    )
+                ) |> ignore
+            )
+            |> reuse 
+                "AddBackground"
+                []
+
+        static member AddBackground (backgroundFile: PdfFile) =
+            Reuses.AddBackgroundOrForeground(BackgroundFile backgroundFile, BackgroundOrForeground.Background)
+
+        static member AddForeground (backgroundFile: PdfFile) =
+            Reuses.AddBackgroundOrForeground(BackgroundFile backgroundFile, BackgroundOrForeground.Foreground)
+
+
+
     type PdfRunner with 
+        
         static member Reuse(reuse: Reuse<_, _>, ?targetPdfFile) = 
-            fun (inputPdfFile: PdfFile) ->
-                let targetPdfFile = defaultArg targetPdfFile inputPdfFile.Path 
-
-                match inputPdfFile.Path = targetPdfFile with 
-                | false -> File.Copy(inputPdfFile.Path, targetPdfFile, true)
-                | true -> ()
-
-                run targetPdfFile (Flow.Reuse reuse) 
-                |> List.exactlyOne 
-                |> fun m -> m.PdfFile
+            PdfRunner.OneFileFlow(Flow.Reuse reuse, ?targetPdfFile = targetPdfFile)
 
         static member OneColumn(?targetPdfFile, ?margin, ?useBleed, ?hspaces, ?vspaces) =
             let reuse =

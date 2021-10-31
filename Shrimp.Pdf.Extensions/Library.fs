@@ -1117,7 +1117,13 @@ module iText =
             | PageBoxKind.AllBox -> failwith "PageBoxKind.AllBox is settable only"
             | PageBoxKind.MediaBox -> page.GetMediaBox()
 
-
+        member page.GetFsRotation() =
+            match page.GetRotation() with 
+            | 0 -> Rotation.None
+            | 90 -> Rotation.Clockwise
+            | 180 -> Rotation.R180
+            | 270 -> Rotation.Counterclockwise
+            | angle -> failwithf "Cannot create rotation from angle %A" angle
             
 
         member page.SetActualBox(rect: Rectangle) =

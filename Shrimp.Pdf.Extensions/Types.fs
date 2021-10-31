@@ -178,6 +178,7 @@ module ExtensionTypes =
         member x.LoggingText = 
             sprintf "Margin %.1f %.1f %.1f %.1f" x.Left x.Top x.Right x.Bottom
 
+
     [<RequireQualifiedAccess>]
     module Margin =
         let getValues (margin: Margin) =
@@ -268,6 +269,14 @@ module ExtensionTypes =
             | Rotation.R180 -> 180.
             | Rotation.None -> 0.
             | _ -> failwith "invalid token"
+
+        let isNon = function
+            | Rotation.None  -> true
+            | _ -> false
+
+        let notNon = function
+            | Rotation.None  -> false
+            | _ -> true
 
 
     type AffineTransformRecord =

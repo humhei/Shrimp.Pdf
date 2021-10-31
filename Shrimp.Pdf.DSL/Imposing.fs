@@ -13,6 +13,42 @@ open System.Collections.Concurrent
 open Shrimp.FSharp.Plus
 open Shrimp.FSharp.Plus.Math
 
+type BackgroundFile = BackgroundFile of PdfFile
+with
+    member x.Value =
+        let (BackgroundFile value) = x
+        value
+
+    static member Create(path: string) =
+        PdfFile path
+        |> BackgroundFile
+
+[<RequireQualifiedAccess>]
+module BackgroundFile =
+    let private backgroundFilePageBoxCache = new ConcurrentDictionary<BackgroundFile, Rectangle list>()
+
+    let getPageBoxes = 
+        fun (backGroundFile: BackgroundFile) ->
+            backgroundFilePageBoxCache.GetOrAdd(backGroundFile, fun backGroundFile ->
+                let reader = new PdfDocument(new PdfReader(backGroundFile.Value.Path))
+                PdfDocument.getPages reader
+                |> List.map (fun page ->
+                    let pageBox = (page.GetActualBox())
+                    reader.Close()
+                    pageBox
+                )
+            )
+
+    let getSize (backgroundFile) =
+        getPageBoxes backgroundFile
+        |> function
+            | [pageBox] -> FsSize.ofRectangle pageBox
+            | h :: t -> failwithf "Cannot get background size as more than 1 pages founded in file %A" backgroundFile
+            | [] -> failwithf "Cannot get background size as no pages founded in file %A" backgroundFile
+
+
+
+
 module Imposing =
 
     type Cropmark = 
@@ -36,38 +72,7 @@ module Imposing =
         | At of Position
 
 
-    type BackgroundFile = BackgroundFile of PdfFile
-    with
-        member x.Value =
-            let (BackgroundFile value) = x
-            value
 
-        static member Create(path: string) =
-            PdfFile path
-            |> BackgroundFile
-
-    [<RequireQualifiedAccess>]
-    module BackgroundFile =
-        let private backgroundFilePageBoxCache = new ConcurrentDictionary<BackgroundFile, Rectangle list>()
-
-        let getPageBoxes = 
-            fun (backGroundFile: BackgroundFile) ->
-                backgroundFilePageBoxCache.GetOrAdd(backGroundFile, fun backGroundFile ->
-                    let reader = new PdfDocument(new PdfReader(backGroundFile.Value.Path))
-                    PdfDocument.getPages reader
-                    |> List.map (fun page ->
-                        let pageBox = (page.GetActualBox())
-                        reader.Close()
-                        pageBox
-                    )
-                )
-
-        let getSize (backgroundFile) =
-            getPageBoxes backgroundFile
-            |> function
-                | [pageBox] -> FsSize.ofRectangle pageBox
-                | h :: t -> failwithf "Cannot get background size as more than 1 pages founded in file %A" backgroundFile
-                | [] -> failwithf "Cannot get background size as no pages founded in file %A" backgroundFile
 
 
 
