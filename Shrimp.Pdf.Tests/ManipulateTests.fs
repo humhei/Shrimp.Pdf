@@ -337,6 +337,7 @@ let manipulateTests =
                           FontRotation = Rotation.None 
                           Position = Position.TopMiddle(0., 0.)}
                     )
+
                     PageModifier.AddText(
                         PageBoxKind.ActualBox,
                         "咬口正",
@@ -353,7 +354,48 @@ let manipulateTests =
                   ]
                 )
         )
+        //|> runTest "datas/bigData/#2021-11-01#(32073, 32075, 32076, 32077, 33149, 33150) 外箱.pdf" 
         |> runTest "datas/manipulate/add text to position.pdf" 
+        |> ignore
+
+    ftestCase "add text to position with font rotation" <| fun _ -> 
+        let x = 
+            List.replicate 55 "5"
+            |> String.concat ""
+
+        Flow.Manipulate (
+            ModifyPage.Create
+                ("add text to position",
+                  PageSelector.All,
+                  Dummy,
+
+                  PageModifier.Batch [
+                    fun args ->
+                        PageModifier.AddText(PageBoxKind.ActualBox, x + " @ 1 / 1 @", fun textAddingArgs ->
+                          let pageSize =
+                            args.Page.GetActualBox()
+                            |> FsSize.ofRectangle
+
+                          match pageSize with 
+                          | FsSize.Uniform 
+                          | FsSize.Landscape ->
+                              { textAddingArgs with 
+                                  PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
+                                  FontRotation = Rotation.Clockwise
+                                  Position = Position.RightMiddle(mm 0., mm 0.)}
+
+                          | FsSize.Portrait ->
+                            { textAddingArgs with 
+                                PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
+                                FontRotation = Rotation.None
+                                Position = Position.BottomMiddle(mm 0., mm 0.)}
+
+                        ) args
+                  ]
+                )
+        )
+        //|> runTest "datas/bigData/#2021-11-01#(32073, 32075, 32076, 32077, 33149, 33150) 外箱.pdf" 
+        |> runTest "datas/manipulate/add text to position with font rotation.pdf" 
         |> ignore
 
     testCase "add text to position with cached fonts" <| fun _ -> 

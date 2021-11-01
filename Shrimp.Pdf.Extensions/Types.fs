@@ -271,6 +271,12 @@ module ExtensionTypes =
             | Rotation.None -> 0.
             | _ -> failwith "invalid token"
 
+        let getRadians rotation = 
+            let angle = getAngle rotation
+            (System.Math.PI / 180.) * angle
+            
+
+
         let isNon = function
             | Rotation.None  -> true
             | _ -> false

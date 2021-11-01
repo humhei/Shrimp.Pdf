@@ -1,4 +1,5 @@
 ﻿namespace Shrimp.Pdf.Extensions
+#nowarn "0104"
 open System
 open iText.Layout
 open iText.Kernel.Colors
@@ -57,19 +58,61 @@ module PdfDocumentWithCachedResources =
             match args.HorizontalTextAlignment with 
             | Some textAlignment -> textAlignment
             | None ->
-                match args.Position with 
-                | Position.XCenter (x, y) -> TextAlignment.CENTER
-                | Position.Left (x, y) -> TextAlignment.LEFT
-                | Position.Right (x, y) -> TextAlignment.RIGHT
+                match args.FontRotation with 
+                | Rotation.None ->
+                    match args.Position with 
+                    | Position.XCenter (x, y) -> TextAlignment.CENTER
+                    | Position.Left (x, y) -> TextAlignment.LEFT
+                    | Position.Right (x, y) -> TextAlignment.RIGHT
+
+                | Rotation.R180 ->
+                    match args.Position with 
+                    | Position.XCenter (x, y) -> TextAlignment.CENTER
+                    | Position.Left (x, y) ->    TextAlignment.RIGHT
+                    | Position.Right (x, y) ->   TextAlignment.LEFT
+
+                | Rotation.Counterclockwise ->
+                    match args.Position with 
+                    | Position.YCenter (x, y) ->  TextAlignment.CENTER
+                    | Position.Top (x, y) ->      TextAlignment.LEFT
+                    | Position.Bottom (x, y) ->   TextAlignment.RIGHT
+
+
+                | Rotation.Clockwise ->
+                    match args.Position with 
+                    | Position.YCenter (x, y) ->  TextAlignment.CENTER
+                    | Position.Top (x, y) ->      TextAlignment.RIGHT
+                    | Position.Bottom (x, y) ->   TextAlignment.LEFT
 
         member args.GetCalculatedVerticalTextAlignment() =
             match args.VerticalTextAlignment with 
             | Some verticalAlignment -> verticalAlignment
             | None ->
-                match args.Position with 
-                | Position.YCenter (x, y) -> VerticalAlignment.MIDDLE
-                | Position.Top (x, y) -> VerticalAlignment.TOP
-                | Position.Bottom (x, y) -> VerticalAlignment.BOTTOM
+                match args.FontRotation with 
+                | Rotation.None ->
+                    match args.Position with 
+                    | Position.YCenter (x, y) -> VerticalAlignment.MIDDLE
+                    | Position.Top (x, y) -> VerticalAlignment.TOP
+                    | Position.Bottom (x, y) -> VerticalAlignment.BOTTOM
+
+                | Rotation.R180 ->
+                    match args.Position with 
+                    | Position.YCenter (x, y) -> VerticalAlignment.MIDDLE
+                    | Position.Top (x, y) ->     VerticalAlignment.BOTTOM
+                    | Position.Bottom (x, y) ->  VerticalAlignment.TOP
+
+                | Rotation.Counterclockwise ->
+                    match args.Position with 
+                    | Position.XCenter (x, y) -> VerticalAlignment.MIDDLE
+                    | Position.Left (x, y) ->    VerticalAlignment.BOTTOM
+                    | Position.Right (x, y) ->   VerticalAlignment.TOP
+
+                    
+                | Rotation.Clockwise ->
+                    match args.Position with 
+                    | Position.XCenter (x, y) -> VerticalAlignment.MIDDLE
+                    | Position.Left (x, y) ->    VerticalAlignment.TOP
+                    | Position.Right (x, y) ->   VerticalAlignment.BOTTOM
 
 
     type PdfCanvas with 
@@ -236,12 +279,14 @@ module PdfDocumentWithCachedResources =
 
                     let vertical = args.GetCalculatedVerticalTextAlignment()
 
+                        
+
                     let canvas =
                         canvas
                             .SetFont(pdfFont)
                             .SetFontColor(fontColor)
                             .SetFontSize(float32 fontSize)
-                            .ShowTextAligned(text,float32 point.x,float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getAngle fontRotation))
+                            .ShowTextAligned(text,float32 point.x,float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getRadians fontRotation) )
 
                     canvas
 

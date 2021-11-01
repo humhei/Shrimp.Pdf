@@ -6,10 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Folder Include="datas\BigData\" />
     <Folder Include="datas\real samples\" />
-    <None Include="datas\**\*.pdf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+      <None Include="datas\**\*.pdf">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
     <EmbeddedResource Remove="datas\compose\**" />
     <None Remove="datas\compose\**" />    <Compile Include="FunctionTests.fs" />
     <Compile Include="Types.fs" />
