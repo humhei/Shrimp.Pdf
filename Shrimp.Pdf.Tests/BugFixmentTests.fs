@@ -65,8 +65,11 @@ let bugFixmentTests =
                                 |> Colors.distinct
                                 |> List.ofSeq
 
-                            let p = FsSeparation.OfSeparation (colors.[0] :?> Separation)
+                            let m  =
+                                colors
+                                |> List.map (FsColor.OfItextColor)
 
+                                    
                             colors
                     ) ||>> (fun colors ->
                         let colors = List.concat colors

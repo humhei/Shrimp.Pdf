@@ -878,14 +878,14 @@ module Imposing =
                 | [] -> sheet, []
 
 
-            let rec produceSheets (readerPages: PdfPage list) (sheets: ImposingSheet list) =
+            let rec produceSheets desiredPageOriention (readerPages: PdfPage list) (sheets: ImposingSheet list) =
                 if readerPages.Length = 0 then sheets
                 else
-                    match args.DesiredPageOrientation with 
+                    match desiredPageOriention with 
                     | DesiredPageOrientation.PageOrientation pageOrientation ->
                         let producedSheet, leftPages = 
                             produceSheet readerPages (new ImposingSheet(x, pageOrientation))
-                        produceSheets leftPages (producedSheet :: sheets)
+                        produceSheets desiredPageOriention leftPages (producedSheet :: sheets)
 
                     | DesiredPageOrientation.Automatic ->
                         let producedSheet, leftPages = 
@@ -901,12 +901,53 @@ module Imposing =
                             then producedSheet1, leftPages1
                             else producedSheet2, leftPages2
 
-                        produceSheets leftPages (producedSheet :: sheets)
+                        produceSheets desiredPageOriention leftPages (producedSheet :: sheets)
 
                     | _ -> failwith "Invalid token"
 
 
-            let producedSheets = produceSheets readerPages []
+            let producedSheets = 
+                let cellSizes = 
+                    readerPages
+                    |> List.map (fun readerPage ->
+                        match args.DesiredSizeOp with 
+                        | Some size -> size 
+                        | None -> 
+                              if args.UseBleed then FsSize.ofRectangle(readerPage.GetTrimBox())
+                              else FsSize.ofRectangle(readerPage.GetActualBox()) 
+                    )
+
+                let desiredPageOriention =
+                    let margin =
+                        match args.Sheet_PlaceTable with 
+                        | Sheet_PlaceTable.Trim_CenterTable margin -> margin
+                        | Sheet_PlaceTable.At _ -> Margin.Zero
+
+                    let backgroundSize =
+                         Background.getSize args.Background
+
+                    match args.DesiredPageOrientation with 
+                    | DesiredPageOrientation.Automatic  ->
+                        let exceedHorizontal =
+                            cellSizes 
+                            |> List.tryFind(fun cellSize ->
+                                cellSize.Width + margin.Left + margin.Right >= backgroundSize.Width
+                            )
+
+                        let exceedVertical =
+                            cellSizes 
+                            |> List.tryFind(fun cellSize ->
+                                cellSize.Height + margin.Top + margin.Bottom >= backgroundSize.Height
+                            )
+
+                        match exceedHorizontal, exceedVertical with 
+                        | Some _, None -> DesiredPageOrientation.Landscape
+                        | None, Some _ -> DesiredPageOrientation.Portrait
+                        | _ -> args.DesiredPageOrientation
+
+                    | _ -> args.DesiredPageOrientation
+
+                produceSheets desiredPageOriention readerPages []
 
             sheets.AddRange(List.rev producedSheets)
 

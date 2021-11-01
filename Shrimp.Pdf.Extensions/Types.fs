@@ -151,6 +151,7 @@ module ExtensionTypes =
           Right: float
           Bottom: float }
     with   
+
         static member Create(value) =
             { Left = value 
               Top = value 

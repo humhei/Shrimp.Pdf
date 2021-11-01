@@ -1,9 +1,13 @@
 ﻿namespace Shrimp.Pdf
+
+open Newtonsoft.Json
+
 #nowarn "0104"
 open iText.Kernel.Pdf
 open iText.Kernel.Geom
 open Shrimp.Pdf.Extensions
 open System.IO
+open Shrimp.FSharp.Plus
 
 type PageOrientation =
     | Landscape  = 0
@@ -132,10 +136,14 @@ type FsSize with
 
     member x.AlignDirection(targetSize: iText.Kernel.Geom.Rectangle) = x.OppositeDirection(targetSize)
 
-type FsPageSize(originSize: FsSize, pageOrientation) =
-    let size = FsSize.rotateTo pageOrientation originSize
+type FsPageSize [<JsonConstructor>] (size: FsSize, pageOrientation) =
+    inherit POCOBase<FsSize * PageOrientation>(size, pageOrientation)
+    let size = FsSize.rotateTo pageOrientation size
+    
+    [<JsonProperty>]
     member x.PageOrientation = pageOrientation
 
+    [<JsonProperty>]
     member x.Size = size
 
     member x.Width = size.Width
