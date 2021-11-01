@@ -167,6 +167,7 @@ module internal rec ManipulateOrReuse =
                         try 
                             flowModel.Document.CloseAndDraft()
                         with _ -> ()
+                        let ex = new System.Exception(sprintf "Error when invoke flow %A to pdfFile %s" (flowModel.FlowName, flow) flowModel.File, ex)
                         raise ex
 
                 | Flow.TupledFlow flow -> flow.Invoke flowModel

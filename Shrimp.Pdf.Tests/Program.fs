@@ -22,6 +22,7 @@ let allTests =
             FunctionTests.functionTests
             FlowNameTests.flowNameTests
             BugFixmentTests.bugFixmentTests
+            FlowTests.flowTests
         ]
 
 [<EntryPoint>]

@@ -11,7 +11,8 @@ open Shrimp.FSharp.Plus
 
 let reuseTests =
   testList "Reuse Tests" [
-    ftestCase "add background tests" <| fun _ -> 
+
+    testCase "add background tests" <| fun _ -> 
 
         Flow.Reuse (
             Reuses.AddBackground(PdfFile @"datas/reuse/backgroundFile.pdf")
@@ -19,7 +20,7 @@ let reuseTests =
         |> runTest "datas/reuse/add background.pdf" 
         |> ignore
 
-    ftestCase "add foreground tests" <| fun _ -> 
+    testCase "add foreground tests" <| fun _ -> 
 
         Flow.Reuse (
             Reuses.AddForeground(PdfFile @"datas/reuse/backgroundFile.pdf")
@@ -336,7 +337,7 @@ let reuseTests =
 
     testCase "move pagebox to origin tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.MovePageBoxToOrigin(PageSelector.All)
+            Reuses.ClearDirtyInfos()
         )
         |> runTest "datas/reuse/move pagebox to origin.pdf" 
         |> ignore

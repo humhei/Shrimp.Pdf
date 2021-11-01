@@ -9,13 +9,16 @@
     <Folder Include="datas\real samples\" />
     <None Include="datas\**\*.pdf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>    <Compile Include="FunctionTests.fs" />
+    </None>
+    <EmbeddedResource Remove="datas\compose\**" />
+    <None Remove="datas\compose\**" />    <Compile Include="FunctionTests.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="BugFixmentTests.fs" />
     <Compile Include="FileOperationTests.fs" />
     <Compile Include="RealSamplesTest.fs" />
     <Compile Include="ManipulateTests.fs" />
     <Compile Include="ReuseTests.fs" />
+    <Compile Include="FlowTests.fs" />
     <Compile Include="FlowNameTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

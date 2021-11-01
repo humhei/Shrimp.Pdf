@@ -376,7 +376,7 @@ module _Reuses =
  
 
 
-        static member MovePageBoxToOrigin(pageSelector: PageSelector) =
+        static member private MovePageBoxToOrigin(pageSelector: PageSelector) =
 
             fun flowModel (splitDocument: SplitDocument) ->
                 let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
@@ -1233,42 +1233,46 @@ module _Reuses =
 
         static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground) =
             (fun flowModel (doc: SplitDocument) ->
-                let useBackground (f) =
+                let backgroundInfos =
                     let pageBoxs = BackgroundFile.getPageBoxes backgroundFile
+                    let totalPageNumber = pageBoxs.Length
                     let reader = new PdfDocument(new PdfReader(backgroundFile.Value.Path))
+          
+                    {|  
+                        Close = fun () -> reader.Close()
+                        GetPageBoxAndXObject = fun (pageNumber: int) -> 
+                            let index = (pageNumber-1) % totalPageNumber
+                            pageBoxs.[index], (reader.GetPage(index+1).CopyAsFormXObject(doc.Writer))
+                    |}
 
-                    let backgroundXObject = 
-                        reader.GetPage(1).CopyAsFormXObject(doc.Writer)
+                let reader = doc.Reader
+                PdfDocument.getPages reader
+                |> List.mapi (fun i readerPage ->
+                    let backgroundPageBox, backgroundXObject = backgroundInfos.GetPageBoxAndXObject(i+1)
 
-                    let r = f backgroundXObject pageBoxs.[0]
-                    reader.Close()
-                    r
+                    let readerPageBox = readerPage.GetActualBox()
+                    let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
 
-                useBackground (fun backgroundXObject backgroundPageBox ->
-                    let reader = doc.Reader
-                    PdfDocument.getPages reader
-                    |> List.map (fun readerPage ->
-                        let readerPageBox = readerPage.GetActualBox()
-                        let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
+                    let pageSize = 
+                        readerPage.GetPageSize()
+                        |> PageSize
 
-                        let pageSize = 
-                            readerPage.GetPageSize()
-                            |> PageSize
+                    let writerPage = doc.Writer.AddNewPage(pageSize)
+                    let pdfCanvas = new PdfCanvas(writerPage)
+                    match choice with 
+                    | BackgroundOrForeground.Background ->
+                        pdfCanvas
+                            .AddXObject(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
+                            .AddXObject(readerXObject, -readerPageBox.GetX(), -readerPageBox.GetY())
 
-                        let writerPage = doc.Writer.AddNewPage(pageSize)
-                        let pdfCanvas = new PdfCanvas(writerPage)
-                        match choice with 
-                        | BackgroundOrForeground.Background ->
-                            pdfCanvas
-                                .AddXObject(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
-                                .AddXObject(readerXObject, -readerPageBox.GetX(), -readerPageBox.GetY())
-
-                        | BackgroundOrForeground.Foreground -> 
-                            pdfCanvas
-                                .AddXObject(readerXObject, -readerPageBox.GetX(), -readerPageBox.GetY())
-                                .AddXObject(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
-                    )
+                    | BackgroundOrForeground.Foreground -> 
+                        pdfCanvas
+                            .AddXObject(readerXObject, -readerPageBox.GetX(), -readerPageBox.GetY())
+                            .AddXObject(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
                 ) |> ignore
+
+                backgroundInfos.Close()
+
             )
             |> reuse 
                 "AddBackground"
@@ -1284,25 +1288,23 @@ module _Reuses =
 
     type PdfRunner with 
         
-        static member Reuse(reuse: Reuse<_, _>, ?targetPdfFile) = 
-            PdfRunner.OneFileFlow(Flow.Reuse reuse, ?targetPdfFile = targetPdfFile)
+        static member Reuse(pdfFile, ?backupPdfPath) = 
+            fun reuse ->
+                PdfRunner.OneFileFlow(pdfFile, ?backupPdfPath = backupPdfPath) (Flow.Reuse reuse)
 
-        static member OneColumn(?targetPdfFile, ?margin, ?useBleed, ?hspaces, ?vspaces) =
-            let reuse =
-                Reuses.OneColumn(?margin = margin, ?useBleed = useBleed, ?hspaces = hspaces, ?vspaces = vspaces)
+        static member OneColumn(?backupPdfPath, ?margin, ?useBleed, ?hspaces, ?vspaces) =
+            fun pdfFile ->
+                let reuse =
+                    Reuses.OneColumn(?margin = margin, ?useBleed = useBleed, ?hspaces = hspaces, ?vspaces = vspaces)
 
-            PdfRunner.Reuse(
-                reuse = reuse,
-                ?targetPdfFile = targetPdfFile
-            )
+                PdfRunner.Reuse(pdfFile,?backupPdfPath = backupPdfPath) reuse
     
-        static member OneRow(?targetPdfFile, ?margin, ?useBleed, ?hspaces, ?vspaces) =
-            let reuse =
-                Reuses.OneRow(?margin = margin, ?useBleed = useBleed, ?hspaces = hspaces, ?vspaces = vspaces)
+        static member OneRow(?backupPdfPath, ?margin, ?useBleed, ?hspaces, ?vspaces) =
+            fun pdfFile ->
+                let reuse =
+                    Reuses.OneRow(?margin = margin, ?useBleed = useBleed, ?hspaces = hspaces, ?vspaces = vspaces)
+
+                PdfRunner.Reuse(pdfFile,?backupPdfPath = backupPdfPath) reuse
 
 
-            PdfRunner.Reuse(
-                reuse = reuse,
-                ?targetPdfFile = targetPdfFile
-            )
     

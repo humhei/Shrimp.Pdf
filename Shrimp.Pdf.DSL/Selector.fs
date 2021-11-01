@@ -5,6 +5,7 @@ open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf
 open Shrimp.Pdf.Colors
+open Shrimp.FSharp.Plus
 
 
 [<AutoOpen>]
@@ -131,6 +132,14 @@ type Info_BoundIs_Args (relativePosition: RelativePosition, ?areaGettingOptions,
 
     member val BoundGettingStrokeOptions = 
         defaultArg boundGettingStrokeOptions BoundGettingStrokeOptions.WithoutStrokeWidth
+
+
+type TextInfo =
+    static member TextContainsIC(text: string) =
+        fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
+            info.Value.GetText().Contains(text, true)
+
+
 
 
 type Info =

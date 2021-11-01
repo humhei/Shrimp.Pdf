@@ -1,4 +1,5 @@
 ﻿namespace Shrimp.Pdf.Colors
+#nowarn "0104"
 open System.Drawing
 open iText.Kernel.Pdf
 open Shrimp.Pdf
@@ -12,9 +13,13 @@ open iText.Kernel.Colors
 open iText.Kernel.Pdf.Function
 open iText.Kernel.Pdf.Colorspace
 open Resources
+open System.Collections.Concurrent
+open Shrimp.Pdf.icms2
+open Shrimp.FSharp.Plus
 
 [<AutoOpen>]
 module _Colors =
+
 
     [<RequireQualifiedAccess>]
     type ValueEqualOptions =
@@ -29,6 +34,14 @@ module _Colors =
         | Rgb = 1
         | Cmyk = 2
         | Lab = 3
+
+    type Icc with 
+        member x.ColorSpace = 
+            match x with 
+            | Icc.Rgb _-> ColorSpace.Rgb
+            | Icc.Cmyk _-> ColorSpace.Cmyk
+            | Icc.Lab _-> ColorSpace.Lab
+            | Icc.Gray _-> ColorSpace.Gray
 
     let private whitePoint = 
         lazy 
@@ -338,16 +351,79 @@ module _Colors =
         then Some ()
         else None
 
-    type PdfSpecialCs.Separation with 
+    let private getAlterColor (alterColorSpace: ColorSpace) (colorValue: float32 list) =
+        match alterColorSpace with 
+        | ColorSpace.Lab -> 
+            { L = colorValue.[0]
+              a = colorValue.[1]
+              b = colorValue.[2] }
+            |> FsValueColor.Lab
+
+        | ColorSpace.Rgb ->
+            { R = colorValue.[0] 
+              G = colorValue.[1]
+              B = colorValue.[2] }
+            |> FsValueColor.Rgb
+
+        | ColorSpace.Gray ->
+            FsValueColor.Gray(FsGray colorValue.[0])
+
+        | ColorSpace.Cmyk ->
+            { C = colorValue.[0] 
+              M = colorValue.[1]
+              Y = colorValue.[2] 
+              K = colorValue.[3] }
+            |> FsValueColor.Cmyk
+
+        
+
+    type private PdfCieBasedCs.IccBased with 
+        member colorSpace.GetICC() = 
+
+            let pdfStream = 
+                (colorSpace.GetPdfObject() :?> PdfArray).Get(1).GetIndirectReference().GetRefersTo() :?> PdfStream
+
+            let byarrays = pdfStream.GetBytes()
+            
+            let streamText = System.Text.Encoding.UTF8.GetString(byarrays.[0..500])
+
+            let icc =
+                match streamText with 
+                | String.Contains "sRGB IEC61966-2.1" -> Icc.Rgb RgbIcc.``SRGB Color Space Profile``
+                | String.Contains "Adobe RGB (1998)" -> Icc.Rgb RgbIcc.AdobeRGB1998
+                | String.Contains "Apple RGB" -> Icc.Rgb RgbIcc.AdobeRGB1998
+                | String.Contains "CIE LAB" -> Icc.Lab LabIcc.``CIE Lab``
+                | String.Contains "Dot Gain 15%" -> Icc.Gray GrayIcc.``Dot Gain 15%``
+                | String.Contains "Dot Gain 20%" -> Icc.Gray GrayIcc.``Dot Gain 20%``
+                | String.Contains "Dot Gain 25%" -> Icc.Gray GrayIcc.``Dot Gain 25%``
+                | String.Contains "Dot Gain 30%" -> Icc.Gray GrayIcc.``Dot Gain 30%``
+                | String.Contains "Japan Color 2001 Coated" -> Icc.Cmyk CmykIcc.JapanColor2001Coated
+                | String.Contains "U.S. Web Coated (SWOP) v2" -> Icc.Cmyk CmykIcc.USWebCoatedSWOP
+                | _ -> failwith "Not implemented"
+
+            icc
+
+    
+
+    type private PdfSpecialCs.Separation with 
         member x.GetAlternateSpace() =
-            let colorSpacePdfArray = x.GetPdfObject() :?> PdfArray
-            match colorSpacePdfArray.Get(2) with
-            | :? PdfArray as pdfArray -> pdfArray.GetAsName(0)
-            | :? PdfName as pdfName -> pdfName 
-            | _ -> failwith "Invalid token "
+            let pdfName = 
+                let colorSpacePdfArray = x.GetPdfObject() :?> PdfArray
+                match colorSpacePdfArray.Get(2) with
+                | :? PdfArray as pdfArray -> pdfArray.GetAsName(0)
+                | :? PdfName as pdfName -> pdfName
+                | _ -> failwith "Invalid token "
+
+            match pdfName with 
+            | PdfName PdfName.DeviceCMYK -> ColorSpace.Cmyk
+            | PdfName PdfName.DeviceRGB -> ColorSpace.Rgb
+            | PdfName PdfName.DeviceGray -> ColorSpace.Gray
+            | PdfName PdfName.Lab -> ColorSpace.Lab
+            | _ -> failwithf "Cannot convert %A to colorSpace" pdfName
 
         member x.GetAlternateColorValue() =
             let colorSpacePdfArray = x.GetPdfObject() :?> PdfArray
+
             let colorSpacePdfFunction = 
                 match colorSpacePdfArray.GetAsDictionary(3) with
                 | null ->
@@ -364,7 +440,7 @@ module _Colors =
                     |> List.map (fun m -> (m :?> PdfNumber).FloatValue())
 
                 match alterColorSpace with 
-                | PdfName PdfName.Lab ->
+                | ColorSpace.Lab ->
 
                     let getColorValue valueGroup = 
                         match valueGroup with 
@@ -374,7 +450,7 @@ module _Colors =
 
                     [ range.[0]; getColorValue range.[2..3]; getColorValue range.[4..5] ]
 
-                | PdfName PdfName.DeviceCMYK ->
+                | ColorSpace.Cmyk ->
                     [ range.[1]; range.[3]; range.[5]; range.[7] ]
 
                 | _ -> failwith "Not implemnted"
@@ -385,38 +461,11 @@ module _Colors =
 
             | _ -> failwith "Not implemnted"
 
-        member private x.GetAlterateColor(colorValue: float32 list) =
-            match x.GetAlternateSpace() with 
-            | PdfName PdfName.Lab -> 
-                { L = colorValue.[0]
-                  a = colorValue.[1]
-                  b = colorValue.[2] }
-                |> FsValueColor.Lab
-
-            | PdfName PdfName.DeviceRGB ->
-                { R = colorValue.[0] 
-                  G = colorValue.[1]
-                  B = colorValue.[2] }
-                |> FsValueColor.Rgb
-
-            | PdfName PdfName.DeviceGray ->
-                FsValueColor.Gray(FsGray colorValue.[0])
-
-            | PdfName PdfName.DeviceCMYK ->
-                { C = colorValue.[0] 
-                  M = colorValue.[1]
-                  Y = colorValue.[2] 
-                  K = colorValue.[3] }
-                |> FsValueColor.Cmyk
-
-            | _-> failwith "Not implemented"
 
         member x.GetAlterateColor() =
-            x.GetAlterateColor(x.GetAlternateColorValue())
+            getAlterColor (x.GetAlternateSpace()) (x.GetAlternateColorValue())
 
     type Separation with 
-
-
         member separation.GetAlterateColor() =
             let colorSpace = separation.GetColorSpace() :?> PdfSpecialCs.Separation
             let color = 
@@ -512,22 +561,39 @@ module _Colors =
             | _ -> failwithf "cannot create separation from color %s" (color.GetType().FullName)
 
 
+    let private fsSeparationCache = new ConcurrentDictionary<PdfSpecialCs.Separation, FsSeparation>()
+
     type FsSeparation with 
 
         static member OfSeparation(separation: Separation) =
+            let transparency = 
+                separation.GetColorValue() 
+                |> List.ofArray 
+                |> List.exactlyOne_DetailFailingText
+
             let colorSpace = separation.GetColorSpace() :?> PdfSpecialCs.Separation
+            let v = 
+                fsSeparationCache.GetOrAdd(colorSpace, fun _ ->
+                    let colorSpacePdfArray = 
+                        colorSpace.GetPdfObject() :?> PdfArray
     
-            let colorSpacePdfArray = 
-                colorSpace.GetPdfObject() :?> PdfArray
+                    let colorName = 
+                        let uri = 
+                            (colorSpacePdfArray.Get(1)
+                             |> string).TrimStart('/')
+                        uri.Replace("#20", " ")
     
-            let colorName = 
-                let uri = 
-                    (colorSpacePdfArray.Get(1)
-                     |> string).TrimStart('/')
-                uri.Replace("#20", " ")
-    
-            FsSeparation.Create(colorName, separation.GetAlterateColor())
+
+                    FsSeparation.Create(colorName, separation.GetAlterateColor())
+                )
+
+            { v with Transparency = float transparency }
+
        
+
+        member separation1.IsEqualTo(separation0: FsSeparation, valueEqualOptions) =
+            FsSeparation.IsEqual(separation0, separation1, valueEqualOptions)
+
 
         member separation1.IsEqualTo(color: Color, valueEqualOptions) =
             match color with 
@@ -541,6 +607,55 @@ module _Colors =
             fun (color: Color) (fsSeparations: FsSeparation list) ->
                 fsSeparations
                 |> List.exists (fun m -> m.IsEqualTo(color, valueEqualOptions))
+
+
+    let private fsIccBasedCache = new ConcurrentDictionary<PdfCieBasedCs.IccBased, Icc>()
+    type FsIccBased =
+        { Icc: Icc
+          Color: FsValueColor }
+    with 
+        member x.IsEqualTo(y, valueEqualOptions) =
+            x.Icc = y.Icc
+            &&
+                x.Color.IsEqualTo(y.Color, valueEqualOptions)
+
+        static member OfICCBased(color: IccBased) =
+            
+            let colorSpace = color.GetColorSpace() :?> PdfCieBasedCs.IccBased 
+            let icc = 
+                fsIccBasedCache.GetOrAdd(colorSpace, fun _ ->
+                    colorSpace.GetICC()
+                )
+
+            { Icc = icc
+              Color = getAlterColor (icc.ColorSpace) (List.ofSeq (color.GetColorValue())) }
+
+    [<RequireQualifiedAccess>]
+    type FsColor =
+        | Separation of FsSeparation
+        | IccBased of FsIccBased
+        | ValueColor of FsValueColor
+    with 
+        member x.IsEqualTo(y, ?valueEqualOptions) =
+            let valueEqualOptions = defaultArg valueEqualOptions ValueEqualOptions.DefaultRoundedValue
+            match x, y with 
+            | FsColor.IccBased x, FsColor.IccBased y -> x.IsEqualTo(y, valueEqualOptions)
+            | FsColor.Separation x, FsColor.Separation y -> x.IsEqualTo(y, valueEqualOptions)
+            | FsColor.ValueColor x, FsColor.ValueColor y -> x.IsEqualTo(y, valueEqualOptions)
+            | _, _ -> false
+
+        static member OfItextColor(color: Color) =
+            match color with 
+            | :? Separation as separation -> 
+                FsSeparation.OfSeparation separation
+                |> FsColor.Separation
+            | :? IccBased as iccBased -> 
+                FsIccBased.OfICCBased iccBased
+                |> FsColor.IccBased
+
+            | _ -> 
+                FsValueColor.OfItextColor color
+                |> FsColor.ValueColor
 
     [<RequireQualifiedAccess>]
     module Separation =
@@ -579,17 +694,9 @@ module _Colors =
             | _ -> None
     
         let equal (c1: Color) (c2: Color) =
-            
-            let isValueEqual() = 
-                (FsValueColor.OfItextColor c1).IsEqualTo(FsValueColor.OfItextColor(c2), ValueEqualOptions.DefaultRoundedValue)
-
-            match c1, c2 with 
-            | :? Colors.Separation as c1, (:? Colors.Separation as c2) -> 
-                Separation.equal ValueEqualOptions.DefaultRoundedValue c1 c2
-            | :? Colors.Separation , _
-            | _, :? Colors.Separation -> false
-            | _ -> isValueEqual()
-
+            let fsColor1 = FsColor.OfItextColor c1
+            let fsColor2 = FsColor.OfItextColor c2
+            fsColor1.IsEqualTo(fsColor2)
     
         let pantoneSolidCoated (pantoneEnum: PantoneColorEnum) writer =
             PdfDocument.obtainSperationColorFromResources (@"Pantone+ Solid Coated/" + pantoneEnum.ToString()) writer

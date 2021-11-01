@@ -9,17 +9,12 @@ open System.IO
 [<AutoOpen>]
 module Manipulates =
     type PdfRunner with 
-        static member Manipulate(manipulate: Manipulate<_, _>, ?targetPdfFile) = 
-            PdfRunner.OneFileFlow(Flow.Manipulate manipulate, ?targetPdfFile = targetPdfFile)
+        static member Manipulate(pdfFile, ?backupPdfPath) = 
+            fun manipulate ->
+                PdfRunner.OneFileFlow(pdfFile, ?backupPdfPath = backupPdfPath) (Flow.Manipulate manipulate)
             
 
     type ModifyPage with
-        
-
-
-
-
-
         static member TrimToVisible (pageSelector: PageSelector, ?margin: Margin)  =
             let margin = defaultArg margin (Margin.Create 0.)
             ModifyPage.Create(

@@ -20,6 +20,9 @@
     <EmbeddedResource Include="reference.conf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
+    <None Include="Resources\Icc\**">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      </None>
     <None Include="Resources\Marks\*.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
@@ -55,7 +58,8 @@
     <None Include="Resources\Colors\*.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
-    <None Include="Resources\Colors\*\*.pdf">
+
+      <None Include="Resources\Colors\*\*.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
 
@@ -86,6 +90,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Shrimp.Pdf.Extensions\Shrimp.Pdf.Extensions.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.icms2\Shrimp.Pdf.icms2.fsproj" />
     <ProjectReference Include="..\Shrimp.Pdf.Logger\Shrimp.Pdf.Logger.fsproj" />
     <ProjectReference Include="..\Shrimp.Pdf.Parser\Shrimp.Pdf.Parser.fsproj" />
   </ItemGroup>
@@ -93,6 +98,10 @@
   <ItemGroup>
     <PackageReference Update="FSharp.Core" Version="5.0.1" />
     <PackageReference Update="System.ValueTuple" Version="4.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Resources\Icc\" />
   </ItemGroup>
 
 </Project>

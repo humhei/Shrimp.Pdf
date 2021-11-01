@@ -8,22 +8,22 @@ open System.IO
 [<AutoOpen>]
 module DSL_Flow =
     type PdfRunner with 
-        static member Flow(flow: Flow<_, _>, ?targetPdfFile) = 
-            fun (inputPdfFile: PdfFile) ->
-                let targetPdfFile = defaultArg targetPdfFile inputPdfFile.Path 
+        static member private Flow(pdfFile: PdfFile, ?backupPdfPath) = 
+            fun flow ->
+                let targetPdfFile = defaultArg backupPdfPath pdfFile.Path 
 
-                match inputPdfFile.Path = targetPdfFile with 
-                | false -> File.Copy(inputPdfFile.Path, targetPdfFile, true)
+                match pdfFile.Path = targetPdfFile with 
+                | false -> File.Copy(pdfFile.Path, targetPdfFile, true)
                 | true -> ()
 
                 run targetPdfFile (flow) 
                 |> fun m -> m |> List.map (fun m -> m.PdfFile)
 
 
-        static member OneFileFlow(flow: Flow<_, _>, ?targetPdfFile) = 
-            fun (inputPdfFile: PdfFile) ->
+        static member OneFileFlow(pdfFile: PdfFile, ?backupPdfPath) = 
             
-                match PdfRunner.Flow(flow, ?targetPdfFile = targetPdfFile) inputPdfFile with 
+            fun (flow) ->
+                match PdfRunner.Flow(pdfFile, ?backupPdfPath = backupPdfPath) flow with 
                 | [pdfFile] -> pdfFile
                 | [] -> failwith "Invalid token"
                 | pdfFiles -> failwithf "Multiple pdfFiles %A are found" pdfFiles

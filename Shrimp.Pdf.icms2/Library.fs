@@ -30,7 +30,7 @@ module Core =
     type LabIcc =
         | ``CIE Lab`` = 0
 
-
+    
     [<RequireQualifiedAccess>]
     type Icc =
         | Gray of GrayIcc 
