@@ -21,6 +21,11 @@ open Shrimp.FSharp.Plus
 module _Colors =
 
 
+    type DeviceRgb with 
+        static member OfHex(hex: int) =
+            let color = System.Drawing.Color.FromArgb(hex)
+            DeviceRgb(int color.R, int color.G, int color.B)
+
     [<RequireQualifiedAccess>]
     type ValueEqualOptions =
         | Exactly
@@ -61,6 +66,8 @@ module _Colors =
         member x.LoggingText = 
             let range255 = x.Range255
             sprintf "RGB %.1f %.1f %.1f" (range255.R) range255.G range255.B
+
+
 
     type FsLab =
         { L: float32 
@@ -716,15 +723,15 @@ module _Colors =
 
     [<RequireQualifiedAccess>]
     module Colors =
+        let private comparer =
+            { new IEqualityComparer<Color> with 
+                member __.Equals(x,y) = 
+                    Color.equal x y
+    
+                member __.GetHashCode(_) = 0
+            }
+
         let distinct (colors: Color seq) =
-            let comparer =
-                { new IEqualityComparer<Color> with 
-                    member __.Equals(x,y) = 
-                        Color.equal x y
-    
-                    member __.GetHashCode(_) = 0
-                }
-    
             colors.Distinct(comparer)
             
         let contains color colors =

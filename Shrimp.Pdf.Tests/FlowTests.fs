@@ -14,8 +14,18 @@ let flowTests =
 
   testList "Flow Tests" [
     testCase "filterPages" <| fun _ -> 
-        Flows.FilterPages(Text(TextInfo.TextContainsIC("15")))
+        Flows.FilterPages(PageFilter(Text(TextInfo.TextContainsIC("15"))))
         |> runTest "datas/flows/filterPages.pdf" 
+        |> ignore
+
+    ftestCase "filterPages_infos" <| fun _ -> 
+        Flows.FilterPages(
+            PageFilter(
+                InfosSelector.Text
+                    (TextInfos.ExistsText_In_OneLine(fun text -> text = "36 -> 41"))
+            )
+        )
+        |> runTest "datas/flows/filterPages_infos.pdf" 
         |> ignore
 
   ]

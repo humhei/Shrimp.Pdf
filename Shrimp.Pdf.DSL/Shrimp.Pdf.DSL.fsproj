@@ -13,6 +13,7 @@
       <Compile Include="Reuses.fs" />
     <Compile Include="ModifyPage.fs" />
     <Compile Include="Modify.fs" />
+    <Compile Include="InfosSelector.fs" />
     <Compile Include="Manipulates.fs" />
     <Compile Include="Flows.fs" />
   </ItemGroup>

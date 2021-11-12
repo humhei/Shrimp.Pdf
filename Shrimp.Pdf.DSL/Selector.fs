@@ -1,4 +1,7 @@
 ﻿namespace Shrimp.Pdf.DSL
+
+
+
 #nowarn "0104"
 open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
@@ -6,6 +9,8 @@ open Shrimp.Pdf.Parser
 open Shrimp.Pdf
 open Shrimp.Pdf.Colors
 open Shrimp.FSharp.Plus
+open System.Collections.Generic
+open System.Linq
 
 
 [<AutoOpen>]
@@ -32,6 +37,46 @@ type SelectorTag =
     | Path = 0
     | Text = 1
     | PathOrText = 2
+
+
+
+[<AutoOpen>]
+module _SelectionGrouper = 
+
+    type private Bottom = Bottom of float
+    with 
+        member x.Value = 
+            let (Bottom v) = x
+            v
+
+    [<RequireQualifiedAccess>]
+    type SelectionGrouper =
+        | None
+        | Plane of tolerance: float 
+    with    
+        /// (SelectionSorter.Plane (mm 3., Direction.Horizontal))
+        static member DefaultValue =
+            (SelectionGrouper.Plane (tolerance.Value))
+
+
+        member grouper.GroupBy_Bottom(frect: 'info -> iText.Kernel.Geom.Rectangle) (infos: 'info seq) = 
+            let comparer =
+                { new IEqualityComparer<Bottom> with 
+                    member __.Equals(x,y) = 
+                        match grouper with 
+                        | SelectionGrouper.None -> x = y
+                        | SelectionGrouper.Plane tolerance ->
+                            abs (x.Value - y.Value) < tolerance
+            
+                    member __.GetHashCode(_) = 0
+                }
+
+            infos.GroupBy(
+                (fun m -> Bottom((frect m).GetBottomF())),
+                (fun (key: Bottom) r -> (key.Value,r |> Seq.sortBy (fun m -> (frect m).GetLeft()))),
+                comparer)
+          
+
 
 [<RequireQualifiedAccess>]
 type SelectionSorter =
@@ -98,6 +143,10 @@ with
 
 
 
+
+
+
+
 type Selector<'userState> =
     | Path of (PageModifingArguments<'userState> -> IntegratedPathRenderInfo -> bool)
     | Text of (PageModifingArguments<'userState> -> IntegratedTextRenderInfo -> bool)
@@ -134,13 +183,22 @@ type Info_BoundIs_Args (relativePosition: RelativePosition, ?areaGettingOptions,
         defaultArg boundGettingStrokeOptions BoundGettingStrokeOptions.WithoutStrokeWidth
 
 
+
+
 type TextInfo =
     static member TextContainsIC(text: string) =
         fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
             info.Value.GetText().Contains(text, true)
 
-
-
+    static member FontNameIs(fontName) =
+        fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
+            ITextRenderInfo.fontNameIs fontName
+        
+    static member FontNameAndSizeIs(fontName, fontSize: float) =
+        fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
+            ITextRenderInfo.fontNameIs fontName info
+            && (fontSize @= float(ITextRenderInfo.getActualFontSize info))
+        
 
 type Info =
 
@@ -148,15 +206,38 @@ type Info =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
             IIntegratedRenderInfo.isVisible info
 
-    static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, predicate: Color -> bool, ?predicateCompose) =
-        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            IAbstractRenderInfo.ColorIs(fillOrStrokeOptions, predicate, ?predicateCompose = predicateCompose) info
 
+    static member IsFillVisible() =
+        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
+            IIntegratedRenderInfo.isFillVisible info
+
+    static member IsFillNotVisible() =
+        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
+            IIntegratedRenderInfo.isFillVisible info
+            |> not
+
+    static member IsStrokeVisible() =
+        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
+            IIntegratedRenderInfo.isStrokeVisible info
+
+    static member IsStrokeNotVisible() =
+        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
+            IIntegratedRenderInfo.isStrokeVisible info
+            |> not
+
+    static member internal ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, predicate: Color -> bool, predicateCompose) =
+        let predicate = predicate >> predicateCompose 
+        
+        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
+            IAbstractRenderInfo.ColorIs(fillOrStrokeOptions, predicate) info
+
+    static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, predicate: Color -> bool) =
+        Info.ColorIs(fillOrStrokeOptions, predicate, id)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, color: Color) =
         Info.ColorIs(fillOrStrokeOptions, Color.equal color)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
-    
 
     static member ColorIs (fillOrStrokeOptions: FillOrStrokeOptions, pdfCanvasColor: PdfCanvasColor) =
         Info.ColorIs(fillOrStrokeOptions, fun color -> pdfCanvasColor.IsEqualTo(color))
@@ -184,14 +265,20 @@ type Info =
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member FillColorIsNot (color: Color) =
+        Info.IsFillNotVisible()
+        <||>
         Info.ColorIs(FillOrStrokeOptions.Fill, Color.equal color, not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member FillColorIsNot (pdfCanvasColor: PdfCanvasColor) =
+        Info.IsFillNotVisible()
+        <||>
         Info.ColorIs(FillOrStrokeOptions.Fill, (fun color -> pdfCanvasColor.IsEqualTo(color)), not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member FillColorIsNot (colorSpace: ColorSpace) =
+        Info.IsFillNotVisible()
+        <||>
         Info.ColorIs(FillOrStrokeOptions.Fill, (fun color -> color.IsInColorSpace(colorSpace)), not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
@@ -208,14 +295,20 @@ type Info =
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member StrokeColorIsNot (color: Color) =
+        Info.IsStrokeNotVisible()
+        <||>
         Info.ColorIs(FillOrStrokeOptions.Stroke, Color.equal color, not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member StrokeColorIsNot (pdfCanvasColor: PdfCanvasColor) =
+        Info.IsStrokeNotVisible()
+        <||>
         Info.ColorIs(FillOrStrokeOptions.Stroke, (fun color -> pdfCanvasColor.IsEqualTo(color)), not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member StrokeColorIsNot (colorSpace: ColorSpace) =
+        Info.IsStrokeNotVisible()
+        <||>
         Info.ColorIs(FillOrStrokeOptions.Stroke, (fun color -> color.IsInColorSpace(colorSpace)), not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
@@ -238,6 +331,8 @@ type Info =
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member FillColorIsNotOneOf (colors: Color list) =
+        Info.IsFillNotVisible()
+        <||>
         Info.ColorIs(FillOrStrokeOptions.Fill, (fun color -> Colors.contains color colors), not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
@@ -246,6 +341,8 @@ type Info =
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member StrokeColorIsNotOneOf (colors: Color list) =
+        Info.IsStrokeNotVisible()
+        <||>
         Info.ColorIs(FillOrStrokeOptions.Stroke, (fun color -> Colors.contains color colors), not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 

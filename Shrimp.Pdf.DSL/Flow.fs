@@ -1,7 +1,4 @@
 ﻿namespace Shrimp.Pdf
-open Shrimp.Pdf.Parser
-open Shrimp.Pdf.Extensions
-open Shrimp.Pdf.DSL
 open Shrimp.FSharp.Plus
 open System.IO
 
@@ -27,3 +24,19 @@ module DSL_Flow =
                 | [pdfFile] -> pdfFile
                 | [] -> failwith "Invalid token"
                 | pdfFiles -> failwithf "Multiple pdfFiles %A are found" pdfFiles
+
+
+        static member OneFileFlow_UserState(pdfFile: PdfFile, ?backupPdfPath) = 
+            
+            fun flow ->
+                let targetPdfFile = defaultArg backupPdfPath pdfFile.Path 
+
+                match pdfFile.Path = targetPdfFile with 
+                | false -> File.Copy(pdfFile.Path, targetPdfFile, true)
+                | true -> ()
+
+                match run targetPdfFile (flow) with 
+                | [flowModel] -> flowModel.UserState
+                | [] -> failwith "Invalid token"
+                | flowModels -> failwithf "Multiple flowModels %A are found" flowModels
+

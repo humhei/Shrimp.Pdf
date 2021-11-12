@@ -60,14 +60,22 @@ with
         |> List.mapi (fun i m -> m.ShuffingText)
         |> String.concat " "
 
+    static member private EnsureSequenceNotEmpty(sequence: 'a list) =
+        match sequence with 
+        | [] -> failwithf "PageNumberSequence is empty"
+        | _ -> ()
+
     static member Create (sequence: int list) =
+        PageNumSequence.EnsureSequenceNotEmpty sequence
+
         if List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in page sequence %A must be bigger than 0" sequence
-        sequence
+        sequence    
         |> List.map (PageNumSequenceToken.PageNum)
         |> AtLeastOneList.Create
         |> PageNumSequence
 
     static member Create (sequence: (int * Rotation) list) =
+        PageNumSequence.EnsureSequenceNotEmpty sequence
         let pageNumbers = List.map fst sequence
         if List.exists (fun pageNumber -> pageNumber <= 0) pageNumbers then failwithf "number in page sequence %A must be bigger than 0" sequence
         sequence
@@ -76,6 +84,7 @@ with
         |> PageNumSequence
 
     static member Create(tokens: PageNumSequenceToken list) =   
+        PageNumSequence.EnsureSequenceNotEmpty tokens
         tokens
         |> List.map (fun m -> m.PageNumValue, m.Rotation)
         |> PageNumSequence.Create

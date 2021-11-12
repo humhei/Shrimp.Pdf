@@ -358,7 +358,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/add text to position.pdf" 
         |> ignore
 
-    ftestCase "add text to position with font rotation" <| fun _ -> 
+    testCase "add text to position with font rotation" <| fun _ -> 
         let x = 
             List.replicate 55 "5"
             |> String.concat ""

@@ -1,4 +1,7 @@
 ﻿namespace Shrimp.Pdf.Extensions
+
+open Shrimp.FSharp.Plus
+
 #nowarn "0104"
 open iText.Kernel.Geom
 open iText.IO.Font
@@ -685,6 +688,11 @@ module iText =
                 else boundWithoutWidth
             | _ -> failwith "Invalid token"
         
+        let fontNameIs fontName (info: ITextRenderInfo) =
+            StringIC(info.Value.GetFont().GetFontProgram().GetFontNames().GetFontName()) = 
+                StringIC(fontName)
+            
+
 
         let getColors (info: ITextRenderInfo) =
             let fillColor = info.Value.GetFillColor()
@@ -709,6 +717,8 @@ module iText =
             | others -> 
                 Logger.unSupportedTextRenderMode others
                 []
+
+
 
 
     [<RequireQualifiedAccess>]
@@ -741,11 +751,7 @@ module iText =
             (getBound boundGettingOptions info).IsInsideOf(rect)
 
     type IAbstractRenderInfo with 
-        static member ColorIs(fillOrStrokeOptions: FillOrStrokeOptions, predicate: Color -> bool, ?predicateCompose) =
-            let predicate =
-                match predicateCompose with 
-                | Some predicateCompose -> predicate >> predicateCompose 
-                | None -> predicate
+        static member ColorIs(fillOrStrokeOptions: FillOrStrokeOptions, predicate: Color -> bool) =
 
             fun (info: #IAbstractRenderInfo) ->
                 match fillOrStrokeOptions with 

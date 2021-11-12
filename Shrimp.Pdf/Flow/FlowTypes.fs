@@ -109,6 +109,8 @@ type FlowName internal (flowNameKind: FlowNameKind, ?parentFlowName) =
 
     static member Disable: FlowName = FlowName(FlowNameKind.Disable)
 
+    override x.ToString() = flowNameKind.NameAndParameters.ToString()
+
 [<RequireQualifiedAccess>]
 module internal FlowName =
     let (|Override|New|Disable|) (flowName: FlowName) =

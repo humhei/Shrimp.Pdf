@@ -268,8 +268,6 @@ module PdfDocumentWithCachedResources =
                         pdfDocument.GetOrCreatePdfFont(pdfFontFactory)
 
                     let fontSize = canvas.CalcFontSize(text, args)
-                        
-
 
                     let point =
                         let rootArea = canvas.GetRootArea()
@@ -278,8 +276,6 @@ module PdfDocumentWithCachedResources =
                     let horizonal = args.GetCalculatedHorizontalTextAlignment()
 
                     let vertical = args.GetCalculatedVerticalTextAlignment()
-
-                        
 
                     let canvas =
                         canvas

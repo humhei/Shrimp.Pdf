@@ -9,6 +9,7 @@ open iText.Layout
 open iText.Layout.Properties
 open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf.Colors
+open Shrimp.FSharp.Plus
 
 
 type ColoredText =
@@ -16,6 +17,8 @@ type ColoredText =
       Color: PdfCanvasColor }
 
 type PageModifier<'userState, 'newUserState> = PageModifingArguments<'userState> -> seq<IIntegratedRenderInfo> -> 'newUserState
+
+
 
 type PageModifier =
 
@@ -74,17 +77,43 @@ type PageModifier =
             |> Colors.distinct
             |> List.ofSeq
 
-    static member PickTexts(picker: Parser<_, _>) : PageModifier<_, _> =
+
+
+    static member PickTexts(picker: string -> _ option) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             infos
             |> List.ofSeq
             |> List.choose IIntegratedRenderInfo.asITextRenderInfo
             |> List.choose (fun renderInfo ->
                 let text = ITextRenderInfo.getText renderInfo
-                match FParsec.CharParsers.run picker text with 
-                | Success (result, _ ,_ )-> Some result
-                | Failure (msg, _ , _) -> None
+                picker text
             )
+
+    static member PickTexts(picker: Parser<_, _>) : PageModifier<_, _> =
+        PageModifier.PickTexts(fun text ->
+            match FParsec.CharParsers.run picker text with 
+            | Success (result, _ ,_ )-> Some result
+            | Failure (msg, _ , _) -> None
+        )
+
+    static member PickTexts_In_OneLine(picker: string -> _ option, ?delimiter: string, ?selectionGrouper: SelectionGrouper) : PageModifier<_, _> =
+        let delimiter = defaultArg delimiter ""
+        let selectionGrouper = defaultArg selectionGrouper SelectionGrouper.DefaultValue
+
+        fun (args: PageModifingArguments<_>) infos ->
+            infos
+            |> Seq.choose IIntegratedRenderInfo.asITextRenderInfo
+            |> selectionGrouper.GroupBy_Bottom(
+               IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth
+            )
+            |> Seq.choose(fun (_, infos) ->
+                let text = 
+                    infos
+                    |> Seq.map (fun m -> m.TextRenderInfo.GetText())
+                    |> String.concat delimiter
+                picker text
+            )
+            |> List.ofSeq
 
     static member SetPageBox(pageBoxKind: PageBoxKind, rect: Rectangle) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
@@ -272,3 +301,40 @@ module ModifyPageOperators =
                 f = f
             )
 
+
+    type PdfRunner with 
+        static member ReadInfos(pdfFile: PdfFile, selector, pageModifier: PageModifier<_, _>, ?name) =
+            let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path
+            let flow = 
+                ModifyPage.Create(
+                    defaultArg name ("Read infos from" + pdfFileName),
+                    PageSelector.All,
+                    selector,
+                    pageModifier
+                )
+                |> Flow.Manipulate
+
+            match run (pdfFile.Path) flow with 
+            | [flowModel] -> flowModel.UserState
+            | [] -> failwith "Invalid token"
+            | flowModels ->  failwithf "Multiple flowModels %A are found" flowModels
+
+        /// default pageSelector is PageSelector.First
+        static member CheckInfos(pdfFile: PdfFile, selector, ?name, ?pageSelector) =
+            let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path
+            let flow = 
+                ModifyPage.Create(
+                    defaultArg name ("Check infos for" + pdfFileName),
+                    defaultArg pageSelector PageSelector.First,
+                    selector,
+                    (fun _ infos -> Seq.length infos)
+                )
+                |> Flow.Manipulate
+
+            match run (pdfFile.Path) flow with 
+            | [flowModel] -> 
+                match List.sum flowModel.UserState with 
+                | 0 -> false
+                | _ -> true
+            | [] -> failwith "Invalid token"
+            | flowModels ->  failwithf "Multiple flowModels %A are found" flowModels

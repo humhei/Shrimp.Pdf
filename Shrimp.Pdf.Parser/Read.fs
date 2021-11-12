@@ -20,6 +20,7 @@ type RenderInfoSelector =
 
 [<RequireQualifiedAccess>]
 module RenderInfoSelector =
+    
 
 
     let toEventTypes selector =
@@ -87,6 +88,9 @@ module RenderInfoSelector =
             | RenderInfoSelector.OR selectors ->
                 fun (renderInfo: IIntegratedRenderInfo) ->
                     selectors |> List.exists (fun selector -> loop selector renderInfo)
+
+
+
 
         loop selector
 
