@@ -18,7 +18,9 @@ open Fake.IO
 open Fake.IO.FileSystemOperators
 open Shrimp.FSharp.Plus.Math
 
-
+type Flip =
+    | HFlip = 0
+    | VFlip = 1
 
 
 // number in page sequence must be bigger than 0
@@ -26,16 +28,19 @@ open Shrimp.FSharp.Plus.Math
 type PageNumSequenceToken =
     | PageNum of int 
     | PageNumWithRotation of int * Rotation
+    | PageNumWithFlip of int * Flip
 with 
     member x.PageNumValue = 
         match x with 
         | PageNumSequenceToken.PageNum pageNum -> pageNum
-        | PageNumSequenceToken.PageNumWithRotation (pageNum, _) -> pageNum
+        | PageNumSequenceToken.PageNumWithRotation (pageNum, _) 
+        | PageNumSequenceToken.PageNumWithFlip (pageNum, _) -> pageNum
 
     member x.Rotation =
         match x with 
         | PageNumSequenceToken.PageNum _ -> Rotation.None
         | PageNumSequenceToken.PageNumWithRotation (_, rotation) -> rotation
+        | PageNumSequenceToken.PageNumWithFlip (_, _) -> Rotation.None
 
     member x.ShuffingText =
         match x with 
@@ -47,6 +52,12 @@ with
                 | Rotation.Clockwise -> ">"
                 | Rotation.Counterclockwise -> "<"
                 | Rotation.R180 -> "*"
+
+        | PageNumSequenceToken.PageNumWithFlip (pageNum, flip) -> 
+            pageNum.ToString() + 
+                match flip with 
+                | Flip.HFlip -> "$"
+                | Flip.VFlip -> "%"
 
 // number in page sequence must be bigger than 0
 type PageNumSequence = private PageNumSequence of AtLeastOneList<PageNumSequenceToken>
@@ -86,8 +97,8 @@ with
     static member Create(tokens: PageNumSequenceToken list) =   
         PageNumSequence.EnsureSequenceNotEmpty tokens
         tokens
-        |> List.map (fun m -> m.PageNumValue, m.Rotation)
-        |> PageNumSequence.Create
+        |> AtLeastOneList.Create
+        |> PageNumSequence
 
 [<RequireQualifiedAccess>]
 type EmptablePageNumSequenceToken =
@@ -179,8 +190,8 @@ type PageResizingRotatingOptions =
     | CounterColckwiseIfNeeded = 2
 
 type RegularImposingSheet<'T> private (userState: 'T, imposingSheet: ImposingSheet) =
+    let rows = imposingSheet.GetRows()
     let rowCount, columnCount =
-        let rows = imposingSheet.GetRows()
 
         let columnCount =
             rows
@@ -192,6 +203,13 @@ type RegularImposingSheet<'T> private (userState: 'T, imposingSheet: ImposingShe
 
         rows.Length, columnCount
 
+    let cellSize =
+        rows
+        |> List.collect (fun row -> row.GetCells())
+        |> List.map(fun m -> m.Size)
+        |> List.distinct
+        |> List.exactlyOne_DetailFailingText
+
     member x.UserState = userState
 
     member x.SetUserState(userState) = RegularImposingSheet(userState, imposingSheet)
@@ -201,6 +219,8 @@ type RegularImposingSheet<'T> private (userState: 'T, imposingSheet: ImposingShe
     member x.ColumnCount = columnCount
 
     member x.ImposingSheet = imposingSheet
+
+    member x.CellSize = cellSize
 
     member x.LandscapedSheetSize: FsSize = 
         { Width = imposingSheet.TableWidth 
@@ -214,7 +234,7 @@ type RegularImposingSheet<'T> private (userState: 'T, imposingSheet: ImposingShe
         { rawArgs.Value with 
             ColNums = [x.ColumnCount]
             RowNum = x.RowCount
-            }
+            DesiredSizeOp = Some cellSize }
 
     member x.CellsCount = x.ColumnCount * x.RowCount
 
@@ -562,6 +582,81 @@ module _Reuses =
                                         PdfPage.setPageBox pageBoxKind newPageBox newPage
                                         |> ignore
                                     )
+
+                            | PageNumSequenceToken.PageNumWithFlip (_, flip) ->
+                                let xobject =
+                                    match xObjectCache.TryGetValue token.PageNumValue with 
+                                    | true, xobject -> xobject
+                                    | false, _ ->
+                                        let xobject = page.CopyAsFormXObject(splitDocument.Writer)
+                                        xObjectCache.Add(token.PageNumValue, xobject)
+                                        xobject
+
+                                let pageBox = page.GetActualBox()
+
+                                let affineTransform =
+                                    let x = pageBox.GetXF()
+                                    let y = pageBox.GetYF()
+                                    let affineTransfrom_Rotate = 
+                                        match flip with 
+                                        | Flip.HFlip -> 
+                                            { ScaleX = -1.0
+                                              ShearX = 0.0 
+                                              ShearY = 0.0 
+                                              ScaleY = 1.0
+                                              TranslateX = 0.0
+                                              TranslateY = 0.0 }
+                                            
+                                        | Flip.VFlip ->
+                                            { ScaleX = 1.0
+                                              ShearX = 0.0 
+                                              ShearY = 0.0 
+                                              ScaleY = -1.0
+                                              TranslateX = 0.0
+                                              TranslateY = 0.0 }
+                                        |> AffineTransform.ofRecord
+
+                                    let affineTransform_Translate = 
+                                        { ScaleX = 1. 
+                                          ScaleY = 1. 
+                                          TranslateX = -x
+                                          TranslateY = -y
+                                          ShearX = 0.
+                                          ShearY = 0. }
+                                        |> AffineTransformRecord.toAffineTransform
+
+                                    affineTransfrom_Rotate.PreConcatenate(affineTransform_Translate)
+                                    affineTransfrom_Rotate
+
+
+
+                                let newPage = 
+                                    let newPageSize =
+                                        affineTransform.Transform(pageBox)
+
+                                    splitDocument.Writer.AddNewPage(PageSize(newPageSize))
+
+                                let canvas = new PdfCanvas(newPage)
+
+                                canvas.AddXObject(xobject,AffineTransformRecord.ofAffineTransform affineTransform) |> ignore
+
+                                [
+                                    PageBoxKind.MediaBox
+                                    PageBoxKind.CropBox
+                                    PageBoxKind.ArtBox
+                                    PageBoxKind.BleedBox
+                                    PageBoxKind.TrimBox
+                                ] |> List.iter (fun pageBoxKind ->
+                                    let pageBox = page.GetPageBox(pageBoxKind)
+                            
+                                    let newPageBox = 
+                                        affineTransform.Transform(pageBox)
+
+                                    PdfPage.setPageBox pageBoxKind newPageBox newPage
+                                    |> ignore
+                                )
+
+
                     loop unionToken
 
             |> reuse 
@@ -571,7 +666,8 @@ module _Reuses =
         static member SequencePages (pageNumSequence: PageNumSequence) =
             Reuses.SequencePages(EmptablePageNumSequence.Create pageNumSequence)
 
-        static member Rotate (pageSelector: PageSelector, rotation: Rotation) =
+
+        static member Rotate (pageSelector: PageSelector, fRotation: PageNumber -> Rotation) =
             Reuse.Factory(fun flowModel splitDocument ->
                 let selectedPageNums = splitDocument.Reader.GetPageNumbers(pageSelector)
 
@@ -579,13 +675,20 @@ module _Reuses =
                     [ 1 .. splitDocument.Reader.GetNumberOfPages() ]
                     |> List.map (fun pageNum -> 
                         if List.contains pageNum selectedPageNums
-                        then (pageNum, rotation)
+                        then (pageNum, fRotation (PageNumber pageNum))
                         else (pageNum, Rotation.None))
                     |> EmptablePageNumSequence.Create
 
                 Reuses.SequencePages(pageNumSequence)
             )
 
+            |> Reuse.rename
+                "Rotate"
+                [ "pageSelector" => pageSelector.ToString()
+                  "rotation" => fRotation.ToString() ]
+
+        static member Rotate (pageSelector: PageSelector, rotation) =
+            Reuses.Rotate(pageSelector, fun _ -> rotation)
             |> Reuse.rename
                 "Rotate"
                 [ "pageSelector" => pageSelector.ToString()
@@ -610,8 +713,6 @@ module _Reuses =
                         let pageBox = page.GetPageBox(pageBoxKind)
                         let affineTransform_Scale = 
                             AffineTransform.GetScaleInstance(size.Width / pageBox.GetWidthF(), size.Height / pageBox.GetHeightF())
-
-
 
                         let xobject = page.CopyAsFormXObject(splitDocument.Writer)
 
@@ -838,6 +939,8 @@ module _Reuses =
                  "fScaleX" => fScaleX.ToString() 
                  "fScaleY" => fScaleY.ToString() ]
 
+                
+
         static member Scale(pageSelector, scaleX, scaleY) =
             Reuses.Scale(
                 pageSelector = pageSelector,
@@ -851,6 +954,52 @@ module _Reuses =
                  "fScaleY" => scaleY.ToString() ]
 
 
+        static member Flip (pageSelector: PageSelector, fFlip: PageNumber -> Flip option) =
+            Reuse.Factory(fun flowModel (splitDocument: SplitDocument) ->
+                let selectedPageNums = splitDocument.Reader.GetPageNumbers(pageSelector)
+
+                let pageNumSequence = 
+                    [ 1 .. splitDocument.Reader.GetNumberOfPages() ]
+                    |> List.map (fun pageNum -> 
+                        if List.contains pageNum selectedPageNums
+                        then 
+                            match fFlip(PageNumber pageNum) with 
+                            | Some flip ->
+                                (pageNum, flip)
+                                |> PageNumSequenceToken.PageNumWithFlip
+
+                            | None -> PageNumSequenceToken.PageNum pageNum
+                        else PageNumSequenceToken.PageNum pageNum
+                    )
+                    |> List.map EmptablePageNumSequenceToken.PageNumSequenceToken
+                    |> EmptablePageNumSequence.Create
+                Reuses.SequencePages(pageNumSequence)
+
+            )
+
+            |> Reuse.rename
+                "Flip"
+                [ "pageSelector" => pageSelector.ToString()
+                  "flip" => fFlip.ToString() ]
+
+        static member Flip (pageSelector: PageSelector, flip: Flip) =
+            Reuses.Flip(pageSelector, fun _ -> Some flip)
+            |> Reuse.rename
+                "Flip"
+                [ "pageSelector" => pageSelector.ToString()
+                  "flip" => flip.ToString() ]
+
+
+        static member FlipEvenPages (pageSelector: PageSelector, flip: Flip) =
+            Reuses.Flip(pageSelector, fun pageNumber -> 
+                match pageNumber.Value with 
+                | Even -> Some flip
+                | Odd -> None
+            )
+            |> Reuse.rename
+                "FlipEvenPages"
+                [ "pageSelector" => pageSelector.ToString()
+                  "flip" => flip.ToString() ]
 
         static member DuplicatePages (pageSelector: PageSelector, copiedNumbers: CopiedNumSequence) =
             Reuse.Factory(fun flowModel splitDocument ->
@@ -897,8 +1046,6 @@ module _Reuses =
             Reuse(fun _ splitDocument ->
                 let reader = splitDocument.Reader
                 let writer = splitDocument.Writer
-
-
 
                 for i = 1 to reader.GetNumberOfPages() do
                     let readerPage = reader.GetPage(i)
@@ -1202,6 +1349,45 @@ module _Reuses =
                     IsRepeated = false
                     UseBleed = defaultArg useBleed false
                     Background = Background.Size FsSize.MAXIMUN})
+
+        
+        /// 合并两页
+        static member MergeTwoPages(useBleed: bool, ?margin: Margin, ?hspaces, ?vspaces, ?cellSize, ?direction: Direction) =
+            let direction = 
+                defaultArg direction Direction.Horizontal
+            
+            let margin = defaultArg margin Margin.Zero
+
+            let colNum =
+                match direction with 
+                | Direction.Horizontal -> 2
+                | Direction.Vertical -> 1
+
+            let rowNum =
+                match direction with 
+                | Direction.Horizontal -> 1
+                | Direction.Vertical -> 2
+
+            let args = 
+                { _ImposingArguments.DefaultValue with 
+                    ColNums = [ colNum ]
+                    RowNum = rowNum
+                    HSpaces = defaultArg hspaces [0.]
+                    VSpaces = defaultArg vspaces [0.]
+                    Sheet_PlaceTable = Imposing.Sheet_PlaceTable.Trim_CenterTable margin
+                    DesiredSizeOp = cellSize
+                    IsRepeated = false
+                    Background = Background.Size FsSize.MAXIMUN
+                    UseBleed = useBleed } 
+
+            Reuses.Impose
+                (fun ops -> args )
+                    
+            |> Reuse.rename 
+                "MergeTwoPages"
+                [
+                    "imposingArguments" => args.ToString()
+                ]
 
         static member ClearDirtyInfos() =
             Reuse.Factory(fun flowModel doc ->

@@ -27,6 +27,12 @@ module Operators =
     let (@=) a b =
         (abs (a - b)) < tolerance.Value
 
+    ///// approximately bigger or equal to 
+    ///// benchmark by (CONFIG: shrimp.pdf.tolerance (default is 0.1))
+    //let (>=@) a b =
+    //    a > b
+    //    || (abs (a - b)) < tolerance.Value
+
     /// defaultConversion: mm to user unit
     let mm (mm: float) =
         mm / 25.4 * 72.

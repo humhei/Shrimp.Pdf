@@ -25,6 +25,10 @@ with
         { Width = x.Width
           Height = x.Height }
 
+    member x.MapValue mapping =
+        { Width = mapping x.Width
+          Height = mapping x.Height }
+
 type RoundedSize = private RoundedSize of FsSize
 with 
     member x.Value =
@@ -135,6 +139,7 @@ type FsSize with
     member x.AlignDirection(targetSize: FsSize) = x.OppositeDirection(targetSize)
 
     member x.AlignDirection(targetSize: iText.Kernel.Geom.Rectangle) = x.OppositeDirection(targetSize)
+
 
 type FsPageSize [<JsonConstructor>] (size: FsSize, pageOrientation) =
     inherit POCOBase<FsSize * PageOrientation>(size, pageOrientation)

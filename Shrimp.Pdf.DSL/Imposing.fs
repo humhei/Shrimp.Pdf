@@ -563,7 +563,8 @@ module Imposing =
                         | Position.Right (x, _) -> -x
                         | Position.XCenter(x, _) -> abs x
 
-                newCell.X + newCell.Size.Width + marginX > pageSize.Width
+                newCell.X + newCell.Size.Width + marginX > pageSize.Width + tolerance.Value
+                
 
             if willWidthExceedPageWidth then false
             else 
@@ -649,20 +650,20 @@ module Imposing =
                         let newLastRow = rows.[rows.Count - 1]
                         y <- newLastRow.Cells.[0].Y
 
-                    let heightExeedPageHeight =
+                    let heightExceedPageHeight =
                         match Seq.tryLast rows with 
                         | Some row -> 
                             let marginY =
                                 match args.Sheet_PlaceTable with 
                                 | Sheet_PlaceTable.Trim_CenterTable margin ->
-                                    margin.Left + margin.Right
+                                    margin.Top + margin.Bottom
                                 | Sheet_PlaceTable.At position ->
                                     match position with 
                                     | Position.Top (_, y) -> -y
                                     | Position.Bottom (_, y) -> y
                                     | Position.YCenter(_, y) -> abs y
 
-                            row.Height + y + marginY > pageSize.Height
+                            row.Height + y + marginY > pageSize.Height + tolerance.Value
 
                         | None -> false
 
@@ -671,7 +672,7 @@ module Imposing =
                         | FillingMode.RowNumSpecific rowNum -> rows.Count > rowNum 
                         | _ -> false
 
-                    if heightExeedPageHeight 
+                    if heightExceedPageHeight 
                     then
                         let lastRow = rows.Last()
                         let cells = lastRow.Cells

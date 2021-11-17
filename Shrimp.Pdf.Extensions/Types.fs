@@ -1,4 +1,5 @@
 ﻿namespace Shrimp.Pdf
+#nowarn "0104"
 open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open FParsec
@@ -178,6 +179,8 @@ module ExtensionTypes =
 
         static member Zero = Margin.Create(0.)
 
+        static member MM6 = Margin.Create(mm 6.)
+
         member x.LoggingText = 
             sprintf "Margin %.1f %.1f %.1f %.1f" x.Left x.Top x.Right x.Bottom
 
@@ -264,6 +267,18 @@ module ExtensionTypes =
         | Counterclockwise = 2
         | R180 = 3
 
+    type Margin with 
+        member x.Rotate(rotation: Rotation) =
+            match rotation with
+            | Rotation.Clockwise ->
+                Margin.Create(x.Bottom, x.Left, x.Top, x.Right)
+            | Rotation.Counterclockwise ->
+                Margin.Create(x.Top, x.Right, x.Bottom, x.Left)
+
+            | Rotation.None -> x
+            | Rotation.R180 -> Margin.Create(x.Right, x.Bottom, x.Left, x.Top) 
+
+
     [<RequireQualifiedAccess>]
     module Rotation =
         let getAngle = function
@@ -290,11 +305,11 @@ module ExtensionTypes =
 
     type AffineTransformRecord =
         { ScaleX: float 
+          ShearX: float 
+          ShearY: float
           ScaleY: float 
           TranslateX: float 
-          TranslateY: float 
-          ShearX: float 
-          ShearY: float }
+          TranslateY: float }
     with
         member x.m00 = x.ScaleX
 
@@ -558,9 +573,27 @@ module ExtensionTypes =
             | PageSelector.First -> "1"
             | PageSelector.All -> "ALL"
             | PageSelector.Expr expr -> expr.ToString()
-            | PageSelector.Numbers numbers -> numbers.ToString()
+            | PageSelector.Numbers numbers -> 
+                let numbers = 
+                    numbers.Value
+                    |> Set.toList
+                    |> List.map string
+                    |> String.concat ", "
 
+                let numbers = "[" + numbers + "]"
 
+                if numbers.Length > 80
+                then 
+                    let chars = 
+                        numbers.ToCharArray()
+                        |> Array.take 80
+
+                    let v = new System.String(chars)
+
+                    v + ".... "
+
+                else 
+                    numbers
 
     type PdfDocument with
 

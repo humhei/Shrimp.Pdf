@@ -253,10 +253,19 @@ let reuseTests =
         |> runTest "datas/reuse/duplicate pages by page num sequence2.pdf" 
         |> ignore
 
-    testCase "duplicate pages by page num sequence tests3" <| fun _ -> 
-        Flow.Reuse (Reuses.SequencePages (PageNumSequence.Create [1, Rotation.Clockwise; 1, Rotation.Counterclockwise; 5, Rotation.Counterclockwise]))
+    ftestCase "duplicate pages by page num sequence tests3" <| fun _ -> 
+        let tokens1 = 
+            [1, Rotation.Clockwise; 1, Rotation.Counterclockwise; 5, Rotation.Counterclockwise]
+            |> List.map PageNumSequenceToken.PageNumWithRotation
+
+        let tokens2 = 
+            [1, Flip.HFlip; 5, Flip.VFlip]
+            |> List.map PageNumSequenceToken.PageNumWithFlip
+
+        Flow.Reuse (Reuses.SequencePages (PageNumSequence.Create (tokens1 @ tokens2)))
         |> runTest "datas/reuse/duplicate pages by page num sequence3.pdf" 
         |> ignore
+
 
 
     testCase "duplicate pages by copied num sequence tests3" <| fun _ -> 

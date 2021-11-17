@@ -18,7 +18,7 @@ let flowTests =
         |> runTest "datas/flows/filterPages.pdf" 
         |> ignore
 
-    ftestCase "filterPages_infos" <| fun _ -> 
+    testCase "filterPages_infos" <| fun _ -> 
         Flows.FilterPages(
             PageFilter(
                 InfosSelector.Text
