@@ -63,6 +63,20 @@ let reuseTests =
         |> runTest "datas/reuse/Clipping Contents To PageBox.pdf" 
         |> ignore
 
+    testCase "preimpose" <| fun _ -> 
+
+        let r = Reuses.PreImpose_Repeated_One
+                    {_ImposingArguments.DefaultValue 
+                        with ColNums = [1]
+                             RowNum = 1
+                             Background = Background.Size (FsSize.A4)
+                             DesiredSizeOp  = 
+                                (FsSize.landscape FsSize.A4)
+                                |> Some
+                        }
+        ()
+
+
     testCase "imposing N-UP tests" <| fun _ -> 
 
         Flow.Reuse (
@@ -253,7 +267,7 @@ let reuseTests =
         |> runTest "datas/reuse/duplicate pages by page num sequence2.pdf" 
         |> ignore
 
-    ftestCase "duplicate pages by page num sequence tests3" <| fun _ -> 
+    testCase "duplicate pages by page num sequence tests3" <| fun _ -> 
         let tokens1 = 
             [1, Rotation.Clockwise; 1, Rotation.Counterclockwise; 5, Rotation.Counterclockwise]
             |> List.map PageNumSequenceToken.PageNumWithRotation

@@ -542,7 +542,7 @@ module Imposing =
                   Index = cells.Count
                   ImposingRow = this }
 
-            if newCell.Size.Width > this.PageSize.Width || newCell.Size.Height > this.PageSize.Height 
+            if newCell.Size.Width > this.PageSize.Width + tolerance.Value || newCell.Size.Height > this.PageSize.Height + tolerance.Value
             then failwithf "desired size is exceeded %A to sheet page size %A" newCell.Size this.PageSize
                   
             let addNewCell_UpdateState() =
@@ -889,6 +889,8 @@ module Imposing =
                         produceSheets desiredPageOriention leftPages (producedSheet :: sheets)
 
                     | DesiredPageOrientation.Automatic ->
+                      
+
                         let producedSheet, leftPages = 
                             let producedSheet1, leftPages1 = 
                                 produceSheet readerPages (new ImposingSheet(x, PageOrientation.Landscape))
@@ -929,22 +931,37 @@ module Imposing =
 
                     match args.DesiredPageOrientation with 
                     | DesiredPageOrientation.Automatic  ->
-                        let exceedHorizontal =
-                            cellSizes 
-                            |> List.tryFind(fun cellSize ->
-                                cellSize.Width + margin.Left + margin.Right >= backgroundSize.Width
-                            )
+                        let (|ValidOrientation|InvalidOrientation|) (orientation) =
+                            let backgroundSize = 
+                                match orientation with 
+                                | PageOrientation.Landscape -> FsSize.landscape backgroundSize
+                                | PageOrientation.Portrait -> FsSize.portrait backgroundSize
 
-                        let exceedVertical =
-                            cellSizes 
-                            |> List.tryFind(fun cellSize ->
-                                cellSize.Height + margin.Top + margin.Bottom >= backgroundSize.Height
-                            )
+                        
+                            let exceedHorizontal =
+                                cellSizes 
+                                |> List.tryFind(fun cellSize ->
+                                    cellSize.Width + margin.Left + margin.Right >= backgroundSize.Width + tolerance.Value
+                                )
 
-                        match exceedHorizontal, exceedVertical with 
-                        | Some _, None -> DesiredPageOrientation.Landscape
-                        | None, Some _ -> DesiredPageOrientation.Portrait
-                        | _ -> args.DesiredPageOrientation
+                            let exceedVertical =
+                                cellSizes 
+                                |> List.tryFind(fun cellSize ->
+                                    cellSize.Height + margin.Top + margin.Bottom >= backgroundSize.Height + tolerance.Value
+                                )
+
+                            match exceedHorizontal, exceedVertical with 
+                            | None _, None _ -> ValidOrientation
+                            | Some v, _ 
+                            | _, Some v -> InvalidOrientation v
+
+
+                        match PageOrientation.Portrait, PageOrientation.Landscape with 
+                        | ValidOrientation, ValidOrientation -> DesiredPageOrientation.Automatic
+                        | ValidOrientation, InvalidOrientation _ -> DesiredPageOrientation.Portrait
+                        | InvalidOrientation _, ValidOrientation -> DesiredPageOrientation.Landscape
+                        | InvalidOrientation size, InvalidOrientation _ -> 
+                            failwithf "desired size is exceeded %A to sheet page size %A" size backgroundSize
 
                     | _ -> args.DesiredPageOrientation
 
