@@ -220,13 +220,35 @@ let manipulateTests =
         |> runTest "datas/manipulate/add bound to text2.pdf" 
         |> ignore
 
-    testCase "add line to position" <| fun _ -> 
+    ftestCase "add line to position" <| fun _ -> 
         Flow.Manipulate (
             ModifyPage.Create
                 ("add line to position",
                   PageSelector.All,
                   Dummy,
                   PageModifier.Batch [
+
+                    PageModifier.AddLine(
+                      AreaGettingOptions.PageBox PageBoxKind.ActualBox,
+                      Position.LeftMiddle (0., 0.),
+                      Position.RightMiddle (0., 0.),
+                      (fun args ->
+                          { args with 
+                                StrokeColor = PdfCanvasColor.Registration
+                                DashPattern = DashPattern.Create(mm 5.)}
+                      )
+                    ) 
+
+                    PageModifier.AddLine(
+                      AreaGettingOptions.PageBox PageBoxKind.ActualBox,
+                      Position.TopMiddle (0., 0.),
+                      Position.BottomMiddle (0., 0.),
+                      (fun args ->
+                          { args with 
+                                StrokeColor = PdfCanvasColor.Registration }
+                      )
+                    ) 
+
                     PageModifier.AddLine(
                       AreaGettingOptions.PageBox PageBoxKind.ActualBox,
                       Position.BottomMiddle (0., mm 3.2),

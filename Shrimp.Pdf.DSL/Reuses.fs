@@ -62,6 +62,10 @@ with
 // number in page sequence must be bigger than 0
 type PageNumSequence = private PageNumSequence of AtLeastOneList<PageNumSequenceToken>
 with 
+    member x.Value_Al1List = 
+        let (PageNumSequence value) = x
+        value
+
     member x.Value = 
         let (PageNumSequence value) = x
         value.AsList
@@ -98,6 +102,11 @@ with
         PageNumSequence.EnsureSequenceNotEmpty tokens
         tokens
         |> AtLeastOneList.Create
+        |> PageNumSequence
+
+    static member Concat(sequences: PageNumSequence al1List) =
+        sequences
+        |> AtLeastOneList.collect(fun m -> m.Value_Al1List)
         |> PageNumSequence
 
 [<RequireQualifiedAccess>]
@@ -223,8 +232,8 @@ type RegularImposingSheet<'T> private (userState: 'T, imposingSheet: ImposingShe
     member x.CellSize = cellSize
 
     member x.LandscapedSheetSize: FsSize = 
-        { Width = imposingSheet.TableWidth 
-          Height = imposingSheet.TableHeight }
+        { Width = imposingSheet.Width 
+          Height = imposingSheet.Height }
         |> FsSize.landscape
 
     member x.RawImposingArguments = imposingSheet.ImposingArguments

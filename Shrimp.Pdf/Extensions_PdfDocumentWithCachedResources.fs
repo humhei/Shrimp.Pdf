@@ -28,11 +28,13 @@ module PdfDocumentWithCachedResources =
 
     type PdfCanvasAddLineArguments =
         { LineWidth: float 
-          StrokeColor: PdfCanvasColor }
+          StrokeColor: PdfCanvasColor
+          DashPattern: DashPattern }
     with 
         static member DefaultValue =
             { LineWidth = mm 0.1 
-              StrokeColor = PdfCanvasColor.ITextColor (DeviceGray.BLACK :> Color) }
+              StrokeColor = PdfCanvasColor.ITextColor (DeviceGray.BLACK :> Color)
+              DashPattern = DashPattern.Empty }
 
 
     type CanvasAddTextArguments = 
@@ -188,6 +190,7 @@ module PdfDocumentWithCachedResources =
             canvas
             |> PdfCanvas.SetStrokeColor(args.StrokeColor)
             |> PdfCanvas.setLineWidth args.LineWidth
+            |> PdfCanvas.setDashpattern args.DashPattern
             |> PdfCanvas.moveTo line.Start
             |> PdfCanvas.lineTo line.End
             |> close

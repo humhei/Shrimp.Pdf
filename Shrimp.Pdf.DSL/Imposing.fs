@@ -145,13 +145,21 @@ module Imposing =
         | R180WhenColNumIsEven 
         | R180WhenRowNumIsEven 
 
+    type SpaceAndMiddleDash =
+        { SpaceValue: float 
+          DashPattern: DashPattern option }
+    with 
+        static member DefaultValue =
+            { SpaceValue = 0. 
+              DashPattern = None }
+
     type _ImposingArguments =
         {
             ColNums: int list
             RowNum: int
             Cropmark: Cropmark option
-            HSpaces: float list
-            VSpaces: float list
+            HSpaceExs: SpaceAndMiddleDash list
+            VSpaceExs: SpaceAndMiddleDash list
             UseBleed: bool
             Background: Background
             DesiredPageOrientation: DesiredPageOrientation
@@ -162,13 +170,21 @@ module Imposing =
         }
 
     with 
+        member x.HSpaces =
+            x.HSpaceExs
+            |> List.map(fun m -> m.SpaceValue)
+
+        member x.VSpaces =
+            x.VSpaceExs
+            |> List.map(fun m -> m.SpaceValue)
+
         static member DefaultValue =
             {
                 ColNums = [0]
                 RowNum = 0
                 Cropmark = None
-                HSpaces = [0.]
-                VSpaces = [0.]
+                HSpaceExs = [SpaceAndMiddleDash.DefaultValue]
+                VSpaceExs = [SpaceAndMiddleDash.DefaultValue]
                 UseBleed = false
                 Background = Background.Size FsSize.A4
                 Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(0.))
@@ -198,15 +214,15 @@ module Imposing =
                             | [] -> [0]
                             | _ -> args.ColNums
 
-                        HSpaces = 
+                        HSpaceExs = 
                             match args.HSpaces with 
-                            | [] -> [0.]
-                            | _ -> args.HSpaces
+                            | [] -> [SpaceAndMiddleDash.DefaultValue]
+                            | _ -> args.HSpaceExs
 
-                        VSpaces = 
+                        VSpaceExs = 
                             match args.VSpaces with 
-                            | [] -> [0.]
-                            | _ -> args.VSpaces
+                            | [] -> [SpaceAndMiddleDash.DefaultValue]
+                            | _ -> args.VSpaceExs
                 }
 
 

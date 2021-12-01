@@ -27,11 +27,16 @@ module ExtensionTypes =
         | FillOrStroke = 2
         | FillAndStroke = 3
 
-    type PageNumber = PageNumber of int
-    with 
-        member x.Value =
-            let (PageNumber value) = x
-            value 
+    type PageNumber(v) =
+        inherit POCOBaseV<int>(v)
+
+        let __checkPageNumberValid =
+            match v > 0 with 
+            | true -> ()
+            | false -> failwithf "Cannot create pageNumber by %d" v
+
+        member x.Value = v
+
 
     type IAbstractRenderInfo =
         abstract member Value: AbstractRenderInfo
@@ -375,6 +380,11 @@ module ExtensionTypes =
         member x.PhaseF32 =
             float32 x.Phase
 
+        static member Create(value) =
+            { DashArray = [|value|]
+              Phase = value }
+
+        static member Empty = {DashArray = [||]; Phase = 0.}
 
     type PageBoxKind =
         | ArtBox = 0

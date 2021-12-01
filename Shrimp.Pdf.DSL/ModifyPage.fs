@@ -157,6 +157,8 @@ type PageModifier =
             [ PdfCanvas.addLine line mapping ]
         )
 
+
+
     static member AddText(pageBoxKind, text, mapping) : PageModifier<_, _> =
         PageModifier.AddText(AreaGettingOptions.PageBox pageBoxKind, text, mapping)
 
