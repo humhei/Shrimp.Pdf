@@ -52,6 +52,26 @@ module BackgroundFile =
 
 module Imposing =
 
+    type RowNumber(v) =
+        inherit POCOBaseV<int>(v)
+
+        let __checkPageNumberValid =
+            match v > 0 with 
+            | true -> ()
+            | false -> failwithf "Cannot create rowNumber by %d" v
+
+        member x.Value = v
+
+    type ColumnNumber(v) =
+        inherit POCOBaseV<int>(v)
+
+        let __checkPageNumberValid =
+            match v > 0 with 
+            | true -> ()
+            | false -> failwithf "Cannot create columnNumber by %d" v
+
+        member x.Value = v
+
     type Cropmark = 
         { Length: float
           Distance: float
@@ -149,23 +169,28 @@ module Imposing =
     type SpaceMiddleLine =
         { Properties: PdfCanvasAddLineArguments 
           EdgeLength_PercentToMargin: float }
+    with 
+        static member DashLine(?dashValue, ?edgeLength_PercentToMargin) =
+            { Properties =
+                PdfCanvasAddLineArguments.DashLine(?value = dashValue)
+              EdgeLength_PercentToMargin = defaultArg edgeLength_PercentToMargin 0.7
+            }
 
     type Space =
-        { Value: float 
+        { Space: float 
           MiddleLine: SpaceMiddleLine option }
     with 
         static member Zero =
-            { Value = 0. 
+            { Space = 0. 
               MiddleLine = None }
 
-        static member MiddleDashLine(value, ?dashValue) =
-            { Value = value 
+        static member Value(value) = { Space = value; MiddleLine = None }
+
+        static member MiddleDashLine(value, ?dashValue, ?edgeLength_PercentToMargin) =
+            { Space = value 
               MiddleLine = 
-                Some 
-                    { Properties =
-                        PdfCanvasAddLineArguments.DashLine(?value = dashValue)
-                      EdgeLength_PercentToMargin = 0.7
-                    }
+                Some (SpaceMiddleLine.DashLine(?dashValue = dashValue, ?edgeLength_PercentToMargin = edgeLength_PercentToMargin))
+                    
                 
               }
 
@@ -175,13 +200,13 @@ module Imposing =
         new (value: float) =
             Spaces 
                 [
-                    { Value = value
+                    { Space = value
                       MiddleLine = None }
                 ]
 
         new (values: float list) =
             Spaces 
-                (values |> List.map(fun value -> {Value = value; MiddleLine = None}))
+                (values |> List.map(fun value -> {Space = value; MiddleLine = None}))
 
 
         new (space: Space) = Spaces [space]
@@ -210,11 +235,11 @@ module Imposing =
     with 
         member x.HSpaces =
             x.HSpaceExes.Value
-            |> List.map(fun m -> m.Value)
+            |> List.map(fun m -> m.Space)
 
         member x.VSpaces =
             x.VSpaceExes.Value
-            |> List.map(fun m -> m.Value)
+            |> List.map(fun m -> m.Space)
 
         static member DefaultValue =
             {
@@ -573,7 +598,7 @@ module Imposing =
                     | 0 -> 0.
                     | _ -> cell.HSpaces.[(colIndex - 1) % cell.HSpaces.Length] 
                 let nextHSpaceEx = cell.HSpaceExes.Value.[(colIndex) % cell.HSpaces.Length] 
-                let nextHSpace = nextHSpaceEx.Value 
+                let nextHSpace = nextHSpaceEx.Space 
 
                 let preVSpace = 
                     match rowIndex with 
@@ -581,7 +606,7 @@ module Imposing =
                     | _ -> cell.VSpaces.[(rowIndex - 1) % cell.VSpaces.Length] 
 
                 let nextVSpaceEx = cell.VSpaceExes.Value.[(rowIndex) % cell.VSpaces.Length] 
-                let nextVSpace = nextVSpaceEx.Value
+                let nextVSpace = nextVSpaceEx.Space
 
 
                 let addVertical() =
@@ -636,7 +661,7 @@ module Imposing =
                                     match colIndex with 
                                     | 0 -> 
                                         let margin = pageMargin
-                                        cell.X - margin.Left / spaceMiddleLine.EdgeLength_PercentToMargin
+                                        cell.X - margin.Left * spaceMiddleLine.EdgeLength_PercentToMargin
 
                                     | _ -> cell.X - preHSpace / 2.
 
@@ -644,7 +669,7 @@ module Imposing =
                                     match colIndex = cell.ImposingRow.Cells.Count-1 with 
                                     | true ->
                                         let margin = pageMargin
-                                        cell.X + cell.Size.Width + margin.Right / spaceMiddleLine.EdgeLength_PercentToMargin
+                                        cell.X + cell.Size.Width + margin.Right * spaceMiddleLine.EdgeLength_PercentToMargin
                                     | false -> cell.X + cell.Size.Width + nextHSpace / 2.
 
                                 { Start = Point(xStart, y); End = Point(xEnd, y) }
@@ -978,6 +1003,8 @@ module Imposing =
         
         member x.GetRows() = List.ofSeq rows
 
+        member x.GetFirstRow() = rows.[0]
+
         member x.RowsCount = rows.Count 
 
         member x.GetCellsCount() = rows |> Seq.sumBy(fun row -> row.Cells.Count)
@@ -985,24 +1012,31 @@ module Imposing =
     /// Build() -> Draw()
     and ImposingDocument (splitDocument: SplitDocument, imposingArguments: ImposingArguments) =  
         let sheets = new ResizeArray<ImposingSheet>()
-            
+        let mutable isDrawed = false
+
+
         let mutable imposingArguments = imposingArguments
 
         member internal x.SplitDocument: SplitDocument = splitDocument
 
         member x.ImposingArguments: ImposingArguments = imposingArguments
 
-        /// 
+        /// CRACKING FOR IMPOSE WITH CellRotation
         member internal x.ReSetIsRepeated(isRepeated) =
             imposingArguments <- 
                 ImposingArguments.Create(fun _ -> { imposingArguments.Value with IsRepeated = isRepeated})
 
+        member internal x.IsDrawed = isDrawed
+
         /// NOTE: Internal Use
         member internal x.Draw() =
             if sheets.Count = 0 then failwith "cannot draw documents, sheets is empty, please invoke Build() first"
-
-            for sheet in sheets do
-                sheet.Draw()
+            match isDrawed with 
+            | true -> failwith "document was drawed already"
+            | false ->
+                for sheet in sheets do
+                    sheet.Draw()
+                    isDrawed <- true
 
         /// NOTE: Internal Use
         member internal x.Build() =

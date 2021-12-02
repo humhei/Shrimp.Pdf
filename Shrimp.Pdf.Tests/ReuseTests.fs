@@ -77,7 +77,7 @@ let reuseTests =
         ()
 
 
-    ftestCase "imposing N-UP tests" <| fun _ -> 
+    testCase "imposing N-UP tests" <| fun _ -> 
 
         Flow.Reuse (
             Reuse.dummy()
@@ -92,12 +92,50 @@ let reuseTests =
                         Background = Background.Size FsSize.A0
                         HSpaceExes = Spaces [Space.MiddleDashLine(mm 3., mm 1.5); Space.MiddleDashLine(mm 9., mm 3.)]
                         VSpaceExes =  Spaces [Space.MiddleDashLine(mm 3., mm 1.5); Space.MiddleDashLine(mm 9., mm 3.)]
-                        Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 30., mm 30., mm 30., mm 40.))
+                        Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 30., mm 40., mm 50., mm 60.))
                         UseBleed = true
                     }
                 ) ||>> fun imposingDocument -> imposingDocument.GetSheets()
         )
         |> runTest "datas/reuse/Imposing N-UP.pdf" 
+        |> ignore
+
+    ftestCase "imposing N-UP3 tests" <| fun _ -> 
+
+        Flow.Reuse (
+            Reuse.dummy()
+            <+>
+            Reuses.Impose
+                (fun args ->
+                    { args with 
+                        DesiredSizeOp = Some { Width = mm 50.; Height = mm 50.}
+                        ColNums = [4]
+                        RowNum = 4
+                        Cropmark = Some Cropmark.defaultValue
+                        Background = Background.Size FsSize.A0
+                        HSpaceExes = Spaces [mm 3.; mm 9.]
+                        VSpaceExes =  Spaces [mm 3.; mm 9.]
+                        Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 30., mm 40., mm 50., mm 60.))
+                        UseBleed = true
+                    }
+                ) 
+        )
+        <+> Flow.Manipulate(
+            ModifyPage.AddVSpaceMiddleLines(fun (pageNumber, rowNumber) ->
+                match pageNumber.Value, rowNumber.Value with 
+                | 1, 1  
+                | 1, 2 -> Some (SpaceMiddleLine.DashLine()) 
+                | _ -> None
+            )
+            <+>
+            ModifyPage.AddHSpaceMiddleLines(fun (pageNumber, rowNumber) ->
+                match pageNumber.Value, rowNumber.Value with 
+                | 1, 1  
+                | 1, 2 -> Some (SpaceMiddleLine.DashLine()) 
+                | _ -> None
+            )
+        )
+        |> runTest "datas/reuse/Imposing N-UP3.pdf" 
         |> ignore
 
     testCase "imposing N-UP2 tests" <| fun _ -> 
