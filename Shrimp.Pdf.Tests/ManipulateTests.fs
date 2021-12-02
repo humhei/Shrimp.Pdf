@@ -220,7 +220,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/add bound to text2.pdf" 
         |> ignore
 
-    ftestCase "add line to position" <| fun _ -> 
+    testCase "add line to position" <| fun _ -> 
         Flow.Manipulate (
             ModifyPage.Create
                 ("add line to position",

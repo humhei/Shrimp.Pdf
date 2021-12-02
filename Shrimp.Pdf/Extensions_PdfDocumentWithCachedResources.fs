@@ -36,6 +36,11 @@ module PdfDocumentWithCachedResources =
               StrokeColor = PdfCanvasColor.ITextColor (DeviceGray.BLACK :> Color)
               DashPattern = DashPattern.Empty }
 
+        static member DashLine(?value) =
+            { LineWidth = mm 0.1 
+              StrokeColor = PdfCanvasColor.ITextColor (DeviceGray.BLACK :> Color)
+              DashPattern = DashPattern.Create(defaultArg value (mm 2.0)) }
+
 
     type CanvasAddTextArguments = 
         { PdfFontFactory: FsPdfFontFactory 
@@ -120,7 +125,7 @@ module PdfDocumentWithCachedResources =
     type PdfCanvas with 
         member internal x.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =
             match pdfCanvasColor with 
-            | PdfCanvasColor.ITextColor color ->Some color
+            | PdfCanvasColor.Value color -> color |> FsValueColor.ToItextColor |> Some
             | PdfCanvasColor.Separation separation ->
                 let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
                 let resourceColor = ResourceColor.CustomSeparation separation

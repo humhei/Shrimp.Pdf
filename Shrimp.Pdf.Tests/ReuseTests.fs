@@ -42,8 +42,8 @@ let reuseTests =
                         Cropmark = Some Cropmark.defaultValue
                         Background = Background.Size FsSize.A0
                         Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 6.))
-                        HSpaces = [mm 3.; mm 9.]
-                        VSpaces = [mm 3.; mm 9.]
+                        HSpaceExes = Spaces [mm 3.; mm 9.]
+                        VSpaceExes = Spaces [mm 3.; mm 9.]
                         UseBleed = true
                         IsRepeated = true
                         CellRotation = CellRotation.R180WhenRowNumIsEven
@@ -77,7 +77,7 @@ let reuseTests =
         ()
 
 
-    testCase "imposing N-UP tests" <| fun _ -> 
+    ftestCase "imposing N-UP tests" <| fun _ -> 
 
         Flow.Reuse (
             Reuse.dummy()
@@ -90,8 +90,8 @@ let reuseTests =
                         RowNum = 4
                         Cropmark = Some Cropmark.defaultValue
                         Background = Background.Size FsSize.A0
-                        HSpaces = [mm 3.; mm 9.]
-                        VSpaces = [mm 3.; mm 9.]
+                        HSpaceExes = Spaces [Space.MiddleDashLine(mm 3., mm 1.5); Space.MiddleDashLine(mm 9., mm 3.)]
+                        VSpaceExes =  Spaces [Space.MiddleDashLine(mm 3., mm 1.5); Space.MiddleDashLine(mm 9., mm 3.)]
                         Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 30., mm 30., mm 30., mm 40.))
                         UseBleed = true
                     }
@@ -132,8 +132,8 @@ let reuseTests =
                     ColNums = [2]
                     RowNum = 2
                     Cropmark = Some Cropmark.defaultValue
-                    HSpaces = [mm 3.; mm 9.]
-                    VSpaces = [mm 3.; mm 9.]
+                    HSpaceExes =  Spaces [mm 3.; mm 9.]
+                    VSpaceExes =  Spaces [mm 3.; mm 9.]
                     Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create (mm 0., mm 6., mm 9., mm 12.))
                     IsRepeated = true
                 }
@@ -171,8 +171,8 @@ let reuseTests =
                     RowNum = 4
                     Cropmark = Some Cropmark.defaultValue
                     Background = Background.Size FsSize.A0
-                    HSpaces = [mm 3.; mm 9.]
-                    VSpaces = [mm 3.; mm 9.]
+                    HSpaceExes = Spaces [mm 3.; mm 9.]
+                    VSpaceExes = Spaces [mm 3.; mm 9.]
                     Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable(Margin.Create(mm 9.863, mm 11.201, 0., 0.))
                     UseBleed = true
                 }
@@ -190,8 +190,8 @@ let reuseTests =
                     RowNum = 4
                     Cropmark = Some Cropmark.defaultValue
                     Background = Background.Size FsSize.A0
-                    HSpaces = [mm 3.; mm 9.]
-                    VSpaces = [mm 3.; mm 9.]
+                    HSpaceExes = Spaces (Space.MiddleDashLine(mm 3.))
+                    VSpaceExes = Spaces [mm 3.; mm 9.]
                     Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable(Margin.Create(mm 6., mm 6., mm 6., mm 6.))
                     UseBleed = true
                 }
@@ -208,8 +208,8 @@ let reuseTests =
                     ColNums = [8]
                     RowNum = 11
                     Background = Background.File (BackgroundFile.Create "datas/reuse/backgroundFile.pdf")
-                    HSpaces = [mm 4.]
-                    VSpaces = [mm 3.]
+                    HSpaceExes = Spaces [mm 4.]
+                    VSpaceExes = Spaces [mm 3.]
                     Sheet_PlaceTable = Sheet_PlaceTable.At(Position.LeftTop(mm 9.863, mm -11.201))
                 }
             )

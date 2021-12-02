@@ -14,6 +14,7 @@ open iText.Kernel.Pdf.Function
 open iText.Kernel.Pdf.Colorspace
 open Resources
 open System.Collections.Concurrent
+open Shrimp.FSharp.Plus
 open Shrimp.Pdf.icms2
 open Shrimp.FSharp.Plus
 
@@ -182,6 +183,8 @@ module _Colors =
         member x.IsEqualTo(y: FsValueColor, valueEqualOptions: ValueEqualOptions) =
             FsValueColor.IsEqual (x, y, valueEqualOptions)
 
+
+
         static member IsEqual (color1: FsValueColor, color2: FsValueColor, valueEqualOptions: ValueEqualOptions) =
             let isColorSpaceEqual =
                 match color1, color2 with
@@ -251,7 +254,7 @@ module _Colors =
 
             | FsValueColor.Lab lab -> lab.ToItextColor()
 
-        static member OfItextColor (color: Color) = 
+        static member private OfItextColor_Result (color: Color) = 
             match color with 
             | :? DeviceCmyk as color -> 
                 let colorValues = color.GetColorValue()
@@ -260,6 +263,7 @@ module _Colors =
                   Y = colorValues.[2]
                   K = colorValues.[3] }
                 |> FsValueColor.Cmyk
+                |> Result.Ok
 
             | :? DeviceRgb as color ->
                 let colorValues = color.GetColorValue()
@@ -267,11 +271,13 @@ module _Colors =
                   G = colorValues.[1] 
                   B = colorValues.[2] }
                 |> FsValueColor.Rgb
+                |> Result.Ok
 
             | :? DeviceGray as color ->
                 let colorValues = color.GetColorValue()
                 FsGray colorValues.[0]
                 |> FsValueColor.Gray
+                |> Result.Ok
 
             | :? Lab as color ->
                 let colorValues = color.GetColorValue()
@@ -281,8 +287,19 @@ module _Colors =
                     b = colorValues.[2]
                 }
                 |> FsValueColor.Lab
+                |> Result.Ok
+            | _ -> 
+                sprintf "Cannot convert %s to fsValueColor" (color.GetType().FullName)
+                |> Result.Error
 
-            | _ -> failwithf "Cannot convert %s to fsValueColor" (color.GetType().FullName)
+        static member OfItextColor(color: Color) =
+            FsValueColor.OfItextColor_Result(color)
+            |> Result.getOrFail
+
+        member x.IsEqualTo(y: Color, valueEqualOptions: ValueEqualOptions) =
+            match FsValueColor.OfItextColor_Result y with 
+            | Result.Ok y -> x.IsEqualTo(y, valueEqualOptions)
+            | Result.Error _ -> false
 
     type FsSeparation =
         { Name: string 
@@ -747,19 +764,30 @@ module _Colors =
             )
 
 
+
     [<RequireQualifiedAccess>]
     type PdfCanvasColor = 
         | N
-        | ITextColor of Color
+        | Value of FsValueColor
         | Separation of FsSeparation
         | ColorCard of ColorCard
         | Registration
         | Lab of FsLab
     with 
+        static member ITextColor(color: Color) =
+            match color with 
+            | :? Separation as separation -> 
+                FsSeparation.OfSeparation separation
+                |> PdfCanvasColor.Separation
+            | :? IccBased -> failwithf "Currently conversion of icc based color to PdfCanvasColor is not supported" 
+            | _ ->
+                FsValueColor.OfItextColor color
+                |> PdfCanvasColor.Value
+
         member pdfCanvasColor.IsEqualTo(color: Color) =
             match pdfCanvasColor with 
             | PdfCanvasColor.N -> false
-            | PdfCanvasColor.ITextColor color1 -> Color.equal color color1
+            | PdfCanvasColor.Value color1 -> color1.IsEqualTo(color, ValueEqualOptions.DefaultRoundedValue)
             | PdfCanvasColor.Separation separation1 -> separation1.IsEqualTo(color, ValueEqualOptions.DefaultRoundedValue)
             | PdfCanvasColor.ColorCard colorCard1 ->
     
@@ -776,8 +804,9 @@ module _Colors =
                 | ColorCard.KnownColor knownColor1 ->
                     let itextColor1 = 
                         (Color.fromKnownColor knownColor1)
-                        |> PdfCanvasColor.ITextColor
-    
+                        |> FsValueColor.OfItextColor
+                        |> PdfCanvasColor.Value
+                        
                     itextColor1.IsEqualTo(color)
     
             | PdfCanvasColor.Lab labColor1 -> 
@@ -795,8 +824,6 @@ module _Colors =
             pdfCanvasColor
             |> List.exists(fun pdfCanvasColor -> pdfCanvasColor.IsEqualTo(color))
   
-
-
 
     type Color with 
         member x.IsEqualTo(fsSeparation: FsSeparation, valueEqualOptions) =

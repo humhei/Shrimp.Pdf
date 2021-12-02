@@ -12,6 +12,7 @@ open System
 open System.Collections.Concurrent
 open Shrimp.FSharp.Plus
 open Shrimp.FSharp.Plus.Math
+open Newtonsoft.Json
 
 type BackgroundFile = BackgroundFile of PdfFile
 with
@@ -145,21 +146,58 @@ module Imposing =
         | R180WhenColNumIsEven 
         | R180WhenRowNumIsEven 
 
-    type SpaceAndMiddleDash =
-        { SpaceValue: float 
-          DashPattern: DashPattern option }
+    type SpaceMiddleLine =
+        { Properties: PdfCanvasAddLineArguments 
+          EdgeLength_PercentToMargin: float }
+
+    type Space =
+        { Value: float 
+          MiddleLine: SpaceMiddleLine option }
     with 
-        static member DefaultValue =
-            { SpaceValue = 0. 
-              DashPattern = None }
+        static member Zero =
+            { Value = 0. 
+              MiddleLine = None }
+
+        static member MiddleDashLine(value, ?dashValue) =
+            { Value = value 
+              MiddleLine = 
+                Some 
+                    { Properties =
+                        PdfCanvasAddLineArguments.DashLine(?value = dashValue)
+                      EdgeLength_PercentToMargin = 0.7
+                    }
+                
+              }
+
+    type Spaces [<JsonConstructor>] (v) =
+        inherit POCOBaseV<Space list>(v)
+
+        new (value: float) =
+            Spaces 
+                [
+                    { Value = value
+                      MiddleLine = None }
+                ]
+
+        new (values: float list) =
+            Spaces 
+                (values |> List.map(fun value -> {Value = value; MiddleLine = None}))
+
+
+        new (space: Space) = Spaces [space]
+
+        static member Zero = Spaces (Space.Zero)
+
+        static member MiddleDashLine(value, ?dashValue) = Spaces(Space.MiddleDashLine(value, ?dashValue = dashValue))
+
 
     type _ImposingArguments =
         {
             ColNums: int list
             RowNum: int
             Cropmark: Cropmark option
-            HSpaceExs: SpaceAndMiddleDash list
-            VSpaceExs: SpaceAndMiddleDash list
+            HSpaceExes: Spaces
+            VSpaceExes: Spaces
             UseBleed: bool
             Background: Background
             DesiredPageOrientation: DesiredPageOrientation
@@ -171,20 +209,20 @@ module Imposing =
 
     with 
         member x.HSpaces =
-            x.HSpaceExs
-            |> List.map(fun m -> m.SpaceValue)
+            x.HSpaceExes.Value
+            |> List.map(fun m -> m.Value)
 
         member x.VSpaces =
-            x.VSpaceExs
-            |> List.map(fun m -> m.SpaceValue)
+            x.VSpaceExes.Value
+            |> List.map(fun m -> m.Value)
 
         static member DefaultValue =
             {
                 ColNums = [0]
                 RowNum = 0
                 Cropmark = None
-                HSpaceExs = [SpaceAndMiddleDash.DefaultValue]
-                VSpaceExs = [SpaceAndMiddleDash.DefaultValue]
+                HSpaceExes =  Spaces.Zero
+                VSpaceExes = Spaces.Zero
                 UseBleed = false
                 Background = Background.Size FsSize.A4
                 Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(0.))
@@ -214,15 +252,15 @@ module Imposing =
                             | [] -> [0]
                             | _ -> args.ColNums
 
-                        HSpaceExs = 
+                        HSpaceExes = 
                             match args.HSpaces with 
-                            | [] -> [SpaceAndMiddleDash.DefaultValue]
-                            | _ -> args.HSpaceExs
+                            | [] -> Spaces.Zero
+                            | _ -> args.HSpaceExes
 
-                        VSpaceExs = 
+                        VSpaceExes = 
                             match args.VSpaces with 
-                            | [] -> [SpaceAndMiddleDash.DefaultValue]
-                            | _ -> args.VSpaceExs
+                            | [] -> Spaces.Zero
+                            | _ -> args.VSpaceExes
                 }
 
 
@@ -287,7 +325,11 @@ module Imposing =
         
         member x.HSpaces = x.ImposingArguments.Value.HSpaces
 
+        member x.HSpaceExes = x.ImposingArguments.Value.HSpaceExes
+
         member x.VSpaces = x.ImposingArguments.Value.VSpaces
+
+        member x.VSpaceExes = x.ImposingArguments.Value.VSpaceExes
 
         member x.Cropmark = x.ImposingArguments.Value.Cropmark
 
@@ -438,11 +480,11 @@ module Imposing =
 
             else xobject
 
-        static member AddToPdfCanvas (cellContentAreas_ExtendByCropmarkDistance: Rectangle list) (pdfCanvas: PdfCanvas) (cell: ImposingCell) =
+        static member AddToPdfCanvas (pageMargin: Margin) (cellContentAreas_ExtendByCropmarkDistance: Rectangle list) (pdfCanvas: PdfCanvas) (cell: ImposingCell) =
             let addXObject (pdfCanvas: PdfCanvas) = 
+                let scaleX, scaleY = cell.GetScale()
                 let xObject = cell.GetClippedXObject()
                 let xObjectContentBox = cell.GetXObjectContentBox()
-                let scaleX, scaleY = cell.GetScale()
 
                 //let affineTransform_Rotate =
                 //    match cell.ImposingArguments.Value.CellRotation with 
@@ -520,9 +562,109 @@ module Imposing =
 
                 | None -> pdfCanvas
 
+            let addSpaceMiddleLine (pdfCanvas: PdfCanvas) =  
+                let row_cells = cell.ImposingRow.Cells
+
+                let colIndex = row_cells.IndexOf(cell)
+                let rowIndex = cell.ImposingSheet.Rows.IndexOf(cell.ImposingRow)
+
+                let preHSpace =     
+                    match colIndex with 
+                    | 0 -> 0.
+                    | _ -> cell.HSpaces.[(colIndex - 1) % cell.HSpaces.Length] 
+                let nextHSpaceEx = cell.HSpaceExes.Value.[(colIndex) % cell.HSpaces.Length] 
+                let nextHSpace = nextHSpaceEx.Value 
+
+                let preVSpace = 
+                    match rowIndex with 
+                    | 0 -> 0. 
+                    | _ -> cell.VSpaces.[(rowIndex - 1) % cell.VSpaces.Length] 
+
+                let nextVSpaceEx = cell.VSpaceExes.Value.[(rowIndex) % cell.VSpaces.Length] 
+                let nextVSpace = nextVSpaceEx.Value
+
+
+                let addVertical() =
+                    match nextHSpaceEx.MiddleLine with 
+                    | Some spaceMiddleLine -> 
+                        let pdfCanvasAddLineArguments = spaceMiddleLine.Properties
+
+
+                        let nextCell = 
+                            row_cells
+                            |> Seq.tryItem (colIndex+1)
+
+                        match nextCell with 
+                        | Some nextCell ->
+                            let line: StraightLine =
+                                let x = cell.X + nextHSpace / 2. + cell.Size.Width  
+                                let yStart = 
+                                    match rowIndex with 
+                                    | 0 -> 
+                                        let margin = pageMargin
+                                        margin.Top * spaceMiddleLine.EdgeLength_PercentToMargin + -cell.Y 
+
+                                    | _ -> -cell.Y + preVSpace / 2.
+                                let yEnd = 
+                                    match rowIndex = cell.ImposingSheet.RowsCount-1 with 
+                                    | true ->
+                                        let margin = pageMargin
+                                        -cell.Y - cell.Size.Height - margin.Bottom * spaceMiddleLine.EdgeLength_PercentToMargin
+                                    | false ->
+                                        -cell.Y - cell.Size.Height - nextVSpace / 2.
+
+                                { Start = Point(x, yStart); End = Point(x, yEnd) }
+                            
+                            PdfCanvas.addLine line (fun args -> pdfCanvasAddLineArguments ) pdfCanvas
+
+                        | None -> pdfCanvas
+                    | None -> pdfCanvas
+
+                let addHorizontal() =
+                    match nextVSpaceEx.MiddleLine with 
+                    | Some spaceMiddleLine -> 
+                        let pdfCanvasAddLineArguments = spaceMiddleLine.Properties
+                        let nextRow = 
+                            cell.ImposingSheet.Rows
+                            |> Seq.tryItem (rowIndex+1)
+
+                        match nextRow with 
+                        | Some nextRow ->
+                            let line: StraightLine =
+                                let y = -cell.Y - cell.Size.Height - nextVSpace / 2.
+                                let xStart = 
+                                    match colIndex with 
+                                    | 0 -> 
+                                        let margin = pageMargin
+                                        cell.X - margin.Left / spaceMiddleLine.EdgeLength_PercentToMargin
+
+                                    | _ -> cell.X - preHSpace / 2.
+
+                                let xEnd = 
+                                    match colIndex = cell.ImposingRow.Cells.Count-1 with 
+                                    | true ->
+                                        let margin = pageMargin
+                                        cell.X + cell.Size.Width + margin.Right / spaceMiddleLine.EdgeLength_PercentToMargin
+                                    | false -> cell.X + cell.Size.Width + nextHSpace / 2.
+
+                                { Start = Point(xStart, y); End = Point(xEnd, y) }
+                            
+                            PdfCanvas.addLine line (fun args -> pdfCanvasAddLineArguments ) pdfCanvas
+
+                        | None -> pdfCanvas
+                    | None -> pdfCanvas
+
+
+                pdfCanvas.SaveState() |> ignore
+                addVertical() |> ignore
+                addHorizontal() |> ignore
+                pdfCanvas.RestoreState()
+
+
             pdfCanvas
             |> addXObject
             |> addCropmarks
+            |> addSpaceMiddleLine
 
     and ImposingRow(sheet: ImposingSheet, rowIndex: int) = 
         let cells = ResizeArray<ImposingCell>()
@@ -536,9 +678,9 @@ module Imposing =
 
         member private x.PageSize = sheet.PageSize
 
-        member internal x.AddToCanvas cellContentAreas_ExtendByCropmarkDistance (pdfCanvas: PdfCanvas) = 
+        member internal x.AddToCanvas pageMargin cellContentAreas_ExtendByCropmarkDistance (pdfCanvas: PdfCanvas) = 
             (pdfCanvas, cells)
-            ||> Seq.fold (ImposingCell.AddToPdfCanvas cellContentAreas_ExtendByCropmarkDistance)
+            ||> Seq.fold (ImposingCell.AddToPdfCanvas pageMargin cellContentAreas_ExtendByCropmarkDistance)
 
 
         member internal this.Push(readerPage: PdfPage) =
@@ -789,7 +931,7 @@ module Imposing =
 
             (pdfCanvas, rows)
             ||> Seq.fold (fun pdfCanvas row -> 
-                row.AddToCanvas cellContentAreas_ExtendByCropmarkDistance pdfCanvas
+                row.AddToCanvas this.Margin cellContentAreas_ExtendByCropmarkDistance pdfCanvas
             )
             |> ignore
 

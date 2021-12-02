@@ -72,6 +72,7 @@ type private PdfDocumentCache private (pdfDocument: unit -> PdfDocument, fontsCa
                     | FsValueColor.Lab labColor -> labToItextColor labColor
                     | color -> FsValueColor.ToItextColor color
 
+
                 Separation.Create(separation.Name, valueColor, separation.Transparency) :> Color
 
 

@@ -1249,7 +1249,7 @@ module _Reuses =
                  "margin" => margin.LoggingText ]
 
 
-        static member Impose(fArgs) =
+        static member  Impose(fArgs) =
             let args = (ImposingArguments.Create fArgs)
             let cellRotation = args.Value.CellRotation
             match cellRotation with 
@@ -1335,12 +1335,69 @@ module _Reuses =
                         doc
                 )
                 
+
+
+        //static member Impose(fArgs) =
+        //    let args = fArgs _ImposingArguments.DefaultValue
+        //    let needAddDashLineIn_MiddleSpace =
+        //        ( args.HSpaceExes.Value
+        //          |> List.exists(fun m -> m.MiddleDashPattern.IsSome)
+        //        )
+        //        ||
+        //        ( args.VSpaceExes.Value
+        //          |> List.exists(fun m -> m.MiddleDashPattern.IsSome)
+        //        )
+
+        //    match needAddDashLineIn_MiddleSpace with 
+        //    | false -> Reuses.Impose_CellRotation(fArgs)
+        //    | true ->
+
+        //        Reuses.Impose_CellRotation(fArgs)
+        //        <+> (
+        //            (fun (flowModel: PageModifingArguments<ImposingDocument>) (doc: SplitDocument) ->
+                    
+        //                let reader = doc.Reader
+        //                let writer = doc.Writer
+
+        //                let sheets = flowModel.UserState.GetSheets()
+
+        //                PdfDocument.getPages reader 
+        //                |> List.iteri(fun i page ->
+        //                    let pageNum = i + 1
+        //                    let page = page.CopyTo(writer)
+        //                    let args: PageModifingArguments<_> =
+        //                        { UserState = flowModel.UserState
+        //                          Page = page
+        //                          TotalNumberOfPages = reader.GetNumberOfPages()
+        //                          PageNum = pageNum }
+
+        //                    let sheet = sheets.[i]
+
+        //                    let rowLines =
+        //                        sheet.Rows
+        //                        |> List.ofSeq
+        //                        |> List.map(fun )
+
+
+        //                    PageModifier.AddLine({})
+
+        //                )
+
+
+
+
+        //            )
+        //            |> reuse
+        //                "Impose"
+        //                ["Args" => args.ToString()]
+        //        )
+
         static member OneColumn(?margin, ?useBleed, ?hspaces, ?vspaces) =
             Reuses.Impose(fun args -> 
                 {args with 
                     Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (defaultArg margin Margin.Zero)
-                    HSpaces = defaultArg hspaces [0.]
-                    VSpaces = defaultArg vspaces [0.]
+                    HSpaceExes = defaultArg hspaces Spaces.Zero
+                    VSpaceExes = defaultArg vspaces Spaces.Zero
                     ColNums = [1]
                     RowNum = 0
                     IsRepeated = false
@@ -1351,8 +1408,8 @@ module _Reuses =
             Reuses.Impose(fun args -> 
                 {args with 
                     Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (defaultArg margin Margin.Zero)
-                    HSpaces = defaultArg hspaces [0.]
-                    VSpaces = defaultArg vspaces [0.]
+                    HSpaceExes = defaultArg hspaces Spaces.Zero
+                    VSpaceExes = defaultArg vspaces Spaces.Zero
                     ColNums = [0]
                     RowNum = 1
                     IsRepeated = false
@@ -1381,8 +1438,8 @@ module _Reuses =
                 { _ImposingArguments.DefaultValue with 
                     ColNums = [ colNum ]
                     RowNum = rowNum
-                    HSpaces = defaultArg hspaces [0.]
-                    VSpaces = defaultArg vspaces [0.]
+                    HSpaceExes = defaultArg hspaces Spaces.Zero
+                    VSpaceExes = defaultArg vspaces Spaces.Zero
                     Sheet_PlaceTable = Imposing.Sheet_PlaceTable.Trim_CenterTable margin
                     DesiredSizeOp = cellSize
                     IsRepeated = false
