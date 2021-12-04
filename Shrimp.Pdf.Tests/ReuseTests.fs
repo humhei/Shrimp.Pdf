@@ -100,7 +100,7 @@ let reuseTests =
         |> runTest "datas/reuse/Imposing N-UP.pdf" 
         |> ignore
 
-    ftestCase "imposing N-UP3 tests" <| fun _ -> 
+    testCase "imposing N-UP3 tests" <| fun _ -> 
 
         Flow.Reuse (
             Reuse.dummy()
@@ -238,7 +238,7 @@ let reuseTests =
         |> runTest "datas/reuse/Imposing when cell roation is setted.pdf" 
         |> ignore
 
-    testCase "Imposing when backgroudFile is setted" <| fun _ -> 
+    ftestCase "Imposing when backgroudFile is setted" <| fun _ -> 
         Flow.Reuse (
             Reuses.Impose(fun args ->
                 { args with 
@@ -253,6 +253,25 @@ let reuseTests =
             )
         )
         |> runTest "datas/reuse/Imposing when backgroudFile is setted.pdf" 
+        |> ignore
+
+    ftestCase "Imposing when backgroudFile is setted2" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.Impose(fun args ->
+                { args with 
+                    DesiredSizeOp = Some { Width = mm 30.; Height = mm 30.}
+                    ColNums = [8]
+                    RowNum = 11
+                    Background = 
+                        (BackgroundFile.Create "datas/reuse/backgroundFile_R90.pdf").Clockwise()
+                        |> Background.File
+                    HSpaceExes = Spaces [mm 4.]
+                    VSpaceExes = Spaces [mm 3.]
+                    Sheet_PlaceTable = Sheet_PlaceTable.At(Position.LeftTop(mm 9.863, mm -11.201))
+                }
+            )
+        )
+        |> runTest "datas/reuse/Imposing when backgroudFile is setted2.pdf" 
         |> ignore
 
     testCase "clockwise all pages" <| fun _ -> 

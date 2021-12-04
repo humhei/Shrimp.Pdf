@@ -293,7 +293,20 @@ module ExtensionTypes =
             | Rotation.Counterclockwise -> -90.
             | Rotation.R180 -> 180.
             | Rotation.None -> 0.
-            | _ -> failwith "invalid token"
+
+
+        let ofAngle angle = 
+            let angle = 
+                match angle with 
+                | SmallerThan 0. -> (abs angle) + 180.
+                | _ -> angle
+
+            match (angle) % 360. with
+            | 90. -> Rotation.Clockwise
+            | 180. -> Rotation.R180
+            | 0. -> Rotation.None
+            | 270. -> Rotation.Counterclockwise
+            | v -> failwithf "Cannot create rotation by angle %A" angle
 
         let getRadians rotation = 
             let angle = getAngle rotation

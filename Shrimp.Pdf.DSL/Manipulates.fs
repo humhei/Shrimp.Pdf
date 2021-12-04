@@ -51,7 +51,7 @@ module Manipulates =
                             let pdfCanvas = iText.Kernel.Pdf.Canvas.PdfCanvas(args.Page)
                             let vspaces = 
                                 doc.ImposingArguments.Value.VSpaces
-                                |> List.replicate rowNumber_row_middleLine__zippedList.Length
+                                |> List.replicate rows.Length
                                 |> List.concat
 
                             pdfCanvas.SaveState() |> ignore
@@ -134,7 +134,7 @@ module Manipulates =
                             let pdfCanvas = iText.Kernel.Pdf.Canvas.PdfCanvas(args.Page)
                             let hspaces = 
                                 doc.ImposingArguments.Value.HSpaces
-                                |> List.replicate colNumber_col_middleLine__zippedList.Length
+                                |> List.replicate cells.Length
                                 |> List.concat
 
                             pdfCanvas.SaveState() |> ignore

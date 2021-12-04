@@ -107,6 +107,22 @@ module iText =
         member this.GetTopF() = this.GetTop() |> float
         member this.GetRightF() = this.GetRight() |> float
         member this.GetBottomF() = this.GetBottom() |> float
+        member this.GetXCenter() = (this.GetLeft() + this.GetRight()) / 2.f
+        member this.GetXCenterF() = this.GetXCenter() |> float
+        member this.GetYCenter() = (this.GetTop() + this.GetBottom()) / 2.f
+        member this.GetYCenterF() = this.GetYCenter() |> float
+
+        member this.RotateByCenter(rotation: Rotation) =
+            match rotation with 
+            | Rotation.R180
+            | Rotation.None -> this
+            | Rotation.Counterclockwise
+            | Rotation.Clockwise -> 
+                let xCenter = this.GetXCenter()
+                let yCenter = this.GetYCenter()
+                let x = xCenter - this.GetHeight() / 2.f
+                let y = yCenter - this.GetWidth() / 2.f
+                Rectangle(x, y, this.GetHeight(), this.GetWidth())
 
         member this.ToStaightLines() =
             let x = this.GetXF()

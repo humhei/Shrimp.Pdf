@@ -14,14 +14,36 @@ open Shrimp.FSharp.Plus
 open Shrimp.FSharp.Plus.Math
 open Newtonsoft.Json
 
-type BackgroundFile = BackgroundFile of PdfFile
+type BackgroundFile = private BackgroundFile of PdfFile * Rotation
 with
     member x.Value =
-        let (BackgroundFile value) = x
+        let (BackgroundFile (value, _)) = x
         value
 
+    member internal x.Rotation = 
+        let (BackgroundFile (_, value)) = x
+        value
+        
+    member x.Clockwise() =
+        let newRotation = 
+            let angle = (Rotation.getAngle x.Rotation)
+            Rotation.ofAngle(angle + 90.)
+
+        BackgroundFile(x.Value, newRotation)
+
+    member x.CounterClockwise() =
+        let newRotation = 
+            let angle = (Rotation.getAngle x.Rotation)
+            Rotation.ofAngle(angle - 90.)
+
+        BackgroundFile(x.Value, newRotation)
+
     static member Create(path: string) =
-        PdfFile path
+        (PdfFile path, Rotation.None)
+        |> BackgroundFile
+
+    static member Create(pdfFile: PdfFile) =
+        (pdfFile, Rotation.None)
         |> BackgroundFile
 
 [<RequireQualifiedAccess>]
@@ -36,7 +58,7 @@ module BackgroundFile =
                 |> List.map (fun page ->
                     let pageBox = (page.GetActualBox())
                     reader.Close()
-                    pageBox
+                    pageBox.RotateByCenter(backGroundFile.Rotation)
                 )
             )
 
@@ -46,6 +68,14 @@ module BackgroundFile =
             | [pageBox] -> FsSize.ofRectangle pageBox
             | h :: t -> failwithf "Cannot get background size as more than 1 pages founded in file %A" backgroundFile
             | [] -> failwithf "Cannot get background size as no pages founded in file %A" backgroundFile
+
+    let getPagebox (backgroundFile) =
+         getPageBoxes backgroundFile
+         |> function
+             | [pageBox] -> pageBox
+             | h :: t -> failwithf "Cannot get background size as more than 1 pages founded in file %A" backgroundFile
+             | [] -> failwithf "Cannot get background size as no pages founded in file %A" backgroundFile
+
 
 
 
@@ -176,6 +206,14 @@ module Imposing =
               EdgeLength_PercentToMargin = defaultArg edgeLength_PercentToMargin 0.7
             }
 
+        member x.SetProps(props) =
+            { x with 
+                Properties = props x.Properties }
+
+
+        member x.SetWidth(width) =
+            x.SetProps(fun m -> {m with LineWidth = width})
+
     type Space =
         { Space: float 
           MiddleLine: SpaceMiddleLine option }
@@ -183,6 +221,16 @@ module Imposing =
         static member Zero =
             { Space = 0. 
               MiddleLine = None }
+
+        member x.TrySetMiddleLineProps(props) =
+            { x with 
+                MiddleLine = 
+                    match x.MiddleLine with 
+                    | Some v ->     
+                        { v with Properties = props v.Properties }
+                        |> Some
+                    | None -> None
+            }
 
         static member Value(value) = { Space = value; MiddleLine = None }
 
@@ -210,6 +258,11 @@ module Imposing =
 
 
         new (space: Space) = Spaces [space]
+
+        member x.TrySetMiddleLineProps(props) =
+            v
+            |> List.map(fun m -> m.TrySetMiddleLineProps(props))
+            |> Spaces
 
         static member Zero = Spaces (Space.Zero)
 
@@ -240,6 +293,28 @@ module Imposing =
         member x.VSpaces =
             x.VSpaceExes.Value
             |> List.map(fun m -> m.Space)
+
+        member x.TrySetSpaceMiddleLineWidth(width) =
+            { x with 
+                HSpaceExes = x.HSpaceExes.TrySetMiddleLineProps(fun props ->
+                    { props with LineWidth = width }
+                )
+
+                VSpaceExes = x.VSpaceExes.TrySetMiddleLineProps(fun props ->
+                    { props with LineWidth = width }
+                )
+            }
+
+        member x.TrySetMarkLineWidth(width) =
+            { x with 
+                Cropmark =
+                    match x.Cropmark with 
+                    | Some v ->
+                        { v with Width = width }
+                        |> Some
+                    | None -> None
+            }
+                .TrySetSpaceMiddleLineWidth(width)
 
         static member DefaultValue =
             {
@@ -935,7 +1010,26 @@ module Imposing =
             | Background.File backgroudFile ->
                 let reader = new PdfDocument(new PdfReader(backgroudFile.Value.Path))
                 let xobject = reader.GetPage(1).CopyAsFormXObject(this.SplitDocument.Writer)
-                pdfCanvas.AddXObject(xobject, pageBox.GetX(), pageBox.GetY()) |> ignore
+                let bkRect = BackgroundFile.getPagebox backgroudFile
+                let affineTransform = 
+                    let angle = Rotation.getAngle backgroudFile.Rotation
+                    let x, y = pageBox.GetXF() - bkRect.GetXF() , pageBox.GetYF() - bkRect.GetYF()
+
+                    let affineTransform_Rotate = AffineTransform.GetRotateInstance(Math.PI / -180. * angle, bkRect.GetXCenterF(), bkRect.GetYCenterF())
+                
+                    let affineTransform_Translate = 
+                        { ScaleX = 1. 
+                          ScaleY = 1. 
+                          TranslateX = x
+                          TranslateY = y
+                          ShearX = 0.
+                          ShearY = 0. }
+                        |> AffineTransformRecord.toAffineTransform
+
+                    affineTransform_Rotate.PreConcatenate(affineTransform_Translate)
+                    affineTransform_Rotate
+
+                pdfCanvas.AddXObject(xobject, affineTransform) |> ignore
                 reader.Close()
             | _ -> ()
 

@@ -1540,10 +1540,10 @@ module _Reuses =
                 []
 
         static member AddBackground (backgroundFile: PdfFile) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile backgroundFile, BackgroundOrForeground.Background)
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background)
 
         static member AddForeground (backgroundFile: PdfFile) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile backgroundFile, BackgroundOrForeground.Foreground)
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Foreground)
 
 
 
