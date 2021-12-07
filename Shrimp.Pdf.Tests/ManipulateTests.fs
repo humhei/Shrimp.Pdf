@@ -97,10 +97,10 @@ let manipulateTests =
         |> runTest "datas/manipulate/change separation color of pdfFunction0 Registration to m100.pdf" 
         |> ignore
 
-    testCase "change stroke color b255 to m100" <| fun _ -> 
+    ftestCase "change stroke color b255 to m100" <| fun _ -> 
         Flow.Manipulate (
             Modify.Create(
-                PageSelector.First,
+                PageSelector.Expr(PageSelectorExpr.create "2-R1"),
                 [
                     { Name = "change stroke color b255 to m100"
                       Selector = Path(Info.StrokeColorIs DeviceRgb.BLUE)
@@ -110,6 +110,25 @@ let manipulateTests =
             ) 
         )
         |> runTest "datas/manipulate/change stroke color b255 to m100.pdf" 
+        |> ignore
+
+    testCase "change stroke color b255 to m100_2" <| fun _ -> 
+        Flow.Reuse(
+            Reuses.DuplicatePages(PageSelector.All, CopiedNumSequence.Create [5])
+        )
+        <+>
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.Expr(PageSelectorExpr.create "2"),
+                [
+                    { Name = "change stroke color b255 to m100"
+                      Selector = Path(Info.StrokeColorIs DeviceRgb.BLUE)
+                      Modifiers = [Modifier.SetStrokeColor(DeviceCmyk.MAGENTA)]
+                    }
+                ]
+            ) 
+        )
+        |> runTest "datas/manipulate/change stroke color b255 to m100_2.pdf" 
         |> ignore
 
     testCase "change red to black outside of trimbox" <| fun _ -> 

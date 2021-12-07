@@ -1,4 +1,5 @@
 ﻿namespace Shrimp.Pdf
+#nowarn "0104"
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
@@ -6,7 +7,7 @@ open Shrimp.FSharp.Plus
 open iText.Kernel.Pdf
 open iText.Kernel.Geom
 open System.IO
-open Imposing
+
 
 [<AutoOpen>]
 module Manipulates =
@@ -14,10 +15,11 @@ module Manipulates =
         static member Manipulate(pdfFile, ?backupPdfPath) = 
             fun manipulate ->
                 PdfRunner.OneFileFlow(pdfFile, ?backupPdfPath = backupPdfPath) (Flow.Manipulate manipulate)
-            
+    
+    open Imposing
 
     type ModifyPage with
-        static member AddVSpaceMiddleLines(fLine: PageNumber * RowNumber -> SpaceMiddleLine option) =
+        static member private AddVSpaceMiddleLines(fLine: PageNumber * RowNumber -> SpaceMiddleLine option) =
             ModifyPage.Create(
                 "AddVSpaceMiddleLines",
                 PageSelector.All,
@@ -46,7 +48,7 @@ module Manipulates =
 
                         match rowNumber_row_middleLine__zippedList with 
                         | [] -> ()
-                        | _ ->
+                        | _ ->  
                             let pageBox = args.Page.GetActualBox()
                             let pdfCanvas = iText.Kernel.Pdf.Canvas.PdfCanvas(args.Page)
                             let vspaces = 
@@ -99,7 +101,7 @@ module Manipulates =
                 ]
             )  ||>> (List.head)
 
-        static member AddHSpaceMiddleLines(fLine: PageNumber * ColumnNumber -> SpaceMiddleLine option) =
+        static member private AddHSpaceMiddleLines(fLine: PageNumber * ColumnNumber -> SpaceMiddleLine option) =
             ModifyPage.Create(
                 "AddHSpaceMiddleLines",
                 PageSelector.All,
@@ -180,6 +182,19 @@ module Manipulates =
                 ]
             )  ||>> (List.head)
 
+        static member AddSpaceMiddleLines(rowOrColumn, fLine: PageNumber * RowOrColumnNumber -> SpaceMiddleLine option) =
+            match rowOrColumn with 
+            | RowOrColumn.Column ->
+                ModifyPage.AddHSpaceMiddleLines(
+                    fun (pageNumber, columnNumber) ->
+                        fLine (pageNumber, RowOrColumnNumber.ColumnNumber columnNumber)
+                )
+
+            | RowOrColumn.Row ->
+                ModifyPage.AddVSpaceMiddleLines(
+                    fun (pageNumber, rowNumber) ->
+                        fLine (pageNumber, RowOrColumnNumber.RowNumber rowNumber)
+                )
 
         static member TrimToVisible (pageSelector: PageSelector, ?margin: Margin)  =
             let margin = defaultArg margin (Margin.Create 0.)
@@ -201,3 +216,5 @@ module Manipulates =
                     "margin" => margin.ToString()
                 ]
             )  ||>> ignore
+
+

@@ -121,14 +121,14 @@ let reuseTests =
                 ) 
         )
         <+> Flow.Manipulate(
-            ModifyPage.AddVSpaceMiddleLines(fun (pageNumber, rowNumber) ->
+            ModifyPage.AddSpaceMiddleLines(RowOrColumn.Row,fun (pageNumber, rowNumber) ->
                 match pageNumber.Value, rowNumber.Value with 
                 | 1, 1  
                 | 1, 2 -> Some (SpaceMiddleLine.DashLine()) 
                 | _ -> None
             )
             <+>
-            ModifyPage.AddHSpaceMiddleLines(fun (pageNumber, rowNumber) ->
+            ModifyPage.AddSpaceMiddleLines(RowOrColumn.Column, fun (pageNumber, rowNumber) ->
                 match pageNumber.Value, rowNumber.Value with 
                 | 1, 1  
                 | 1, 2 -> Some (SpaceMiddleLine.DashLine()) 
@@ -238,7 +238,7 @@ let reuseTests =
         |> runTest "datas/reuse/Imposing when cell roation is setted.pdf" 
         |> ignore
 
-    ftestCase "Imposing when backgroudFile is setted" <| fun _ -> 
+    testCase "Imposing when backgroudFile is setted" <| fun _ -> 
         Flow.Reuse (
             Reuses.Impose(fun args ->
                 { args with 
@@ -255,7 +255,7 @@ let reuseTests =
         |> runTest "datas/reuse/Imposing when backgroudFile is setted.pdf" 
         |> ignore
 
-    ftestCase "Imposing when backgroudFile is setted2" <| fun _ -> 
+    testCase "Imposing when backgroudFile is setted2" <| fun _ -> 
         Flow.Reuse (
             Reuses.Impose(fun args ->
                 { args with 

@@ -14,29 +14,31 @@ open Shrimp.FSharp.Plus
 open Shrimp.FSharp.Plus.Math
 open Newtonsoft.Json
 
-type BackgroundFile = private BackgroundFile of PdfFile * Rotation
+
+
+
+type BackgroundFile = private BackgroundFile of PdfFile * currrentRotation: Rotation
 with
     member x.Value =
         let (BackgroundFile (value, _)) = x
         value
 
-    member internal x.Rotation = 
+    member internal x.CurrentRotation = 
         let (BackgroundFile (_, value)) = x
         value
         
-    member x.Clockwise() =
-        let newRotation = 
-            let angle = (Rotation.getAngle x.Rotation)
-            Rotation.ofAngle(angle + 90.)
-
+    member x.Rotate(rotation) =
+        let angle_plus = Rotation.getAngle rotation
+        let newRotation =
+            let angle = (Rotation.getAngle x.CurrentRotation)
+            Rotation.ofAngle(angle + angle_plus)
+            
         BackgroundFile(x.Value, newRotation)
 
-    member x.CounterClockwise() =
-        let newRotation = 
-            let angle = (Rotation.getAngle x.Rotation)
-            Rotation.ofAngle(angle - 90.)
 
-        BackgroundFile(x.Value, newRotation)
+    member x.Clockwise() = x.Rotate(Rotation.Clockwise)
+
+    member x.CounterClockwise() = x.Rotate(Rotation.Counterclockwise)
 
     static member Create(path: string) =
         (PdfFile path, Rotation.None)
@@ -58,7 +60,7 @@ module BackgroundFile =
                 |> List.map (fun page ->
                     let pageBox = (page.GetActualBox())
                     reader.Close()
-                    pageBox.RotateByCenter(backGroundFile.Rotation)
+                    pageBox.RotateByCenter(backGroundFile.CurrentRotation)
                 )
             )
 
@@ -78,29 +80,51 @@ module BackgroundFile =
 
 
 
+type RowNumber(v) =
+    inherit POCOBaseV<int>(v)
 
+    let __checkPageNumberValid =
+        match v > 0 with 
+        | true -> ()
+        | false -> failwithf "Cannot create rowNumber by %d" v
+
+    member x.Value = v
+
+type ColumnNumber(v) =
+    inherit POCOBaseV<int>(v)
+
+    let __checkPageNumberValid =
+        match v > 0 with 
+        | true -> ()
+        | false -> failwithf "Cannot create columnNumber by %d" v
+
+    member x.Value = v
+
+type RowOrColumn =
+    | Row = 0
+    | Column = 1
+
+[<AutoOpen>]
+module _RowOrColumnEx =
+    type RowOrColumn with
+        member x.Negative =
+            match x with 
+            | RowOrColumn.Row -> RowOrColumn.Column
+            | RowOrColumn.Column -> RowOrColumn.Row
+
+[<RequireQualifiedAccess>]
+type RowOrColumnNumber =
+    | RowNumber of RowNumber
+    | ColumnNumber of ColumnNumber
+with 
+    member x.Value =
+        match x with 
+        | RowOrColumnNumber.RowNumber v -> v.Value
+        | RowOrColumnNumber.ColumnNumber v -> v.Value
 
 module Imposing =
 
-    type RowNumber(v) =
-        inherit POCOBaseV<int>(v)
 
-        let __checkPageNumberValid =
-            match v > 0 with 
-            | true -> ()
-            | false -> failwithf "Cannot create rowNumber by %d" v
-
-        member x.Value = v
-
-    type ColumnNumber(v) =
-        inherit POCOBaseV<int>(v)
-
-        let __checkPageNumberValid =
-            match v > 0 with 
-            | true -> ()
-            | false -> failwithf "Cannot create columnNumber by %d" v
-
-        member x.Value = v
 
     type Cropmark = 
         { Length: float
@@ -361,6 +385,15 @@ module Imposing =
                             match args.VSpaces with 
                             | [] -> Spaces.Zero
                             | _ -> args.VSpaceExes
+
+                        DesiredPageOrientation =
+                            match args.Background with 
+                            | Background.Size _ -> args.DesiredPageOrientation
+                            | Background.File backgroundFile ->
+                                match BackgroundFile.getSize backgroundFile with 
+                                | FsSize.Landscape _ -> DesiredPageOrientation.Landscape
+                                | FsSize.Portrait _ -> DesiredPageOrientation.Portrait
+                                | FsSize.Uniform -> DesiredPageOrientation.Landscape
                 }
 
 
@@ -1012,7 +1045,7 @@ module Imposing =
                 let xobject = reader.GetPage(1).CopyAsFormXObject(this.SplitDocument.Writer)
                 let bkRect = BackgroundFile.getPagebox backgroudFile
                 let affineTransform = 
-                    let angle = Rotation.getAngle backgroudFile.Rotation
+                    let angle = Rotation.getAngle backgroudFile.CurrentRotation
                     let x, y = pageBox.GetXF() - bkRect.GetXF() , pageBox.GetYF() - bkRect.GetYF()
 
                     let affineTransform_Rotate = AffineTransform.GetRotateInstance(Math.PI / -180. * angle, bkRect.GetXCenterF(), bkRect.GetYCenterF())

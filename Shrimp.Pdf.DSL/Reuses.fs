@@ -544,12 +544,12 @@ module _Reuses =
                                             xObjectCache.Add(token.PageNumValue, xobject)
                                             xobject
 
-                                    let pageBox = page.GetActualBox()
+                                    let acutalBox = page.GetActualBox()
 
                                     let affineTransform =
                                         let angle = Rotation.getAngle rotation
-                                        let x = pageBox.GetXF()
-                                        let y = pageBox.GetYF()
+                                        let x = acutalBox.GetXF()
+                                        let y = acutalBox.GetYF()
                                         let affineTransfrom_Rotate = AffineTransform.GetRotateInstance(Math.PI / -180. * angle, x, y)
 
                                         let affineTransform_Translate = 
@@ -568,7 +568,7 @@ module _Reuses =
 
                                     let newPage = 
                                         let newPageSize =
-                                            affineTransform.Transform(pageBox)
+                                            affineTransform.Transform(acutalBox)
 
                                         splitDocument.Writer.AddNewPage(PageSize(newPageSize))
 
@@ -601,11 +601,11 @@ module _Reuses =
                                         xObjectCache.Add(token.PageNumValue, xobject)
                                         xobject
 
-                                let pageBox = page.GetActualBox()
+                                let actualBox = page.GetActualBox()
 
                                 let affineTransform =
-                                    let x = pageBox.GetXF()
-                                    let y = pageBox.GetYF()
+                                    let x = actualBox.GetXF()
+                                    let y = actualBox.GetYF()
                                     let affineTransfrom_Rotate = 
                                         match flip with 
                                         | Flip.HFlip -> 
@@ -641,7 +641,7 @@ module _Reuses =
 
                                 let newPage = 
                                     let newPageSize =
-                                        affineTransform.Transform(pageBox)
+                                        affineTransform.Transform(actualBox)
 
                                     splitDocument.Writer.AddNewPage(PageSize(newPageSize))
 
@@ -1175,14 +1175,16 @@ module _Reuses =
 
 
     
-        static member private Impose_Raw (fArgs) =
+        static member private Impose_Raw (fArgs, ?draw) =
+            let draw = defaultArg draw true
             let imposingArguments = ImposingArguments.Create fArgs
 
             fun flowModel (splitDocument: SplitDocument) ->
                 let imposingDocument = new ImposingDocument(splitDocument, imposingArguments)
                 imposingDocument.Build()
-
-                imposingDocument.Draw()
+                match draw with 
+                | true -> imposingDocument.Draw()
+                | false -> splitDocument.Writer.AddNewPage() |> ignore
                 (imposingDocument)
 
             |> reuse 
@@ -1193,12 +1195,15 @@ module _Reuses =
         static member PreImpose_Repeated_One(baseFArgs: _ImposingArguments) =
             let preImposeFlow =
                 Reuses.Impose_Raw
-                    (fun _ ->
+                    ((fun _ ->
                         let args = (baseFArgs)
 
                         { args with
-                              IsRepeated = true })
+                              IsRepeated = true }
+                    ),
+                    draw = false )
                 |> Flow.Reuse
+
 
             runWithBackup
                 (Path.GetTempFileName()

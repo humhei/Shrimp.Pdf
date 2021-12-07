@@ -150,7 +150,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
             let name = operatorRange.Operands.[0] :?> PdfName
 
             let container = resources.GetResource(PdfName.XObject)
-            let xobjectStream = container.Get(name) :?> PdfStream
+            let xobjectStream = (container.Get(name) :?> PdfStream).Clone() :?> PdfStream
             let subType = xobjectStream.GetAsName(PdfName.Subtype)
             match subType with 
             | Form ->
@@ -159,6 +159,8 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                     match subResources with 
                     | null -> resources
                     | _ -> PdfResources subResources
+
+
 
                 let fixedStream: PdfStream = this.EditContent(xobjectResources, xobjectStream)
                 container.Put(name, fixedStream) |> ignore
@@ -211,7 +213,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
         match pdfObject with 
         | :? PdfStream as stream -> 
             let pdfCanvas = new ModifierPdfCanvas(new PdfStream(), resources, document)
-
+            
             let bytes = stream.GetBytes()
             pdfCanvasStack.Push(pdfCanvas)
             resourcesStack.Push(resources)
@@ -220,9 +222,9 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
             let pdfCanvas = pdfCanvasStack.Pop()
             resourcesStack.Pop()|> ignore
-            let clonedStream = stream.Clone() :?> PdfStream
-            clonedStream.SetData(pdfCanvas.GetContentStream().GetBytes()) |> ignore
-            clonedStream
+            //let clonedStream = stream.Clone() :?> PdfStream
+            stream.SetData(pdfCanvas.GetContentStream().GetBytes()) |> ignore
+            stream
 
         | :? PdfArray as array ->
             if array |> Seq.forall (fun o -> o :? PdfStream) && Seq.length array > 1 then 
@@ -250,13 +252,19 @@ module PdfPage =
         match pageContents with 
         | null -> Seq.empty
         | _ ->
-            let resources = page.GetResources()
-            let fixedStream = editor.EditContent(resources, pageContents)
+            match pageContents with 
+            | :? PdfStream as xobjectStream ->
+                let xobjectStream = xobjectStream.Clone() :?> PdfStream
+                let resources = page.GetResources()
 
-            page.Put(PdfName.Contents, fixedStream)
-            |> ignore
+                let fixedStream = editor.EditContent(resources, xobjectStream)
 
-            editor.ParsedRenderInfos
+                page.Put(PdfName.Contents, fixedStream)
+                |> ignore
+
+                editor.ParsedRenderInfos
+
+            | _ -> failwithf "Not implemented when pageContents is %A" (pageContents.GetType())
 
 
 
