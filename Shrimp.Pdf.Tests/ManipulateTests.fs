@@ -97,7 +97,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/change separation color of pdfFunction0 Registration to m100.pdf" 
         |> ignore
 
-    ftestCase "change stroke color b255 to m100" <| fun _ -> 
+    testCase "change stroke color b255 to m100" <| fun _ -> 
         Flow.Manipulate (
             Modify.Create(
                 PageSelector.Expr(PageSelectorExpr.create "2-R1"),
@@ -112,7 +112,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/change stroke color b255 to m100.pdf" 
         |> ignore
 
-    testCase "change stroke color b255 to m100_2" <| fun _ -> 
+    ftestCase "change stroke color b255 to m100_2" <| fun _ -> 
         Flow.Reuse(
             Reuses.DuplicatePages(PageSelector.All, CopiedNumSequence.Create [5])
         )

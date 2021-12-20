@@ -150,7 +150,9 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
             let name = operatorRange.Operands.[0] :?> PdfName
 
             let container = resources.GetResource(PdfName.XObject)
-            let xobjectStream = (container.Get(name) :?> PdfStream).Clone() :?> PdfStream
+            let xobjectStream = 
+                let pdfStream = (container.Get(name) :?> PdfStream)
+                pdfStream.Clone() :?> PdfStream
             let subType = xobjectStream.GetAsName(PdfName.Subtype)
             match subType with 
             | Form ->
@@ -247,24 +249,21 @@ module PdfPage =
     let modify (selectorModifierMapping) (page: PdfPage) =
         let document = page.GetDocument()
         let editor = new PdfCanvasEditor(selectorModifierMapping, document)
-        let pageContents = page.GetPdfObject().Get(PdfName.Contents)
+        let pageContents = page.GetPdfObject().Get(PdfName.Contents).Clone()
 
         match pageContents with 
         | null -> Seq.empty
         | _ ->
-            match pageContents with 
-            | :? PdfStream as xobjectStream ->
-                let xobjectStream = xobjectStream.Clone() :?> PdfStream
-                let resources = page.GetResources()
+            let resources = page.GetResources()
 
-                let fixedStream = editor.EditContent(resources, xobjectStream)
+            let fixedStream = editor.EditContent(resources, pageContents)
 
-                page.Put(PdfName.Contents, fixedStream)
-                |> ignore
+            page.Put(PdfName.Contents, fixedStream)
+            |> ignore
 
-                editor.ParsedRenderInfos
+            editor.ParsedRenderInfos
 
-            | _ -> failwithf "Not implemented when pageContents is %A" (pageContents.GetType())
+         
 
 
 

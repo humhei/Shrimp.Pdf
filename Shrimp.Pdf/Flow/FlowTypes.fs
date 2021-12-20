@@ -47,7 +47,7 @@ with
 
 
 [<Sealed>]
-type FlowName internal (flowNameKind: FlowNameKind, ?parentFlowName) =
+type FlowName private (flowNameKind: FlowNameKind, ?parentFlowName) =
 
     let parentFlowName: FlowName option = parentFlowName
 
@@ -90,8 +90,8 @@ type FlowName internal (flowNameKind: FlowNameKind, ?parentFlowName) =
      
     static member Override (name: string, ?paramters) = 
         let paramters = defaultArg paramters []
-        if name.IndexOfAny(Path.GetInvalidPathChars()) > 0 then failwithf "Invalid flowName path %s" name
-        if name.Length > 100 then failwithf "flowName %s 's length is bigger 100" name
+        if name.IndexOfAny(Path.GetInvalidFileNameChars()) > 0 then failwithf "Invalid flowName path %s" name
+        if name.Length > 100 then failwithf "flowName %s 's length is bigger than 100" name
         (name, paramters)
         |> FlowNameKind.Override
         |> FlowName
@@ -101,7 +101,7 @@ type FlowName internal (flowNameKind: FlowNameKind, ?parentFlowName) =
 
     static member New (name: string, ?paramters) = 
         let paramters = defaultArg paramters []
-        if name.IndexOfAny(Path.GetInvalidPathChars()) > 0 then failwithf "Invalid path %s" name
+        if name.IndexOfAny(Path.GetInvalidFileNameChars()) > 0 then failwithf "Invalid flowName %s" name
         if name.Length > 100 then failwithf "flowName %s 's length is bigger 100" name
         (name, paramters)
         |> FlowNameKind.New

@@ -437,6 +437,14 @@ module ExtensionTypes =
           End: Point }
 
 
+    type YEffect =
+        | Top = 0
+        | Bottom  = 1
+
+    type XEffect =
+        | Left = 0
+        | Right = 1
+
     [<RequireQualifiedAccess>]
     type Position =
         | LeftBottom of float * float

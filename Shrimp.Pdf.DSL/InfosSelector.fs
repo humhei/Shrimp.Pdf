@@ -66,19 +66,17 @@ module InfosSelector =
 [<AutoOpen>]
 module _InfosSelector =
 
-    
+    type TextInfoRecordsPicker<'userState, 'result> = PageModifingArguments<'userState> -> seq<IntegratedTextRenderInfo> -> 'result 
+    type TextInfoRecordsPicker<'userState> = TextInfoRecordsPicker<'userState, string list>
 
-    type TextInfosPicker<'userState> = PageModifingArguments<'userState> -> seq<IntegratedTextRenderInfo> -> string list
-
-    let private pickerToExists predicate (textInfosPicker: _ -> TextInfosPicker<_>) =
-        let picker text =
+    let private pickerToExists predicate (textInfosPicker: (_ -> _ option) -> TextInfoRecordsPicker<_>) =
+        let picker (text: _) =
             match predicate text with 
-            | true -> Some text
+            | true -> Some ""
             | false -> None
 
         fun args infos ->
-            let result =
-                textInfosPicker picker args infos
+            let result = textInfosPicker picker args infos
 
             match result with 
             | _ :: _ -> true
@@ -87,7 +85,38 @@ module _InfosSelector =
 
     type TextInfos = 
 
-        static member PickText(picker: string -> string option): TextInfosPicker<_> = 
+        static member PickText(picker: TextInfoRecord -> _ option): TextInfoRecordsPicker<_, _> = 
+            fun (args: PageModifingArguments<_>) infos ->
+                let infos =
+                    infos
+                    |> Seq.map (fun (m: IntegratedTextRenderInfo) -> m :> IIntegratedRenderInfo)
+
+                PageModifier.PickTexts(picker) args infos
+
+        static member PickExactlyOneText(picker: TextInfoRecord -> _ option): TextInfoRecordsPicker<_, _> = 
+            fun (args: PageModifingArguments<_>) textInfos ->
+
+                let infos =
+                    textInfos
+                    |> Seq.map (fun (m: IntegratedTextRenderInfo) -> m :> IIntegratedRenderInfo)
+
+                let r = PageModifier.PickTexts(picker) args infos
+                match r with 
+                | [r] -> r
+                | [] -> 
+                    let records =
+                        textInfos
+                        |> Seq.map (fun m -> m.RecordValue)
+
+                    failwithf "Cannnot found any text in %A by picker %A" records picker
+                | rs -> 
+                    let records =
+                        textInfos
+                        |> Seq.map (fun m -> m.RecordValue)
+                    failwithf "Found multiple texts %A in %A by picker %A" rs records picker
+
+
+        static member PickText(picker: string -> string option): TextInfoRecordsPicker<_> = 
             fun (args: PageModifingArguments<_>) infos ->
                 let infos =
                     infos
@@ -96,7 +125,7 @@ module _InfosSelector =
                 PageModifier.PickTexts(picker) args infos
 
                 
-        static member PickText_In_OneLine(picker: string -> string option, ?delimiter: string, ?selectionGrouper: SelectionGrouper): TextInfosPicker<_> = 
+        static member PickText_In_OneLine(picker: string -> string option, ?delimiter: string, ?selectionGrouper: SelectionGrouper): TextInfoRecordsPicker<_> = 
             fun (args: PageModifingArguments<_>) infos ->
                 let infos =
                     infos
@@ -112,6 +141,11 @@ module _InfosSelector =
 
 
         static member ExistsText(predicate: string -> bool) =
-            fun picker ->
+            fun (picker: string -> string option) ->
+                TextInfos.PickText(picker) 
+            |> pickerToExists predicate
+
+        static member ExistsText(predicate: TextInfoRecord -> bool) =
+            fun (picker: TextInfoRecord -> string option) ->
                 TextInfos.PickText(picker) 
             |> pickerToExists predicate

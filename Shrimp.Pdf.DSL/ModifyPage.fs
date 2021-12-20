@@ -20,6 +20,7 @@ type PageModifier<'userState, 'newUserState> = PageModifingArguments<'userState>
 
 
 
+
 type PageModifier =
 
     static member private AddNew (canvasAreaOptions, canvasActionsBuilder) : PageModifier<_, _> =
@@ -77,7 +78,15 @@ type PageModifier =
             |> Colors.distinct
             |> List.ofSeq
 
-
+    static member PickTexts(picker: TextInfoRecord -> _ option) : PageModifier<_, _> =
+        fun (args: PageModifingArguments<_>) infos ->
+            infos
+            |> List.ofSeq
+            |> List.choose IIntegratedRenderInfo.asITextRenderInfo
+            |> List.choose (fun renderInfo ->
+                renderInfo.RecordValue
+                |> picker 
+            )
 
     static member PickTexts(picker: string -> _ option) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
@@ -88,6 +97,7 @@ type PageModifier =
                 let text = ITextRenderInfo.getText renderInfo
                 picker text
             )
+
 
     static member PickTexts(picker: Parser<_, _>) : PageModifier<_, _> =
         PageModifier.PickTexts(fun text ->

@@ -112,6 +112,30 @@ module iText =
         member this.GetYCenter() = (this.GetTop() + this.GetBottom()) / 2.f
         member this.GetYCenterF() = this.GetYCenter() |> float
 
+        member this.setHeight(effect: YEffect, fHeight: float -> float) =
+            let height = this.GetHeightF()
+            let newHeight = fHeight height
+
+            let y =
+                match effect with 
+                | YEffect.Top -> this.GetTopF() - newHeight
+                | YEffect.Bottom -> this.GetYF()
+
+
+            Rectangle(this.GetX(), float32 y, this.GetWidth(), float32 newHeight)
+                    
+        member this.setWidth(effect: XEffect, fWidth: float -> float) =
+            let width = this.GetWidthF()
+            let newWidth = fWidth width
+
+            let x =
+                match effect with 
+                | XEffect.Left -> this.GetXF()
+                | XEffect.Right -> this.GetRightF() - newWidth
+
+            Rectangle(float32 x, this.GetY(), float32 newWidth, this.GetHeight())
+                    
+
         member this.RotateByCenter(rotation: Rotation) =
             match rotation with 
             | Rotation.R180
@@ -704,9 +728,11 @@ module iText =
                 else boundWithoutWidth
             | _ -> failwith "Invalid token"
         
+        let getFontName (info: ITextRenderInfo) =
+            info.Value.GetFont().GetFontProgram().GetFontNames().GetFontName()
+
         let fontNameIs fontName (info: ITextRenderInfo) =
-            StringIC(info.Value.GetFont().GetFontProgram().GetFontNames().GetFontName()) = 
-                StringIC(fontName)
+            StringIC(getFontName info) = StringIC(fontName)
             
 
 
