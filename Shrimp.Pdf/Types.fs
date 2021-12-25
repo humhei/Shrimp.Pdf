@@ -194,7 +194,7 @@ type SplitDocument internal (reader: string, writer: string) =
 
     let mutable writerDocument: PdfDocumentWithCachedResources option = None
 
-    let mutable isOpend = false
+    let mutable isOpened = false
 
     member x.ReaderPath = reader
 
@@ -211,7 +211,7 @@ type SplitDocument internal (reader: string, writer: string) =
         | None -> failwith "document is not open yet please open it first"
 
     member internal x.Open() =
-        if not isOpend 
+        if not isOpened 
         then
             match readerDocument with 
             | Some readerDocument1 ->
@@ -233,7 +233,19 @@ type SplitDocument internal (reader: string, writer: string) =
             | None ->
                 writerDocument <- Some(new PdfDocumentWithCachedResources(writer))
 
-        isOpend <- true
+        isOpened <- true
+
+    member internal x.TryCloseAndDisposeWriter_IfOpened() =
+        match isOpened with 
+        | true ->
+            x.Reader.Close()
+            match x.Writer.GetNumberOfPages() with 
+            | 0 -> x.Writer.AddNewPage() |> ignore
+            | _ -> ()
+            x.Writer.Close()
+            File.Delete writer
+            isOpened <- false
+        | false -> ()
 
     member internal x.CloseAndDraft() =
         x.Reader.Close()
@@ -241,7 +253,7 @@ type SplitDocument internal (reader: string, writer: string) =
 
         File.Delete(reader)
         File.Move(writer, reader)
-        isOpend <- false
+        isOpened <- false
 
     static member Create(reader, writer) = new SplitDocument(reader, writer)
 

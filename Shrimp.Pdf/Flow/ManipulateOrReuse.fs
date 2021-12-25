@@ -18,6 +18,11 @@ module internal rec ManipulateOrReuse =
             | SplitOrIntegratedDocument.SplitDocument document -> document.CloseAndDraft()
             | SplitOrIntegratedDocument.IntegratedDocument document -> document.CloseAndDraft()
     
+        member x.TryCloseAndDisposeWriter_IfOpened() =
+            match x with 
+            | SplitOrIntegratedDocument.SplitDocument document -> document.TryCloseAndDisposeWriter_IfOpened()
+            | SplitOrIntegratedDocument.IntegratedDocument document -> document.TryCloseIfOpened()
+    
 
     type FlowModel<'userState> =
         { File: string
@@ -171,6 +176,7 @@ module internal rec ManipulateOrReuse =
                     | false -> 
                         try 
                             let newUserState = (manipulateOrReuse.Transform flowModel)
+                            flowModel.Document.TryCloseAndDisposeWriter_IfOpened()
                             FlowModel.mapTo newUserState flowModel
                         with ex ->
                             let ex = new System.Exception(sprintf "OperateDocument: false\nError when invoke flow %A to pdfFile %s" (flowModel.FlowName, flow) flowModel.File, ex)
@@ -328,11 +334,11 @@ module internal rec ManipulateOrReuse =
                     fun flowModel -> 
                         match flowModel.Document with 
                         | SplitOrIntegratedDocument.SplitDocument splitDocument ->
-                            flowModel.UserState
+                            //flowModel.UserState
                             //splitDocument.Reader.CopyPagesTo(1, splitDocument.Reader.GetNumberOfPages(), splitDocument.Writer)
                             //|> ignore
 
-                            //flowModel.UserState 
+                            flowModel.UserState 
 
                         | SplitOrIntegratedDocument.IntegratedDocument _ ->
                             flowModel.UserState

@@ -74,8 +74,21 @@ module _Colors =
         static member GRAY = { R = 0.5f; G = 0.5f; B = 0.5f }
 
         member x.LoggingText = 
-            let range255 = x.Range255
-            sprintf "RGB %.1f %.1f %.1f" (range255.R) range255.G range255.B
+            let colorName = 
+                match x with 
+                | EqualTo FsDeviceRgb.RED -> "RED"
+                | EqualTo FsDeviceRgb.GREEN -> "GREEN"
+                | EqualTo FsDeviceRgb.BLUE -> "BLUE"
+                | EqualTo FsDeviceRgb.MAGENTA -> "MAGENTA"
+                | EqualTo FsDeviceRgb.YELLOW -> "YELLOW"
+                | EqualTo FsDeviceRgb.BLACK -> "BLACK"
+                | EqualTo FsDeviceRgb.WHITE -> "WHITE"
+                | EqualTo FsDeviceRgb.GRAY -> "GRAY"
+                | _ ->
+                    let range255 = x.Range255
+                    sprintf "%.1f %.1f %.1f" (range255.R) range255.G range255.B
+
+            "RGB " + colorName
 
         static member Create(r, g, b) =
             let ensureValueValid v =
@@ -142,8 +155,12 @@ module _Colors =
           Y: float32 
           K: float32 }
     with 
-        member x.LoggingText = 
-            sprintf "CMYK %.1f %.1f %.1f %.1f" (x.C) x.M x.Y x.K
+        member x.Range100 =
+            { C = x.C * 100.f; M = x.M * 100.f; Y = x.Y * 100.f; K = x.K *100.f}
+
+
+
+            
 
         static member CYAN = { C = 1.0f; M = 0.0f; Y = 0.0f; K = 0.0f }
         static member MAGENTA = { C = 0.0f; M = 1.0f; Y = 0.0f; K = 0.0f }
@@ -153,6 +170,22 @@ module _Colors =
         static member GRAY = { C = 0.0f; M = 0.0f; Y = 0.0f; K = 0.5f }
         static member RED =  { C = 0.0f; M = 1.0f; Y = 1.0f; K = 0.0f }
         static member GREEN =  { C = 1.0f; M = 0.0f; Y = 1.0f; K = 0.0f }
+
+        member x.LoggingText = 
+            let colorName = 
+                match x with 
+                | EqualTo FsDeviceCmyk.CYAN -> "CYAN"
+                | EqualTo FsDeviceCmyk.RED -> "RED"
+                | EqualTo FsDeviceCmyk.GREEN -> "GREEN"
+                | EqualTo FsDeviceCmyk.MAGENTA -> "MAGENTA"
+                | EqualTo FsDeviceCmyk.YELLOW -> "YELLOW"
+                | EqualTo FsDeviceCmyk.BLACK -> "BLACK"
+                | EqualTo FsDeviceCmyk.WHITE -> "WHITE"
+                | EqualTo FsDeviceCmyk.GRAY -> "GRAY"
+                | _ ->
+                    sprintf "%.1f %.1f %.1f %.1f" (x.C) x.M x.Y x.K
+
+            "CMYK " + colorName
 
     type FsGray = FsGray of float32
     with 

@@ -162,6 +162,13 @@ type IntegratedDocument internal (reader: string, writer: string) =
 
         isOpened <- false
 
+    member internal x.TryCloseIfOpened() =
+        match isOpened with 
+        | true ->
+            x.Value.Close()
+            isOpened <- false
+        | false -> ()
+
     static member Create(reader, writer) = new IntegratedDocument(reader, writer)
 
 
