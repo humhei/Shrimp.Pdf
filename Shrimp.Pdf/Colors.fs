@@ -235,11 +235,14 @@ module _Colors =
         static member GRAY = FsGray.GRAY |> FsValueColor.Gray
 
 
+        static member RGB_BLACK = FsDeviceRgb.BLACK |> FsValueColor.Rgb
+        static member RGB_WHITE = FsDeviceRgb.WHITE |> FsValueColor.Rgb
         static member RGB_RED = FsDeviceRgb.RED |> FsValueColor.Rgb
         static member RGB_BLUE = FsDeviceRgb.BLUE |> FsValueColor.Rgb
         static member RGB_MAGENTA = FsDeviceRgb.MAGENTA |> FsValueColor.Rgb
 
 
+        static member CMYK_WHITE = FsDeviceCmyk.WHITE |>     FsValueColor.Cmyk
         static member CMYK_CYAN = FsDeviceCmyk.CYAN |>     FsValueColor.Cmyk
         static member CMYK_BLACK = FsDeviceCmyk.BLACK |>   FsValueColor.Cmyk
         static member CMYK_MAGENTA = FsDeviceCmyk.MAGENTA |> FsValueColor.Cmyk
@@ -754,10 +757,13 @@ module _Colors =
             | FsColor.ValueColor x, FsColor.ValueColor y -> x.IsEqualTo(y, valueEqualOptions)
             | _, _ -> false
 
+        static member RGB_BLACK = FsValueColor.RGB_BLACK  |> FsColor.ValueColor
+        static member RGB_WHITE = FsValueColor.RGB_WHITE  |> FsColor.ValueColor
         static member RGB_RED = FsValueColor.RGB_RED  |> FsColor.ValueColor
         static member RGB_BLUE = FsValueColor.RGB_BLUE  |> FsColor.ValueColor
         static member RGB_MAGENTA = FsValueColor.RGB_MAGENTA  |> FsColor.ValueColor
 
+        static member CMYK_WHITE = FsValueColor.CMYK_WHITE  |> FsColor.ValueColor
         static member CMYK_BLACK = FsValueColor.CMYK_BLACK  |> FsColor.ValueColor
         static member CMYK_CYAN = FsValueColor.CMYK_CYAN  |> FsColor.ValueColor
         static member CMYK_MAGENTA = FsValueColor.CMYK_MAGENTA  |> FsColor.ValueColor
@@ -776,27 +782,48 @@ module _Colors =
             FsValueColor.CreateRGB(r, g, b)
             |> FsColor.ValueColor
 
-        static member OfItextColor(color: Color) =
-            match color with 
-            | :? Separation as separation -> 
-                FsSeparation.OfSeparation separation
-                |> FsColor.Separation
-            | :? IccBased as iccBased -> 
-                FsIccBased.OfICCBased iccBased
-                |> FsColor.IccBased
+        static member valueColor(valueColor: FsValueColor) =
+            FsColor.ValueColor valueColor
 
-            | _ -> 
-                FsValueColor.OfItextColor color
-                |> FsColor.ValueColor
+        static member valueColor(valueColor: FsDeviceRgb) =
+            FsColor.ValueColor (FsValueColor.Rgb valueColor)
+
+        static member valueColor(valueColor: FsDeviceCmyk) =
+            FsColor.ValueColor (FsValueColor.Cmyk valueColor)
+
+        static member valueColor(valueColor: FsGray) =
+            FsColor.ValueColor (FsValueColor.Gray valueColor)
+
+
+
 
 
     [<RequireQualifiedAccess>]
     module FsColor =
+        let private fsColorCache = new ConcurrentDictionary<CustomComparable<Color, int>, FsColor>()
+
+        let OfItextColor(color: Color) =
+            let color = CustomComparable(color, fun color -> color.GetHashCode())
+            fsColorCache.GetOrAdd(color, fun color ->
+                let color = color.Value
+                match color with 
+                | :? Separation as separation -> 
+                    FsSeparation.OfSeparation separation
+                    |> FsColor.Separation
+                | :? IccBased as iccBased -> 
+                    FsIccBased.OfICCBased iccBased
+                    |> FsColor.IccBased
+                | _ -> 
+                    FsValueColor.OfItextColor color
+                    |> FsColor.ValueColor
+            )
+
+
         let equal (c1: FsColor) (c2: FsColor) =
             c1.IsEqualTo(c2)
 
         let equalToItextB  (c2: FsColor) (c1: Color) =
-            equal (FsColor.OfItextColor c1) c2
+            equal (OfItextColor c1) c2
 
         let (|EqualTo|_|) color1 color2 =
             if equal color1 color2 then Some ()
@@ -972,6 +999,19 @@ module _Colors =
             | PdfCanvasColor.Lab labColor -> labColor.LoggingText
             | PdfCanvasColor.Registration -> "Registration"
 
+        static member valueColor(valueColor: FsValueColor) =
+            PdfCanvasColor.Value valueColor
+
+        static member valueColor(valueColor: FsDeviceRgb) =
+            PdfCanvasColor.Value (FsValueColor.Rgb valueColor)
+
+        static member valueColor(valueColor: FsDeviceCmyk) =
+            PdfCanvasColor.Value (FsValueColor.Cmyk valueColor)
+
+        static member valueColor(valueColor: FsGray) =
+            PdfCanvasColor.Value (FsValueColor.Gray valueColor)
+
+
         static member CreateRGB(r, g, b: int) =
             FsValueColor.CreateRGB(r, g, b)
             |> PdfCanvasColor.Value
@@ -1069,6 +1109,19 @@ module _Colors =
         static member BLACK = PdfCanvasColor.BLACK |> NullablePdfCanvasColor.OfPdfCanvasColor
         static member WHITE = PdfCanvasColor.WHITE |> NullablePdfCanvasColor.OfPdfCanvasColor
         static member GRAY =  PdfCanvasColor.GRAY  |> NullablePdfCanvasColor.OfPdfCanvasColor
+
+        static member valueColor(valueColor: FsValueColor) =
+            NullablePdfCanvasColor.Value valueColor
+
+        static member valueColor(valueColor: FsDeviceRgb) =
+            NullablePdfCanvasColor.Value (FsValueColor.Rgb valueColor)
+
+        static member valueColor(valueColor: FsDeviceCmyk) =
+            NullablePdfCanvasColor.Value (FsValueColor.Cmyk valueColor)
+
+        static member valueColor(valueColor: FsGray) =
+            NullablePdfCanvasColor.Value (FsValueColor.Gray valueColor)
+
 
         static member OfFsColor color =
             PdfCanvasColor.OfFsColor color
