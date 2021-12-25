@@ -401,7 +401,7 @@ let manipulateTests =
         |> ignore
 
 
-    ftestCase "add colored texts to position4" <| fun _ -> 
+    testCase "add colored texts to position4" <| fun _ -> 
         Flow.Manipulate (
             ModifyPage.Create
                 ("add colored texts to position4",

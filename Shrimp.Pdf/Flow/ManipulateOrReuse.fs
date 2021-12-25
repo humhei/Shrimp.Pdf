@@ -57,9 +57,17 @@ module internal rec ManipulateOrReuse =
                 f = f
             )
 
+    type  ManipulateOrReuse<'oldUserState, 'newUserState> =
+        { Transform: FlowModel<'oldUserState> -> 'newUserState
+          OperateDocument: bool }
+    with 
+        member x.MapTransform(mapping) =
+            { Transform = mapping x.Transform 
+              OperateDocument = x.OperateDocument }
+
     [<RequireQualifiedAccess>]
     type Flow<'oldUserState, 'newUserState> =
-        | ManipulateOrReuse of (FlowModel<'oldUserState> -> 'newUserState)
+        | ManipulateOrReuse of ManipulateOrReuse<'oldUserState, 'newUserState>
         | Func of ('oldUserState -> Flow<'oldUserState, 'newUserState>)
         | Factory of (FlowModel<'oldUserState> -> Flow<'oldUserState, 'newUserState>)
         | NamedFlow of FlowName * Flow<'oldUserState, 'newUserState>
@@ -69,11 +77,13 @@ module internal rec ManipulateOrReuse =
         static member internal Append(appendix: (SplitOrIntegratedDocument -> unit), flow) =
             let rec loop flow =
                 match flow with 
-                | Flow.ManipulateOrReuse transform -> 
-                    fun (flowModel: FlowModel<_>) ->
-                        let userState = transform flowModel
-                        appendix flowModel.Document
-                        userState
+                | Flow.ManipulateOrReuse manipulate -> 
+                    manipulate.MapTransform(fun transform ->
+                        fun (flowModel: FlowModel<_>) ->
+                            let userState = transform flowModel
+                            appendix flowModel.Document
+                            userState
+                    )
                     |> Flow.ManipulateOrReuse
 
                 | Flow.Func factory ->
@@ -157,18 +167,28 @@ module internal rec ManipulateOrReuse =
             let rec loop (flowModel: FlowModel<'userState>) flow =
                 match flow with 
                 | Flow.ManipulateOrReuse manipulateOrReuse -> 
-                    flowModel.Document.Open()
-                    try 
-                        let newUserState = (manipulateOrReuse flowModel)
-                        flowModel.Document.CloseAndDraft()
-                        FlowModel.mapTo newUserState flowModel
-
-                    with ex ->
+                    match manipulateOrReuse.OperateDocument with 
+                    | false -> 
                         try 
+                            let newUserState = (manipulateOrReuse.Transform flowModel)
+                            FlowModel.mapTo newUserState flowModel
+                        with ex ->
+                            let ex = new System.Exception(sprintf "OperateDocument: false\nError when invoke flow %A to pdfFile %s" (flowModel.FlowName, flow) flowModel.File, ex)
+                            raise ex
+
+                    | true ->
+                        flowModel.Document.Open()
+                        try 
+                            let newUserState = (manipulateOrReuse.Transform flowModel)
                             flowModel.Document.CloseAndDraft()
-                        with _ -> ()
-                        let ex = new System.Exception(sprintf "Error when invoke flow %A to pdfFile %s" (flowModel.FlowName, flow) flowModel.File, ex)
-                        raise ex
+                            FlowModel.mapTo newUserState flowModel
+
+                        with ex ->
+                            try 
+                                flowModel.Document.CloseAndDraft()
+                            with _ -> ()
+                            let ex = new System.Exception(sprintf "Error when invoke flow %A to pdfFile %s" (flowModel.FlowName, flow) flowModel.File, ex)
+                            raise ex
 
                 | Flow.TupledFlow flow -> flow.Invoke flowModel
                 
@@ -222,10 +242,12 @@ module internal rec ManipulateOrReuse =
         static member MapStateBack (mapping, flow: Flow<_, _>) =
             let rec loop flow = 
                 match flow with 
-                | Flow.ManipulateOrReuse transform -> 
-                    fun flowModel ->
-                        FlowModel.mapM mapping flowModel
-                        |> transform
+                | Flow.ManipulateOrReuse manipulateOrReuse -> 
+                    manipulateOrReuse.MapTransform(fun tranform ->
+                        fun flowModel ->
+                            FlowModel.mapM mapping flowModel
+                            |> tranform
+                    )
                     |> Flow.ManipulateOrReuse
 
                 | Flow.Func factory ->
@@ -261,11 +283,13 @@ module internal rec ManipulateOrReuse =
         static member MapState (flow, mapping) =
             let rec loop flow = 
                 match flow with 
-                | Flow.ManipulateOrReuse transform -> 
-                    fun flowModel ->
-                        flowModel
-                        |> transform
-                        |> mapping
+                | Flow.ManipulateOrReuse manipulateOrReuse -> 
+                    manipulateOrReuse.MapTransform(fun transform ->
+                        fun flowModel ->
+                            flowModel
+                            |> transform
+                            |> mapping
+                    )
                     |> Flow.ManipulateOrReuse
 
                 | Flow.Func factory ->
@@ -300,16 +324,22 @@ module internal rec ManipulateOrReuse =
 
         static member Dummy() =
             Flow.ManipulateOrReuse(
-               fun flowModel -> 
-                   match flowModel.Document with 
-                   | SplitOrIntegratedDocument.SplitDocument splitDocument ->
-                       splitDocument.Reader.CopyPagesTo(1, splitDocument.Reader.GetNumberOfPages(), splitDocument.Writer)
-                       |> ignore
+                { Transform =
+                    fun flowModel -> 
+                        match flowModel.Document with 
+                        | SplitOrIntegratedDocument.SplitDocument splitDocument ->
+                            flowModel.UserState
+                            //splitDocument.Reader.CopyPagesTo(1, splitDocument.Reader.GetNumberOfPages(), splitDocument.Writer)
+                            //|> ignore
 
-                       flowModel.UserState 
+                            //flowModel.UserState 
 
-                   | SplitOrIntegratedDocument.IntegratedDocument _ ->
-                       flowModel.UserState
+                        | SplitOrIntegratedDocument.IntegratedDocument _ ->
+                            flowModel.UserState
+
+                  OperateDocument = false
+                }
+
             )
 
         static member Batch (?flowName: FlowName) =
@@ -475,17 +505,22 @@ type Reuse<'oldUserState, 'newUserState> internal
         |> Reuse
 
      
-    new (f: Shrimp.Pdf.FlowModel<'oldUserState> -> SplitDocument -> 'newUserState, ?flowName: FlowName) =
+    new (f: Shrimp.Pdf.FlowModel<'oldUserState> -> SplitDocument -> 'newUserState, operateDocument, ?flowName: FlowName) =
         let flow =
-            Flow.ManipulateOrReuse (fun flowModel ->
-                match flowModel.Document with 
-                | SplitOrIntegratedDocument.SplitDocument document ->
-                    f 
-                        (flowModel.ToPublicFlowModel())
-                        document
+            Flow.ManipulateOrReuse (
+                { Transform = 
+                    fun flowModel ->
+                        match flowModel.Document with 
+                        | SplitOrIntegratedDocument.SplitDocument document ->
+                            f 
+                                (flowModel.ToPublicFlowModel())
+                                document
 
-                | SplitOrIntegratedDocument.IntegratedDocument _ ->
-                    failwith "Invalid token"
+                        | SplitOrIntegratedDocument.IntegratedDocument _ ->
+                            failwith "Invalid token"
+                  OperateDocument = operateDocument
+                }
+
             )
         match flowName with 
         | None -> Reuse(flow)
@@ -498,6 +533,9 @@ type Reuse<'oldUserState, 'newUserState> internal
                     flow
                 )
             )
+
+    new (f, ?flowName) =
+        Reuse(f = f, ?flowName = flowName, operateDocument = true)
 
     new (flowName, reuse: Reuse<_, _>) =
         Reuse(
@@ -513,11 +551,15 @@ type Reuse<'oldUserState, 'newUserState> internal
 [<RequireQualifiedAccess>]
 module Reuse =
     let dummy() = 
-        Reuse(fun flowModel splitDocument -> 
-            splitDocument.Reader.CopyPagesTo(1, splitDocument.Reader.GetNumberOfPages(), splitDocument.Writer)
-            |> ignore
+        Reuse(
+            f = (fun flowModel splitDocument -> 
+                
+                //splitDocument.Reader.CopyPagesTo(1, splitDocument.Reader.GetNumberOfPages(), splitDocument.Writer)
+                //|> ignore
 
-            flowModel.UserState 
+                flowModel.UserState 
+            ),
+            operateDocument = false
         )
 
     let rename (name: string) (paramters: list<string * string>) =
@@ -574,18 +616,23 @@ type Manipulate<'oldUserState, 'newUserState> internal (flow: Flow<'oldUserState
         |> Manipulate
 
 
-    new (f: Shrimp.Pdf.FlowModel<'oldUserState> -> IntegratedDocument -> 'newUserState, ?flowName: FlowName) =
+    new (f: Shrimp.Pdf.FlowModel<'oldUserState> -> IntegratedDocument -> 'newUserState, operateDocument, ?flowName: FlowName) =
         
         let flow = 
-            Flow.ManipulateOrReuse (fun flowModel ->
-                match flowModel.Document with 
-                | SplitOrIntegratedDocument.SplitDocument document ->
-                    failwith "Invalid token"
+            Flow.ManipulateOrReuse (
+                { Transform =
+                    fun flowModel ->
+                        match flowModel.Document with 
+                        | SplitOrIntegratedDocument.SplitDocument document ->
+                            failwith "Invalid token"
 
-                | SplitOrIntegratedDocument.IntegratedDocument document ->
-                    f 
-                        (flowModel.ToPublicFlowModel())
-                        document
+                        | SplitOrIntegratedDocument.IntegratedDocument document ->
+                            f 
+                                (flowModel.ToPublicFlowModel())
+                                document
+
+                  OperateDocument = operateDocument
+                }
             )
 
         match flowName with 
@@ -598,6 +645,9 @@ type Manipulate<'oldUserState, 'newUserState> internal (flow: Flow<'oldUserState
             )
 
         | None -> Manipulate flow
+
+    new (f, ?flowName) =
+        Manipulate(f = f, ?flowName = flowName, operateDocument = true)
 
     new (flowName, manipulate: Manipulate<_, _>) =
         Manipulate(
@@ -613,7 +663,11 @@ type Manipulate<'oldUserState, 'newUserState> internal (flow: Flow<'oldUserState
 [<RequireQualifiedAccess>]
 module Manipulate =
     let dummy() = 
-        Manipulate(fun flowModel _ -> flowModel.UserState)
+        Manipulate(
+            f = (fun flowModel doc -> 
+                flowModel.UserState),
+            operateDocument = false 
+        )
 
     let rename (name: string) (paramters: list<string * string>) =
         fun (reuse: Manipulate<_, _>) ->

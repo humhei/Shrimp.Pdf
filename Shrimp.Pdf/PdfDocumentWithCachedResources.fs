@@ -139,7 +139,7 @@ type IntegratedDocument internal (reader: string, writer: string) =
     member x.Value = 
         match pdfDocument with 
         | Some document -> document
-        | None -> failwith "document is not open yet please option it first"
+        | None -> failwith "document is not open yet please open it first"
 
     member internal x.Open() =
         if not isOpened

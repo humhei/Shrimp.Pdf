@@ -203,12 +203,12 @@ type SplitDocument internal (reader: string, writer: string) =
     member x.Reader = 
         match readerDocument with 
         | Some reader -> reader
-        | None -> failwith "document is not open yet please option it first"
+        | None -> failwith "document is not open yet please open it first"
 
     member x.Writer = 
         match writerDocument with 
         | Some writer -> writer
-        | None -> failwith "document is not open yet please option it first"
+        | None -> failwith "document is not open yet please open it first"
 
     member internal x.Open() =
         if not isOpend 
