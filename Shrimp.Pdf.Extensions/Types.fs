@@ -10,6 +10,7 @@ open Shrimp.FSharp.Plus
 [<AutoOpen>]
 module ExtensionTypes =
 
+
     
 
     type Direction =
@@ -75,12 +76,37 @@ module ExtensionTypes =
             member x.Tag = IntegratedRenderInfoTag.Path
             member x.ClippingPathInfo = x.ClippingPathInfo
 
+    type TextInfoRecord =
+        { Text: string 
+          FontSize: float 
+          FillColor: iText.Kernel.Colors.Color 
+          StrokeColor: iText.Kernel.Colors.Color 
+          FontName: string }
+
+    type internal TextRenderInfo with 
+        member info.GetActualFontSize() =
+            let matrix = info.GetTextMatrix()
+            info.GetFontSize() * matrix.Get(0) |> float
+
+        member info.GetFontName() =
+            info.GetFont().GetFontProgram().GetFontNames().GetFontName()
+
+
     [<Struct>]
     type IntegratedTextRenderInfo =
         { TextRenderInfo: TextRenderInfo 
           ClippingPathInfo: ClippingPathInfo option }
 
     with 
+        member renderInfo.RecordValue =
+            let renderInfo = renderInfo.TextRenderInfo
+            { Text = renderInfo.GetText()
+              FontSize = renderInfo.GetActualFontSize()
+              FontName = renderInfo.GetFontName()
+              FillColor = renderInfo.GetFillColor()
+              StrokeColor = renderInfo.GetStrokeColor() }
+
+
         interface ITextRenderInfo with 
             member x.Value = x.TextRenderInfo
 

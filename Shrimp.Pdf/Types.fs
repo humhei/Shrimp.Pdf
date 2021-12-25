@@ -10,34 +10,7 @@ open Shrimp.FSharp.Plus
 open Shrimp.FSharp.Plus.Text
 open Shrimp.Pdf.Colors
 
-type TextInfoRecord =
-    { Text: string 
-      FontSize: float 
-      FillColor: iText.Kernel.Colors.Color 
-      StrokeColor: iText.Kernel.Colors.Color 
-      FontName: string }
-with 
-    member x.Is(fontName: string, fontSize: float, ?fillColor: iText.Kernel.Colors.Color) =
-        
-        let ifFontNameTheSame = 
-            StringIC fontName = StringIC x.FontName
-            || (
-                    if x.FontName.Contains "+"
-                    then StringIC(x.FontName.RightOf("+").Value) = StringIC fontName
-                    else false
-                )
 
-        ifFontNameTheSame
-        && fontSize @= x.FontSize
-        &&
-            match fillColor with 
-            | Some fillColor -> Color.equal fillColor x.FillColor
-            | None -> true
-
-    member x.Pick(fontName, fontSize, picker, ?fillColor) =
-        match x.Is(fontName, fontSize, ?fillColor = fillColor) with 
-        | true -> picker x.Text
-        | false -> None
 
 type PageOrientation =
     | Landscape  = 0
@@ -276,13 +249,28 @@ type SplitDocument internal (reader: string, writer: string) =
              
 [<AutoOpen>]
 module _Types_Ex =
-    type ITextRenderInfo with 
-        member renderInfo.RecordValue =
-            { Text = ITextRenderInfo.getText renderInfo
-              FontSize = ITextRenderInfo.getActualFontSize renderInfo
-              FontName = ITextRenderInfo.getFontName renderInfo
-              FillColor = renderInfo.Value.GetFillColor()
-              StrokeColor = renderInfo.Value.GetStrokeColor() }
+    type TextInfoRecord with
+        member x.Is(fontName: string, fontSize: float, ?fillColor: FsColor) =
+            
+            let ifFontNameTheSame = 
+                StringIC fontName = StringIC x.FontName
+                || (
+                        if x.FontName.Contains "+"
+                        then StringIC(x.FontName.RightOf("+").Value) = StringIC fontName
+                        else false
+                    )
+    
+            ifFontNameTheSame
+            && fontSize @= x.FontSize
+            &&
+                match fillColor with 
+                | Some fillColor -> FsColor.equal fillColor (FsColor.OfItextColor x.FillColor)
+                | None -> true
+    
+        member x.Pick(fontName, fontSize, picker, ?fillColor) =
+            match x.Is(fontName, fontSize, ?fillColor = fillColor) with 
+            | true -> picker x.Text
+            | false -> None
 
     type PdfPage with 
         member x.GetPageEdge(innerBox: FsSize, pageBoxKind: PageBoxKind) =

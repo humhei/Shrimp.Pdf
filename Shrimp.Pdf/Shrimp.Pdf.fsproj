@@ -101,6 +101,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="f\" />
     <Folder Include="Resources\Icc\" />
   </ItemGroup>
 

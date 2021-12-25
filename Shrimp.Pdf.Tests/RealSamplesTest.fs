@@ -16,7 +16,7 @@ let readB255Bound() =
         "read b255 bound",
         PageSelector.All,
         Path (
-            Info.StrokeColorIs DeviceRgb.BLUE
+            Info.StrokeColorIs FsColor.RGB_BLUE
             <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)
         ),
         PageModifier.GetBoundOfSelector()
@@ -32,7 +32,7 @@ let setTrimBoxToStrokeB255() =
         (fun args -> PageModifier.SetPageBox(PageBoxKind.TrimBox, args.PageUserState()) args)
     ) ||>> ignore
 
-let retainTitleInfo (color: Color) = 
+let retainTitleInfo (color: FsColor) = 
     SelectorAndModifiers(
         sprintf "retain title info %O" color,
         Factory(fun args ->
@@ -64,7 +64,7 @@ let blackAndWhiteTitleInfo() =
     )
   
 
-let retainNavigationInfo (color: Color) =
+let retainNavigationInfo (color: FsColor) =
     SelectorAndModifiers(
         sprintf "retain navigation info %O" color,
         PathOrText (fun args ->
@@ -83,7 +83,7 @@ let removeNavigationInfo() =
         PathOrText (fun args ->
             let pageEdge, _ = args.PageUserState()
             ( Info.BoundIsCrossOf(AreaGettingOptions.Specfic pageEdge.LeftMiddle)
-                <&&> Info.FillColorIs DeviceRgb.MAGENTA
+                <&&> Info.FillColorIs FsColor.RGB_MAGENTA
             ) args
         ),
         [ Modifier.CancelFillAndStroke() ]
@@ -143,8 +143,8 @@ let realSamplesTests =
             <+> 
             Modify.Create(
                 PageSelector.All,
-                [ retainTitleInfo DeviceRgb.RED
-                  retainNavigationInfo DeviceRgb.MAGENTA ]
+                [ retainTitleInfo FsColor.RGB_RED
+                  retainNavigationInfo FsColor.RGB_MAGENTA ]
             )
         )
         
@@ -174,7 +174,7 @@ let realSamplesTests =
             <+> 
             Modify.Create (
                 PageSelector.All,
-                [ retainTitleInfo DeviceRgb.MAGENTA
+                [ retainTitleInfo FsColor.RGB_MAGENTA
                   removeNavigationInfo() 
                   blackAndWhiteTitleInfo()
                 ]

@@ -207,13 +207,22 @@ type Modifier =
 
 
     static member ReplaceColor(colorKeyValuePairs: list<Color * Color>, ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
-        let originColors = colorKeyValuePairs |> List.map fst
-        let newColors = colorKeyValuePairs |> List.map snd
+        let originColors = 
+            colorKeyValuePairs 
+            |> List.map fst
+            |> List.map (FsColor.OfItextColor)
+
+        let newColors = 
+            colorKeyValuePairs 
+            |> List.map snd
+
+
         Modifier.ReplaceColor(
             ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
             picker =
                 fun color ->
-                    match Colors.tryFindIndex color originColors with 
+                    let color = FsColor.OfItextColor color
+                    match FsColors.tryFindIndex color originColors with 
                     | Some index -> Some newColors.[index]
                     | None -> None
         )
@@ -518,6 +527,10 @@ type Modify =
 
 
     static member ReplaceColors (originColors: Color list, targetColor: Color, ?options: Modify_ReplaceColors_Options) =
+        let originColors = 
+            originColors
+            |> List.map FsColor.OfItextColor
+            
         let options = defaultArg options Modify_ReplaceColors_Options.DefaultValue
         let nameAndParamters =
             { Name = "ReplaceColors"
@@ -532,7 +545,8 @@ type Modify =
             options = options,
             nameAndParamters = nameAndParamters,
             picker = fun color ->
-                if Colors.contains color originColors
+                let color = FsColor.OfItextColor color
+                if FsColors.contains color originColors
                 then Some targetColor
                 else None
         ) :> Manipulate<_, _>

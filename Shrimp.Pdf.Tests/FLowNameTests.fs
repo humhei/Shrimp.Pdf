@@ -21,7 +21,7 @@ let flowNameTests =
               { args with 
                   PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                   CanvasFontSize = CanvasFontSize.Numeric 25. 
-                  FontColor = PdfCanvasColor.Separation (FsSeparation.Create("专色1", DeviceRgb.BLUE))
+                  FontColor = PdfCanvasColor.Separation (FsSeparation.Create("专色1",FsValueColor.RGB_BLUE))
                   FontRotation = Rotation.None 
                   Position = position}
             )

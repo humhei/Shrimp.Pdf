@@ -8,6 +8,7 @@ open Shrimp.Pdf.Extensions
 open iText.Kernel.Colors
 open Shrimp.Pdf.DSL
 open Shrimp.FSharp.Plus
+open Shrimp.Pdf.Colors
 
 let reuseTests =
   testList "Reuse Tests" [
@@ -364,7 +365,7 @@ let reuseTests =
     testCase "tile pages by selector tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.TilePages
-                (Path(Info.StrokeColorIs DeviceRgb.BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
                  SelectionSorter.Plane(mm 3., Direction.Vertical)
             )
             <.+>
@@ -376,7 +377,8 @@ let reuseTests =
         |> ignore
 
     testCase "trim to first stroke color" <| fun _ -> 
-        let strokeColor = new DeviceRgb(0.498f, 0.616f, 0.725f)
+        let strokeColor = 
+            FsColor.CreateRGB(0.498f, 0.616f, 0.725f)
         let pageBoxKind = PageBoxKind.AllBox
         Flow.Manipulate(
             ModifyPage.Create( 

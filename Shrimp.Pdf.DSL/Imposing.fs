@@ -657,7 +657,7 @@ module Imposing =
                 | Some cropmark ->
                     pdfCanvas
                         .SetLineWidth(float32 cropmark.Width) 
-                        .SetStrokeColor(cropmark.Color)
+                        .SetStrokeColor(NullablePdfCanvasColor.OfPdfCanvasColor cropmark.Color)
                         |> ignore
 
                     let height = cell.Size.Height

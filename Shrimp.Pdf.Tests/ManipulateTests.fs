@@ -41,7 +41,7 @@ let manipulateTests =
         let colors = 
             [
                 { Name = "CuttingLine_BLUE" 
-                  Color = FsValueColor.OfItextColor DeviceRgb.BLUE
+                  Color = FsValueColor.RGB_BLUE
                   Transparency = 1. }
 
                 FsSeparation.Create("PageNumber", DeviceRgb(200, 0, 56))
@@ -103,7 +103,7 @@ let manipulateTests =
                 PageSelector.Expr(PageSelectorExpr.create "2-R1"),
                 [
                     { Name = "change stroke color b255 to m100"
-                      Selector = Path(Info.StrokeColorIs DeviceRgb.BLUE)
+                      Selector = Path(Info.StrokeColorIs FsColor.RGB_BLUE)
                       Modifiers = [Modifier.SetStrokeColor(DeviceCmyk.MAGENTA)]
                     }
                 ]
@@ -112,7 +112,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/change stroke color b255 to m100.pdf" 
         |> ignore
 
-    ftestCase "change stroke color b255 to m100_2" <| fun _ -> 
+    testCase "change stroke color b255 to m100_2" <| fun _ -> 
         Flow.Reuse(
             Reuses.DuplicatePages(PageSelector.All, CopiedNumSequence.Create [5])
         )
@@ -122,7 +122,7 @@ let manipulateTests =
                 PageSelector.Expr(PageSelectorExpr.create "2"),
                 [
                     { Name = "change stroke color b255 to m100"
-                      Selector = Path(Info.StrokeColorIs DeviceRgb.BLUE)
+                      Selector = Path(Info.StrokeColorIs FsColor.RGB_BLUE)
                       Modifiers = [Modifier.SetStrokeColor(DeviceCmyk.MAGENTA)]
                     }
                 ]
@@ -137,7 +137,7 @@ let manipulateTests =
                 PageSelector.All,
                 [
                     { Name = "change red to black outside of trimbox"
-                      Selector = PathOrText(Info.FillColorIs DeviceRgb.RED <&&> Info.BoundIsOutsideOf(AreaGettingOptions.PageBox PageBoxKind.TrimBox))
+                      Selector = PathOrText(Info.FillColorIs FsColor.RGB_RED <&&> Info.BoundIsOutsideOf(AreaGettingOptions.PageBox PageBoxKind.TrimBox))
                       Modifiers = [Modifier.SetFillColor(DeviceGray.BLACK)]
                     }
                 ]
@@ -152,7 +152,7 @@ let manipulateTests =
                 PageSelector.First,
                 [
                     { Name = "xobject_change stroke color b255 to m100"
-                      Selector = Path(Info.StrokeColorIs DeviceRgb.BLUE)
+                      Selector = Path(Info.StrokeColorIs FsColor.RGB_BLUE)
                       Modifiers = [Modifier.SetStrokeColor(DeviceCmyk.MAGENTA)] }
                 ]
             )
@@ -166,7 +166,7 @@ let manipulateTests =
                 PageSelector.First,
                 [
                     { Name = "xobject_change stroke color b255 to m100"
-                      Selector = Path(Info.StrokeColorIs DeviceRgb.BLUE)
+                      Selector = Path(Info.StrokeColorIs FsColor.RGB_BLUE)
                       Modifiers = [Modifier.SetStrokeColor(DeviceCmyk.MAGENTA)] }
                 ]
             )
@@ -175,7 +175,7 @@ let manipulateTests =
                 PageSelector.First,
                 [
                     { Name = "xobject_change stroke color m100 to c100"
-                      Selector = Path(Info.StrokeColorIs DeviceCmyk.MAGENTA)
+                      Selector = Path(Info.StrokeColorIs FsColor.CMYK_MAGENTA)
                       Modifiers = [Modifier.SetStrokeColor(DeviceCmyk.CYAN)] }
                 ]
             )
@@ -206,7 +206,7 @@ let manipulateTests =
                       Selector = Text(fun _ _ -> true) 
                       Modifiers = [
                         Modifier.AddRectangleToBound(fun args -> 
-                            { args with StrokeColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA}
+                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor (PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
                         )
                       ]
                     }
@@ -229,7 +229,7 @@ let manipulateTests =
                       Selector = Text(fun _ _ -> true) 
                       Modifiers = [
                         Modifier.AddRectangleToBound(fun args -> 
-                            { args with StrokeColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA}
+                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor(PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
                         )
                       ]
                     }
@@ -303,16 +303,16 @@ let manipulateTests =
                     AreaGettingOptions.PageBox PageBoxKind.ActualBox,
                     [ 
                         { Text = "你好天气很好"
-                          Color = PdfCanvasColor.ITextColor DeviceCmyk.CYAN }
+                          Color = PdfCanvasColor.OfITextColor DeviceCmyk.CYAN }
 
                         { Text = "M"
-                          Color = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA }
+                          Color = PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA }
 
                         { Text = "是的啊"
-                          Color = PdfCanvasColor.ITextColor DeviceCmyk.YELLOW }
+                          Color = PdfCanvasColor.OfITextColor DeviceCmyk.YELLOW }
 
                         { Text = "Unicode"
-                          Color = PdfCanvasColor.ITextColor DeviceCmyk.BLACK }
+                          Color = PdfCanvasColor.OfITextColor DeviceCmyk.BLACK }
                     ],
                     fun args -> 
                         { args with 
@@ -336,10 +336,10 @@ let manipulateTests =
                     AreaGettingOptions.PageBox PageBoxKind.ActualBox,
                     [ 
                         { Text = "BLACK"
-                          Color = PdfCanvasColor.ITextColor DeviceCmyk.CYAN }
+                          Color = PdfCanvasColor.OfITextColor DeviceCmyk.CYAN }
 
                         { Text = "C= 8.0, M=100.0, Y=15.0, K=0.0"
-                          Color = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA }
+                          Color = PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA }
 
                     ],
                     fun args -> 
@@ -354,6 +354,114 @@ let manipulateTests =
         |> runTest "datas/manipulate/add colored texts to position2.pdf" 
         |> ignore
 
+    testCase "add colored texts to position3" <| fun _ -> 
+        Flow.Manipulate (
+            ModifyPage.Create
+                ("add colored texts to position3",
+                  PageSelector.All,
+                  Dummy,
+                  PageModifier.AddColoredTexts(
+                    AreaGettingOptions.PageBox PageBoxKind.ActualBox,
+                    [ 
+                        { Text = "BLACK"
+                          Color = PdfCanvasColor.Value (FsValueColor.Rgb FsDeviceRgb.BLACK) }
+
+                        { Text = "BLUE"
+                          Color = PdfCanvasColor.Value (FsValueColor.Rgb FsDeviceRgb.BLUE) }
+                           
+                        { Text = "GRAY"
+                          Color = PdfCanvasColor.Value (FsValueColor.Rgb FsDeviceRgb.GRAY) }
+                           
+                        { Text = "GREEN"
+                          Color = PdfCanvasColor.Value (FsValueColor.Rgb FsDeviceRgb.GREEN) }
+                           
+                        { Text = "MAGENTA"
+                          Color = PdfCanvasColor.Value (FsValueColor.Rgb FsDeviceRgb.MAGENTA) }
+                           
+                        { Text = "RED"
+                          Color = PdfCanvasColor.Value (FsValueColor.Rgb FsDeviceRgb.RED) }
+                           
+                        { Text = "WHITE"
+                          Color = PdfCanvasColor.Value (FsValueColor.Rgb FsDeviceRgb.WHITE) }
+                           
+                        { Text = "YELLOW"
+                          Color = PdfCanvasColor.Value (FsValueColor.Rgb FsDeviceRgb.YELLOW) }
+
+                    ],
+                    fun args -> 
+                        { args with 
+                            Position = Position.Center(0., 0.)
+                            PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
+                            HorizontalTextAlignment = Some iText.Layout.Properties.TextAlignment.RIGHT
+                        }
+                  )
+                )
+        )
+        |> runTest "datas/manipulate/add colored texts to position3.pdf" 
+        |> ignore
+
+
+    ftestCase "add colored texts to position4" <| fun _ -> 
+        Flow.Manipulate (
+            ModifyPage.Create
+                ("add colored texts to position4",
+                  PageSelector.All,
+                  Dummy,
+                  PageModifier.AddColoredTexts(
+                    AreaGettingOptions.PageBox PageBoxKind.ActualBox,
+                    [ 
+                        { Text = "BLACK"
+                          Color = PdfCanvasColor.Value (FsValueColor.Gray FsGray.BLACK) }
+
+                        { Text = "GRAY"
+                          Color = PdfCanvasColor.Value (FsValueColor.Gray FsGray.GRAY) }
+
+                        { Text = "WHITE"
+                          Color = PdfCanvasColor.Value (FsValueColor.Gray FsGray.WHITE) }
+
+                        { Text = "CMYK__"
+                          Color = PdfCanvasColor.Value (FsValueColor.Cmyk FsDeviceCmyk.BLACK) }
+
+                        { Text = "BLACK"
+                          Color = PdfCanvasColor.Value (FsValueColor.Cmyk FsDeviceCmyk.BLACK) }
+
+                        
+                        { Text = "CYAN"
+                          Color = PdfCanvasColor.Value (FsValueColor.Cmyk FsDeviceCmyk.CYAN) }
+
+                        { Text = "GRAY"
+                          Color = PdfCanvasColor.Value (FsValueColor.Cmyk FsDeviceCmyk.GRAY) }
+
+                        { Text = "GREEN"
+                          Color = PdfCanvasColor.Value (FsValueColor.Cmyk FsDeviceCmyk.GREEN) }
+
+                        { Text = "MAGENTA"
+                          Color = PdfCanvasColor.Value (FsValueColor.Cmyk FsDeviceCmyk.MAGENTA) }
+
+                        { Text = "RED"
+                          Color = PdfCanvasColor.Value (FsValueColor.Cmyk FsDeviceCmyk.RED) }
+
+                        { Text = "WHITE"
+                          Color = PdfCanvasColor.Value (FsValueColor.Cmyk FsDeviceCmyk.WHITE) }
+
+                        { Text = "YELLOW"
+                          Color = PdfCanvasColor.Value (FsValueColor.Cmyk FsDeviceCmyk.YELLOW) }
+
+
+
+                    ],
+                    fun args -> 
+                        { args with 
+                            Position = Position.Center(0., 0.)
+                            PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
+                            HorizontalTextAlignment = Some iText.Layout.Properties.TextAlignment.RIGHT
+                        }
+                  )
+                )
+        )
+        |> runTest "datas/manipulate/add colored texts to position4.pdf" 
+        |> ignore
+
     testCase "add text to position" <| fun _ -> 
         Flow.Manipulate (
             ModifyPage.Create
@@ -365,7 +473,7 @@ let manipulateTests =
                       { args with 
                           PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                           CanvasFontSize = CanvasFontSize.Numeric 25. 
-                          FontColor = PdfCanvasColor.Separation (FsSeparation.Create("专色1", DeviceRgb.BLUE))
+                          FontColor = PdfCanvasColor.Separation (FsSeparation.Create("专色1",FsValueColor.RGB_BLUE))
                           FontRotation = Rotation.None 
                           Position = Position.LeftTop(0., 0.)}
                     )
@@ -449,7 +557,7 @@ let manipulateTests =
                     { args with 
                         PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
-                        FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
+                        FontColor = PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
                         Position = Position.LeftTop(0., 0.)}
                   ) 
@@ -466,7 +574,7 @@ let manipulateTests =
                         { args with 
                             PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                             CanvasFontSize = CanvasFontSize.Numeric 25. 
-                            FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
+                            FontColor = PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA 
                             FontRotation = Rotation.None 
                             Position = Position.LeftTop(mm 20., 0.)}
                       ) args
@@ -486,7 +594,7 @@ let manipulateTests =
                     { args with 
                         PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
-                        FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
+                        FontColor = PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
                         Position = Position.LeftTop(mm 40., 0.)}
                   ) 
@@ -505,7 +613,7 @@ let manipulateTests =
                     { args with 
                         PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
-                        FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
+                        FontColor = PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
                         Position = Position.LeftTop(0., 0.)}
                   ) 
@@ -521,7 +629,7 @@ let manipulateTests =
                     { args with 
                         PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                         CanvasFontSize = CanvasFontSize.Numeric 25. 
-                        FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
+                        FontColor = PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA 
                         FontRotation = Rotation.None 
                         Position = Position.LeftTop(mm 3., 0.)}
                   ) 
@@ -542,7 +650,7 @@ let manipulateTests =
                 { args with 
                     PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                     CanvasFontSize = CanvasFontSize.OfRootArea 0.8 
-                    FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
+                    FontColor = PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA 
                     FontRotation = Rotation.None 
                     Position = Position.Center(0., 0.)}
                 )
@@ -565,7 +673,7 @@ let manipulateTests =
                 { args with 
                     PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                     CanvasFontSize = CanvasFontSize.Numeric 12.
-                    FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
+                    FontColor = PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA 
                     FontRotation = Rotation.None 
                     Position = Position.LeftTop(0., 0.)}
                 )
@@ -616,7 +724,7 @@ let manipulateTests =
                                 PdfFontFactory = pdfFontFactory
                                 CanvasFontSize = 
                                     CanvasFontSize.OfRootArea 0.8
-                                FontColor = PdfCanvasColor.ITextColor DeviceCmyk.MAGENTA 
+                                FontColor = PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA 
                                 FontRotation = Rotation.None 
                                 Position = Position.LeftMiddle (0., 0.)}
                     ) args
@@ -631,7 +739,7 @@ let manipulateTests =
                 "add rect to area",
                 PageSelector.All,
                 Dummy,
-                PageModifier.AddRectangleToCanvasRootArea(AreaGettingOptions.PageBox PageBoxKind.ActualBox, fun args -> { args with FillColor = PdfCanvasColor.ITextColor DeviceRgb.BLACK})
+                PageModifier.AddRectangleToCanvasRootArea(AreaGettingOptions.PageBox PageBoxKind.ActualBox, fun args -> { args with FillColor = NullablePdfCanvasColor.OfPdfCanvasColor(PdfCanvasColor.OfITextColor DeviceRgb.BLACK)})
             ) 
         )
         |> runTest "datas/manipulate/add rect to area.pdf" 

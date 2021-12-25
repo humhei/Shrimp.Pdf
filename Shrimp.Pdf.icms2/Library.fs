@@ -37,6 +37,13 @@ module Core =
         | Cmyk of CmykIcc
         | Rgb of RgbIcc
         | Lab of LabIcc
+    with 
+        member x.LoggingText =
+            match x with 
+            | Icc.Gray v -> v.ToString()
+            | Icc.Cmyk v -> v.ToString()
+            | Icc.Rgb  v -> v.ToString()
+            | Icc.Lab  v -> v.ToString()
 
     type Intent = 
         | INTENT_PERCEPTUAL = 0u

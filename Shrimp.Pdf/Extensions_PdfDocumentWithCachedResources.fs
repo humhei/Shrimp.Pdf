@@ -17,13 +17,13 @@ module PdfDocumentWithCachedResources =
 
     type PdfCanvasAddRectangleArguments =
         { LineWidth: float 
-          StrokeColor: PdfCanvasColor
-          FillColor: PdfCanvasColor }
+          StrokeColor: NullablePdfCanvasColor
+          FillColor: NullablePdfCanvasColor }
     with 
         static member DefaultValue =
             { LineWidth = mm 0.1 
-              StrokeColor = PdfCanvasColor.ITextColor (DeviceGray.BLACK :> Color)
-              FillColor = PdfCanvasColor.N }
+              StrokeColor = NullablePdfCanvasColor.BLACK
+              FillColor = NullablePdfCanvasColor.N }
 
 
     type PdfCanvasAddLineArguments =
@@ -33,12 +33,12 @@ module PdfDocumentWithCachedResources =
     with 
         static member DefaultValue =
             { LineWidth = mm 0.1 
-              StrokeColor = PdfCanvasColor.ITextColor (DeviceGray.BLACK :> Color)
+              StrokeColor = PdfCanvasColor.BLACK
               DashPattern = DashPattern.Empty }
 
         static member DashLine(?value) =
             { LineWidth = mm 0.1 
-              StrokeColor = PdfCanvasColor.ITextColor (DeviceGray.BLACK :> Color)
+              StrokeColor = PdfCanvasColor.BLACK
               DashPattern = DashPattern.Create(defaultArg value (mm 2.0)) }
 
 
@@ -55,7 +55,7 @@ module PdfDocumentWithCachedResources =
         static member DefaultValue =
             { PdfFontFactory = FsPdfFontFactory.StandardFonts (iText.IO.Font.Constants.StandardFonts.HELVETICA)
               CanvasFontSize = CanvasFontSize.Numeric 9.
-              FontColor = PdfCanvasColor.ITextColor DeviceGray.BLACK 
+              FontColor = PdfCanvasColor.BLACK
               FontRotation = Rotation.None
               Position = Position.LeftTop (0., 0.)
               HorizontalTextAlignment = None 
@@ -125,60 +125,60 @@ module PdfDocumentWithCachedResources =
     type PdfCanvas with 
         member internal x.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =
             match pdfCanvasColor with 
-            | PdfCanvasColor.Value color -> color |> FsValueColor.ToItextColor |> Some
+            | PdfCanvasColor.Value color -> color |> FsValueColor.ToItextColor
             | PdfCanvasColor.Separation separation ->
                 let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
                 let resourceColor = ResourceColor.CustomSeparation separation
                 pdfDocument.GetOrCreateColor(resourceColor) 
-                |> Some
 
             | PdfCanvasColor.Lab lab ->
                 let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
                 let resourceColor = ResourceColor.Lab lab
                 pdfDocument.GetOrCreateColor(resourceColor) 
-                |> Some
                 
-            | PdfCanvasColor.N -> None
             | PdfCanvasColor.ColorCard colorCard ->
                 match colorCard with 
                 | ColorCard.KnownColor knownColor ->
                     DeviceRgb.fromKnownColor knownColor
                     :> Color
-                    |> Some
                 | ColorCard.Pantone pantoneColor ->
                     let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
                     let resourceColor = ResourceColor.Pantone pantoneColor
                     pdfDocument.GetOrCreateColor(resourceColor) 
-                    |> Some
+
                 | ColorCard.TPX tpxColor ->
                     let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
                     let resourceColor = ResourceColor.Tpx tpxColor
                     pdfDocument.GetOrCreateColor(resourceColor) 
-                    |> Some
 
             | PdfCanvasColor.Registration ->
                     let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
                     let resourceColor = ResourceColor.Registration
                     pdfDocument.GetOrCreateColor(resourceColor) 
-                    |> Some
 
 
-        static member SetStrokeColor(strokeColor: PdfCanvasColor) =
+        static member SetStrokeColor(strokeColor: NullablePdfCanvasColor) =
             fun (canvas: PdfCanvas) ->
-                match canvas.GetOrCreateColor(strokeColor) with 
-                | Some color ->canvas.SetStrokeColor(color)
-                | None -> canvas
+                match strokeColor with 
+                | NullablePdfCanvasColor.PdfCanvasColor strokeColor ->
+                    let color = canvas.GetOrCreateColor(strokeColor) 
+                    canvas.SetStrokeColor(color)
 
-        static member SetFillColor(fillColor: PdfCanvasColor) =
+                | NullablePdfCanvasColor.Non -> canvas
+
+        static member SetFillColor(fillColor: NullablePdfCanvasColor) =
+
             fun (canvas: PdfCanvas) ->
-                match canvas.GetOrCreateColor(fillColor) with 
-                | Some color ->canvas.SetFillColor(color)
-                | None -> canvas
+                match fillColor with 
+                | NullablePdfCanvasColor.Non -> canvas
+                | NullablePdfCanvasColor.PdfCanvasColor fillColor ->
+                    let color = canvas.GetOrCreateColor(fillColor) 
+                    canvas.SetFillColor(color)
 
-        member x.SetStrokeColor(strokeColor: PdfCanvasColor) =
+        member x.SetStrokeColor(strokeColor) =
             PdfCanvas.SetStrokeColor (strokeColor) x
 
-        member x.SetFillColor(fillColor: PdfCanvasColor) =
+        member x.SetFillColor(fillColor) =
             PdfCanvas.SetFillColor (fillColor) x
 
 
@@ -187,13 +187,10 @@ module PdfDocumentWithCachedResources =
     module PdfCanvas =
         let addLine (line: StraightLine) (mapping: PdfCanvasAddLineArguments -> PdfCanvasAddLineArguments) (canvas: PdfCanvas) =
             let args = mapping PdfCanvasAddLineArguments.DefaultValue
-            let close =
-                match args.StrokeColor with 
-                | PdfCanvasColor.N -> PdfCanvas.endPath
-                | _ -> PdfCanvas.stroke
+            let close = PdfCanvas.stroke
             
             canvas
-            |> PdfCanvas.SetStrokeColor(args.StrokeColor)
+            |> PdfCanvas.SetStrokeColor(NullablePdfCanvasColor.OfPdfCanvasColor args.StrokeColor)
             |> PdfCanvas.setLineWidth args.LineWidth
             |> PdfCanvas.setDashpattern args.DashPattern
             |> PdfCanvas.moveTo line.Start
@@ -205,9 +202,9 @@ module PdfDocumentWithCachedResources =
             let args = mapping PdfCanvasAddRectangleArguments.DefaultValue
             let close =
                 match args.FillColor, args.StrokeColor with 
-                | PdfCanvasColor.N, PdfCanvasColor.N -> PdfCanvas.endPath
-                | _, PdfCanvasColor.N -> PdfCanvas.fill
-                | PdfCanvasColor.N , _ -> PdfCanvas.stroke
+                | NullablePdfCanvasColor.N, NullablePdfCanvasColor.N -> PdfCanvas.endPath
+                | _, NullablePdfCanvasColor.N -> PdfCanvas.fill
+                | NullablePdfCanvasColor.N , _ -> PdfCanvas.stroke
                 | _, _ -> PdfCanvas.fillStroke
 
             canvas
@@ -268,33 +265,30 @@ module PdfDocumentWithCachedResources =
                 let pdfFontFactory, fontColor, fontRotation, position = 
                     args.PdfFontFactory, args.FontColor, args.FontRotation, args.Position
 
-                match canvas.GetOrCreateColor(fontColor) with 
-                | Some fontColor ->
+                let fontColor = canvas.GetOrCreateColor(fontColor)
+                    
+                let pdfFont =
+                    let pdfDocument = canvas.GetPdfDocument() :?> PdfDocumentWithCachedResources
+                    pdfDocument.GetOrCreatePdfFont(pdfFontFactory)
 
-                    let pdfFont =
-                        let pdfDocument = canvas.GetPdfDocument() :?> PdfDocumentWithCachedResources
-                        pdfDocument.GetOrCreatePdfFont(pdfFontFactory)
+                let fontSize = canvas.CalcFontSize(text, args)
 
-                    let fontSize = canvas.CalcFontSize(text, args)
+                let point =
+                    let rootArea = canvas.GetRootArea()
+                    rootArea.GetPoint(position)
 
-                    let point =
-                        let rootArea = canvas.GetRootArea()
-                        rootArea.GetPoint(position)
+                let horizonal = args.GetCalculatedHorizontalTextAlignment()
 
-                    let horizonal = args.GetCalculatedHorizontalTextAlignment()
+                let vertical = args.GetCalculatedVerticalTextAlignment()
 
-                    let vertical = args.GetCalculatedVerticalTextAlignment()
-
-                    let canvas =
-                        canvas
-                            .SetFont(pdfFont)
-                            .SetFontColor(fontColor)
-                            .SetFontSize(float32 fontSize)
-                            .ShowTextAligned(text,float32 point.x,float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getRadians fontRotation) )
-
+                let canvas =
                     canvas
+                        .SetFont(pdfFont)
+                        .SetFontColor(fontColor)
+                        .SetFontSize(float32 fontSize)
+                        .ShowTextAligned(text,float32 point.x,float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getRadians fontRotation) )
 
-                | None -> canvas
+                canvas
 
 
 

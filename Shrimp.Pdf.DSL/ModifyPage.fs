@@ -215,7 +215,9 @@ type PageModifier =
                             -totalTextWidth / 2. + scanedTextWidths.[i] + textWidth / 2.
                         )
 
-                    | TextAlignment.RIGHT -> scanedTextWidths |> List.map (fun scanedTextWidth -> -scanedTextWidth) 
+                    | TextAlignment.RIGHT -> 
+                        let scanedTextWidths = List.take textWidths.Length scanedTextWidths
+                        scanedTextWidths |> List.mapi (fun i scanedTextWidth -> -totalTextWidth + scanedTextWidth + textWidths.[i]) 
 
                     | _ -> failwith "Not implemented"
 

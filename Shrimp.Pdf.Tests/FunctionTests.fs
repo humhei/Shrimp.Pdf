@@ -13,7 +13,7 @@ let functionTests =
     testCase "PageSelectorExpr tests" <| fun _ -> 
         //(ColorCard.Pantone PantoneColorEnum.``PANTONE 100 C``)
         //|> PdfCanvasColor.ColorCard
-        //|> PdfCanvasColor.ITextColor
+        //|> PdfCanvasColor.OfITextColor
         //let expr1 = PageSelectorExpr.create "1,2-R3"
         ()
 

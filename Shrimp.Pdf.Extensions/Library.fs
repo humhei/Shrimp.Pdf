@@ -658,9 +658,7 @@ module iText =
 
         /// GetFontSize() * ctm.m00
         let getActualFontSize (info: ITextRenderInfo) =
-            let info = info.Value
-            let matrix = info.GetTextMatrix()
-            info.GetFontSize() * matrix.Get(0) |> float
+            info.Value.GetActualFontSize()
 
         let getHeight (info: ITextRenderInfo) =
             let info = info.Value
@@ -728,11 +726,18 @@ module iText =
                 else boundWithoutWidth
             | _ -> failwith "Invalid token"
         
-        let getFontName (info: ITextRenderInfo) =
-            info.Value.GetFont().GetFontProgram().GetFontNames().GetFontName()
+        let getFontName (info: ITextRenderInfo) = info.Value.GetFontName()
 
         let fontNameIs fontName (info: ITextRenderInfo) =
-            StringIC(getFontName info) = StringIC(fontName)
+            let fontName' = getFontName info
+
+            StringIC fontName = StringIC fontName'
+            || (
+                    if fontName'.Contains "+"
+                    then StringIC(fontName'.RightOf("+").Value) = StringIC fontName
+                    else false
+                )
+
             
 
 

@@ -64,10 +64,36 @@ module _Colors =
                G = x.G * 255.f
                B = x.B * 255.f |}
 
+        static member RED = { R = 1.0f; G = 0.0f; B = 0.0f }
+        static member GREEN = { R = 0.0f; G = 1.0f; B = 0.0f }
+        static member BLUE = { R = 0.0f; G = 0.0f; B = 1.0f }
+        static member MAGENTA = { R = 1.0f; G = 0.0f; B = 1.0f }
+        static member YELLOW = { R = 1.0f; G = 1.0f; B = 0.0f }
+        static member BLACK = { R = 0.0f; G = 0.0f; B = 0.0f }
+        static member WHITE = { R = 1.0f; G = 1.0f; B = 1.0f }
+        static member GRAY = { R = 0.5f; G = 0.5f; B = 0.5f }
+
         member x.LoggingText = 
             let range255 = x.Range255
             sprintf "RGB %.1f %.1f %.1f" (range255.R) range255.G range255.B
 
+        static member Create(r, g, b) =
+            let ensureValueValid v =
+                match v with 
+                | SmallerOrEqual 1.0f & BiggerOrEqual 0.0f -> ()
+                | _ -> failwithf "Cannot create RGB from %A" (r, g, b)
+
+            ensureValueValid r
+            ensureValueValid g
+            ensureValueValid b
+
+            { R = r
+              G = g
+              B = b }
+
+
+        static member Create(r, g, b) =
+            FsDeviceRgb.Create(float32 r / 255.f, float32 g / 255.f, float32 b / 255.f)
 
 
     type FsLab =
@@ -119,11 +145,24 @@ module _Colors =
         member x.LoggingText = 
             sprintf "CMYK %.1f %.1f %.1f %.1f" (x.C) x.M x.Y x.K
 
+        static member CYAN = { C = 1.0f; M = 0.0f; Y = 0.0f; K = 0.0f }
+        static member MAGENTA = { C = 0.0f; M = 1.0f; Y = 0.0f; K = 0.0f }
+        static member YELLOW = { C = 0.0f; M = 0.0f; Y = 1.0f; K = 0.0f }
+        static member BLACK = { C = 0.0f; M = 0.0f; Y = 0.0f; K = 1.0f }
+        static member WHITE = { C = 0.0f; M = 0.0f; Y = 0.0f; K = 0.0f }
+        static member GRAY = { C = 0.0f; M = 0.0f; Y = 0.0f; K = 0.5f }
+        static member RED =  { C = 0.0f; M = 1.0f; Y = 1.0f; K = 0.0f }
+        static member GREEN =  { C = 1.0f; M = 0.0f; Y = 1.0f; K = 0.0f }
+
     type FsGray = FsGray of float32
     with 
         member x.LoggingText = 
             let (FsGray v) = x
             sprintf "K %.1f" v
+
+        static member BLACK = FsGray 0.0f
+        static member WHITE = FsGray 1.0f
+        static member GRAY = FsGray 0.5f
 
     [<RequireQualifiedAccess>]
     type FsValueColor =
@@ -132,6 +171,14 @@ module _Colors =
         | Lab of FsLab
         | Gray of FsGray
     with 
+
+        static member CreateRGB(r, g, b: int) =
+            FsDeviceRgb.Create(r, g, b)
+            |> FsValueColor.Rgb
+
+        static member CreateRGB(r, g, b: float32) =
+            FsDeviceRgb.Create(r, g, b)
+            |> FsValueColor.Rgb
 
         member x.LoggingText = 
             match x with
@@ -180,10 +227,23 @@ module _Colors =
 
             | FsValueColor.Lab lab -> [ lab.L; lab.a; lab.b ]
 
-        member x.IsEqualTo(y: FsValueColor, valueEqualOptions: ValueEqualOptions) =
-            FsValueColor.IsEqual (x, y, valueEqualOptions)
+        member x.IsEqualTo(y: FsValueColor, ?valueEqualOptions: ValueEqualOptions) =
+            FsValueColor.IsEqual (x, y, defaultArg valueEqualOptions ValueEqualOptions.DefaultRoundedValue) 
+
+        static member BLACK = FsGray.BLACK |> FsValueColor.Gray
+        static member WHITE = FsGray.WHITE |> FsValueColor.Gray
+        static member GRAY = FsGray.GRAY |> FsValueColor.Gray
 
 
+        static member RGB_RED = FsDeviceRgb.RED |> FsValueColor.Rgb
+        static member RGB_BLUE = FsDeviceRgb.BLUE |> FsValueColor.Rgb
+        static member RGB_MAGENTA = FsDeviceRgb.MAGENTA |> FsValueColor.Rgb
+
+
+        static member CMYK_CYAN = FsDeviceCmyk.CYAN |>     FsValueColor.Cmyk
+        static member CMYK_BLACK = FsDeviceCmyk.BLACK |>   FsValueColor.Cmyk
+        static member CMYK_MAGENTA = FsDeviceCmyk.MAGENTA |> FsValueColor.Cmyk
+        static member CMYK_YELLOW = FsDeviceCmyk.YELLOW |> FsValueColor.Cmyk
 
         static member IsEqual (color1: FsValueColor, color2: FsValueColor, valueEqualOptions: ValueEqualOptions) =
             let isColorSpaceEqual =
@@ -241,8 +301,7 @@ module _Colors =
 
         static member ToItextColor fsValueColor =
             match fsValueColor with
-            | FsValueColor.Cmyk cmyk ->
-                new DeviceCmyk(cmyk.C, cmyk.M, cmyk.Y, cmyk.K) :> Color
+            | FsValueColor.Cmyk cmyk -> new DeviceCmyk(cmyk.C, cmyk.M, cmyk.Y, cmyk.K) :> Color
 
             | FsValueColor.Gray (FsGray v) ->
                 let grayColor = new DeviceGray()
@@ -301,11 +360,27 @@ module _Colors =
             | Result.Ok y -> x.IsEqualTo(y, valueEqualOptions)
             | Result.Error _ -> false
 
+    [<RequireQualifiedAccess>]
+    module FsValueColor =
+        let fromKnownColor (knownColor: KnownColor) =
+            match knownColor with 
+            | KnownColor.Black -> (FsGray.BLACK) |> FsValueColor.Gray
+            | KnownColor.White -> FsGray.WHITE |> FsValueColor.Gray  
+            | KnownColor.Gray -> FsGray.GRAY |> FsValueColor.Gray  
+            | _ -> 
+                let color = Color.FromName(knownColor.ToString())
+                FsDeviceRgb.Create(int color.R, int color.G, int color.B)
+                |> FsValueColor.Rgb
+    
+
     type FsSeparation =
         { Name: string 
           Color: FsValueColor
           Transparency: float }
     with 
+
+        member x.LoggingText = x.Name
+
         static member Create(name: string, color: Color, ?transparency) =
             { Name = name 
               Color = FsValueColor.OfItextColor color
@@ -596,6 +671,7 @@ module _Colors =
                 |> List.exactlyOne_DetailFailingText
 
             let colorSpace = separation.GetColorSpace() :?> PdfSpecialCs.Separation
+            
             let v = 
                 fsSeparationCache.GetOrAdd(colorSpace, fun _ ->
                     let colorSpacePdfArray = 
@@ -605,6 +681,7 @@ module _Colors =
                         let uri = 
                             (colorSpacePdfArray.Get(1)
                              |> string).TrimStart('/')
+
                         uri.Replace("#20", " ")
     
 
@@ -615,8 +692,8 @@ module _Colors =
 
        
 
-        member separation1.IsEqualTo(separation0: FsSeparation, valueEqualOptions) =
-            FsSeparation.IsEqual(separation0, separation1, valueEqualOptions)
+        member separation1.IsEqualTo(separation0: FsSeparation, ?valueEqualOptions) =
+            FsSeparation.IsEqual(separation0, separation1, defaultArg valueEqualOptions ValueEqualOptions.DefaultRoundedValue)
 
 
         member separation1.IsEqualTo(color: Color, valueEqualOptions) =
@@ -638,10 +715,13 @@ module _Colors =
         { Icc: Icc
           Color: FsValueColor }
     with 
+        member x.LoggingText = x.Icc.LoggingText + " " + x.Color.LoggingText
+
         member x.IsEqualTo(y, valueEqualOptions) =
             x.Icc = y.Icc
             &&
                 x.Color.IsEqualTo(y.Color, valueEqualOptions)
+
 
         static member OfICCBased(color: IccBased) =
             
@@ -660,6 +740,12 @@ module _Colors =
         | IccBased of FsIccBased
         | ValueColor of FsValueColor
     with 
+        member x.LoggingText =
+            match x with 
+            | FsColor.Separation v -> v.LoggingText
+            | FsColor.IccBased v -> v.LoggingText
+            | FsColor.ValueColor v -> v.LoggingText
+
         member x.IsEqualTo(y, ?valueEqualOptions) =
             let valueEqualOptions = defaultArg valueEqualOptions ValueEqualOptions.DefaultRoundedValue
             match x, y with 
@@ -667,6 +753,28 @@ module _Colors =
             | FsColor.Separation x, FsColor.Separation y -> x.IsEqualTo(y, valueEqualOptions)
             | FsColor.ValueColor x, FsColor.ValueColor y -> x.IsEqualTo(y, valueEqualOptions)
             | _, _ -> false
+
+        static member RGB_RED = FsValueColor.RGB_RED  |> FsColor.ValueColor
+        static member RGB_BLUE = FsValueColor.RGB_BLUE  |> FsColor.ValueColor
+        static member RGB_MAGENTA = FsValueColor.RGB_MAGENTA  |> FsColor.ValueColor
+
+        static member CMYK_BLACK = FsValueColor.CMYK_BLACK  |> FsColor.ValueColor
+        static member CMYK_CYAN = FsValueColor.CMYK_CYAN  |> FsColor.ValueColor
+        static member CMYK_MAGENTA = FsValueColor.CMYK_MAGENTA  |> FsColor.ValueColor
+        static member CMYK_YELLOW = FsValueColor.CMYK_YELLOW  |> FsColor.ValueColor
+
+
+        static member BLACK = FsValueColor.BLACK |> FsColor.ValueColor
+        static member WHITE = FsValueColor.WHITE |> FsColor.ValueColor
+        static member GRAY = FsValueColor.GRAY |> FsColor.ValueColor
+
+        static member CreateRGB(r, g, b: int) =
+            FsValueColor.CreateRGB(r, g, b)
+            |> FsColor.ValueColor
+
+        static member CreateRGB(r, g, b: float32) =
+            FsValueColor.CreateRGB(r, g, b)
+            |> FsColor.ValueColor
 
         static member OfItextColor(color: Color) =
             match color with 
@@ -681,6 +789,81 @@ module _Colors =
                 FsValueColor.OfItextColor color
                 |> FsColor.ValueColor
 
+
+    [<RequireQualifiedAccess>]
+    module FsColor =
+        let equal (c1: FsColor) (c2: FsColor) =
+            c1.IsEqualTo(c2)
+
+        let equalToItextB  (c2: FsColor) (c1: Color) =
+            equal (FsColor.OfItextColor c1) c2
+
+        let (|EqualTo|_|) color1 color2 =
+            if equal color1 color2 then Some ()
+            else None
+
+        let isSeparation (c: FsColor) =
+            match c with 
+            | FsColor.Separation _ -> true 
+            | _ -> false
+    
+        let asSeparation (c: FsColor) =
+            match c with 
+            | FsColor.Separation sepa -> Some sepa
+            | _ -> None
+
+        
+        let isCmyk (color: FsColor) =
+            match color with 
+            | FsColor.ValueColor (FsValueColor.Cmyk _) -> true
+            | _ -> false
+    
+        let isGray (color: FsColor) =
+            match color with 
+            | FsColor.ValueColor (FsValueColor.Gray _) -> true
+            | _ -> false
+
+        let isRgb (color: FsColor) =
+            match color with 
+            | FsColor.ValueColor (FsValueColor.Rgb _) -> true
+            | _ -> false
+
+
+
+
+    [<RequireQualifiedAccess>]
+    module FsColors =
+        let tryFindIndex (color: FsColor) colors =
+            colors 
+            |> List.tryFindIndex (fun color' -> color.IsEqualTo(color'))
+
+        let contains (color: FsColor) colors =
+            colors |> List.exists (fun color' -> color.IsEqualTo(color'))
+
+        let containsItext (color: Color) colors =
+            let color = FsColor.OfItextColor color
+            colors |> List.exists (fun color' -> color.IsEqualTo(color'))
+
+        let private comparer =
+            { new IEqualityComparer<FsColor> with 
+                member __.Equals(x,y) = 
+                    FsColor.equal x y
+    
+                member __.GetHashCode(_) = 0
+            }
+
+        let distinct (colors: FsColor seq) =
+            colors.Distinct(comparer)
+  
+    
+        let except colors1 colors2 =
+            colors2 |> List.filter (fun c -> 
+                contains c colors1 
+                |> not
+            )
+
+
+
     [<RequireQualifiedAccess>]
     module Separation =
         let equal valueEqualOptions (c1: Separation) (c2: Separation) =
@@ -688,7 +871,7 @@ module _Colors =
     
     [<RequireQualifiedAccess>]
     module Color =
-    
+
         let isCmyk (color: Color) =
             match color with 
             | :? DeviceCmyk -> true
@@ -717,10 +900,7 @@ module _Colors =
             | :? Colors.Separation as sepa -> Some sepa
             | _ -> None
     
-        let equal (c1: Color) (c2: Color) =
-            let fsColor1 = FsColor.OfItextColor c1
-            let fsColor2 = FsColor.OfItextColor c2
-            fsColor1.IsEqualTo(fsColor2)
+
     
         let pantoneSolidCoated (pantoneEnum: PantoneColorEnum) writer =
             PdfDocument.obtainSperationColorFromResources (@"Pantone+ Solid Coated/" + pantoneEnum.ToString()) writer
@@ -734,16 +914,22 @@ module _Colors =
             | KnownColor.White -> DeviceGray.WHITE :> Color
             | _ -> DeviceRgb.fromKnownColor knownColor :> Color
 
-        let (|EqualTo|_|) color1 color2 =
-            if equal color1 color2 then Some ()
-            else None
+        //[<System.ObsoleteAttribute("Using FsColor instead")>]
+        //let (|EqualTo|_|) color1 color2 =
+        //    if equal color1 color2 then Some ()
+        //    else None
 
     [<RequireQualifiedAccess>]
     module Colors =
+        let private equal (c1: Color) (c2: Color) =
+            let fsColor1 = FsColor.OfItextColor c1
+            let fsColor2 = FsColor.OfItextColor c2
+            fsColor1.IsEqualTo(fsColor2)
+
         let private comparer =
             { new IEqualityComparer<Color> with 
                 member __.Equals(x,y) = 
-                    Color.equal x y
+                    equal x y
     
                 member __.GetHashCode(_) = 0
             }
@@ -751,11 +937,11 @@ module _Colors =
         let distinct (colors: Color seq) =
             colors.Distinct(comparer)
             
-        let contains color colors =
-            colors |> List.exists (Color.equal color)
+        let private contains color colors =
+            colors |> List.exists (equal color)
     
-        let tryFindIndex color colors =
-            colors |> List.tryFindIndex (Color.equal color)
+        let private tryFindIndex color colors =
+            colors |> List.tryFindIndex (equal color)
 
         let except colors1 colors2 =
             colors2 |> List.filter (fun c -> 
@@ -767,14 +953,48 @@ module _Colors =
 
     [<RequireQualifiedAccess>]
     type PdfCanvasColor = 
-        | N
         | Value of FsValueColor
         | Separation of FsSeparation
         | ColorCard of ColorCard
         | Registration
         | Lab of FsLab
     with 
-        static member ITextColor(color: Color) =
+        member x.LoggingText =
+            match x with 
+            | PdfCanvasColor.Value v -> v.LoggingText
+            | PdfCanvasColor.Separation v -> v.LoggingText
+            | PdfCanvasColor.ColorCard colorCard ->
+                match colorCard with 
+                | ColorCard.KnownColor knownColorEnum -> knownColorEnum.ToString()
+                | ColorCard.Pantone colorEnum -> colorEnum.ToString()
+                | ColorCard.TPX tpxColorEnum -> tpxColorEnum.ToString()
+
+            | PdfCanvasColor.Lab labColor -> labColor.LoggingText
+            | PdfCanvasColor.Registration -> "Registration"
+
+        static member CreateRGB(r, g, b: int) =
+            FsValueColor.CreateRGB(r, g, b)
+            |> PdfCanvasColor.Value
+
+        static member CreateRGB(r, g, b: float32) =
+            FsValueColor.CreateRGB(r, g, b)
+            |> PdfCanvasColor.Value
+
+        static member OfFsColor(color: FsColor) =
+            match color with 
+            | FsColor.Separation separation -> 
+                separation
+                |> PdfCanvasColor.Separation
+            | FsColor.IccBased _ -> failwithf "Currently conversion of icc based color to PdfCanvasColor is not supported" 
+            | FsColor.ValueColor valueColor ->
+                valueColor
+                |> PdfCanvasColor.Value
+
+        static member BLACK = FsValueColor.BLACK |> PdfCanvasColor.Value
+        static member WHITE = FsValueColor.WHITE |> PdfCanvasColor.Value
+        static member GRAY = FsValueColor.GRAY |> PdfCanvasColor.Value
+
+        static member OfITextColor(color: Color) =
             match color with 
             | :? Separation as separation -> 
                 FsSeparation.OfSeparation separation
@@ -784,12 +1004,11 @@ module _Colors =
                 FsValueColor.OfItextColor color
                 |> PdfCanvasColor.Value
 
-        member pdfCanvasColor.IsEqualTo(color: Color) =
-            match pdfCanvasColor with 
-            | PdfCanvasColor.N -> false
-            | PdfCanvasColor.Value color1 -> color1.IsEqualTo(color, ValueEqualOptions.DefaultRoundedValue)
-            | PdfCanvasColor.Separation separation1 -> separation1.IsEqualTo(color, ValueEqualOptions.DefaultRoundedValue)
-            | PdfCanvasColor.ColorCard colorCard1 ->
+        member pdfCanvasColor.IsEqualTo(fsColor: FsColor) =
+            match pdfCanvasColor,fsColor with 
+            | PdfCanvasColor.Value color1, FsColor.ValueColor color2 -> color1.IsEqualTo(color2)
+            | PdfCanvasColor.Separation separation1, FsColor.Separation separation2 -> separation1.IsEqualTo(separation2)
+            | PdfCanvasColor.ColorCard colorCard1, _ ->
     
                 match colorCard1 with 
                 | ColorCard.Pantone _ 
@@ -800,30 +1019,75 @@ module _Colors =
                         | ColorCard.TPX tpxColor1 -> FsSeparation.OfTpx tpxColor1
                         | ColorCard.KnownColor knownColor -> failwith "Invalid token"
                     
-                    separation1.IsEqualTo(color, ValueEqualOptions.RoundedValue 0)
-                | ColorCard.KnownColor knownColor1 ->
-                    let itextColor1 = 
-                        (Color.fromKnownColor knownColor1)
-                        |> FsValueColor.OfItextColor
-                        |> PdfCanvasColor.Value
-                        
-                    itextColor1.IsEqualTo(color)
-    
-            | PdfCanvasColor.Lab labColor1 -> 
-                match color with 
-                | :? Lab as labColor ->
-                    let colorValue1 = (FsValueColor.Lab labColor1).GetColorValue()
-                    let colorValue = labColor.GetColorValue() |> List.ofArray
-                    colorValue = colorValue1
-                | _ -> false
-    
-            | PdfCanvasColor.Registration ->
-                 FsSeparation.Registration.IsEqualTo(color, ValueEqualOptions.RoundedValue 0)
+                    match fsColor with 
+                    | FsColor.Separation separation2 ->
+                        separation1.IsEqualTo(separation2, ValueEqualOptions.RoundedValue 0)
+                    | _ -> false
 
-        static member Contains(color: Color) (pdfCanvasColor: PdfCanvasColor list) =
+                | ColorCard.KnownColor knownColor1 ->
+                    let knownColor1 = 
+                        (FsValueColor.fromKnownColor knownColor1)
+                        |> PdfCanvasColor.Value
+
+                    knownColor1.IsEqualTo(fsColor)
+    
+            | PdfCanvasColor.Lab labColor1, _ -> 
+                (PdfCanvasColor.Value (FsValueColor.Lab labColor1)).IsEqualTo(fsColor)
+    
+            | PdfCanvasColor.Registration, _ ->
+                 PdfCanvasColor.Separation(FsSeparation.Registration).IsEqualTo(fsColor)
+
+            | _, _ -> false
+
+        member pdfCanvasColor.IsEqualToItextColor(color: Color) =
+            pdfCanvasColor.IsEqualTo(FsColor.OfItextColor color)
+
+        static member Contains(color: FsColor) (pdfCanvasColor: PdfCanvasColor list) =
             pdfCanvasColor
             |> List.exists(fun pdfCanvasColor -> pdfCanvasColor.IsEqualTo(color))
   
+        
+
+    [<RequireQualifiedAccess>]
+    type NullablePdfCanvasColor =
+        | N 
+        | Value of FsValueColor
+        | Separation of FsSeparation
+        | ColorCard of ColorCard
+        | Registration
+        | Lab of FsLab
+    with 
+
+        static member OfPdfCanvasColor color =
+            match color with 
+            | PdfCanvasColor.Value v ->                 NullablePdfCanvasColor.Value         v
+            | PdfCanvasColor.Separation v ->            NullablePdfCanvasColor.Separation    v
+            | PdfCanvasColor.ColorCard v ->             NullablePdfCanvasColor.ColorCard     v
+            | PdfCanvasColor.Lab v ->                   NullablePdfCanvasColor.Lab           v
+            | PdfCanvasColor.Registration ->            NullablePdfCanvasColor.Registration  
+                             
+        static member BLACK = PdfCanvasColor.BLACK |> NullablePdfCanvasColor.OfPdfCanvasColor
+        static member WHITE = PdfCanvasColor.WHITE |> NullablePdfCanvasColor.OfPdfCanvasColor
+        static member GRAY =  PdfCanvasColor.GRAY  |> NullablePdfCanvasColor.OfPdfCanvasColor
+
+        static member OfFsColor color =
+            PdfCanvasColor.OfFsColor color
+            |> NullablePdfCanvasColor.OfPdfCanvasColor
+
+        static member OfITextColor(color) =
+            PdfCanvasColor.OfITextColor(color) 
+            |> NullablePdfCanvasColor.OfPdfCanvasColor
+
+    [<RequireQualifiedAccess>]
+    module NullablePdfCanvasColor =
+        let (|Non|PdfCanvasColor|) = function
+            | NullablePdfCanvasColor.N -> Non ()
+            | NullablePdfCanvasColor.Value           v   -> PdfCanvasColor(PdfCanvasColor.Value        v)
+            | NullablePdfCanvasColor.Separation      v   -> PdfCanvasColor(PdfCanvasColor.Separation   v)
+            | NullablePdfCanvasColor.ColorCard       v   -> PdfCanvasColor(PdfCanvasColor.ColorCard    v)
+            | NullablePdfCanvasColor.Lab             v   -> PdfCanvasColor(PdfCanvasColor.Lab          v)
+            | NullablePdfCanvasColor.Registration        -> PdfCanvasColor(PdfCanvasColor.Registration  )
+
 
     type Color with 
         member x.IsEqualTo(fsSeparation: FsSeparation, valueEqualOptions) =
@@ -849,7 +1113,7 @@ module _Colors =
 
     [<RequireQualifiedAccess>]
     type FsItextPersistableColor =
-        | Value of Color
+        | Value of FsValueColor
         | Separation of FsSeparation
 
     with 
@@ -859,13 +1123,13 @@ module _Colors =
                 FsSeparation.OfSeparation separationColor
                 |> FsItextPersistableColor.Separation
 
-            | _ -> FsItextPersistableColor.Value (color)
+            | _ -> FsItextPersistableColor.Value (FsValueColor.OfItextColor color)
 
         
         static member IsEqual (color1: FsItextPersistableColor, color2: FsItextPersistableColor, valueEqualOptions) =
             match color1, color2 with 
             | FsItextPersistableColor.Value color1, FsItextPersistableColor.Value color2 ->
-                FsValueColor.IsEqual(FsValueColor.OfItextColor color1, FsValueColor.OfItextColor color2, valueEqualOptions)
+                FsValueColor.IsEqual(color1, color2, valueEqualOptions)
          
             | FsItextPersistableColor.Separation color1, FsItextPersistableColor.Separation color2 ->
                 FsSeparation.IsEqual (color1, color2, valueEqualOptions)

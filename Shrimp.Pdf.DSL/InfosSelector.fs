@@ -66,10 +66,10 @@ module InfosSelector =
 [<AutoOpen>]
 module _InfosSelector =
 
-    type TextInfoRecordsPicker<'userState, 'result> = PageModifingArguments<'userState> -> seq<IntegratedTextRenderInfo> -> 'result 
-    type TextInfoRecordsPicker<'userState> = TextInfoRecordsPicker<'userState, string list>
+    type TextInfosPicker<'userState, 'result> = PageModifingArguments<'userState> -> seq<IntegratedTextRenderInfo> -> 'result 
+    type TextInfosPicker<'userState> = TextInfosPicker<'userState, string list>
 
-    let private pickerToExists predicate (textInfosPicker: (_ -> _ option) -> TextInfoRecordsPicker<_>) =
+    let private pickerToExists predicate (textInfosPicker: (_ -> _ option) -> TextInfosPicker<_>) =
         let picker (text: _) =
             match predicate text with 
             | true -> Some ""
@@ -85,7 +85,7 @@ module _InfosSelector =
 
     type TextInfos = 
 
-        static member PickText(picker: TextInfoRecord -> _ option): TextInfoRecordsPicker<_, _> = 
+        static member PickText(picker: TextInfoRecord -> _ option): TextInfosPicker<_, _> = 
             fun (args: PageModifingArguments<_>) infos ->
                 let infos =
                     infos
@@ -93,7 +93,7 @@ module _InfosSelector =
 
                 PageModifier.PickTexts(picker) args infos
 
-        static member PickExactlyOneText(picker: TextInfoRecord -> _ option): TextInfoRecordsPicker<_, _> = 
+        static member PickExactlyOneText(picker: TextInfoRecord -> _ option): TextInfosPicker<_, _> = 
             fun (args: PageModifingArguments<_>) textInfos ->
 
                 let infos =
@@ -116,7 +116,7 @@ module _InfosSelector =
                     failwithf "Found multiple texts %A in %A by picker %A" rs records picker
 
 
-        static member PickText(picker: string -> string option): TextInfoRecordsPicker<_> = 
+        static member PickText(picker: string -> string option): TextInfosPicker<_> = 
             fun (args: PageModifingArguments<_>) infos ->
                 let infos =
                     infos
@@ -125,7 +125,7 @@ module _InfosSelector =
                 PageModifier.PickTexts(picker) args infos
 
                 
-        static member PickText_In_OneLine(picker: string -> string option, ?delimiter: string, ?selectionGrouper: SelectionGrouper): TextInfoRecordsPicker<_> = 
+        static member PickText_In_OneLine(picker: string -> string option, ?delimiter: string, ?selectionGrouper: SelectionGrouper): TextInfosPicker<_> = 
             fun (args: PageModifingArguments<_>) infos ->
                 let infos =
                     infos
