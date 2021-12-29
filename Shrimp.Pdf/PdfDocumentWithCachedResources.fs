@@ -8,6 +8,7 @@ open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Colors
+open Shrimp.FSharp.Plus
 
 module private FontExtensions =
     let private fontRegisterCache = new ConcurrentDictionary<string, RegisterableFont>()
@@ -129,43 +130,61 @@ type PdfDocumentWithCachedResources =
 
 
 type IntegratedDocument internal (reader: string, writer: string) =
-    let mutable pdfDocument = None
+    let mutable pdfDocument: Lazy<PdfDocumentWithCachedResources> option = None
     let mutable isOpened = false
 
     member x.ReaderPath = reader
 
     member x.WriterPath = writer
 
-    member x.Value = 
+    member x.LazyValue =
         match pdfDocument with 
         | Some document -> document
         | None -> failwith "document is not open yet please open it first"
+
+
+    member x.Value = x.LazyValue.Value
 
     member internal x.Open() =
         if not isOpened
         then
             match pdfDocument with 
-            | Some (oldPdfDocument: PdfDocumentWithCachedResources) ->
-                if oldPdfDocument.IsClosed()
-                then 
-                    pdfDocument <- Some (new PdfDocumentWithCachedResources(reader, writer, oldPdfDocument))
-                else failwith "Old document is not closed yet"
+            | Some (oldPdfDocument) ->
+                match oldPdfDocument with 
+                | Lazy.ValueCreated oldPdfDocument ->
+
+                    if oldPdfDocument.IsClosed()
+                    then 
+                        pdfDocument <- Some (lazy new PdfDocumentWithCachedResources(reader, writer, oldPdfDocument))
+                    else failwith "Old document is not closed yet"
+
+                | Lazy.NotCreated ->
+                    pdfDocument <- Some (lazy new PdfDocumentWithCachedResources(reader, writer))
+                    
+
             | None ->
-                pdfDocument <- Some (new PdfDocumentWithCachedResources(reader, writer))
+                pdfDocument <- Some (lazy new PdfDocumentWithCachedResources(reader, writer))
 
         isOpened <- true
 
     member internal x.CloseAndDraft() =
-        x.Value.Close()
-        File.Delete(reader)
-        File.Move(writer, reader)
+        match x.LazyValue with 
+        | Lazy.ValueCreated value ->
+            value.Close()
+            File.Delete(reader)
+            File.Move(writer, reader)
+
+        | Lazy.NotCreated _ -> ()
 
         isOpened <- false
 
-    member internal x.TryCloseIfOpened() =
+    member internal x.TryCloseAndDisposeWriter_IfOpened() =
         match isOpened with 
         | true ->
-            x.Value.Close()
+            match x.LazyValue with 
+            | Lazy.ValueCreated value -> value.Close()
+            | Lazy.NotCreated _ -> ()
+
             isOpened <- false
         | false -> ()
 

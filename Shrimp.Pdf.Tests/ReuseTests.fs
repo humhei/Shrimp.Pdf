@@ -8,6 +8,7 @@ open Shrimp.Pdf.Extensions
 open iText.Kernel.Colors
 open Shrimp.Pdf.DSL
 open Shrimp.FSharp.Plus
+open iText.Kernel.Pdf
 open Shrimp.Pdf.Colors
 
 let reuseTests =
@@ -29,7 +30,23 @@ let reuseTests =
         |> runTest "datas/reuse/add foreground.pdf" 
         |> ignore
 
-    ftestCase "impose cell rotation tests" <| fun _ -> 
+    testCase "impose cell rotation tests" <| fun _ -> 
+
+        let readB255Bound() =
+            ModifyPage.Create( 
+                "read b255 bound",
+                PageSelector.All,
+                Path (
+                    Info.StrokeColorIs FsColor.RGB_BLUE
+                    <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)
+                ),
+                PageModifier.GetBoundOfSelector()
+            )
+
+        let flow =
+            Flow.Manipulate(readB255Bound())
+
+        let m = PdfRunner.OneFileFlow_UserState(PdfFile @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\NAUTICA\.btw\ESO0510\鞋图贴标.pdf") flow
 
         Flow.Manipulate(Manipulate.dummy())
         <+>

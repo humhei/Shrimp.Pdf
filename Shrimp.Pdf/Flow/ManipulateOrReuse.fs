@@ -21,7 +21,7 @@ module internal rec ManipulateOrReuse =
         member x.TryCloseAndDisposeWriter_IfOpened() =
             match x with 
             | SplitOrIntegratedDocument.SplitDocument document -> document.TryCloseAndDisposeWriter_IfOpened()
-            | SplitOrIntegratedDocument.IntegratedDocument document -> document.TryCloseIfOpened()
+            | SplitOrIntegratedDocument.IntegratedDocument document -> document.TryCloseAndDisposeWriter_IfOpened()
     
 
     type FlowModel<'userState> =

@@ -775,12 +775,14 @@ module _Colors =
         | Separation of FsSeparation
         | IccBased of FsIccBased
         | ValueColor of FsValueColor
+        | PatternColor of PatternColor
     with 
         member x.LoggingText =
             match x with 
             | FsColor.Separation v -> v.LoggingText
             | FsColor.IccBased v -> v.LoggingText
             | FsColor.ValueColor v -> v.LoggingText
+            | FsColor.PatternColor _ -> "PatternColor"
 
         member x.IsEqualTo(y, ?valueEqualOptions) =
             let valueEqualOptions = defaultArg valueEqualOptions ValueEqualOptions.DefaultRoundedValue
@@ -846,6 +848,7 @@ module _Colors =
                 | :? IccBased as iccBased -> 
                     FsIccBased.OfICCBased iccBased
                     |> FsColor.IccBased
+                | :? PatternColor as patternColor -> FsColor.PatternColor patternColor
                 | _ -> 
                     FsValueColor.OfItextColor color
                     |> FsColor.ValueColor
@@ -1059,9 +1062,12 @@ module _Colors =
                 separation
                 |> PdfCanvasColor.Separation
             | FsColor.IccBased _ -> failwithf "Currently conversion of icc based color to PdfCanvasColor is not supported" 
+            | FsColor.PatternColor _ -> failwithf "Currently conversion of pattern color to PdfCanvasColor is not supported" 
             | FsColor.ValueColor valueColor ->
                 valueColor
                 |> PdfCanvasColor.Value
+
+
 
         static member BLACK = FsValueColor.BLACK |> PdfCanvasColor.Value
         static member WHITE = FsValueColor.WHITE |> PdfCanvasColor.Value

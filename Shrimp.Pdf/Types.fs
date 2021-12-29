@@ -190,9 +190,9 @@ type ReaderDocument (reader: string) =
 
 
 type SplitDocument internal (reader: string, writer: string) =
-    let mutable readerDocument: PdfDocument option = None
+    let mutable readerDocument: Lazy<PdfDocument> option = None
 
-    let mutable writerDocument: PdfDocumentWithCachedResources option = None
+    let mutable writerDocument: Lazy<PdfDocumentWithCachedResources> option = None
 
     let mutable isOpened = false
 
@@ -200,60 +200,97 @@ type SplitDocument internal (reader: string, writer: string) =
 
     member x.WriterPath = writer
 
-    member x.Reader = 
+    member private x.LazyReader = 
         match readerDocument with 
         | Some reader -> reader
         | None -> failwith "document is not open yet please open it first"
 
-    member x.Writer = 
+    member x.Reader = x.LazyReader.Value
+        
+    member private x.LazyWriter = 
         match writerDocument with 
         | Some writer -> writer
         | None -> failwith "document is not open yet please open it first"
+
+    member x.Writer = x.LazyWriter.Value 
+     
 
     member internal x.Open() =
         if not isOpened 
         then
             match readerDocument with 
             | Some readerDocument1 ->
-                if readerDocument1.IsClosed() 
-                then
-                    readerDocument <- Some (new PdfDocument(new PdfReader(reader)))
-                else 
-                    failwith "Old document is not closed yet"
+                match readerDocument1 with 
+                | Lazy.ValueCreated readerDocument1 ->
+                    if readerDocument1.IsClosed() 
+                    then
+                        readerDocument <- Some (lazy new PdfDocument(new PdfReader(reader)))
+                    else 
+                        failwith "Old document is not closed yet"
 
-            | None -> readerDocument <- Some (new PdfDocument(new PdfReader(reader)))
+                | Lazy.NotCreated -> readerDocument <- Some (lazy new PdfDocument(new PdfReader(reader)))
+
+            | None -> readerDocument <- Some (lazy new PdfDocument(new PdfReader(reader)))
 
             match writerDocument with 
             | Some writerDocument1 ->
-                if writerDocument1.IsClosed() 
-                then
-                    writerDocument <- Some (new PdfDocumentWithCachedResources(writer))
-                else 
-                    failwith "Old document is not closed yet"
+                match writerDocument1 with 
+                | Lazy.ValueCreated writerDocument1 ->
+                    if writerDocument1.IsClosed() 
+                    then
+                        writerDocument <- Some (lazy new PdfDocumentWithCachedResources(writer))
+                    else 
+                        failwith "Old document is not closed yet"
+                | _ -> writerDocument <- Some (lazy new PdfDocumentWithCachedResources(writer))
+
             | None ->
-                writerDocument <- Some(new PdfDocumentWithCachedResources(writer))
+                writerDocument <- Some(lazy new PdfDocumentWithCachedResources(writer))
 
         isOpened <- true
 
+    member internal x.CloseAndDraft() =
+        match x.LazyReader, x.LazyWriter with 
+        | Lazy.ValueCreated readerDocument, Lazy.ValueCreated writerDocument ->
+            readerDocument.Close()
+            writerDocument.Close()
+            File.Delete(reader)
+            File.Move(writer, reader)
+
+        | Lazy.ValueCreated readerDocument, Lazy.NotCreated ->
+            readerDocument.Close()
+
+        | Lazy.NotCreated, Lazy.ValueCreated writerDocument ->
+            writerDocument.Close()
+            File.Delete(reader)
+            File.Move(writer, reader)
+
+        | Lazy.NotCreated, Lazy.NotCreated -> ()
+
+        isOpened <- false
+
     member internal x.TryCloseAndDisposeWriter_IfOpened() =
         match isOpened with 
-        | true ->
-            x.Reader.Close()
-            match x.Writer.GetNumberOfPages() with 
-            | 0 -> x.Writer.AddNewPage() |> ignore
-            | _ -> ()
-            x.Writer.Close()
-            File.Delete writer
+        | true ->   
+            
+            match x.LazyReader with 
+            | Lazy.ValueCreated readerDocument -> readerDocument.Close()
+            | Lazy.NotCreated _ -> ()
+
+            match x.LazyWriter with 
+            | Lazy.ValueCreated writerDocument ->
+                
+                match writerDocument.GetNumberOfPages() with 
+                | 0 -> writerDocument.AddNewPage() |> ignore
+                | _ -> ()
+
+                writerDocument.Close()
+                File.Delete(writer)
+
+            | Lazy.NotCreated _ -> ()
+
             isOpened <- false
         | false -> ()
 
-    member internal x.CloseAndDraft() =
-        x.Reader.Close()
-        x.Writer.Close()
-
-        File.Delete(reader)
-        File.Move(writer, reader)
-        isOpened <- false
 
     static member Create(reader, writer) = new SplitDocument(reader, writer)
 

@@ -15,8 +15,8 @@
     <PackageReference Include="FParsec" Version="1.1.1" />
     <PackageReference Include="itext7" Version="7.1.9" />
     <PackageReference Include="itext7.font-asian" Version="7.1.9" />
-    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.27"/>
-    <PackageReference Include="Shrimp.FSharp.Plus" Version="1.1.202"/>
+    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.27" />
+    <PackageReference Include="Shrimp.FSharp.Plus" Version="1.1.206" />
   </ItemGroup>
 
   <ItemGroup>

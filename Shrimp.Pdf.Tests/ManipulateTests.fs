@@ -16,7 +16,7 @@ let manipulateTests =
 
 
     testCase "change separation color of pdfFunction2 PageNumber to m100" <| fun _ -> 
-
+        
         let pageNumberSeparationColor: PdfCanvasColor =
             FsSeparation.Create("PageNumber", DeviceRgb(200, 0, 56))
             |> PdfCanvasColor.Separation
@@ -129,6 +129,21 @@ let manipulateTests =
             ) 
         )
         |> runTest "datas/manipulate/change stroke color b255 to m100_2.pdf" 
+        |> ignore
+
+    ftestCase "change stroke color b255 to m100_3" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.Expr(PageSelectorExpr.create "1"),
+                [
+                    { Name = "change stroke color b255 to m100"
+                      Selector = Path(Info.FillColorIs FsColor.RGB_BLUE)
+                      Modifiers = [Modifier.SetStrokeColor(DeviceCmyk.MAGENTA)]
+                    }
+                ]
+            ) 
+        )
+        |> runTest "datas/manipulate/change stroke color b255 to m100_3.pdf" 
         |> ignore
 
     testCase "change red to black outside of trimbox" <| fun _ -> 

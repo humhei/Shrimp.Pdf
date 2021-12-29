@@ -53,7 +53,7 @@ type PageModifier =
 
 
     static member GetBoundOfSelector() : PageModifier<_, _> =
-        fun (args: PageModifingArguments<_>) infos ->
+        fun (args: PageModifingArguments<_>) infos ->   
             let trimedBox = 
                 infos
                 |> Seq.map (IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth)
