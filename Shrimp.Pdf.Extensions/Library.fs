@@ -112,6 +112,17 @@ module iText =
         member this.GetYCenter() = (this.GetTop() + this.GetBottom()) / 2.f
         member this.GetYCenterF() = this.GetYCenter() |> float
 
+        member rect.applyMargin(margin :Margin) =   
+            let left = margin.Left
+            let top = margin.Top
+            let right = margin.Right
+            let bottom = margin.Bottom
+            let x = rect.GetXF() - left
+            let y = rect.GetYF() - bottom
+            let width = rect.GetWidthF() + left + right 
+            let height = rect.GetHeightF() + top + bottom
+            Rectangle(float32 x, float32 y, float32 width, float32 height)
+
         member this.setHeight(effect: YEffect, fHeight: float -> float) =
             let height = this.GetHeightF()
             let newHeight = fHeight height
@@ -166,6 +177,7 @@ module iText =
             |> List.distinct
 
         member this.IsOutsideOf(rect: Rectangle) =
+            let rect = rect.applyMargin(Margin.Create -tolerance.Value)
             this.GetBottom() > rect.GetTop() 
             || this.GetTop() < rect.GetBottom()
             || this.GetLeft() > rect.GetRight()
@@ -174,6 +186,7 @@ module iText =
 
 
         member this.IsInsideOf(rect: Rectangle) =
+            let rect = rect.applyMargin(Margin.Create tolerance.Value)
             this.GetBottom() > rect.GetBottom()
             && this.GetTop() < rect.GetTop()
             && this.GetLeft() > rect.GetLeft()
@@ -487,15 +500,7 @@ module iText =
             create x y width height
 
         let applyMargin (margin:Margin) (rect: Rectangle) =
-            let left = margin.Left
-            let top = margin.Top
-            let right = margin.Right
-            let bottom = margin.Bottom
-            let x = rect.GetXF() - left
-            let y = rect.GetYF() - bottom
-            let width = rect.GetWidthF() + left + right 
-            let height = rect.GetHeightF() + top + bottom
-            create x y width height
+            rect.applyMargin(margin)
 
     [<RequireQualifiedAccess>]
     module AffineTransform = 
@@ -664,8 +669,12 @@ module iText =
             let info = info.Value
             let ascent = info.GetAscentLine()
             let descent = info.GetDescentLine()
-            ascent.GetStartPoint().Get(1) - descent.GetStartPoint().Get(1)
-            |> float
+            let baseHeight = 
+                ascent.GetStartPoint().Get(1) - descent.GetStartPoint().Get(1)
+                |> float
+
+            let redirectedHeight = textInfoHeightRedirectPercentage.Value * baseHeight
+            redirectedHeight
 
         let getWidth (info: ITextRenderInfo) =
             let info = info.Value

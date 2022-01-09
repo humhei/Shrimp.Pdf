@@ -131,14 +131,18 @@ let manipulateTests =
         |> runTest "datas/manipulate/change stroke color b255 to m100_2.pdf" 
         |> ignore
 
-    ftestCase "change stroke color b255 to m100_3" <| fun _ -> 
+    testCase "change stroke color b255 to m100_3" <| fun _ -> 
         Flow.Manipulate (
             Modify.Create(
                 PageSelector.Expr(PageSelectorExpr.create "1"),
                 [
                     { Name = "change stroke color b255 to m100"
-                      Selector = Path(Info.FillColorIs FsColor.RGB_BLUE)
-                      Modifiers = [Modifier.SetStrokeColor(DeviceCmyk.MAGENTA)]
+                      Selector = PathOrText(Info.FillColorIs FsColor.RGB_BLUE)
+                      Modifiers = [
+                        ( fun args ->
+                            Modifier.SetStrokeColor(DeviceCmyk.MAGENTA) args 
+                        )
+                    ]
                     }
                 ]
             ) 
@@ -229,6 +233,44 @@ let manipulateTests =
             )
         )
         |> runTest "datas/manipulate/add bound to text.pdf" 
+        |> ignore
+
+    testCase "add bound to text3" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "add bound to text"
+                      Selector = Text(fun _ _ -> true) 
+                      Modifiers = [
+                        Modifier.AddRectangleToBound(fun args -> 
+                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor (PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
+                        )
+                      ]
+                    }
+                ]
+            )
+        )
+        |> runTest "datas/manipulate/add bound to text3.pdf" 
+        |> ignore
+
+    testCase "add bound to text4" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "add bound to text"
+                      Selector = Text(fun _ _ -> true) 
+                      Modifiers = [
+                        Modifier.AddRectangleToBound(fun args -> 
+                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor (PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
+                        )
+                      ]
+                    }
+                ]
+            )
+        )
+        |> runTest "datas/manipulate/add bound to text4.pdf" 
         |> ignore
 
     testCase "add bound to text2" <| fun _ -> 
@@ -774,5 +816,23 @@ let manipulateTests =
         |> runTest "datas/manipulate/trim to visible2.pdf" 
         |> ignore
 
+    testCase "test infos" <| fun _ -> 
+        let flow =
+            ModifyPage.Create(
+                "trim to visible",
+                PageSelector.All,
+                PathOrText (fun _ _ -> true),
+                (fun args renderInfos ->
+                    let infos = List.ofSeq renderInfos
+                    ()
+
+                )
+            )
+
+        Flow.Manipulate(
+            flow
+        )
+        |> runTest "datas/manipulate/testInfos.pdf" 
+        |> ignore
 
   ]

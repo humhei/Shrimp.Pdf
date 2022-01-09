@@ -9,10 +9,6 @@ open Shrimp.FSharp.Plus
 
 [<AutoOpen>]
 module ExtensionTypes =
-
-
-    
-
     type Direction =
         | Vertical = 0
         | Horizontal = 1

@@ -11,6 +11,8 @@ open Shrimp.Pdf.Colors
 open Shrimp.FSharp.Plus
 open System.Collections.Generic
 open System.Linq
+open FParsec
+open FParsec.CharParsers
 
 
 [<AutoOpen>]
@@ -186,6 +188,13 @@ type Info_BoundIs_Args (relativePosition: RelativePosition, ?areaGettingOptions,
 
 
 type TextInfo =
+    static member FPrasec(parser: Parser<_, _>) =
+        fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
+            match run parser (info.Value.GetText()) with 
+            | Success _ -> true
+            | Failure _ -> false
+
+
     static member TextContainsIC(text: string) =
         fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
             info.Value.GetText().Contains(text, true)

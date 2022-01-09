@@ -32,22 +32,6 @@ let reuseTests =
 
     testCase "impose cell rotation tests" <| fun _ -> 
 
-        let readB255Bound() =
-            ModifyPage.Create( 
-                "read b255 bound",
-                PageSelector.All,
-                Path (
-                    Info.StrokeColorIs FsColor.RGB_BLUE
-                    <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)
-                ),
-                PageModifier.GetBoundOfSelector()
-            )
-
-        let flow =
-            Flow.Manipulate(readB255Bound())
-
-        let m = PdfRunner.OneFileFlow_UserState(PdfFile @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\NAUTICA\.btw\ESO0510\鞋图贴标.pdf") flow
-
         Flow.Manipulate(Manipulate.dummy())
         <+>
         Flow.Reuse (
@@ -59,11 +43,11 @@ let reuseTests =
                         DesiredSizeOp = Some { Width = mm 35.; Height = mm 82.}
                         ColNums = [10]
                         RowNum = 5
-                        Cropmark = Some Cropmark.defaultValue
+                        Cropmark = Some { Cropmark.defaultValue with IsRevealedBetweenCells = false }
                         Background = Background.Size FsSize.A0
                         Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 6.))
-                        HSpaceExes = Spaces [mm 3.; mm 9.]
-                        VSpaceExes = Spaces [mm 3.; mm 9.]
+                        HSpaceExes = Spaces [mm 3.; mm 20.]
+                        VSpaceExes = Spaces [mm 3.; mm 20.]
                         UseBleed = true
                         IsRepeated = true
                         CellRotation = CellRotation.R180WhenRowNumIsEven

@@ -22,6 +22,11 @@ module Operators =
         lazy
             config.Value.GetDouble("shrimp.pdf.tolerance")
 
+    let textInfoHeightRedirectPercentage = 
+        lazy
+            config.Value.GetDouble("shrimp.pdf.textInfoHeightRedirectPercentage")
+
+
     /// approximately equal to 
     /// benchmark by (CONFIG: shrimp.pdf.tolerance (default is 0.1))
     let (@=) a b =

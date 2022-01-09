@@ -317,24 +317,24 @@ module ModifyPageOperators =
 
 
     type PdfRunner with 
-        static member ReadInfos(pdfFile: PdfFile, selector, pageModifier: PageModifier<_, _>, ?name) =
-            let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path
-            let flow = 
-                ModifyPage.Create(
-                    defaultArg name ("Read infos from" + pdfFileName),
-                    PageSelector.All,
-                    selector,
-                    pageModifier
-                )
-                |> Flow.Manipulate
+        //static member ReadInfos(pdfFile: PdfFile, selector, pageModifier: PageModifier<_, _>, ?name) =
+        //    let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path
+        //    let flow = 
+        //        ModifyPage.Create(
+        //            defaultArg name ("Read infos from" + pdfFileName),
+        //            PageSelector.All,
+        //            selector,
+        //            pageModifier
+        //        )
+        //        |> Flow.Manipulate
 
-            match run (pdfFile.Path) flow with 
-            | [flowModel] -> flowModel.UserState
-            | [] -> failwith "Invalid token"
-            | flowModels ->  failwithf "Multiple flowModels %A are found" flowModels
+        //    match run (pdfFile.Path) flow with 
+        //    | [flowModel] -> flowModel.UserState
+        //    | [] -> failwith "Invalid token"
+        //    | flowModels ->  failwithf "Multiple flowModels %A are found" flowModels
 
         /// default pageSelector is PageSelector.First
-        static member CheckInfos(pdfFile: PdfFile, selector, ?name, ?pageSelector) =
+        static member CheckInfos(pdfFile: PdfFile, selector, ?name, ?backupPdfPath, ?pageSelector) =
             let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path
             let flow = 
                 ModifyPage.Create(
@@ -344,6 +344,11 @@ module ModifyPageOperators =
                     (fun _ infos -> Seq.length infos)
                 )
                 |> Flow.Manipulate
+
+            let run =
+                match backupPdfPath with 
+                | Some backupPdfPath -> runWithBackup backupPdfPath
+                | None -> run
 
             match run (pdfFile.Path) flow with 
             | [flowModel] -> 

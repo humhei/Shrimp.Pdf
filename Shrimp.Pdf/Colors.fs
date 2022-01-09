@@ -790,6 +790,7 @@ module _Colors =
             | FsColor.IccBased x, FsColor.IccBased y -> x.IsEqualTo(y, valueEqualOptions)
             | FsColor.Separation x, FsColor.Separation y -> x.IsEqualTo(y, valueEqualOptions)
             | FsColor.ValueColor x, FsColor.ValueColor y -> x.IsEqualTo(y, valueEqualOptions)
+            | FsColor.PatternColor x, FsColor.PatternColor y -> false
             | _, _ -> false
 
         static member RGB_BLACK = FsValueColor.RGB_BLACK  |> FsColor.ValueColor

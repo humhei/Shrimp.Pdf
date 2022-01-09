@@ -130,6 +130,7 @@ module Imposing =
         { Length: float
           Distance: float
           Width: float
+          IsRevealedBetweenCells: bool
           Color: PdfCanvasColor }
 
     [<RequireQualifiedAccess>]
@@ -138,6 +139,7 @@ module Imposing =
             { Length = mm 3.8
               Distance = mm 3.2
               Width = mm 0.1
+              IsRevealedBetweenCells = true
               Color = PdfCanvasColor.Registration }
 
 
@@ -436,6 +438,13 @@ module Imposing =
             ImposingArguments(fillingMode, args)
 
 
+    type private ItemPosition =
+        | First = 0 
+        | Middle = 1
+        | Last = 2
+        | FirstAndLast = 3
+
+
 
     /// coordinate origin is left top of table
     /// y: top -> bottom --------0 -> tableHeight
@@ -468,6 +477,29 @@ module Imposing =
 
         member x.UseBleed = x.ImposingArguments.Value.UseBleed
 
+        member private cell.ColumnPosition() =
+            let cells = cell.ImposingRow.Cells
+            let index = cell.Index
+            if cells.Count = 1 then ItemPosition.FirstAndLast
+            else
+                match index with 
+                | 0 -> ItemPosition.First
+                | index when index = cells.Count - 1 -> ItemPosition.Last
+                | _ -> ItemPosition.Middle 
+
+        member private cell.RowPosition() =
+            let row = cell.ImposingRow
+            let rows = row.ImposingSheet.Rows
+            let rowIndex = row.RowIndex
+            let index = rowIndex
+            if rows.Count = 1 then ItemPosition.FirstAndLast
+            else
+                match  index with 
+                | 0 -> ItemPosition.First
+                | index when index = rows.Count - 1 -> ItemPosition.Last
+                | _ -> ItemPosition.Middle
+
+
         member private cell.GetXObjectContentBox() =
             let xObjectContentBox = 
                 if cell.UseBleed
@@ -497,41 +529,16 @@ module Imposing =
                 let actualBox = cell.Page.GetActualBox()
 
                 let cells = cell.ImposingRow.Cells
-                let colIndex = cell.ImposingRow.Cells.IndexOf(cell)
-                let rowIndex = cell.ImposingRow.RowIndex
-
 
                 if Rectangle.equal trimBox actualBox then xobject
                 else 
-                    let (|ColumnFirst|ColumnLast|ColumnMiddle|ColumnFirstAndLast|) (cell: ImposingCell) =
-                        let cells = cell.ImposingRow.Cells
-                        let index = colIndex
-                        if cells.Count = 1 then ColumnFirstAndLast
-                        else
-                            match index with 
-                            | 0 -> ColumnFirst
-                            | index when index = cells.Count - 1 -> ColumnLast
-                            | _ -> ColumnMiddle 
-
-                    let (|RowFirst|RowLast|RowMiddle|RowFirstAndLast|) (row: ImposingRow) =
-                        let rows = row.ImposingSheet.Rows
-                        let index = rowIndex
-                        if rows.Count = 1 then RowFirstAndLast
-                        else
-                            match  index with 
-                            | 0 -> RowFirst
-                            | index when index = rows.Count - 1 -> RowLast
-                            | _ -> RowMiddle
-
-
-
                     let bbox = 
                         let x, width =
                             
-                            let index = colIndex
+                            let index = cell.Index
 
-                            match cell with 
-                            | ColumnFirst   ->
+                            match cell.ColumnPosition() with 
+                            | ItemPosition.First   ->
                                 let x = actualBox.GetXF()
                                 
                                 let width = 
@@ -540,9 +547,9 @@ module Imposing =
 
                                 x, width
 
-                            | ColumnFirstAndLast ->  actualBox.GetXF() , actualBox.GetWidthF()
+                            | ItemPosition.FirstAndLast ->  actualBox.GetXF() , actualBox.GetWidthF()
 
-                            | ColumnMiddle ->
+                            | ItemPosition.Middle ->
                                 let preHSpace = cell.HSpaces.[(index - 1) % cell.HSpaces.Length] / scaleX
                                 let nextHSpace = cell.HSpaces.[(index) % cell.HSpaces.Length] / scaleX
 
@@ -552,7 +559,7 @@ module Imposing =
 
              
 
-                            | ColumnLast ->
+                            | ItemPosition.Last ->
                                 let preHSpace = cell.HSpaces.[(index - 1) % cell.HSpaces.Length] / scaleX
 
                                 let x = trimBox.GetXF() - preHSpace / 2.
@@ -565,10 +572,10 @@ module Imposing =
 
                         let y, height = 
                             let row = cell.ImposingRow
-                            let index = rowIndex
+                            let index = row.RowIndex
 
-                            match row with 
-                            | RowFirst ->
+                            match cell.RowPosition() with 
+                            | ItemPosition.First ->
                                 let nextVSpace = cell.VSpaces.[(index) % cell.VSpaces.Length] / scaleY
 
                                 let y = trimBox.GetYF() - nextVSpace / 2.
@@ -576,7 +583,7 @@ module Imposing =
                                 let height = actualBox.GetTopF() - trimBox.GetBottomF() + nextVSpace / 2.
                                 y, height
 
-                            | RowMiddle ->
+                            | ItemPosition.Middle ->
                                 let preVSpace = cell.VSpaces.[(index - 1) % cell.VSpaces.Length] / scaleY
 
                                 let nextVSpace = cell.VSpaces.[(index) % cell.VSpaces.Length] / scaleY
@@ -585,8 +592,8 @@ module Imposing =
                                 let height = trimBox.GetHeightF() + nextVSpace / 2. + preVSpace / 2.
                                 y, height
 
-                            | RowFirstAndLast -> actualBox.GetYF(), actualBox.GetHeightF()
-                            | RowLast  -> 
+                            | ItemPosition.FirstAndLast -> actualBox.GetYF(), actualBox.GetHeightF()
+                            | ItemPosition.Last  -> 
                                 let y = actualBox.GetYF()
 
                                 let preVSpace = cell.VSpaces.[(index - 1) % cell.VSpaces.Length] / scaleY
@@ -668,23 +675,66 @@ module Imposing =
                         let distance = cropmark.Distance
                         let length = cropmark.Length
                         let width = cell.Size.Width
-                        [
-                            x, y-distance, x, y-distance-length                             ///left top VLine
-                            x-distance, y, x-distance-length, y                             ///left top HLine
-                            x-distance, y+height, x-distance-length, y+height               ///left bottom VLine
-                            x, y+distance+height, x, y+distance+length+height               ///left bottom HLine
-                            x+width, y-distance, x+width, y-distance-length                 ///right top VLine
-                            x+distance+width, y, x+distance+length+width, y                 ///right top HLine
-                            x+distance+width, y+height, x+distance+length+width, y+height   ///right bottom VLine     
-                            x+width, y+distance+height, x+width, y+distance+length+height   ///right bottom HLine
-                        ] |> List.map (fun (x1, y1, x2 , y2) ->
+                        let colPos = cell.ColumnPosition()
+                        let rowPos = cell.RowPosition()
+
+                        let leftTopV = x, y-distance, x, y-distance-length 
+                        let leftTopH = x-distance, y, x-distance-length, y            
+                        let leftBottomV = x-distance, y+height, x-distance-length, y+height     
+                        let leftBottomH = x, y+distance+height, x, y+distance+length+height
+                        let rightTopV = x+width, y-distance, x+width, y-distance-length  
+                        let rightTopH = x+distance+width, y, x+distance+length+width, y        
+                        let rightBottomV = x+distance+width, y+height, x+distance+length+width, y+height
+                        let rightBottomH = x+width, y+distance+height, x+width, y+distance+length+height
+                        match cropmark.IsRevealedBetweenCells with 
+                        | true ->
+                            [
+                                leftTopV
+                                leftTopH
+                                leftBottomV
+                                leftBottomH
+                                rightTopV
+                                rightTopH
+                                rightBottomV
+                                rightBottomH
+                            ] 
+                        | false ->
+                            [
+                                match rowPos with 
+                                | ItemPosition.First | ItemPosition.FirstAndLast -> 
+                                    leftTopV
+                                    rightTopV
+
+                                | _ -> ()
+
+                                match colPos with 
+                                | ItemPosition.First | ItemPosition.FirstAndLast -> 
+                                    leftTopH
+                                    leftBottomH
+                                | _ -> ()
+
+                                match rowPos with 
+                                | ItemPosition.FirstAndLast | ItemPosition.Last ->
+                                    leftBottomV
+                                    rightBottomV
+                                | _ -> ()
+
+                                match colPos with 
+                                | ItemPosition.FirstAndLast | ItemPosition.Last ->
+                                    rightTopH
+                                    rightBottomH
+                                | _ -> ()
+                            ] 
+
+                        |> List.map (fun (x1, y1, x2 , y2) ->
                             { Start = new Point(x1, y1); End = new Point(x2, y2) }
                         )
                     
                     let interspatialCropmarkLines = 
                         allCropmarkLines
                         |> List.filter (fun l -> List.forall (fun cropamrkRedArea -> l.IsOutsideOf(cropamrkRedArea)) cellContentAreas_ExtendByCropmarkDistance)
-                    
+                        
+
                     (pdfCanvas, interspatialCropmarkLines)
                     ||> List.fold (fun (pdfCanvas: PdfCanvas) line ->
                         pdfCanvas
