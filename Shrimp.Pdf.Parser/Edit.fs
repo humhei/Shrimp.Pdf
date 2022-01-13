@@ -15,7 +15,7 @@ open iText.IO.Source
 open System.IO
 open Shrimp.Pdf.Parser.Helper
 
-
+[<Struct>]
 type OperatorRange =
     { Operator: PdfLiteral 
       Operands: IList<PdfObject> }

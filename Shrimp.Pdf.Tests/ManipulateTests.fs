@@ -825,40 +825,58 @@ let manipulateTests =
         |> runTest "datas/manipulate/add rect to area.pdf" 
         |> ignore
 
-    testCase "trim to visible test" <| fun _ -> 
-        Flow.Manipulate(
-            ModifyPage.TrimToVisible (PageSelector.All)
-        )
-        |> runTest "datas/manipulate/trim to visible.pdf" 
-        |> ignore
+    ftestList "trim to visible tests" [
+        testCase "trim to visible test" <| fun _ -> 
+            Flow.Manipulate(
+                ModifyPage.TrimToVisible (PageSelector.All)
+            )
+            |> runTest "datas/manipulate/trim to visible.pdf" 
+            |> ignore
 
-    testCase "trim to visible test 2" <| fun _ -> 
-        Flow.Manipulate(
-            ModifyPage.TrimToVisible(PageSelector.All, (Margin.Create(mm 6.)))
-        )
-        |> runTest "datas/manipulate/trim to visible2.pdf" 
-        |> ignore
+        testCase "trim to visible test 2" <| fun _ -> 
+            Flow.Manipulate(
+                ModifyPage.TrimToVisible(PageSelector.All, (Margin.Create(mm 6.)))
+            )
+            |> runTest "datas/manipulate/trim to visible2.pdf" 
+            |> ignore
 
-    testCase "trim to visible test 3" <| fun _ -> 
-        Flow.Manipulate(
-            ModifyPage.TrimToVisible(PageSelector.All, (Margin.Create(mm 6.)))
-        )
-        |> runTest "datas/manipulate/trim to visible3.pdf" 
-        |> ignore
+        testCase "trim to visible test 3" <| fun _ -> 
+            Flow.Manipulate(
+                ModifyPage.TrimToVisible(PageSelector.All, (Margin.Create(mm 6.)))
+            )
+            |> runTest "datas/manipulate/trim to visible3.pdf" 
+            |> ignore
 
-    testCase "trim to visible test 4" <| fun _ -> 
-        Flow.Manipulate(
-            ModifyPage.TrimToVisible(PageSelector.All)
-        )
-        |> runTest "datas/manipulate/trim to visible4.pdf" 
-        |> ignore
+        testCase "trim to visible test 4" <| fun _ -> 
+            Flow.Manipulate(
+                ModifyPage.TrimToVisible(PageSelector.All)
+            )
+            |> runTest "datas/manipulate/trim to visible4.pdf" 
+            |> ignore
 
-    testCase "trim to visible test5" <| fun _ -> 
-        Flow.Manipulate(
-            ModifyPage.TrimToVisible (PageSelector.All)
-        )
-        |> runTest "datas/manipulate/trim to visible5.pdf" 
-        |> ignore
+        testCase "trim to visible test5" <| fun _ -> 
+            Flow.Manipulate(
+                ModifyPage.TrimToVisible (PageSelector.All)
+            )
+            |> runTest "datas/manipulate/trim to visible5.pdf" 
+            |> ignore
+
+        testCase "trim to visible test6" <| fun _ -> 
+            Flow.Manipulate(
+                ModifyPage.TrimToVisible (PageSelector.All)
+            )
+            |> runTest "datas/manipulate/trim to visible6.pdf" 
+            |> ignore
+
+        testCase "trim to visible test7" <| fun _ -> 
+            Flow.Manipulate(
+                ModifyPage.TrimToVisible (PageSelector.All)
+            )
+            |> runTest "datas/manipulate/trim to visible7.pdf" 
+            |> ignore
+        
+    ]
+
 
 
     testCase "test infos" <| fun _ -> 

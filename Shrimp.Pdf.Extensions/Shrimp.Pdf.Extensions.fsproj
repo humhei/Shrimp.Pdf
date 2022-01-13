@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <UserSecretsId>3735d31e-733a-445b-9b87-999af1becbaa</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,10 +15,10 @@
 
   <ItemGroup>
     <PackageReference Include="FParsec" Version="1.1.1" />
-    <PackageReference Include="itext7" Version="7.1.9" />
+    <PackageReference Include="itext7" Version="99.99.0" />
     <PackageReference Include="itext7.font-asian" Version="7.1.9" />
     <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.29" />
-    <PackageReference Include="Shrimp.FSharp.Plus" Version="1.1.208" />
+    <PackageReference Include="Shrimp.FSharp.Plus" Version="1.1.209" />
   </ItemGroup>
 
   <ItemGroup>

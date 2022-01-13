@@ -8,6 +8,7 @@ open iText.Kernel.Pdf.Canvas.Parser.Listener
 open System.Collections.Generic
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf.Extensions
+open Shrimp.FSharp.Plus
 open Shrimp.Pdf
 open iText.Kernel.Pdf
 
@@ -129,6 +130,16 @@ module internal Listeners =
 
         let parsedRenderInfos = List<IIntegratedRenderInfo>()
 
+        let supportedEventTypes =
+            let supportedEvents = 
+                renderInfoSelectorMapping
+                |> Map.toList
+                |> List.map snd
+                |> RenderInfoSelector.OR
+                |> RenderInfoSelector.toEventTypes
+              
+            List supportedEvents :> ICollection<_>
+
         member this.CurrentRenderInfo = currentRenderInfo.Value
 
         member this.CurrentRenderInfoStatus = currentRenderInfoStatus
@@ -152,6 +163,17 @@ module internal Listeners =
 
         member internal this.SetXObjectClippingBoxState(xObjectBBoxState) =
             currentXObjectClippingBox <- xObjectBBoxState
+
+        member internal this.UpdateXObjectClippingBoxCtm(ctm: Matrix) =
+            let newXObjectClippingBox =
+                match currentXObjectClippingBox with 
+                | XObjectClippingBoxState.Init -> XObjectClippingBoxState.Init
+                | XObjectClippingBoxState.IntersectedNone -> XObjectClippingBoxState.IntersectedNone
+                | XObjectClippingBoxState.IntersectedSome v ->
+                    ((AffineTransform.ofMatrix ctm).Transform(v))
+                    |> XObjectClippingBoxState.IntersectedSome
+
+            currentXObjectClippingBox <- newXObjectClippingBox
 
 
         interface IEventListener with 
@@ -200,33 +222,72 @@ module internal Listeners =
                         currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
                         currentRenderInfo <- None
 
-            member this.GetSupportedEvents() = 
-                let supportedEvents = 
-                    renderInfoSelectorMapping
-                    |> Map.toList
-                    |> List.map snd
-                    |> RenderInfoSelector.OR
-                    |> RenderInfoSelector.toEventTypes
-                  
-                List supportedEvents :> ICollection<_>
+            member this.GetSupportedEvents() = supportedEventTypes
 
     type DummyListener() =
+        let supportedEvents = List () :> ICollection<_>
+            
         interface IEventListener with
             member this.EventOccurred(data,tp) = ()
-            member this.GetSupportedEvents() = List () :> ICollection<_>
+            member this.GetSupportedEvents() = supportedEvents
 
 open Listeners
 
 
+//type private ClippingPath_UpdateCtm_Bug_FixmentPdfCanvasProcessor(listener: IEventListener, additionalContentOperators) =
+//    inherit PdfCanvasProcessor(listener, additionalContentOperators)
+
+//    let mutable clippingPath_BeforeUpdateCtm: Path option = None
+
+//    override this.ProcessContent(contentBytes, resources) =
+//        match clippingPath_BeforeUpdateCtm with 
+//        | None -> ()
+//        | Some v -> this.GetGraphicsState().SetClippingPath(v)
+
+//        base.ProcessContent(contentBytes, resources)
+
+
+//    override this.InvokeOperator(operator, operands) =
+//        match operator.ToString() with 
+//        | "cm" ->
+//            let gs = this.GetGraphicsState()
+//            clippingPath_BeforeUpdateCtm <- Some (gs.GetClippingPath())
+//            base.InvokeOperator(operator, operands)
+
+//            let ctm = 
+//                gs.GetCtm()
+//                |> AffineTransform.ofMatrix
+
+//            let newClippingPath = ctm.Transform(clippingPath_BeforeUpdateCtm.Value)
+//            gs.SetClippingPath(newClippingPath)
+//            let info = new ClippingPathInfo(gs, gs.GetClippingPath(), gs.GetCtm())
+//            this.GetEventListener().EventOccurred(info, EventType.CLIP_PATH_CHANGED)
+            
+//        | _ ->
+//            base.InvokeOperator(operator, operands)
+
+
+        
+
 type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener , additionalContentOperators) =
     inherit PdfCanvasProcessor(listener, additionalContentOperators)
+
     member private this.InitClippingPath(page: PdfPage) =
-        let clippingPath = new Path();
-        clippingPath.Rectangle(page.GetCropBox() |> Rectangle.applyMargin (Margin.Create (mm Shrimp.Pdf.Constants.MAXIMUM_MM_WIDTH)));
+        let clippingPath = new Path()
+        let initBox = page.GetCropBox() |> Rectangle.applyMargin (Margin.Create(Constants.MAXIMUM_MM_WIDTH / 2.)) 
+        clippingPath.Rectangle(initBox);
         this.GetGraphicsState().SetClippingPath(clippingPath)
 
+        do 
+            match this.GetEventListener() with 
+            | :? FilteredEventListenerEx as listener -> 
+                listener.SetXObjectClippingBox(initBox)
+            | _ -> ()
+
+    override this.ProcessContent(contentBytes, resources) =
+        base.ProcessContent(contentBytes, resources)
+
     override this.InvokeOperator(operator, operands) =
-        
         match operator.ToString() with
         | "Do" -> 
             match this.GetEventListener() with 
@@ -234,16 +295,43 @@ type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener ,
                 let name = operands.[0] :?> PdfName
                 let resource = this.GetResources()
                 let formObject = resource.GetForm(name)
-                let bbox = PdfFormXObject.getBBox formObject
-                let originState = listener.GetXObjectClippingBox()
-                listener.SetXObjectClippingBox(bbox)
-                base.InvokeOperator(operator, operands)
-                listener.SetXObjectClippingBoxState(originState)
+
+                match formObject with 
+                | null -> base.InvokeOperator(operator, operands)
+                | formObject ->
+                    let bbox = 
+                        //PdfFormXObject.getBBox formObject
+                        let bbox =  PdfFormXObject.getBBox formObject
+                        let ctm = this.GetGraphicsState().GetCtm() |> AffineTransform.ofMatrix
+                        ctm.Transform(bbox)
+
+                    let originState = listener.GetXObjectClippingBox()
+                    listener.SetXObjectClippingBox(bbox)
+                    base.InvokeOperator(operator, operands)
+                    listener.SetXObjectClippingBoxState(originState)
 
             | _ -> base.InvokeOperator(operator, operands)
-        | _ -> 
+        | _ ->  
             base.InvokeOperator(operator, operands)
+            //match operator.ToString() with 
+            //| "cm" ->
+            //    match this.GetEventListener() with 
+            //    | :? FilteredEventListenerEx as listener ->
+            //        let ctm = 
+            //            new Matrix(
+            //                (operands.[0] :?> PdfNumber).FloatValue(),
+            //                (operands.[1] :?> PdfNumber).FloatValue(),
+            //                (operands.[2] :?> PdfNumber).FloatValue(),
+            //                (operands.[3] :?> PdfNumber).FloatValue(),
+            //                (operands.[4] :?> PdfNumber).FloatValue(),
+            //                (operands.[5] :?> PdfNumber).FloatValue()
+            //            )
+            //        base.InvokeOperator(operator, operands)
+            //        listener.UpdateXObjectClippingBoxCtm(ctm)
 
+            //    | _ -> base.InvokeOperator(operator, operands)
+            //| _ -> base.InvokeOperator(operator, operands)
+                
 
 
 

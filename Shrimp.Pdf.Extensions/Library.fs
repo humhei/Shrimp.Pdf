@@ -302,8 +302,8 @@ module iText =
         let ofPoints (points: Point seq) =
             let xs,ys = 
                 points 
-                |> Seq.map (fun p -> p.x,p.y) 
                 |> List.ofSeq
+                |> List.map (fun p -> p.x,p.y) 
                 |> List.unzip
 
             let x = List.min xs
@@ -549,6 +549,37 @@ module iText =
             let p3 = new Point (rect.GetXF(),rect.GetTopF())
             let p4 = new Point (rect.GetRightF(),rect.GetYF())
             [p1; p2; p3 ;p4] |> List.map (fun p -> AffineTransform.transform p this) |> Rectangle.ofPoints
+
+        member this.Transform(segment: IShape) =
+            let points = 
+                segment.GetBasePoints()
+                |> Seq.map (this.Transform)
+                |> ResizeArray
+            match segment with 
+            | :? BezierCurve -> BezierCurve(points) :> IShape
+            | _ -> Line(points.[0], points.[1]) :> IShape
+
+
+        member this.Transform(subPath: Subpath) =
+            let newSubPath = Subpath()
+
+            let __addSegmentsToNewSubPath = 
+                subPath.GetSegments()
+                |> Seq.map(this.Transform)
+                |> Seq.iter(newSubPath.AddSegment)
+
+            newSubPath.SetClosed(subPath.IsClosed())
+            newSubPath
+
+        member this.Transform(rect: Path) = 
+            let newPath = new Path()
+
+            for subPath in rect.GetSubpaths() do
+                let newSubPath = this.Transform(subPath)
+                newPath.AddSubpath(newSubPath)
+
+            newPath
+
 
         member this.InverseTransform(rect: Rectangle) = 
             let p1 = new Point (rect.GetXF(),rect.GetYF())
@@ -843,24 +874,31 @@ module iText =
                     && predicate(info.Value.GetStrokeColor())
 
 
+    [<Struct; RequireQualifiedAccess>]
+    type private ClippingPathInfoResult =
+        | IntersectedSome of Rectangle
+        | IntersectedNone 
+
     [<RequireQualifiedAccess>]
     module IIntegratedRenderInfo =
         [<RequireQualifiedAccess>]
         module private ClippingPathInfo =
-            let getActualClippingPath (info: ClippingPathInfo) = 
+            let private getActualClippingPath (info: ClippingPathInfo) = 
                 match info.GetClippingPath() with 
                 | null -> failwith "Not implemented"
-                | path -> 
-                    if 
-                        path.GetSubpaths() |> Seq.forall(fun subPath -> subPath.GetPiecewiseLinearApproximation().Count = 0) 
-                        then failwith "Not implementd"
-                    else path
+                | path -> path
         
             let getActualClippingArea (info) =
                 let clippingPath = getActualClippingPath info
-                clippingPath.GetSubpaths()
-                |> Seq.collect(Subpath.toActualPoints (info.GetGraphicsState().GetCtm()))
-                |> Rectangle.ofPoints
+                let points = 
+                    let ctm = info.GetGraphicsState().GetCtm()
+                    clippingPath.GetSubpaths()
+                    |> Seq.collect(Subpath.toRawPoints)
+                    |> List.ofSeq
+
+                match points with 
+                | [] -> ClippingPathInfoResult.IntersectedNone
+                | _ -> Rectangle.ofPoints points |> ClippingPathInfoResult.IntersectedSome
 
         //[<Struct>]
         //type private ClippingPathInfos =
@@ -890,16 +928,21 @@ module iText =
                 match infos.ClippingPathInfoState, infos.XObjectClippingBoxState with 
                 | ClippingPathInfoState.Init, XObjectClippingBoxState.Init -> NonExists ()
                 | ClippingPathInfoState.Intersected clippingPathInfo, XObjectClippingBoxState.Init ->
-                    IntersectedSome (ClippingPathInfo.getActualClippingArea clippingPathInfo)
+                    match (ClippingPathInfo.getActualClippingArea clippingPathInfo) with 
+                    | ClippingPathInfoResult.IntersectedSome clippingArea -> IntersectedSome clippingArea
+                    | ClippingPathInfoResult.IntersectedNone -> IntersectedNone
 
                 | ClippingPathInfoState.Init, XObjectClippingBoxState.IntersectedSome rect ->
                     IntersectedSome rect
 
                 | ClippingPathInfoState.Intersected clippingPathInfo, XObjectClippingBoxState.IntersectedSome rect ->
                     let clippingArea = ClippingPathInfo.getActualClippingArea clippingPathInfo
-                    match Rectangle.tryGetIntersection clippingArea rect with 
-                    | Some rect -> IntersectedSome rect
-                    | None -> IntersectedNone
+                    match clippingArea with 
+                    | ClippingPathInfoResult.IntersectedNone -> IntersectedNone
+                    | ClippingPathInfoResult.IntersectedSome clippingArea ->
+                        match Rectangle.tryGetIntersection clippingArea rect with 
+                        | Some rect -> IntersectedSome rect
+                        | None -> IntersectedNone
 
                 | _, XObjectClippingBoxState.IntersectedNone -> IntersectedNone
 
@@ -959,7 +1002,7 @@ module iText =
             IAbstractRenderInfo.tryGetVisibleBound boundGettingOptions info.ClippingPathInfos info
     
         let isVisible (info: IIntegratedRenderInfo) =
-            isFillVisible info || isStrokeVisible info
+            IAbstractRenderInfo.isVisible FillOrStrokeOptions.FillOrStroke info.ClippingPathInfos info
 
     [<RequireQualifiedAccess>]
     module CanvasGraphicsState =
