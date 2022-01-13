@@ -124,7 +124,9 @@ module FsSize =
 
     let A4 = ofPageSize PageSize.A4
 
-    let MAXIMUN = { Width = mm 5080.; Height = mm 5080. }
+    let MAXIMUN = 
+        { Width = mm Shrimp.Pdf.Constants.MAXIMUM_MM_WIDTH
+          Height = mm Shrimp.Pdf.Constants.MAXIMUM_MM_WIDTH }
 
 type FsSize with    
     member private x.OppositeDirection(targetSize: FsSize) =

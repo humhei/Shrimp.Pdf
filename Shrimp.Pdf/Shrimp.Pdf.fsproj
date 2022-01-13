@@ -44,16 +44,16 @@
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
     <None Include="Resources\Fonts\Alibaba-PuHuiTi\Alibaba-PuHuiTi-Regular.otf" />
-    <Content Include="Resources\Fonts\思源黑体\LICENSE_CJK.txt" />
-    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-Black.otf" />
-    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-Bold.otf" />
-    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-DemiLight.otf" />
-    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-Light.otf" />
-    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-Medium.otf" />
-    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-Regular.otf" />
-    <Content Include="Resources\Fonts\思源黑体\NotoSansHans-Thin-Windows.otf" />
-    <Content Include="Resources\Fonts\思源黑体\数英免责申明.txt" />
-    <Content Include="Resources\Fonts\黑体.ttf" />
+    <None Include="Resources\Fonts\思源黑体\LICENSE_CJK.txt" />
+    <None Include="Resources\Fonts\思源黑体\NotoSansHans-Black.otf" />
+    <None Include="Resources\Fonts\思源黑体\NotoSansHans-Bold.otf" />
+    <None Include="Resources\Fonts\思源黑体\NotoSansHans-DemiLight.otf" />
+    <None Include="Resources\Fonts\思源黑体\NotoSansHans-Light.otf" />
+    <None Include="Resources\Fonts\思源黑体\NotoSansHans-Medium.otf" />
+    <None Include="Resources\Fonts\思源黑体\NotoSansHans-Regular.otf" />
+    <None Include="Resources\Fonts\思源黑体\NotoSansHans-Thin-Windows.otf" />
+    <None Include="Resources\Fonts\思源黑体\数英免责申明.txt" />
+    <None Include="Resources\Fonts\黑体.ttf" />
 
     <None Include="Resources\Colors\*.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
@@ -101,7 +101,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="f\" />
     <Folder Include="Resources\Icc\" />
   </ItemGroup>
 

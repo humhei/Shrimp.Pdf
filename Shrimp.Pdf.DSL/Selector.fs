@@ -12,6 +12,7 @@ open Shrimp.FSharp.Plus
 open System.Collections.Generic
 open System.Linq
 open FParsec
+open Shrimp.Pdf.Constants
 open FParsec.CharParsers
 
 

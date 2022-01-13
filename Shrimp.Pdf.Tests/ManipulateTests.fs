@@ -296,6 +296,29 @@ let manipulateTests =
         |> runTest "datas/manipulate/add bound to text2.pdf" 
         |> ignore
 
+    testCase "add bound to bound1" <| fun _ -> 
+        Flow.Reuse(
+            Reuses.ClearDirtyInfos()
+        )
+        <+>
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "add bound to bound"
+                      Selector = Path(fun _ _ -> true) 
+                      Modifiers = [
+                        Modifier.AddRectangleToBound(fun args -> 
+                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor(PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
+                        )
+                      ]
+                    }
+                ]
+            )
+        )
+        |> runTest "datas/manipulate/add bound to bound1.pdf" 
+        |> ignore
+
     testCase "add line to position" <| fun _ -> 
         Flow.Manipulate (
             ModifyPage.Create
@@ -804,7 +827,7 @@ let manipulateTests =
 
     testCase "trim to visible test" <| fun _ -> 
         Flow.Manipulate(
-            ModifyPage.TrimToVisible (PageSelector.All, (Margin.Create(mm 6.)))
+            ModifyPage.TrimToVisible (PageSelector.All)
         )
         |> runTest "datas/manipulate/trim to visible.pdf" 
         |> ignore
@@ -815,6 +838,28 @@ let manipulateTests =
         )
         |> runTest "datas/manipulate/trim to visible2.pdf" 
         |> ignore
+
+    testCase "trim to visible test 3" <| fun _ -> 
+        Flow.Manipulate(
+            ModifyPage.TrimToVisible(PageSelector.All, (Margin.Create(mm 6.)))
+        )
+        |> runTest "datas/manipulate/trim to visible3.pdf" 
+        |> ignore
+
+    testCase "trim to visible test 4" <| fun _ -> 
+        Flow.Manipulate(
+            ModifyPage.TrimToVisible(PageSelector.All)
+        )
+        |> runTest "datas/manipulate/trim to visible4.pdf" 
+        |> ignore
+
+    testCase "trim to visible test5" <| fun _ -> 
+        Flow.Manipulate(
+            ModifyPage.TrimToVisible (PageSelector.All)
+        )
+        |> runTest "datas/manipulate/trim to visible5.pdf" 
+        |> ignore
+
 
     testCase "test infos" <| fun _ -> 
         let flow =

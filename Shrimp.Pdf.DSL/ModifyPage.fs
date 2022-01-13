@@ -78,15 +78,20 @@ type PageModifier =
             |> Colors.distinct
             |> List.ofSeq
 
-    static member PickTexts(picker: TextInfoRecord -> _ option) : PageModifier<_, _> =
+    static member PickTexts(picker: IntegratedTextRenderInfo -> _ option) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             infos
             |> List.ofSeq
             |> List.choose IIntegratedRenderInfo.asITextRenderInfo
             |> List.choose (fun renderInfo ->
-                renderInfo.RecordValue
+                renderInfo
                 |> picker 
             )
+
+    //static member PickTexts(picker: TextInfoRecord -> _ option) : PageModifier<_, _> =
+    //    PageModifier.PickTexts(fun (info: IntegratedTextRenderInfo) ->
+    //        picker info.RecordValue
+    //    )
 
     static member PickTexts(picker: string -> _ option) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->

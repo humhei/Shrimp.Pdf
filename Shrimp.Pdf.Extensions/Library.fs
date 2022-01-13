@@ -14,7 +14,7 @@ open iText.Kernel.Pdf.Canvas.Parser.Data
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf.Xobject
 open Shrimp.Pdf
-
+open Shrimp.Pdf.Constants
 
 
 
@@ -326,6 +326,8 @@ module iText =
 
         let toPdfArray (rect: Rectangle) =
             new PdfArray(rect)
+
+
 
         let toStraightLines (rect: Rectangle) =
             let x = rect.GetXF()
@@ -660,7 +662,14 @@ module iText =
 
     [<RequireQualifiedAccess>]
     module ITextRenderInfo =
+        type private TextRenderInfo with 
+            member info.GetActualFontSize() =
+                let matrix = info.GetTextMatrix()
+                info.GetFontSize() * matrix.Get(0) |> float
 
+            member info.GetFontName() =
+                info.GetFont().GetFontProgram().GetFontNames().GetFontName()
+        
         /// GetFontSize() * ctm.m00
         let getActualFontSize (info: ITextRenderInfo) =
             info.Value.GetActualFontSize()
@@ -838,71 +847,116 @@ module iText =
     module IIntegratedRenderInfo =
         [<RequireQualifiedAccess>]
         module private ClippingPathInfo =
-            let tryGetActualClippingPath (info: ClippingPathInfo) = 
+            let getActualClippingPath (info: ClippingPathInfo) = 
                 match info.GetClippingPath() with 
-                | null -> None
+                | null -> failwith "Not implemented"
                 | path -> 
-                    if path.GetSubpaths() |> Seq.forall(fun subPath -> subPath.GetPiecewiseLinearApproximation().Count = 0) then None
-                    else Some path
+                    if 
+                        path.GetSubpaths() |> Seq.forall(fun subPath -> subPath.GetPiecewiseLinearApproximation().Count = 0) 
+                        then failwith "Not implementd"
+                    else path
         
-            let tryGetActualClippingArea (info) =
-                tryGetActualClippingPath info
-                |> Option.map (fun clippingPath ->
-                    clippingPath.GetSubpaths()
-                    |> Seq.collect(Subpath.toActualPoints (info.GetGraphicsState().GetCtm()))
-                    |> Rectangle.ofPoints
-                )
-        
-        
+            let getActualClippingArea (info) =
+                let clippingPath = getActualClippingPath info
+                clippingPath.GetSubpaths()
+                |> Seq.collect(Subpath.toActualPoints (info.GetGraphicsState().GetCtm()))
+                |> Rectangle.ofPoints
+
+        //[<Struct>]
+        //type private ClippingPathInfos =
+        //    { ClippingPathInfo: ClippingPathInfo option 
+        //      XObjectClippingBox: Rectangle option }
+        //with 
+        //    member x.TryGetAcutalClippingArea() =  
+        //        let clippingArea1 =
+        //            match x.ClippingPathInfo with 
+        //            | Some clippingPathInfo -> Some (ClippingPathInfo.getActualClippingArea clippingPathInfo)
+        //            | None -> None
+                
+        //        match clippingArea1, x.XObjectClippingBox with 
+        //        | Some box1, Some box2 -> Rectangle.tryGetIntersection box1 box2
+        //        | Some box1, None -> Some box1
+        //        | None, Some box2 -> Some box2
+        //        | None, None -> None
+
+        //    member x.IsEmpty =
+        //        match x.ClippingPathInfo, x.XObjectClippingBox with 
+        //        | None, None -> true
+        //        | _ -> false
+
+        [<RequireQualifiedAccess>]
+        module private ClippingPathInfos =
+            let (|NonExists|IntersectedNone|IntersectedSome|) (infos: ClippingPathInfos) =
+                match infos.ClippingPathInfoState, infos.XObjectClippingBoxState with 
+                | ClippingPathInfoState.Init, XObjectClippingBoxState.Init -> NonExists ()
+                | ClippingPathInfoState.Intersected clippingPathInfo, XObjectClippingBoxState.Init ->
+                    IntersectedSome (ClippingPathInfo.getActualClippingArea clippingPathInfo)
+
+                | ClippingPathInfoState.Init, XObjectClippingBoxState.IntersectedSome rect ->
+                    IntersectedSome rect
+
+                | ClippingPathInfoState.Intersected clippingPathInfo, XObjectClippingBoxState.IntersectedSome rect ->
+                    let clippingArea = ClippingPathInfo.getActualClippingArea clippingPathInfo
+                    match Rectangle.tryGetIntersection clippingArea rect with 
+                    | Some rect -> IntersectedSome rect
+                    | None -> IntersectedNone
+
+                | _, XObjectClippingBoxState.IntersectedNone -> IntersectedNone
+
+
         [<RequireQualifiedAccess>]
         module private IAbstractRenderInfo =
-            let isVisible (fillOrStrokeOptions: FillOrStrokeOptions) (clippingPathInfo: ClippingPathInfo option) (info: IAbstractRenderInfo) =
+            [<RequireQualifiedAccess; Struct>]
+            type private VisibleBoundResult =
+                | None
+                | Some of Rectangle
+                | SameToInfoBound
+
+            let private getVisibleBound boundGettingOptions (fillOrStrokeOptions: FillOrStrokeOptions) (clippingPathInfos: ClippingPathInfos) (info: IAbstractRenderInfo) =
+                let b = 
+                    match fillOrStrokeOptions with 
+                    | FillOrStrokeOptions.Fill -> IAbstractRenderInfo.hasFill info
+                    | FillOrStrokeOptions.Stroke -> IAbstractRenderInfo.hasStroke info
+                    | FillOrStrokeOptions.FillAndStroke -> IAbstractRenderInfo.hasFill info && IAbstractRenderInfo.hasStroke info
+                    | FillOrStrokeOptions.FillOrStroke -> IAbstractRenderInfo.hasFill info || IAbstractRenderInfo.hasStroke info
+                    &&
+                        match info with 
+                        | :? PathRenderInfo as info -> not (info.IsPathModifiesClippingPath())
+                        | _ -> true
+
+                match b with 
+                | true ->
+                    match clippingPathInfos with 
+                    | ClippingPathInfos.IntersectedNone -> VisibleBoundResult.None
+                    | ClippingPathInfos.IntersectedSome clippingBound -> 
+                        let bound = IAbstractRenderInfo.getBound boundGettingOptions info
+                        match Rectangle.tryGetIntersection bound clippingBound with 
+                        | Some rect -> VisibleBoundResult.Some rect
+                        | None -> VisibleBoundResult.None
+                    | ClippingPathInfos.NonExists -> VisibleBoundResult.SameToInfoBound 
+                | false -> VisibleBoundResult.None
         
-                match fillOrStrokeOptions with 
-                | FillOrStrokeOptions.Fill -> IAbstractRenderInfo.hasFill info
-                | FillOrStrokeOptions.Stroke -> IAbstractRenderInfo.hasStroke info
-                | FillOrStrokeOptions.FillAndStroke -> IAbstractRenderInfo.hasFill info && IAbstractRenderInfo.hasStroke info
-                | FillOrStrokeOptions.FillOrStroke -> IAbstractRenderInfo.hasFill info || IAbstractRenderInfo.hasStroke info
-        
-                &&
-                    match info with 
-                    | :? PathRenderInfo as info -> not (info.IsPathModifiesClippingPath())
-                    | _ -> true
-                && 
-                    match clippingPathInfo with 
-                    | Some clippingPathInfo ->
-                        match ClippingPathInfo.tryGetActualClippingArea clippingPathInfo with 
-                            | Some clippingBound ->
-                                let bound = IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithStrokeWidth info
-                                match Rectangle.tryGetIntersection bound clippingBound with 
-                                | Some _ -> true
-                                | None -> false
-                            | None -> true
-                    | None -> true
-        
-            let tryGetVisibleBound boundGettingOptions (clippingPathInfo: ClippingPathInfo option) (info: IAbstractRenderInfo) =
-                if isVisible (FillOrStrokeOptions.FillOrStroke) clippingPathInfo info 
-                then
-                    let bound = IAbstractRenderInfo.getBound boundGettingOptions info
-                    match clippingPathInfo with 
-                    | None -> Some bound 
-                    | Some clippingPathInfo ->
-                        match ClippingPathInfo.tryGetActualClippingArea clippingPathInfo with 
-                        | Some clippingBound -> Rectangle.tryGetIntersection bound clippingBound 
-                        | None -> 
-                            if bound.GetWidthF() @= 0. || bound.GetHeightF() @= 0. then None
-                            else
-                                Some bound
-                else None
+            let isVisible (fillOrStrokeOptions: FillOrStrokeOptions) (clippingPathInfos: ClippingPathInfos) (info: IAbstractRenderInfo) =
+                match getVisibleBound BoundGettingStrokeOptions.WithStrokeWidth fillOrStrokeOptions clippingPathInfos info with 
+                | VisibleBoundResult.None -> false
+                | VisibleBoundResult.Some _ -> true
+                | VisibleBoundResult.SameToInfoBound -> true
+
+            let tryGetVisibleBound boundGettingOptions (clippingPathInfos: ClippingPathInfos) (info: IAbstractRenderInfo) =
+                match getVisibleBound boundGettingOptions FillOrStrokeOptions.FillOrStroke clippingPathInfos info with 
+                | VisibleBoundResult.None -> None
+                | VisibleBoundResult.Some rect -> Some rect
+                | VisibleBoundResult.SameToInfoBound -> None
+
 
         let isStrokeVisible (info: IIntegratedRenderInfo) = 
-            IAbstractRenderInfo.isVisible FillOrStrokeOptions.Stroke info.ClippingPathInfo info
+            IAbstractRenderInfo.isVisible FillOrStrokeOptions.Stroke info.ClippingPathInfos info
     
         let isFillVisible (info: IIntegratedRenderInfo) = 
-            IAbstractRenderInfo.isVisible FillOrStrokeOptions.Fill info.ClippingPathInfo info
+            IAbstractRenderInfo.isVisible FillOrStrokeOptions.Fill info.ClippingPathInfos info
     
         let tryGetVisibleBound boundGettingOptions (info: IIntegratedRenderInfo) =
-            IAbstractRenderInfo.tryGetVisibleBound boundGettingOptions info.ClippingPathInfo info
+            IAbstractRenderInfo.tryGetVisibleBound boundGettingOptions info.ClippingPathInfos info
     
         let isVisible (info: IIntegratedRenderInfo) =
             isFillVisible info || isStrokeVisible info

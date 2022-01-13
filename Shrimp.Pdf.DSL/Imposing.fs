@@ -13,6 +13,7 @@ open System.Collections.Concurrent
 open Shrimp.FSharp.Plus
 open Shrimp.FSharp.Plus.Math
 open Newtonsoft.Json
+open Shrimp.Pdf.Constants
 
 
 

@@ -85,7 +85,7 @@ module _InfosSelector =
 
     type TextInfos = 
 
-        static member PickText(picker: TextInfoRecord -> _ option): TextInfosPicker<_, _> = 
+        static member PickText(picker: IntegratedTextRenderInfo -> _ option): TextInfosPicker<_, _> = 
             fun (args: PageModifingArguments<_>) infos ->
                 let infos =
                     infos
@@ -93,7 +93,7 @@ module _InfosSelector =
 
                 PageModifier.PickTexts(picker) args infos
 
-        static member PickExactlyOneText(picker: TextInfoRecord -> _ option): TextInfosPicker<_, _> = 
+        static member PickExactlyOneText(picker: IntegratedTextRenderInfo -> _ option): TextInfosPicker<_, _> = 
             fun (args: PageModifingArguments<_>) textInfos ->
 
                 let infos =
@@ -145,7 +145,7 @@ module _InfosSelector =
                 TextInfos.PickText(picker) 
             |> pickerToExists predicate
 
-        static member ExistsText(predicate: TextInfoRecord -> bool) =
-            fun (picker: TextInfoRecord -> string option) ->
+        static member ExistsText(predicate: IntegratedTextRenderInfo -> bool) =
+            fun (picker: IntegratedTextRenderInfo -> string option) ->
                 TextInfos.PickText(picker) 
             |> pickerToExists predicate

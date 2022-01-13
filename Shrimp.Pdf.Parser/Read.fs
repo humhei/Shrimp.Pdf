@@ -1,4 +1,7 @@
 ﻿namespace Shrimp.Pdf.Parser
+
+open iText.Kernel.Geom
+
 #nowarn "0104"
 open iText.Kernel.Pdf.Canvas.Parser
 open iText.Kernel.Pdf.Canvas.Parser.Listener
@@ -6,7 +9,7 @@ open System.Collections.Generic
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf
-
+open iText.Kernel.Pdf
 
 
 [<RequireQualifiedAccess>]
@@ -99,6 +102,7 @@ module RenderInfoSelector =
 type SelectorModiferToken = 
     { Name: string }
 
+
 module internal Listeners =
 
     type CurrentRenderInfoStatus =
@@ -116,10 +120,12 @@ module internal Listeners =
                 RenderInfoSelector.toRenderInfoPredication renderInfoSelector
             )
 
+        let mutable currentXObjectClippingBox = XObjectClippingBoxState.Init
+
         let mutable currentRenderInfo: IIntegratedRenderInfo option = None
         let mutable currentRenderInfoToken = None
         let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Selected
-        let mutable currentClippingPathInfo = None
+        let mutable currentClippingPathInfo = ClippingPathInfoState.Init
 
         let parsedRenderInfos = List<IIntegratedRenderInfo>()
 
@@ -131,26 +137,46 @@ module internal Listeners =
 
         member this.ParsedRenderInfos = parsedRenderInfos :> seq<IIntegratedRenderInfo>
 
+        member internal this.GetXObjectClippingBox() = currentXObjectClippingBox
+
+        member internal this.SetXObjectClippingBox(xObjectBBox: Rectangle) =
+            currentXObjectClippingBox <-
+                match currentXObjectClippingBox with 
+                | XObjectClippingBoxState.IntersectedNone -> XObjectClippingBoxState.IntersectedNone
+                | XObjectClippingBoxState.Init -> XObjectClippingBoxState.IntersectedSome xObjectBBox
+                | XObjectClippingBoxState.IntersectedSome xObjectBBox' ->
+                
+                    match Rectangle.tryGetIntersection xObjectBBox' xObjectBBox with 
+                    | Some rect -> XObjectClippingBoxState.IntersectedSome rect
+                    | None -> XObjectClippingBoxState.IntersectedNone 
+
+        member internal this.SetXObjectClippingBoxState(xObjectBBoxState) =
+            currentXObjectClippingBox <- xObjectBBoxState
+
 
         interface IEventListener with 
             member this.EventOccurred(data, tp) = 
 
                 match tp with 
                 | EventType.CLIP_PATH_CHANGED -> 
-                    currentClippingPathInfo <- Some (data :?> ClippingPathInfo)
-                    currentClippingPathInfo.Value.PreserveGraphicsState()
+                    let clippingPathInfo' = data :?> ClippingPathInfo
 
+                    currentClippingPathInfo <- ClippingPathInfoState.Intersected clippingPathInfo'
+                    clippingPathInfo'.PreserveGraphicsState()
                 | _ ->
-
                     let renderInfo = 
                         match data with 
                         | :? PathRenderInfo as pathRenderInfo ->
-                            { ClippingPathInfo  = currentClippingPathInfo 
+                            { ClippingPathInfos  = 
+                                { XObjectClippingBoxState = currentXObjectClippingBox
+                                  ClippingPathInfoState = currentClippingPathInfo }
                               PathRenderInfo = pathRenderInfo }
                             :> IIntegratedRenderInfo
 
                         | :? TextRenderInfo as textRenderInfo ->
-                            { ClippingPathInfo  = currentClippingPathInfo 
+                            { ClippingPathInfos = 
+                                { XObjectClippingBoxState = currentXObjectClippingBox
+                                  ClippingPathInfoState = currentClippingPathInfo }
                               TextRenderInfo = textRenderInfo }
                             :> IIntegratedRenderInfo
 
@@ -189,11 +215,45 @@ module internal Listeners =
             member this.EventOccurred(data,tp) = ()
             member this.GetSupportedEvents() = List () :> ICollection<_>
 
+open Listeners
+
+
 type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener , additionalContentOperators) =
     inherit PdfCanvasProcessor(listener, additionalContentOperators)
+    member private this.InitClippingPath(page: PdfPage) =
+        let clippingPath = new Path();
+        clippingPath.Rectangle(page.GetCropBox() |> Rectangle.applyMargin (Margin.Create (mm Shrimp.Pdf.Constants.MAXIMUM_MM_WIDTH)));
+        this.GetGraphicsState().SetClippingPath(clippingPath)
+
+    override this.InvokeOperator(operator, operands) =
+        
+        match operator.ToString() with
+        | "Do" -> 
+            match this.GetEventListener() with 
+            | :? FilteredEventListenerEx as listener ->
+                let name = operands.[0] :?> PdfName
+                let resource = this.GetResources()
+                let formObject = resource.GetForm(name)
+                let bbox = PdfFormXObject.getBBox formObject
+                let originState = listener.GetXObjectClippingBox()
+                listener.SetXObjectClippingBox(bbox)
+                base.InvokeOperator(operator, operands)
+                listener.SetXObjectClippingBoxState(originState)
+
+            | _ -> base.InvokeOperator(operator, operands)
+        | _ -> 
+            base.InvokeOperator(operator, operands)
+
+
+
 
     override this.ProcessPageContent(page) =
+        this.InitClippingPath(page);
+        let gs = this.GetGraphicsState()
+        this.EventOccurred(new ClippingPathInfo(gs, gs.GetClippingPath(), gs.GetCtm()), EventType.CLIP_PATH_CHANGED);
         this.ProcessContent(page.GetContentBytes(), page.GetResources());
+
+
 
     new (listener: IEventListener) = NonInitialCallbackablePdfCanvasProcessor(listener, dict [])
 

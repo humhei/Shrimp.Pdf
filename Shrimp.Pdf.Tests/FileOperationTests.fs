@@ -23,7 +23,7 @@ let fileOperationTests =
         |> ignore
 
     testCase "split document PdfRunner" <| fun _ ->
-        PdfRunner.SplitDocumentToMany(PdfFile "datas/file operation/split document.pdf")
+        PdfRunner.SplitDocumentToMany(PdfFile "datas/file operation/split document.pdf", fun args -> {args with Override = true})
         |> ignore
 
     testCase "merge documents" <| fun _ -> 

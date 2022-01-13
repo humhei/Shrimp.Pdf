@@ -1397,6 +1397,7 @@ module _Reuses =
         //                ["Args" => args.ToString()]
         //        )
 
+        /// default useBleed: false
         static member OneColumn(?margin, ?useBleed, ?hspaces, ?vspaces) =
             Reuses.Impose(fun args -> 
                 {args with 
@@ -1409,6 +1410,7 @@ module _Reuses =
                     UseBleed = defaultArg useBleed false
                     Background = Background.Size FsSize.MAXIMUN})
 
+        /// default useBleed: false
         static member OneRow(?margin, ?useBleed, ?hspaces, ?vspaces) =
             Reuses.Impose(fun args -> 
                 {args with 
@@ -1558,6 +1560,7 @@ module _Reuses =
             fun reuse ->
                 PdfRunner.OneFileFlow(pdfFile, ?backupPdfPath = backupPdfPath) (Flow.Reuse reuse)
 
+        /// default useBleed: false
         static member OneColumn(?backupPdfPath, ?margin, ?useBleed, ?hspaces, ?vspaces) =
             fun pdfFile ->
                 let reuse =
@@ -1565,6 +1568,7 @@ module _Reuses =
 
                 PdfRunner.Reuse(pdfFile,?backupPdfPath = backupPdfPath) reuse
     
+        /// default useBleed: false
         static member OneRow(?backupPdfPath, ?margin, ?useBleed, ?hspaces, ?vspaces) =
             fun pdfFile ->
                 let reuse =

@@ -9,6 +9,8 @@ open Shrimp.FSharp.Plus
 
 [<AutoOpen>]
 module ExtensionTypes =
+
+
     type Direction =
         | Vertical = 0
         | Horizontal = 1
@@ -52,104 +54,27 @@ module ExtensionTypes =
         | Path = 0
         | Text = 1
 
+    [<RequireQualifiedAccess; Struct>]
+    type XObjectClippingBoxState =
+        | Init 
+        | IntersectedSome of Rectangle
+        | IntersectedNone 
+
+    [<RequireQualifiedAccess; Struct>]
+    type ClippingPathInfoState =
+        | Init 
+        | Intersected of ClippingPathInfo
+
+    [<Struct>]
+    type ClippingPathInfos =
+        { XObjectClippingBoxState: XObjectClippingBoxState 
+          ClippingPathInfoState: ClippingPathInfoState }
+
+
     type IIntegratedRenderInfo =
         inherit IAbstractRenderInfo
         abstract member Tag: IntegratedRenderInfoTag
-        abstract member ClippingPathInfo: ClippingPathInfo option
-
-    [<Struct>]
-    type IntegratedPathRenderInfo =
-        { PathRenderInfo: PathRenderInfo 
-          ClippingPathInfo: ClippingPathInfo option }
-    with 
-        interface IPathRenderInfo with 
-            member x.Value = x.PathRenderInfo
-
-        interface IAbstractRenderInfo with 
-            member x.Value = x.PathRenderInfo :> AbstractRenderInfo
-
-        interface IIntegratedRenderInfo with 
-            member x.Tag = IntegratedRenderInfoTag.Path
-            member x.ClippingPathInfo = x.ClippingPathInfo
-
-    type TextInfoRecord =
-        { Text: string 
-          FontSize: float 
-          FillColor: iText.Kernel.Colors.Color 
-          StrokeColor: iText.Kernel.Colors.Color 
-          FontName: string }
-
-    type internal TextRenderInfo with 
-        member info.GetActualFontSize() =
-            let matrix = info.GetTextMatrix()
-            info.GetFontSize() * matrix.Get(0) |> float
-
-        member info.GetFontName() =
-            info.GetFont().GetFontProgram().GetFontNames().GetFontName()
-
-
-    [<Struct>]
-    type IntegratedTextRenderInfo =
-        { TextRenderInfo: TextRenderInfo 
-          ClippingPathInfo: ClippingPathInfo option }
-
-    with 
-        member renderInfo.RecordValue =
-            let renderInfo = renderInfo.TextRenderInfo
-            { Text = renderInfo.GetText()
-              FontSize = renderInfo.GetActualFontSize()
-              FontName = renderInfo.GetFontName()
-              FillColor = renderInfo.GetFillColor()
-              StrokeColor = renderInfo.GetStrokeColor() }
-
-
-        interface ITextRenderInfo with 
-            member x.Value = x.TextRenderInfo
-
-        interface IAbstractRenderInfo with 
-            member x.Value = x.TextRenderInfo :> AbstractRenderInfo
-
-        interface IIntegratedRenderInfo with 
-            member x.Tag = IntegratedRenderInfoTag.Text
-
-            member x.ClippingPathInfo = x.ClippingPathInfo
-
-    [<RequireQualifiedAccess>]
-    type IntegratedRenderInfo =
-        | Text of IntegratedTextRenderInfo
-        | Path of IntegratedPathRenderInfo
-
-    with 
-        member x.ClippingPathInfo =
-            match x with 
-            | IntegratedRenderInfo.Text info -> info.ClippingPathInfo
-            | IntegratedRenderInfo.Path info -> info.ClippingPathInfo
-
-        member x.RenderInfo : AbstractRenderInfo =
-            match x with 
-            | IntegratedRenderInfo.Text info -> info.TextRenderInfo :> AbstractRenderInfo
-            | IntegratedRenderInfo.Path info -> info.PathRenderInfo :> AbstractRenderInfo
-
-
-    [<RequireQualifiedAccess>]
-    module IIntegratedRenderInfo =
-
-        let (|Text|Path|) (info: IIntegratedRenderInfo) = 
-            match info.Tag with 
-            | IntegratedRenderInfoTag.Path -> Path (info :?> IntegratedPathRenderInfo)
-            | IntegratedRenderInfoTag.Text -> Text (info :?> IntegratedTextRenderInfo)
-            | _ -> failwith "Invalid token"
-
-        let asIPathRenderInfo (info: IIntegratedRenderInfo) = 
-            match info with
-            | Path info -> Some (info)
-            | _ -> None 
-
-        let asITextRenderInfo (info: IIntegratedRenderInfo) =
-            match info with
-            | Text info -> Some (info)
-            | _ -> None 
-
+        abstract member ClippingPathInfos: ClippingPathInfos
 
 
 

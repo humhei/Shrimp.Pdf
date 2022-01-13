@@ -6,10 +6,8 @@ open System.IO
 open System
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
 
-
-[<AutoOpen>]
-module Operators =
-
+module Constants =
+    
     type private AssemblyFinder = AssemblyFinder
 
     let private config = 
@@ -22,11 +20,17 @@ module Operators =
         lazy
             config.Value.GetDouble("shrimp.pdf.tolerance")
 
+
     let textInfoHeightRedirectPercentage = 
         lazy
             config.Value.GetDouble("shrimp.pdf.textInfoHeightRedirectPercentage")
 
+    let [<Literal>] MAXIMUM_MM_WIDTH = 5080.
 
+
+[<AutoOpen>]
+module Operators =
+    open Constants
     /// approximately equal to 
     /// benchmark by (CONFIG: shrimp.pdf.tolerance (default is 0.1))
     let (@=) a b =
@@ -41,6 +45,7 @@ module Operators =
     /// defaultConversion: mm to user unit
     let mm (mm: float) =
         mm / 25.4 * 72.
+
 
     /// defaultConversion: userUnit to mm
     let userUnitToMM (userUnit: float) =
