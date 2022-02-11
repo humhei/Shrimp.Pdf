@@ -10,6 +10,28 @@ open Shrimp.FSharp.Plus
 [<AutoOpen>]
 module ExtensionTypes =
 
+    [<RequireQualifiedAccess>]
+    module Subpath =
+
+        let toRawPoints (subpath: Subpath) =
+            subpath.GetPiecewiseLinearApproximation()
+
+    [<RequireQualifiedAccess>]
+    module Rectangle =
+        // <param name="points" at least two unique points></param>
+        let ofPoints (points: Point al2List) =
+            let xs,ys = 
+                points.AsList 
+                |> List.ofSeq
+                |> List.map (fun p -> p.x,p.y) 
+                |> List.unzip
+
+            let x = List.min xs
+            let y = List.min ys
+            let width = List.max xs - x 
+            let height = List.max ys - y
+            Rectangle(float32 x, float32 y, float32 width, float32 height)
+    
 
     type Direction =
         | Vertical = 0
@@ -60,10 +82,47 @@ module ExtensionTypes =
         | IntersectedSome of Rectangle
         | IntersectedNone 
 
+    
+    [<Struct; RequireQualifiedAccess>]
+    type ClippingPathInfoResult =
+        | IntersectedSome of Rectangle
+        | IntersectedNone 
+
+    [<RequireQualifiedAccess>]
+    module ClippingPathInfo =
+        let private getActualClippingPath (info: ClippingPathInfo) = 
+            match info.GetClippingPath() with 
+            | null -> failwith "Not implemented"
+            | path -> path
+    
+        let getActualClippingArea (info) =
+            let clippingPath = getActualClippingPath info
+            let points = 
+                clippingPath.GetSubpaths()
+                |> Seq.collect(Subpath.toRawPoints)
+                |> List.ofSeq
+
+            match points with 
+            | [] -> ClippingPathInfoResult.IntersectedNone
+            | _ -> Rectangle.ofPoints (AtLeastTwoList.Create points) |> ClippingPathInfoResult.IntersectedSome
+
+
+
+    
     [<RequireQualifiedAccess; Struct>]
     type ClippingPathInfoState =
         | Init 
         | Intersected of ClippingPathInfo
+    with 
+        member x.ActualClippingPathArea =
+            match x with 
+            | ClippingPathInfoState.Init _ -> None
+            | ClippingPathInfoState.Intersected v -> Some (ClippingPathInfo.getActualClippingArea v)
+
+
+
+
+
 
     [<Struct>]
     type ClippingPathInfos =
@@ -136,7 +195,13 @@ module ExtensionTypes =
         static member MM6 = Margin.Create(mm 6.)
 
         member x.LoggingText = 
-            sprintf "Margin %.1f %.1f %.1f %.1f" x.Left x.Top x.Right x.Bottom
+            let distincted =
+                [x.Left; x.Top; x.Right; x.Bottom]
+                |> List.distinct
+
+            match distincted with 
+            | [one] -> sprintf "Margin %.1f" one
+            | _ -> sprintf "Margin %.1f %.1f %.1f %.1f" x.Left x.Top x.Right x.Bottom
 
 
     [<RequireQualifiedAccess>]
@@ -377,6 +442,7 @@ module ExtensionTypes =
         | Inbox = 0
         | CrossBox = 1
         | OutBox = 2
+
 
 
     type StraightLine =

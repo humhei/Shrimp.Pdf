@@ -3,6 +3,8 @@
 
 
 #nowarn "0104"
+open FParsec
+open FParsec.CharParsers
 open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Parser
@@ -11,9 +13,8 @@ open Shrimp.Pdf.Colors
 open Shrimp.FSharp.Plus
 open System.Collections.Generic
 open System.Linq
-open FParsec
 open Shrimp.Pdf.Constants
-open FParsec.CharParsers
+
 
 
 [<AutoOpen>]
@@ -191,7 +192,7 @@ type Info_BoundIs_Args (relativePosition: RelativePosition, ?areaGettingOptions,
 type TextInfo =
     static member FPrasec(parser: Parser<_, _>) =
         fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
-            match run parser (info.Value.GetText()) with 
+            match FParsec.CharParsers.run parser (info.Value.GetText()) with 
             | Success _ -> true
             | Failure _ -> false
 
@@ -209,6 +210,8 @@ type TextInfo =
             ITextRenderInfo.fontNameIs fontName info
             && (fontSize @= float(ITextRenderInfo.getActualFontSize info))
         
+
+
 
 type Info =
 
@@ -384,6 +387,20 @@ type Info =
     static member BoundIsInsideOf (areaGettingOptions, ?boundGettingOptions) =
         Info.BoundIs(RelativePosition.Inbox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member PointOfBoundIsInsideOf (pointPosition: Position, areaGettingOptions, ?boundGettingStrokeOptions) =
+        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
+            let boundGettingOptions = defaultArg boundGettingStrokeOptions BoundGettingStrokeOptions.WithoutStrokeWidth
+
+            let bound = IAbstractRenderInfo.getBound boundGettingOptions info
+
+            let point = 
+                bound.GetPoint(pointPosition)
+
+            let rect = args.Page.GetArea(areaGettingOptions)
+
+            point.IsInsideOf(rect)
+
 
     static member BoundIsOutsideOf (areaGettingOptions, ?boundGettingOptions) =
         Info.BoundIs(RelativePosition.OutBox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)

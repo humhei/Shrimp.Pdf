@@ -26,14 +26,14 @@
     <None Include="Resources\Marks\*.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
-    <Content Include="Resources\Fonts\微软雅黑\msyh.ttc" />
-    <Content Include="Resources\Fonts\微软雅黑\msyhbd.ttc" />
-    <Content Include="Resources\Fonts\微软雅黑\msyhl.ttc" />
+    <None Include="Resources\Fonts\微软雅黑\msyh.ttc" />
+    <None Include="Resources\Fonts\微软雅黑\msyhbd.ttc" />
+    <None Include="Resources\Fonts\微软雅黑\msyhl.ttc" />
     <None Include="Resources\Fonts\Adobe\AdobeHeitiStd-Regular.otf" />
-    <Content Include="Resources\Fonts\方正\方正黑体简体.TTF" />
-    <Content Include="Resources\Fonts\方正\方正大黑简体.ttf" />
-    <Content Include="Resources\Fonts\Arial-Unicode\arial unicode ms.ttf" />
-    <Content Include="Resources\Fonts\Arial-Unicode\arial unicode ms bold.ttf" />
+    <None Include="Resources\Fonts\方正\方正黑体简体.TTF" />
+    <None Include="Resources\Fonts\方正\方正大黑简体.ttf" />
+    <None Include="Resources\Fonts\Arial-Unicode\arial unicode ms.ttf" />
+    <None Include="Resources\Fonts\Arial-Unicode\arial unicode ms bold.ttf" />
     <None Include="Resources\Fonts\*.otf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>

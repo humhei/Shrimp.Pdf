@@ -57,6 +57,7 @@ type PageModifier =
             let trimedBox = 
                 infos
                 |> Seq.map (IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth)
+                |> AtLeastOneList.Create
                 |> Rectangle.ofRectangles
             trimedBox
 

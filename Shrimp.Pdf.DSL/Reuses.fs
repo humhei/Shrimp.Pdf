@@ -42,6 +42,15 @@ with
         | PageNumSequenceToken.PageNumWithRotation (_, rotation) -> rotation
         | PageNumSequenceToken.PageNumWithFlip (_, _) -> Rotation.None
 
+    member x.MapPageNumber(mapping) =
+        match x with 
+        | PageNumSequenceToken.PageNum pageNum -> mapping pageNum |> PageNumSequenceToken.PageNum
+        | PageNumSequenceToken.PageNumWithRotation (pageNum, rotation) -> 
+            (mapping pageNum, rotation) |> PageNumSequenceToken.PageNumWithRotation
+        | PageNumSequenceToken.PageNumWithFlip (pageNum, flip) -> 
+            (mapping pageNum, flip) |> PageNumSequenceToken.PageNumWithFlip
+            
+
     member x.ShuffingText =
         match x with 
         | PageNumSequenceToken.PageNum pageNum -> pageNum.ToString()
@@ -69,6 +78,11 @@ with
     member x.Value = 
         let (PageNumSequence value) = x
         value.AsList
+
+    member x.MapPageNumber(mapping) = 
+        x.Value_Al1List
+        |> AtLeastOneList.map (fun m -> m.MapPageNumber mapping)
+        |> PageNumSequence
 
     member x.ShuffingText = 
         x.Value
@@ -125,11 +139,15 @@ with
     static member Create(pageNum: int, rotation) =
         EmptablePageNumSequenceToken.PageNumSequenceToken (PageNumSequenceToken.PageNumWithRotation(pageNum, rotation))
 
-        
+
 
 // number in page sequence must be bigger than 0
 type EmptablePageNumSequence = private EmptablePageNumSequence of AtLeastOneList<EmptablePageNumSequenceToken>
 with 
+    member x.Value_Al1List = 
+        let (EmptablePageNumSequence value) = x
+        value
+
     member x.Value = 
         let (EmptablePageNumSequence value) = x
         value.AsList
@@ -163,6 +181,11 @@ with
         sequence.Value
         |> List.map EmptablePageNumSequenceToken.PageNumSequenceToken
         |> AtLeastOneList.Create
+        |> EmptablePageNumSequence
+
+    static member Concat(sequences: EmptablePageNumSequence al1List) =
+        sequences
+        |> AtLeastOneList.collect(fun m -> m.Value_Al1List)
         |> EmptablePageNumSequence
 
 // number in page sequence must be bigger than 0

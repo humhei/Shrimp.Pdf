@@ -27,7 +27,7 @@ let allTests =
 
 [<EntryPoint>]
 let main argv =
-    SetClientContext()
+    //SetClientContext()
     runTests testConfig allTests
     Console.Read()
     0

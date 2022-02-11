@@ -297,31 +297,23 @@ module iText =
             let width = float32 width
             let height = float32 height
             new Rectangle(x,y,width,height)
-            
-        // <param name="points" at least two unique points></param>
-        let ofPoints (points: Point seq) =
-            let xs,ys = 
-                points 
-                |> List.ofSeq
-                |> List.map (fun p -> p.x,p.y) 
-                |> List.unzip
-
-            let x = List.min xs
-            let y = List.min ys
-            let width = List.max xs - x 
-            let height = List.max ys - y
-            (create x y width height)
 
 
         // <param name="rects" at least one rectange></param>
-        let ofRectangles (rects: Rectangle seq) =
-            rects |> Seq.collect (fun rect ->
-                let x = rect.GetXF()
-                let y = rect.GetYF()
-                let right = rect.GetRightF()
-                let top = rect.GetTopF()
-                [Point(x,y);Point(right,top)]
-            ) |> ofPoints
+        let ofRectangles (rects: Rectangle al1List) =
+            match rects.AsList with 
+            | [rect] -> rect
+            | rects ->
+
+                rects |> Seq.collect (fun rect ->
+                    let x = rect.GetXF()
+                    let y = rect.GetYF()
+                    let right = rect.GetRightF()
+                    let top = rect.GetTopF()
+                    [Point(x,y);Point(right,top)]
+                ) 
+                |> AtLeastTwoList.Create
+                |> Rectangle.ofPoints
 
 
         let toPdfArray (rect: Rectangle) =
@@ -548,7 +540,10 @@ module iText =
             let p2 = new Point (rect.GetRightF(),rect.GetTopF())
             let p3 = new Point (rect.GetXF(),rect.GetTopF())
             let p4 = new Point (rect.GetRightF(),rect.GetYF())
-            [p1; p2; p3 ;p4] |> List.map (fun p -> AffineTransform.transform p this) |> Rectangle.ofPoints
+            [p1; p2; p3 ;p4]
+            |> AtLeastTwoList.Create
+            |> AtLeastTwoList.map (fun p -> AffineTransform.transform p this) 
+            |> Rectangle.ofPoints
 
         member this.Transform(segment: IShape) =
             let points = 
@@ -586,7 +581,10 @@ module iText =
             let p2 = new Point (rect.GetRightF(),rect.GetTopF())
             let p3 = new Point (rect.GetXF(),rect.GetTopF())
             let p4 = new Point (rect.GetRightF(),rect.GetYF())
-            [p1; p2; p3 ;p4] |> List.map (fun p -> AffineTransform.inverseTransform p this) |> Rectangle.ofPoints
+            [p1; p2; p3 ;p4] 
+            |> AtLeastTwoList.Create
+            |> AtLeastTwoList.map (fun p -> AffineTransform.inverseTransform p this) 
+            |> Rectangle.ofPoints
 
 
 
@@ -608,19 +606,20 @@ module iText =
     [<RequireQualifiedAccess>]
     module Subpath =
 
-        let toRawPoints (subpath: Subpath) =
-            subpath.GetPiecewiseLinearApproximation()
-
         let toActualPoints (ctm: Matrix) subpath =
-            toRawPoints subpath
+            Subpath.toRawPoints subpath
             |> Seq.map (fun pt -> (AffineTransform.ofMatrix ctm).Transform(pt))
 
         let getActualBound ctm (subpath: Subpath) =
-            toActualPoints ctm subpath
-            |> Rectangle.ofPoints
+            let points = 
+                toActualPoints ctm subpath
+                |> AtLeastTwoList.Create
+
+            Rectangle.ofPoints points
+
 
         let isNotEmpty (subpath: Subpath) =
-            let points = toRawPoints subpath
+            let points = Subpath.toRawPoints subpath
             points.Count > 0
 
 
@@ -679,7 +678,7 @@ module iText =
             else []
 
         let getBound (boundGettingOptions: BoundGettingStrokeOptions) (info: IPathRenderInfo) = 
-            let boundWithoutWidth = info |> toActualPoints |> Rectangle.ofPoints
+            let boundWithoutWidth = info |> toActualPoints |> AtLeastTwoList.Create |> Rectangle.ofPoints
             match boundGettingOptions with 
             | BoundGettingStrokeOptions.WithoutStrokeWidth -> boundWithoutWidth
             | BoundGettingStrokeOptions.WithStrokeWidth ->
@@ -713,7 +712,7 @@ module iText =
                 ascent.GetStartPoint().Get(1) - descent.GetStartPoint().Get(1)
                 |> float
 
-            let redirectedHeight = textInfoHeightRedirectPercentage.Value * baseHeight
+            let redirectedHeight = baseHeight
             redirectedHeight
 
         let getWidth (info: ITextRenderInfo) =
@@ -874,32 +873,9 @@ module iText =
                     && predicate(info.Value.GetStrokeColor())
 
 
-    [<Struct; RequireQualifiedAccess>]
-    type private ClippingPathInfoResult =
-        | IntersectedSome of Rectangle
-        | IntersectedNone 
 
     [<RequireQualifiedAccess>]
     module IIntegratedRenderInfo =
-        [<RequireQualifiedAccess>]
-        module private ClippingPathInfo =
-            let private getActualClippingPath (info: ClippingPathInfo) = 
-                match info.GetClippingPath() with 
-                | null -> failwith "Not implemented"
-                | path -> path
-        
-            let getActualClippingArea (info) =
-                let clippingPath = getActualClippingPath info
-                let points = 
-                    let ctm = info.GetGraphicsState().GetCtm()
-                    clippingPath.GetSubpaths()
-                    |> Seq.collect(Subpath.toRawPoints)
-                    |> List.ofSeq
-
-                match points with 
-                | [] -> ClippingPathInfoResult.IntersectedNone
-                | _ -> Rectangle.ofPoints points |> ClippingPathInfoResult.IntersectedSome
-
         //[<Struct>]
         //type private ClippingPathInfos =
         //    { ClippingPathInfo: ClippingPathInfo option 

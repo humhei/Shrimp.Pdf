@@ -161,6 +161,19 @@ type PdfRunner =
         |> List.exactlyOne
         |> fun m -> m.PdfFile
 
+    static member MergeDocuments (inputs: PdfFile al1List, ?fArgs) =
+        match inputs with 
+        | AtLeastOneList.Many inputs -> PdfRunner.MergeDocuments(inputs, ?fArgs = fArgs)
+        | AtLeastOneList.One input ->
+            let args = 
+                match fArgs with 
+                | Some fArgs -> fArgs DocumentMergingArguments.DefalutValue
+                | None -> DocumentMergingArguments.DefalutValue
+
+            File.Copy(input.Path, args.TargetDocumentPath, args.Override)
+
+            PdfFile args.TargetDocumentPath
+
     static member SplitDocumentToMany (inputPdfFile: PdfFile, ?fArgs) =
         
         let flow =

@@ -206,10 +206,16 @@ module Manipulates =
                     let bound = 
                         renderInfos
                         |> Seq.choose (IIntegratedRenderInfo.tryGetVisibleBound BoundGettingStrokeOptions.WithStrokeWidth)
-                        |> Rectangle.ofRectangles
+                        |> AtLeastOneList.TryCreate
+                        |> Option.map Rectangle.ofRectangles
 
-                    args.Page.SetActualBox(bound |> Rectangle.applyMargin margin)
-                    |> ignore
+                    match bound with 
+                    | Some bound ->
+                        args.Page.SetActualBox(bound |> Rectangle.applyMargin margin)
+                        |> ignore
+
+                    | None -> 
+                        failwithf "Cannot trim to visible as all infos are invisible"
 
                 ),
                 parameters = [

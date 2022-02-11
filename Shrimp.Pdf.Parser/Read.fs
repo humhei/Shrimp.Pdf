@@ -182,7 +182,6 @@ module internal Listeners =
                 match tp with 
                 | EventType.CLIP_PATH_CHANGED -> 
                     let clippingPathInfo' = data :?> ClippingPathInfo
-
                     currentClippingPathInfo <- ClippingPathInfoState.Intersected clippingPathInfo'
                     clippingPathInfo'.PreserveGraphicsState()
                 | _ ->
@@ -288,6 +287,7 @@ type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener ,
         base.ProcessContent(contentBytes, resources)
 
     override this.InvokeOperator(operator, operands) =
+        //printfn "%s %A" (operator.ToString())(List.ofSeq operands)
         match operator.ToString() with
         | "Do" -> 
             match this.GetEventListener() with 

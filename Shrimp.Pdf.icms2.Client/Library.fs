@@ -1,4 +1,4 @@
-﻿namespace Shrimp.Pdf.icms2
+﻿namespace Shrimp.Pdf.icms2.client
 #nowarn "0104"
 open Shrimp.Pdf.icms2.Core
 open iText.Kernel.Colors

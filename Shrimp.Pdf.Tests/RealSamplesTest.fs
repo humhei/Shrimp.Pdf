@@ -34,7 +34,7 @@ let setTrimBoxToStrokeB255() =
 
 let retainTitleInfo (color: FsColor) = 
     SelectorAndModifiers(
-        sprintf "retain title info %O" color,
+        sprintf "retain title info %O" color.LoggingText,
         Factory(fun args ->
           let pageEdge, titleArea = args.PageUserState()
           OR [
@@ -51,22 +51,22 @@ let retainTitleInfo (color: FsColor) =
     )
  
 
-let blackAndWhiteTitleInfo() =
-    SelectorAndModifiers(
-        "black and white title info",
-        Factory (fun args ->
-            let pageEdge, titleArea = args.PageUserState()
-            PathOrText (
-                Info.BoundIsInsideOf(AreaGettingOptions.Specfic titleArea)
-            )
-        ),
-        [ Modifier.BlackOrWhite() ]
-    )
+//let blackAndWhiteTitleInfo() =
+//    SelectorAndModifiers(
+//        "black and white title info",
+//        Factory (fun args ->
+//            let pageEdge, titleArea = args.PageUserState()
+//            PathOrText (
+//                Info.BoundIsInsideOf(AreaGettingOptions.Specfic titleArea)
+//            )
+//        ),
+//        [ Modifier.BlackOrWhite() ]
+//    )
   
 
 let retainNavigationInfo (color: FsColor) =
     SelectorAndModifiers(
-        sprintf "retain navigation info %O" color,
+        sprintf "retain navigation info %O" color.LoggingText,
         PathOrText (fun args ->
             let pageEdge, _ = args.PageUserState()
             ( Info.BoundIsInsideOf(AreaGettingOptions.Specfic pageEdge.LeftMiddle)
@@ -176,7 +176,7 @@ let realSamplesTests =
                 PageSelector.All,
                 [ retainTitleInfo FsColor.RGB_MAGENTA
                   removeNavigationInfo() 
-                  blackAndWhiteTitleInfo()
+                  //blackAndWhiteTitleInfo()
                 ]
             )
         )
