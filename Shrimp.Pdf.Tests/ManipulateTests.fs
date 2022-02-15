@@ -825,7 +825,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/add rect to area.pdf" 
         |> ignore
 
-    ftestList "trim to visible tests" [
+    testList "trim to visible tests" [
         testCase "trim to visible test" <| fun _ -> 
             Flow.Manipulate(
                 ModifyPage.TrimToVisible (PageSelector.All)

@@ -64,21 +64,16 @@ module _SelectionGrouper =
 
 
         member grouper.GroupBy_Bottom(frect: 'info -> iText.Kernel.Geom.Rectangle) (infos: 'info seq) = 
-            let comparer =
-                { new IEqualityComparer<Bottom> with 
-                    member __.Equals(x,y) = 
-                        match grouper with 
-                        | SelectionGrouper.None -> x = y
-                        | SelectionGrouper.Plane tolerance ->
-                            abs (x.Value - y.Value) < tolerance
-            
-                    member __.GetHashCode(_) = 0
-                }
+            infos
+            |> Seq.map(fun m ->
+                frect m, m
+            )
+            |> Seq.groupBy(fun (m, _) -> m.GetBottomF() |> NearbyPX)   
+            |> Seq.map(fun (a, b) ->
+                a.Value, b |> Seq.sortBy(fun (rect, info) -> rect.GetLeft()) |> Seq.map snd
+            )
 
-            infos.GroupBy(
-                (fun m -> Bottom((frect m).GetBottomF())),
-                (fun (key: Bottom) r -> (key.Value,r |> Seq.sortBy (fun m -> (frect m).GetLeft()))),
-                comparer)
+    
           
 
 

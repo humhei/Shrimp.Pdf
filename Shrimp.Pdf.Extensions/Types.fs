@@ -10,6 +10,8 @@ open Shrimp.FSharp.Plus
 [<AutoOpen>]
 module ExtensionTypes =
 
+
+
     [<RequireQualifiedAccess>]
     module Subpath =
 
@@ -32,6 +34,11 @@ module ExtensionTypes =
             let height = List.max ys - y
             Rectangle(float32 x, float32 y, float32 width, float32 height)
     
+
+    type FsPoint =
+        { X: float 
+          Y: float }
+
 
     type Direction =
         | Vertical = 0
@@ -641,6 +648,10 @@ module ExtensionTypes =
 
                 else 
                     numbers
+
+        static member Number(pageNumber: int) =
+            AtLeastOneSet.Create [pageNumber]
+            |> PageSelector.Numbers
 
     type PdfDocument with
 

@@ -3,6 +3,7 @@ open iText.Kernel.Geom
 open Akka.Configuration
 open System.Reflection
 open System.IO
+open Shrimp.FSharp.Plus
 open System
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
 
@@ -41,6 +42,15 @@ module Operators =
     //let (>=@) a b =
     //    a > b
     //    || (abs (a - b)) < tolerance.Value
+
+    /// unSerializable
+    type NearbyPX(v: float) =
+        inherit CustomEquatable<float>(v, fun a b ->
+            (abs (a-b)) <= tolerance.Value
+        )
+
+        member x.Value = v
+
 
     /// defaultConversion: mm to user unit
     let mm (mm: float) =

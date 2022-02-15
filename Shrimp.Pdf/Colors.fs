@@ -836,10 +836,10 @@ module _Colors =
 
     [<RequireQualifiedAccess>]
     module FsColor =
-        let private fsColorCache = new ConcurrentDictionary<CustomComparable<Color, int>, FsColor>()
+        let private fsColorCache = new ConcurrentDictionary<SerializableCustomComparable<Color, int>, FsColor>()
 
         let OfItextColor(color: Color) =
-            let color = CustomComparable(color, fun color -> color.GetHashCode())
+            let color = SerializableCustomComparable(color, fun color -> color.GetHashCode())
             fsColorCache.GetOrAdd(color, fun color ->
                 let color = color.Value
                 match color with 

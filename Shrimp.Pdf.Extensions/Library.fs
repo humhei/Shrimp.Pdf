@@ -111,6 +111,9 @@ module iText =
         member this.GetXCenterF() = this.GetXCenter() |> float
         member this.GetYCenter() = (this.GetTop() + this.GetBottom()) / 2.f
         member this.GetYCenterF() = this.GetYCenter() |> float
+        member this.GetCenter() = 
+            { X = this.GetXCenterF() 
+              Y = this.GetYCenterF() }
 
         member rect.applyMargin(margin :Margin) =   
             let left = margin.Left

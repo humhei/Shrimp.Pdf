@@ -17,11 +17,16 @@
     <PackageReference Include="FParsec" Version="1.1.1" />
     <PackageReference Include="itext7" Version="99.99.1" />
     <PackageReference Include="itext7.font-asian" Version="7.1.9" />
-    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.33" />
-    <PackageReference Include="Shrimp.FSharp.Plus" Version="1.1.279" />
+    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.34" />
+    <PackageReference Include="Shrimp.FSharp.Plus" Version="1.1.285" />
   </ItemGroup>
 
   <ItemGroup>
+    <!--<ProjectReference Include="..\..\..\Github\itext7-dotnet\itext\itext.font-asian\itext.font-asian.netstandard.csproj" />
+    <ProjectReference Include="..\..\..\Github\itext7-dotnet\itext\itext.forms\itext.forms.netstandard.csproj" />
+    <ProjectReference Include="..\..\..\Github\itext7-dotnet\itext\itext.io\itext.io.netstandard.csproj" />
+    <ProjectReference Include="..\..\..\Github\itext7-dotnet\itext\itext.kernel\itext.kernel.netstandard.csproj" />
+    <ProjectReference Include="..\..\..\Github\itext7-dotnet\itext\itext.layout\itext.layout.netstandard.csproj" />-->
     <ProjectReference Include="..\Shrimp.Pdf.Logger\Shrimp.Pdf.Logger.fsproj" />
   </ItemGroup>
 

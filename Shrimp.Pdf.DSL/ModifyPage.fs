@@ -10,6 +10,7 @@ open iText.Layout.Properties
 open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf.Colors
 open Shrimp.FSharp.Plus
+open Shrimp.Pdf
 
 
 type ColoredText =
@@ -17,7 +18,6 @@ type ColoredText =
       Color: PdfCanvasColor }
 
 type PageModifier<'userState, 'newUserState> = PageModifingArguments<'userState> -> seq<IIntegratedRenderInfo> -> 'newUserState
-
 
 
 
@@ -119,6 +119,16 @@ type PageModifier =
         fun (args: PageModifingArguments<_>) infos ->
             infos
             |> Seq.choose IIntegratedRenderInfo.asITextRenderInfo
+            |> Seq.distinctBy(fun m ->
+                let bound =
+                    IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
+
+                let customEquality (x: float) =
+                    NearbyPX x
+
+                customEquality(bound.GetXCenterF()), customEquality(bound.GetYCenterF())
+
+            )
             |> selectionGrouper.GroupBy_Bottom(
                IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth
             )
@@ -323,29 +333,64 @@ module ModifyPageOperators =
 
 
     type PdfRunner with 
-        //static member ReadInfos(pdfFile: PdfFile, selector, pageModifier: PageModifier<_, _>, ?name) =
-        //    let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path
-        //    let flow = 
-        //        ModifyPage.Create(
-        //            defaultArg name ("Read infos from" + pdfFileName),
-        //            PageSelector.All,
-        //            selector,
-        //            pageModifier
-        //        )
-        //        |> Flow.Manipulate
+        static member ReadInfos(pdfFile: PdfFile, selector,  pageModifier: PageModifier<_, _>, ?backupPdfPath, ?name, ?pageSelector) =
+            let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path
+            let flow = 
+                ModifyPage.Create(
+                    defaultArg name ("Read infos from" + pdfFileName),
+                    defaultArg pageSelector PageSelector.All,
+                    selector,
+                    pageModifier
+                )
+                |> Flow.Manipulate
 
-        //    match run (pdfFile.Path) flow with 
-        //    | [flowModel] -> flowModel.UserState
-        //    | [] -> failwith "Invalid token"
-        //    | flowModels ->  failwithf "Multiple flowModels %A are found" flowModels
+            let run =
+                match backupPdfPath with 
+                | Some backupPdfPath -> runWithBackup backupPdfPath
+                | None -> run
+
+            match run (pdfFile.Path) flow with 
+            | [flowModel] -> flowModel.UserState
+            | [] -> failwith "Invalid token"
+            | flowModels ->  failwithf "Multiple flowModels %A are found" flowModels
+
+        static member ReadTextInfos(pdfFile: PdfFile,  ?backupPdfPath, ?name, ?pageSelector) =
+            PdfRunner.ReadInfos(
+                pdfFile, 
+                Selector.Text (fun _ _ -> true),
+                pageModifier = (fun args infos ->
+                    infos
+                    |> List.ofSeq
+                    |> List.choose (IIntegratedRenderInfo.asITextRenderInfo)
+                    |> List.map(fun m -> m.RecordValue)
+                ),
+                ?backupPdfPath = backupPdfPath,
+                ?name = name,
+                ?pageSelector = pageSelector
+            )
+
+        static member ReadPathInfos(pdfFile: PdfFile,  ?backupPdfPath, ?name, ?pageSelector) =
+            PdfRunner.ReadInfos(
+                pdfFile, 
+                Selector.Path (fun _ _ -> true),
+                pageModifier = (fun args infos ->
+                    infos
+                    |> List.ofSeq
+                    |> List.choose (IIntegratedRenderInfo.asIPathRenderInfo)
+                    |> List.map(fun m -> m.RecordValue)
+                ),
+                ?backupPdfPath = backupPdfPath,
+                ?name = name,
+                ?pageSelector = pageSelector
+            )
 
         /// default pageSelector is PageSelector.First
-        static member CheckInfos(pdfFile: PdfFile, selector, ?name, ?backupPdfPath, ?pageSelector) =
+        static member CheckInfos(pageSelector, pdfFile: PdfFile, selector, ?name, ?backupPdfPath) =
             let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path
             let flow = 
                 ModifyPage.Create(
                     defaultArg name ("Check infos for" + pdfFileName),
-                    defaultArg pageSelector PageSelector.First,
+                    pageSelector,
                     selector,
                     (fun _ infos -> Seq.length infos)
                 )
