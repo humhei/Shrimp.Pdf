@@ -10,11 +10,11 @@ open Shrimp.Pdf.Colors
 
 let functionTests =
   testList "Function Tests" [
-    testCase "PageSelectorExpr tests" <| fun _ -> 
+    testCase "IndexExpr tests" <| fun _ -> 
         //(ColorCard.Pantone PantoneColorEnum.``PANTONE 100 C``)
         //|> PdfCanvasColor.ColorCard
         //|> PdfCanvasColor.OfITextColor
-        //let expr1 = PageSelectorExpr.create "1,2-R3"
+        //let expr1 = IndexExpr.create "1,2-R3"
         ()
 
 

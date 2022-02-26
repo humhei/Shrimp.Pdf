@@ -679,14 +679,14 @@ module Imposing =
                         let colPos = cell.ColumnPosition()
                         let rowPos = cell.RowPosition()
 
-                        let leftTopV = x, y-distance, x, y-distance-length 
+                        let leftTopV = x, y-distance, x, y-distance-length                                   
                         let leftTopH = x-distance, y, x-distance-length, y            
-                        let leftBottomV = x-distance, y+height, x-distance-length, y+height     
-                        let leftBottomH = x, y+distance+height, x, y+distance+length+height
+                        let leftBottomV = x, y+distance+height, x, y+distance+length+height
+                        let leftBottomH = x-distance, y+height, x-distance-length, y+height     
                         let rightTopV = x+width, y-distance, x+width, y-distance-length  
                         let rightTopH = x+distance+width, y, x+distance+length+width, y        
-                        let rightBottomV = x+distance+width, y+height, x+distance+length+width, y+height
-                        let rightBottomH = x+width, y+distance+height, x+width, y+distance+length+height
+                        let rightBottomV = x+width, y+distance+height, x+width, y+distance+length+height
+                        let rightBottomH = x+distance+width, y+height, x+distance+length+width, y+height
                         match cropmark.IsRevealedBetweenCells with 
                         | true ->
                             [

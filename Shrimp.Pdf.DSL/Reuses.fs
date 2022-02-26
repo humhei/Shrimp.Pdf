@@ -68,6 +68,8 @@ with
                 | Flip.HFlip -> "$"
                 | Flip.VFlip -> "%"
 
+exception PageNumSequenceEmptyException of string
+
 // number in page sequence must be bigger than 0
 type PageNumSequence = private PageNumSequence of AtLeastOneList<PageNumSequenceToken>
 with 
@@ -91,7 +93,7 @@ with
 
     static member private EnsureSequenceNotEmpty(sequence: 'a list) =
         match sequence with 
-        | [] -> failwithf "PageNumberSequence is empty"
+        | [] -> raise (PageNumSequenceEmptyException "PageNumberSequence is empty")
         | _ -> ()
 
     static member Create (sequence: int list) =
@@ -1263,11 +1265,9 @@ module _Reuses =
 
                     let canvas = new PdfCanvas(newPage)
                     newPage.SetPageBoxToPage(page) |> ignore
-
                     //let clippingBoxToActualPage =  - clippingPageBox.GetX()
                         
-
-                    canvas.AddXObject(xobject, -actualBox.GetX(), -actualBox.GetY())
+                    canvas.AddXObject(xobject, 0.f, 0.f)
                     |> ignore
 
 
@@ -1421,12 +1421,12 @@ module _Reuses =
         //        )
 
         /// default useBleed: false
-        static member OneColumn(?margin, ?useBleed, ?hspaces, ?vspaces) =
+        static member OneColumn(?margin, ?useBleed, ?spaces) =
             Reuses.Impose(fun args -> 
                 {args with 
                     Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (defaultArg margin Margin.Zero)
-                    HSpaceExes = defaultArg hspaces Spaces.Zero
-                    VSpaceExes = defaultArg vspaces Spaces.Zero
+                    HSpaceExes = Spaces.Zero
+                    VSpaceExes = defaultArg spaces Spaces.Zero
                     ColNums = [1]
                     RowNum = 0
                     IsRepeated = false
@@ -1434,12 +1434,12 @@ module _Reuses =
                     Background = Background.Size FsSize.MAXIMUN})
 
         /// default useBleed: false
-        static member OneRow(?margin, ?useBleed, ?hspaces, ?vspaces) =
+        static member OneRow(?margin, ?useBleed, ?spaces) =
             Reuses.Impose(fun args -> 
                 {args with 
                     Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (defaultArg margin Margin.Zero)
-                    HSpaceExes = defaultArg hspaces Spaces.Zero
-                    VSpaceExes = defaultArg vspaces Spaces.Zero
+                    HSpaceExes = defaultArg spaces Spaces.Zero
+                    VSpaceExes = Spaces.Zero
                     ColNums = [0]
                     RowNum = 1
                     IsRepeated = false
@@ -1584,18 +1584,18 @@ module _Reuses =
                 PdfRunner.OneFileFlow(pdfFile, ?backupPdfPath = backupPdfPath) (Flow.Reuse reuse)
 
         /// default useBleed: false
-        static member OneColumn(?backupPdfPath, ?margin, ?useBleed, ?hspaces, ?vspaces) =
+        static member OneColumn(?backupPdfPath, ?margin, ?useBleed, ?spaces) =
             fun pdfFile ->
                 let reuse =
-                    Reuses.OneColumn(?margin = margin, ?useBleed = useBleed, ?hspaces = hspaces, ?vspaces = vspaces)
+                    Reuses.OneColumn(?margin = margin, ?useBleed = useBleed, ?spaces = spaces)
 
                 PdfRunner.Reuse(pdfFile,?backupPdfPath = backupPdfPath) reuse
     
         /// default useBleed: false
-        static member OneRow(?backupPdfPath, ?margin, ?useBleed, ?hspaces, ?vspaces) =
+        static member OneRow(?backupPdfPath, ?margin, ?useBleed, ?spaces) =
             fun pdfFile ->
                 let reuse =
-                    Reuses.OneRow(?margin = margin, ?useBleed = useBleed, ?hspaces = hspaces, ?vspaces = vspaces)
+                    Reuses.OneRow(?margin = margin, ?useBleed = useBleed, ?spaces = spaces)
 
                 PdfRunner.Reuse(pdfFile,?backupPdfPath = backupPdfPath) reuse
 

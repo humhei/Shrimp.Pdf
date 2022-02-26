@@ -30,6 +30,9 @@ type DocumentMergingArguments =
     { TargetDocumentPath: string 
       Override: bool }
 with 
+    ///TargetDocumentPath = Path.GetTempFileName() |> Path.changeExtension ".pdf"
+    ///
+    ///Override = false 
     static member DefalutValue =
         { TargetDocumentPath = Path.GetTempFileName() |> Path.changeExtension ".pdf"
           Override = false }
@@ -66,6 +69,7 @@ module FileOperations =
         fun (flowModels: _ list) ->
             if flowModels.Length < 2 then failwithf "Cannot mergeDocuments when input page count %A < 2" flowModels.Length
 
+            Directory.ensure (Path.getDirectory args.TargetDocumentPath)
             if File.exists args.TargetDocumentPath && not args.Override then failwithf "target file %s already exists" args.TargetDocumentPath
             else File.delete args.TargetDocumentPath 
 
@@ -169,6 +173,8 @@ type PdfRunner =
                 match fArgs with 
                 | Some fArgs -> fArgs DocumentMergingArguments.DefalutValue
                 | None -> DocumentMergingArguments.DefalutValue
+
+
 
             File.Copy(input.Path, args.TargetDocumentPath, args.Override)
 

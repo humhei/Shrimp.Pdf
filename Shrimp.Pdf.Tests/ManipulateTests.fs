@@ -882,11 +882,17 @@ let manipulateTests =
             |> runTest "datas/manipulate/trim to visible8.pdf" 
             |> ignore
         
+        testCase "trim to visible test9" <| fun _ -> 
+            Flow.Manipulate(
+                ModifyPage.TrimToVisible (PageSelector.All)
+            )
+            |> runTest "datas/manipulate/trim to visible8.pdf" 
+            |> ignore
     ]
 
 
 
-    testCase "test infos" <| fun _ -> 
+    testCase "test tissue infos" <| fun _ -> 
         let flow =
             ModifyPage.Create(
                 "trim to visible",
@@ -895,7 +901,31 @@ let manipulateTests =
                 (fun args renderInfos ->
                     let infos = List.ofSeq renderInfos
                     ()
+                )
+            )
 
+        Flow.Manipulate(
+            flow
+        )
+        |> runTest "datas/manipulate/test tissue Infos.pdf" 
+        |> ignore
+
+    testCase "test infos" <| fun _ -> 
+        let flow =
+            ModifyPage.Create(
+                "trim to visible",
+                PageSelector.All,
+                PathOrText (fun _ _ -> true),
+                (fun args renderInfos ->
+                    let infos = 
+                        List.ofSeq renderInfos
+                        |> List.choose (IIntegratedRenderInfo.asIPathRenderInfo)
+                        |> List.map(fun m -> m.RecordValue)
+                        |> List.map(fun m -> FsColor.OfItextColor m.StrokeColor)
+                        |> FsColors.distinct
+
+                    let m = 1
+                    ()
                 )
             )
 
@@ -904,5 +934,6 @@ let manipulateTests =
         )
         |> runTest "datas/manipulate/testInfos.pdf" 
         |> ignore
+
 
   ]

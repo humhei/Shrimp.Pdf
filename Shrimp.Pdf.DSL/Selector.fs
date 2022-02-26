@@ -66,7 +66,8 @@ module _SelectionGrouper =
         member grouper.GroupBy_Bottom(frect: 'info -> iText.Kernel.Geom.Rectangle) (infos: 'info seq) = 
             infos
             |> Seq.map(fun m ->
-                frect m, m
+                let rect = frect m
+                rect, m
             )
             |> Seq.groupBy(fun (m, _) -> m.GetBottomF() |> NearbyPX)   
             |> Seq.map(fun (a, b) ->
@@ -389,13 +390,15 @@ type Info =
 
             let bound = IAbstractRenderInfo.getBound boundGettingOptions info
 
-            let point = 
-                bound.GetPoint(pointPosition)
+            let point = bound.GetPoint(pointPosition)
 
             let rect = args.Page.GetArea(areaGettingOptions)
 
             point.IsInsideOf(rect)
 
+    static member CenterPointOfBoundIsInsideOf (areaGettingOptions, ?boundGettingStrokeOptions) =
+        Info.PointOfBoundIsInsideOf(Position.Center(0., 0.), areaGettingOptions, ?boundGettingStrokeOptions = boundGettingStrokeOptions)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member BoundIsOutsideOf (areaGettingOptions, ?boundGettingOptions) =
         Info.BoundIs(RelativePosition.OutBox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)

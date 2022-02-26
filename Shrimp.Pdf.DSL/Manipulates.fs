@@ -203,10 +203,17 @@ module Manipulates =
                 pageSelector,
                 PathOrText (Info.IsVisible()),
                 (fun args renderInfos ->
-                    let bound = 
+                    let bounds = 
                         renderInfos
                         |> Seq.choose (IIntegratedRenderInfo.tryGetVisibleBound BoundGettingStrokeOptions.WithStrokeWidth)
                         |> AtLeastOneList.TryCreate
+
+                    let m = 
+                        bounds
+                        |> Option.map(AtLeastOneList.map(fun m -> m.FsRectangle()))
+
+                    let bound =
+                        bounds
                         |> Option.map Rectangle.ofRectangles
 
                     match bound with 

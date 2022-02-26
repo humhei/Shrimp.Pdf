@@ -10,7 +10,31 @@ open Shrimp.FSharp.Plus
 [<AutoOpen>]
 module ExtensionTypes =
 
+    [<StructuredFormatDisplay("{LoggingText}")>]
+    type FsRectangle =
+        { X: float 
+          Y: float 
+          Width: float 
+          Height: float }
+    with 
+        member x.AsRectangle =
+            Rectangle
+                ( float32 x.X, 
+                  float32 x.Y,
+                  float32 x.Width,
+                  float32 x.Height )
 
+        static member OfRectangle(rect: Rectangle) =
+            { X      = rect.GetX()       |> float
+              Y      = rect.GetY()       |> float
+              Width  = rect.GetWidth()   |> float
+              Height = rect.GetHeight()  |> float
+            }
+
+        member x.LoggingText = 
+            sprintf "RectMM %.1f %.1f %.1f %.1f" x.X x.Y x.Width x.Height
+
+        override x.ToString() = x.LoggingText
 
     [<RequireQualifiedAccess>]
     module Subpath =
@@ -555,6 +579,16 @@ module ExtensionTypes =
         | End of int
 
     with 
+        member x.AsSingleIndexExpr =
+            match x with 
+            | SinglePageSelectorExpr.Begin v -> SingleIndexExpr.Begin v
+            | SinglePageSelectorExpr.End v -> SingleIndexExpr.End v
+
+        static member OfSingleIndexExpr(expr) =
+            match expr with 
+            | SingleIndexExpr.Begin v -> SinglePageSelectorExpr.Begin v
+            | SingleIndexExpr.End v   -> SinglePageSelectorExpr.End v  
+
         override x.ToString() =
             match x with 
             | SinglePageSelectorExpr.Begin i -> i.ToString()
@@ -566,7 +600,29 @@ module ExtensionTypes =
         | Between of SinglePageSelectorExpr * SinglePageSelectorExpr
         | Compose of PageSelectorExpr list
 
-    with 
+    with
+        member x.AsIndexExpr =
+            match x with 
+            | PageSelectorExpr.SinglePage  v       ->  IndexExpr.Single   v.AsSingleIndexExpr       
+            | PageSelectorExpr.Between    (v1, v2) ->  IndexExpr.Between     (v1.AsSingleIndexExpr, v2.AsSingleIndexExpr) 
+            | PageSelectorExpr.Compose     v       ->  
+                v       
+                |> List.map(fun m -> m.AsIndexExpr)
+                |> IndexExpr.Compose
+
+        static member OfIndexExpr(expr) =
+            match expr with 
+            | IndexExpr.Single  v       ->  
+                PageSelectorExpr.SinglePage  (SinglePageSelectorExpr.OfSingleIndexExpr v)
+            | IndexExpr.Between    (v1, v2) ->  
+                let v1 =  SinglePageSelectorExpr.OfSingleIndexExpr v1
+                let v2 =  SinglePageSelectorExpr.OfSingleIndexExpr v2
+                PageSelectorExpr.Between (v1, v2)
+            | IndexExpr.Compose     v       ->  
+                v       
+                |> List.map(PageSelectorExpr.OfIndexExpr)
+                |> PageSelectorExpr.Compose
+
         override x.ToString() =
             match x with 
             | PageSelectorExpr.SinglePage expr -> expr.ToString()
@@ -578,38 +634,9 @@ module ExtensionTypes =
 
     [<RequireQualifiedAccess>]
     module PageSelectorExpr = 
-        let private parser() = 
-
-            let pSinglePage = 
-                let pBegin = 
-                    pint32 |>> (fun i -> 
-                        if i > 0 then  SinglePageSelectorExpr.Begin i
-                        else failwithf "page num %d should be bigger than 0" i
-                    )
-
-                let pEnd = 
-                    (pstringCI "R") >>. pint32 |>> (fun i ->
-                        if i > 0 then  SinglePageSelectorExpr.End i
-                        else failwithf "page num %d should be bigger than 0" i
-                    )
-
-                (pEnd)
-                <|> (pBegin)
-
-            let pBetween = 
-                (pSinglePage .>>? pchar '-' .>>. pSinglePage )
-                |>> PageSelectorExpr.Between
-
-            sepBy1 ((pBetween <|> (pSinglePage |>> PageSelectorExpr.SinglePage)) .>> spaces) (pchar ',')
-
         let create (exprText: string) =
-            match run (parser()) exprText with 
-            | Success (result, _, _) -> 
-                match result with 
-                | [expr] -> expr
-                | _ -> PageSelectorExpr.Compose result
-
-            | Failure (errorMsg, _, _) -> failwithf "%s" errorMsg
+            IndexExpr.create exprText
+            |> PageSelectorExpr.OfIndexExpr
 
 
 

@@ -19,6 +19,16 @@ module _Flows =
 
         member x.SetInfo(fInfo) = PageFilter(fInfo pageFilter_Info, pageFilter_Infos) 
 
+        member x.AddFilter_BoundIsInsideActualBox() =
+            x.SetInfo(fun selector ->
+                Selector.AND[
+                    selector
+                    PathOrText(
+                        Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)
+                    )
+                ]
+            )
+
         member x.SetInfos(fSelectors) = PageFilter(pageFilter_Info, fSelectors pageFilter_Infos) 
 
 

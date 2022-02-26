@@ -30,7 +30,7 @@ let reuseTests =
         |> runTest "datas/reuse/add foreground.pdf" 
         |> ignore
 
-    testCase "impose cell rotation tests" <| fun _ -> 
+    ftestCase "impose cell rotation tests" <| fun _ -> 
 
         Flow.Manipulate(Manipulate.dummy())
         <+>
@@ -50,7 +50,6 @@ let reuseTests =
                         VSpaceExes = Spaces [mm 3.; mm 20.]
                         UseBleed = true
                         IsRepeated = true
-                        CellRotation = CellRotation.R180WhenRowNumIsEven
                     }
                 ) ||>> fun imposingDocument -> imposingDocument.GetSheets()
         )
@@ -65,6 +64,14 @@ let reuseTests =
             Reuses.ClippingContentsToPageBox(PageBoxKind.TrimBox, Margin.Create (mm 1., mm 2., mm 3., mm 4.))
         )
         |> runTest "datas/reuse/Clipping Contents To PageBox.pdf" 
+        |> ignore
+
+    testCase "Clipping Contents To PageBox2" <| fun _ -> 
+
+        Flow.Reuse (
+            Reuses.ClippingContentsToPageBox(PageBoxKind.ActualBox, Margin.Create (mm -1.))
+        )
+        |> runTest "datas/reuse/Clipping Contents To PageBox2.pdf" 
         |> ignore
 
     testCase "preimpose" <| fun _ -> 
@@ -95,7 +102,7 @@ let reuseTests =
                         Cropmark = Some Cropmark.defaultValue
                         Background = Background.Size FsSize.A0
                         HSpaceExes = Spaces [Space.MiddleDashLine(mm 3., mm 1.5); Space.MiddleDashLine(mm 9., mm 3.)]
-                        VSpaceExes =  Spaces [Space.MiddleDashLine(mm 3., mm 1.5); Space.MiddleDashLine(mm 9., mm 3.)]
+                        VSpaceExes = Spaces [mm 3.; mm 20.]
                         Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 30., mm 40., mm 50., mm 60.))
                         UseBleed = true
                     }

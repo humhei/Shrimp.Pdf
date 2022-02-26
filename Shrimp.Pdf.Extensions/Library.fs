@@ -99,6 +99,8 @@ module iText =
 
 
     type Rectangle with 
+
+
         member this.GetWidthF() = this.GetWidth() |> float
         member this.GetHeightF() = this.GetHeight() |> float
         member this.GetXF() = this.GetX() |> float
@@ -111,9 +113,15 @@ module iText =
         member this.GetXCenterF() = this.GetXCenter() |> float
         member this.GetYCenter() = (this.GetTop() + this.GetBottom()) / 2.f
         member this.GetYCenterF() = this.GetYCenter() |> float
-        member this.GetCenter() = 
+        member this.GetFsCenter() = 
             { X = this.GetXCenterF() 
               Y = this.GetYCenterF() }
+
+        member this.GetCenter() = 
+            Point(this.GetXCenterF(), this.GetYCenterF())
+
+        member x.FsRectangle() = FsRectangle.OfRectangle x
+            
 
         member rect.applyMargin(margin :Margin) =   
             let left = margin.Left
@@ -187,13 +195,15 @@ module iText =
             || this.GetRight() < rect.GetLeft()
 
 
-
         member this.IsInsideOf(rect: Rectangle) =
             let rect = rect.applyMargin(Margin.Create tolerance.Value)
             this.GetBottom() > rect.GetBottom()
             && this.GetTop() < rect.GetTop()
             && this.GetLeft() > rect.GetLeft()
             && this.GetRight() < rect.GetRight()
+
+        member this.IsCenterPointInsideOf(paramRect: Rectangle) =
+            this.GetCenter().IsInsideOf(paramRect)
 
         member this.IsCrossOf(rect: Rectangle) =
             (not <| this.IsOutsideOf(rect)) 
@@ -293,6 +303,8 @@ module iText =
 
         let isCrossOf (paramRect) (rect: Rectangle) =
             rect.IsCrossOf(paramRect)
+
+
 
         let create x y width height =
             let x = float32 x

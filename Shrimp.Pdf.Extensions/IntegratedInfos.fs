@@ -12,12 +12,12 @@ open Shrimp.FSharp.Plus
 
 [<AutoOpen>]
 module IntegratedInfos =
-    
+
+
     type PathInfoRecord =
         { FillColor: iText.Kernel.Colors.Color 
           StrokeColor: iText.Kernel.Colors.Color 
-          Bound: Rectangle }
-
+          Bound: FsRectangle }
     [<Struct>]
     type IntegratedPathRenderInfo =
         { PathRenderInfo: PathRenderInfo 
@@ -27,7 +27,11 @@ module IntegratedInfos =
             let renderInfo = integratedInfo.PathRenderInfo
             { FillColor = renderInfo.GetFillColor()
               StrokeColor = renderInfo.GetStrokeColor()
-              Bound = IPathRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo}
+              Bound = 
+                let bound = (IPathRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo)
+                bound.FsRectangle()
+                
+              }
 
 
         interface IPathRenderInfo with 
@@ -40,14 +44,16 @@ module IntegratedInfos =
             member x.Tag = IntegratedRenderInfoTag.Path
             member x.ClippingPathInfos = x.ClippingPathInfos
 
+
+
     type TextInfoRecord =
         { Text: string 
           FontSize: float 
           FillColor: iText.Kernel.Colors.Color 
           StrokeColor: iText.Kernel.Colors.Color 
           FontName: string
-          Bound: Rectangle }
-
+          Bound: FsRectangle }
+            
 
     [<Struct>]
     type IntegratedTextRenderInfo =
@@ -62,7 +68,10 @@ module IntegratedInfos =
               FontName = ITextRenderInfo.getFontName integratedInfo
               FillColor = renderInfo.GetFillColor()
               StrokeColor = renderInfo.GetStrokeColor()
-              Bound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo}
+              Bound = 
+                let bound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo
+                bound.FsRectangle()
+            }
 
         interface ITextRenderInfo with 
             member x.Value = x.TextRenderInfo

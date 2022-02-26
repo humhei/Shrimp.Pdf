@@ -28,11 +28,11 @@ let flowTests =
         |> runTest "datas/flows/filterPages_infos.pdf" 
         |> ignore
 
-    ftestCase "filterPages_infos2" <| fun _ ->  
+    testCase "filterPages_infos2 with duplicated texts" <| fun _ ->  
         Flows.FilterPages(
             PageFilter(
                 InfosSelector.Text(fun args infos ->
-                    (TextInfos.ExistsText_In_OneLine(fun text -> text.Contains "EXPE")) args infos
+                    (TextInfos.ExistsText_In_OneLine(fun text -> text.Contains "EEXPE")) args infos
                 )
             )
         )
