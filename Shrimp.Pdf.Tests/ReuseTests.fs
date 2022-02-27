@@ -30,7 +30,7 @@ let reuseTests =
         |> runTest "datas/reuse/add foreground.pdf" 
         |> ignore
 
-    ftestCase "impose cell rotation tests" <| fun _ -> 
+    testCase "impose cell rotation tests" <| fun _ -> 
 
         Flow.Manipulate(Manipulate.dummy())
         <+>

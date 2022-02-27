@@ -59,7 +59,7 @@ type internal CallbackableContentOperator (originalOperator) =
                         let size = size.FloatValue()
                         processor.GetGraphicsState().SetFontSize(size)
 
-                    else raise ex
+                    else reraise()
 
             processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
 
@@ -76,8 +76,6 @@ and private OperatorRangeCallbackablePdfCanvasProcessor(listener) =
         | :? CallbackableContentOperator as wrapper -> wrapper.OriginalOperator
         | _ -> formOperator
 
-    override this.ProcessPageContent(page) =
-        this.ProcessContent(page.GetContentBytes(), page.GetResources());
 
 
 
@@ -256,6 +254,7 @@ module PdfPage =
         | _ ->
             let resources = page.GetResources()
 
+            editor.InitClippingPath(page)
             let fixedStream = editor.EditContent(resources, pageContents)
 
             page.Put(PdfName.Contents, fixedStream)

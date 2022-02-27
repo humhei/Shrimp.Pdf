@@ -9,6 +9,25 @@ open Shrimp.Pdf.icms2
 open Shrimp.Pdf.RegisterableFonts.YaHei
 open Imposing
 
+[<RequireQualifiedAccess>]
+module PageInfos =
+    open FParsec
+    let sizeParser() = 
+        let pMultiple () = anyOf [ 'x'; '×'; '*' ]
+
+        let parser =
+            let unitParser =
+                (pstring "mm" >>% 1) <|> (pstring "cm" >>% 10)
+
+            (pfloat .>> (pMultiple () <|> (unitParser >>. pMultiple()))
+             .>>. pfloat
+             .>>. unitParser
+             |>> (fun ((width, height), unit) ->
+                 { Width = (width * float unit)
+                   Height = (height * float unit) }))
+
+        parser
+
 
 let manipulateTests =
   testList "Manipulates Tests" [
@@ -910,7 +929,34 @@ let manipulateTests =
         |> runTest "datas/manipulate/test tissue Infos.pdf" 
         |> ignore
 
-    testCase "test infos" <| fun _ -> 
+    
+    
+
+    let tryColoredSizeText() =
+        Modify.Create(
+            PageSelector.All,
+            [ 
+                SelectorAndModifiers(
+                    "TryColoredSizeText",
+                    Selector.Text(
+                        (
+                            Info.BoundIsOutsideOf (AreaGettingOptions.PageBox PageBoxKind.TrimBox)
+                            <||>
+                            Info.BoundIsCrossOf(AreaGettingOptions.PageBox PageBoxKind.TrimBox)
+                        )
+                        <&&>
+                        TextInfo.FPrasec (PageInfos.sizeParser())
+                        <&&>
+                        Info.BoundIsInsideOf (AreaGettingOptions.PageBox PageBoxKind.ActualBox)
+                        <&&>
+                        Info.IsFillVisible()
+                    ),
+                    [Modifier.SetFillColor(iText.Kernel.Colors.DeviceRgb.RED)]
+                )
+            ]
+        )
+
+    ftestCase "test infos" <| fun _ -> 
         let flow =
             ModifyPage.Create(
                 "trim to visible",
@@ -930,7 +976,7 @@ let manipulateTests =
             )
 
         Flow.Manipulate(
-            flow
+            tryColoredSizeText()
         )
         |> runTest "datas/manipulate/testInfos.pdf" 
         |> ignore

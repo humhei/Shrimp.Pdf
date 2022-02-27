@@ -179,7 +179,9 @@ module internal rec ManipulateOrReuse =
                             flowModel.Document.TryCloseAndDisposeWriter_IfOpened()
                             FlowModel.mapTo newUserState flowModel
                         with ex ->
-                            let ex = new System.Exception(sprintf "OperateDocument: false\nError when invoke flow %A to pdfFile %s" (flowModel.FlowName, flow) flowModel.File, ex)
+                            let ex = 
+                                new System.Exception(
+                                    sprintf "OperateDocument: false\nError when invoke flow %A to pdfFile %s\nInnerException:\n%A" (flowModel.FlowName, flow) flowModel.File ex, ex) 
                             raise ex
 
                     | true ->
@@ -193,8 +195,12 @@ module internal rec ManipulateOrReuse =
                             try 
                                 flowModel.Document.CloseAndDraft()
                             with _ -> ()
-                            let ex = new System.Exception(sprintf "Error when invoke flow %A to pdfFile %s" (flowModel.FlowName, flow) flowModel.File, ex)
+                            
+                            let ex = 
+                                new System.Exception(
+                                    sprintf "Error when invoke flow %A to pdfFile %s\nInnerException:\n%A" (flowModel.FlowName, flow) flowModel.File ex, ex) 
                             raise ex
+
 
                 | Flow.TupledFlow flow -> flow.Invoke flowModel
                 

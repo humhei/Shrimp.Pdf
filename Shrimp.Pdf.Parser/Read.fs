@@ -271,7 +271,7 @@ open Listeners
 type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener , additionalContentOperators) =
     inherit PdfCanvasProcessor(listener, additionalContentOperators)
 
-    member private this.InitClippingPath(page: PdfPage) =
+    member internal this.InitClippingPath(page: PdfPage) =
         let clippingPath = new Path()
         let initBox = page.GetCropBox() |> Rectangle.applyMargin (Margin.Create(Constants.MAXIMUM_MM_WIDTH / 2.)) 
         clippingPath.Rectangle(initBox);
@@ -282,6 +282,10 @@ type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener ,
             | :? FilteredEventListenerEx as listener -> 
                 listener.SetXObjectClippingBox(initBox)
             | _ -> ()
+
+
+        let gs = this.GetGraphicsState()
+        this.EventOccurred(new ClippingPathInfo(gs, gs.GetClippingPath(), gs.GetCtm()), EventType.CLIP_PATH_CHANGED);
 
     override this.ProcessContent(contentBytes, resources) =
         base.ProcessContent(contentBytes, resources)
@@ -337,8 +341,7 @@ type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener ,
 
     override this.ProcessPageContent(page) =
         this.InitClippingPath(page);
-        let gs = this.GetGraphicsState()
-        this.EventOccurred(new ClippingPathInfo(gs, gs.GetClippingPath(), gs.GetCtm()), EventType.CLIP_PATH_CHANGED);
+
         this.ProcessContent(page.GetContentBytes(), page.GetResources());
 
 
