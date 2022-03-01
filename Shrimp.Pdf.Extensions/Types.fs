@@ -198,7 +198,6 @@ module ExtensionTypes =
           Right: float
           Bottom: float }
     with   
-
         static member Create(value) =
             { Left = value 
               Top = value 
@@ -337,7 +336,6 @@ module ExtensionTypes =
             | Rotation.R180 -> 180.
             | Rotation.None -> 0.
 
-
         let ofAngle angle = 
             let angle = 
                 match angle with 
@@ -350,6 +348,11 @@ module ExtensionTypes =
             | 0. -> Rotation.None
             | 270. -> Rotation.Counterclockwise
             | v -> failwithf "Cannot create rotation by angle %A" angle
+
+        let concatenate (rotation1) (rotation2) =
+            getAngle rotation1 + getAngle rotation2
+            |> ofAngle
+
 
         let getRadians rotation = 
             let angle = getAngle rotation

@@ -956,7 +956,7 @@ let manipulateTests =
             ]
         )
 
-    ftestCase "test infos" <| fun _ -> 
+    testCase "test infos" <| fun _ -> 
         let flow =
             ModifyPage.Create(
                 "trim to visible",

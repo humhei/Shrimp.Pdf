@@ -158,6 +158,11 @@ module Imposing =
     type Background =
         | Size of FsSize
         | File of BackgroundFile
+    with 
+        member x.Rotate(rotation: Rotation) =
+            match x with 
+            | Background.Size v -> FsSize.rotate rotation v |> Background.Size
+            | Background.File v -> v.Rotate(rotation) |> Background.File
 
     [<RequireQualifiedAccess>]
     module Background =
@@ -321,6 +326,56 @@ module Imposing =
             x.VSpaceExes.Value
             |> List.map(fun m -> m.Space)
 
+        member internal args.Rotate(rotation: Rotation) =
+            { args with 
+                DesiredSizeOp =
+                    match args.DesiredSizeOp with 
+                    | Some size -> FsSize.rotate rotation size |> Some
+                    | None -> None
+                HSpaceExes = 
+                    match rotation with 
+                    | Rotation.None
+                    | Rotation.R180 -> args.HSpaceExes
+                    | Rotation.Clockwise
+                    | Rotation.Counterclockwise -> args.VSpaceExes
+                VSpaceExes = 
+                    match rotation with 
+                    | Rotation.None
+                    | Rotation.R180 -> args.VSpaceExes
+                    | Rotation.Clockwise
+                    | Rotation.Counterclockwise -> args.HSpaceExes
+
+                DesiredPageOrientation =
+                    match rotation with 
+                    | Rotation.None
+                    | Rotation.R180 -> args.DesiredPageOrientation
+                    | _ ->
+                        match args.DesiredPageOrientation with 
+                        | DesiredPageOrientation.Automatic -> DesiredPageOrientation.Automatic
+                        | DesiredPageOrientation.Landscape -> DesiredPageOrientation.Portrait
+                        | DesiredPageOrientation.Portrait -> DesiredPageOrientation.Landscape
+                Sheet_PlaceTable = 
+                    match args.Sheet_PlaceTable with 
+                    | Sheet_PlaceTable.Trim_CenterTable margin ->
+                        Sheet_PlaceTable.Trim_CenterTable (margin.Rotate(rotation))
+                    | Sheet_PlaceTable.At _ -> 
+                        failwithf 
+                            "Not supported: AlignDirection is Vertical and Sheet_PlaceTable is %A" args.Sheet_PlaceTable
+                    
+                CellRotation =
+                    match rotation with 
+                    | Rotation.None
+                    | Rotation.R180 -> args.CellRotation
+                    | Rotation.Clockwise
+                    | Rotation.Counterclockwise ->
+                        match args.CellRotation with
+                        | CellRotation.None -> CellRotation.None
+                        | CellRotation.R180WhenColNumIsEven -> CellRotation.R180WhenRowNumIsEven
+                        | CellRotation.R180WhenRowNumIsEven -> CellRotation.R180WhenColNumIsEven
+
+                Background = args.Background.Rotate(rotation)
+            }
+
         member x.TrySetSpaceMiddleLineWidth(width) =
             { x with 
                 HSpaceExes = x.HSpaceExes.TrySetMiddleLineProps(fun props ->
@@ -463,6 +518,11 @@ module Imposing =
         member private x.ImposingDocument: ImposingDocument = x.ImposingSheet.ImposingDocument
 
         member private x.SplitDocument = x.ImposingDocument.SplitDocument
+
+        member internal x.Offset(offset: FsPoint) =
+            { x with 
+                X = x.X + offset.X
+                Y = x.Y + offset.Y }
 
         member x.ImposingArguments: ImposingArguments = x.ImposingDocument.ImposingArguments
         
@@ -851,7 +911,7 @@ module Imposing =
             |> addSpaceMiddleLine
 
     and ImposingRow(sheet: ImposingSheet, rowIndex: int) = 
-        let cells = ResizeArray<ImposingCell>()
+        let mutable cells = ResizeArray<ImposingCell>()
         let mutable x = 0.
 
         member private x.ImposingArguments : ImposingArguments  = sheet.ImposingDocument.ImposingArguments
@@ -859,6 +919,9 @@ module Imposing =
         member internal x.ImposingSheet = sheet
 
         member internal x.RowIndex = rowIndex
+
+
+            
 
         member private x.PageSize = sheet.PageSize
 
@@ -938,6 +1001,14 @@ module Imposing =
             | Some cell -> cell.Y
             | None -> 0.
 
+        member internal x.Offset(offset: FsPoint) =
+            let newCells = new ResizeArray<_>()
+            for cell in cells do 
+                cell.Offset(offset)
+                |> newCells.Add
+
+            cells <- newCells
+
         member x.GetCells() = List.ofSeq cells
 
 
@@ -956,6 +1027,13 @@ module Imposing =
         member x.ImposingArguments : ImposingArguments  = imposingDocument.ImposingArguments
 
         member x.PageSize: FsPageSize = pageSize
+
+        member internal x.Offset(offsets: FsPoint list) =
+            rows
+            |> Seq.iteri(fun i row ->
+                row.Offset(offsets.[i])
+            )
+                
 
         member internal x.ImposingDocument: ImposingDocument = imposingDocument
 
@@ -1187,6 +1265,8 @@ module Imposing =
 
         member x.GetCellsCount() = rows |> Seq.sumBy(fun row -> row.Cells.Count)
 
+        member private x.CellsCount = x.GetCellsCount()
+
     /// Build() -> Draw()
     and ImposingDocument (splitDocument: SplitDocument, imposingArguments: ImposingArguments) =  
         let sheets = new ResizeArray<ImposingSheet>()
@@ -1205,6 +1285,13 @@ module Imposing =
                 ImposingArguments.Create(fun _ -> { imposingArguments.Value with IsRepeated = isRepeated})
 
         member internal x.IsDrawed = isDrawed
+
+        member internal x.Offset(offsetLists: FsPoint list list) =
+            sheets
+            |> Seq.iteri(fun i sheet ->
+                sheet.Offset(offsetLists.[i])
+                
+            )
 
         /// NOTE: Internal Use
         member internal x.Draw() =
@@ -1348,3 +1435,96 @@ module Imposing =
         member x.GetSheets() = List.ofSeq sheets
 
         member x.GetSheet(index) = sheets.[index]
+
+
+    [<RequireQualifiedAccess>]
+    module private Margin =
+        let scaleX (scaleX: float) (margin: Margin) =
+            if margin.Left < 0. || margin.Right < 0. then
+                failwith "Not implemented"
+
+            { margin with
+                  Left = margin.Left * scaleX
+                  Right = margin.Right * scaleX }
+
+        let scaleY (scaleY: float) (margin: Margin) =
+            if margin.Top < 0. || margin.Bottom < 0. then
+                failwith "Not implemented"
+
+            { margin with
+                  Left = margin.Right * scaleY
+                  Right = margin.Right * scaleY }
+
+
+
+    type RotatableImposingSheet =
+        { TableSize: FsSize
+          CellsCount: int
+          OriginSheet: ImposingSheet
+          CurrentRotation: Rotation
+          Margin: Margin }
+
+
+        static member Create(imposingSheet: ImposingSheet) =
+            { TableSize = {Width = imposingSheet.TableWidth; Height = imposingSheet.TableHeight }
+              CellsCount = imposingSheet.GetCellsCount()
+              OriginSheet = imposingSheet
+              CurrentRotation = Rotation.None
+              Margin = imposingSheet.Margin }
+
+        member x.TableWidth = x.TableSize.Width
+
+        member x.RotatedImposingArguments = x.OriginSheet.ImposingArguments.Value.Rotate(x.CurrentRotation)
+
+        member x.OriginImposingArguments = x.OriginSheet.ImposingArguments.Value
+
+        member x.TableHeight = x.TableSize.Height
+
+        member x.SheetWidth =
+            x.TableWidth + x.Margin.Left + x.Margin.Right
+
+        member x.SheetHeight =
+            x.TableHeight + x.Margin.Bottom + x.Margin.Top
+
+        member x.SheetSize : FsSize =
+            { Width = x.SheetWidth
+              Height = x.SheetHeight }
+
+        member x.ScaleToTargetSize(targetSize: FsSize) =
+            let scaleX = targetSize.Width / x.SheetWidth
+            let scaleY = targetSize.Height / x.SheetHeight
+
+            { x with
+                  TableSize = 
+                    { Width = x.TableWidth * scaleX
+                      Height = x.TableHeight * scaleY }
+
+                  Margin =
+                      x.Margin
+                      |> Margin.scaleX scaleX
+                      |> Margin.scaleY scaleY }
+
+        member x.Rotate(rotation: Rotation) =
+            { x with
+                  TableSize = x.TableSize |> FsSize.rotate rotation
+                  Margin = x.Margin.Rotate(rotation)
+                  CurrentRotation = Rotation.concatenate rotation x.CurrentRotation
+            }
+
+
+    type RotatableImposingSheets =
+        | RotatableImposingSheets of RotatableImposingSheet list
+        member x.Value =
+            let (RotatableImposingSheets value) = x
+            value
+
+        member x.Rotate(rotation) =
+            x.Value
+            |> List.map(fun m -> m.Rotate(rotation))
+            |> RotatableImposingSheets
+
+    type ImposingDocument with 
+        member x.GetRotatableImposingSheets() =
+            x.GetSheets()
+            |> List.map RotatableImposingSheet.Create
+            |> RotatableImposingSheets

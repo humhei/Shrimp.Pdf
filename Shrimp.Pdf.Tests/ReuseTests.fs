@@ -173,6 +173,34 @@ let reuseTests =
         |> runTest "datas/reuse/imposing N-UP2.pdf" 
         |> ignore
 
+    testCase "create page template tests" <| fun _ -> 
+
+        Flow.Reuse (
+            Reuses.CreatePageTemplate()
+        )
+        |> runTest "datas/reuse/create page template.pdf" 
+        |> ignore
+
+    ftestCase "imposing N-UP4 tests" <| fun _ -> 
+        let r = 
+            Flow.Reuse (
+                Reuses.ImposeVeritical
+                    (fun args ->
+                        { args with 
+                            ColNums = [5]
+                            RowNum = 4
+                            Cropmark = Some { Cropmark.defaultValue with IsRevealedBetweenCells = false }
+                            Background = Background.Size FsSize.A0
+                            HSpaceExes = Spaces [mm 6.; mm 9.]
+                            VSpaceExes =  Spaces [mm 3.; mm 9.]
+                            Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 30., mm 40., mm 50., mm 60.))
+                            UseBleed = true
+                        }
+                    )
+            )
+            |> runTest "datas/reuse/imposing N-UP4.pdf" 
+        ()
+
     testCase "imposing stepAndRepeat tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.Impose(fun args ->

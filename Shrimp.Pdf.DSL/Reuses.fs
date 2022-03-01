@@ -6,6 +6,7 @@ open System.Collections.Generic
 open Imposing
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Extensions
+open Shrimp.Pdf.Colors
 open iText.Kernel.Pdf.Canvas.Parser
 open Shrimp.Pdf.DSL
 open iText.Kernel.Geom
@@ -17,10 +18,13 @@ open Shrimp.FSharp.Plus
 open Fake.IO
 open Fake.IO.FileSystemOperators
 open Shrimp.FSharp.Plus.Math
+open iText.Layout
 
 type Flip =
     | HFlip = 0
     | VFlip = 1
+
+
 
 
 // number in page sequence must be bigger than 0
@@ -1200,20 +1204,23 @@ module _Reuses =
 
 
     
-        static member private Impose_Raw (fArgs, ?draw) =
-            let draw = defaultArg draw true
+        static member private Impose_Raw (fArgs, offsetLists: option<FsPoint list list>, draw) =
             let imposingArguments = ImposingArguments.Create fArgs
 
             fun flowModel (splitDocument: SplitDocument) ->
                 let imposingDocument = new ImposingDocument(splitDocument, imposingArguments)
                 imposingDocument.Build()
                 match draw with 
-                | true -> imposingDocument.Draw()
+                | true -> 
+                    match offsetLists with 
+                    | Some offsetLists -> imposingDocument.Offset(offsetLists)
+                    | None -> ()
+                    imposingDocument.Draw()
                 | false -> splitDocument.Writer.AddNewPage() |> ignore
                 (imposingDocument)
 
             |> reuse 
-                "Impose"
+                "Impose_Raw"
                 ["imposingArguments" => imposingArguments.ToString()]
 
         
@@ -1226,6 +1233,7 @@ module _Reuses =
                         { args with
                               IsRepeated = true }
                     ),
+                    offsetLists = None,
                     draw = false )
                 |> Flow.Reuse
 
@@ -1277,11 +1285,12 @@ module _Reuses =
                  "margin" => margin.LoggingText ]
 
 
-        static member  Impose(fArgs) =
+
+        static member private Impose(fArgs, offsetLists) =
             let args = (ImposingArguments.Create fArgs)
             let cellRotation = args.Value.CellRotation
             match cellRotation with 
-            | CellRotation.None -> Reuses.Impose_Raw(fArgs)
+            | CellRotation.None -> Reuses.Impose_Raw(fArgs, offsetLists = offsetLists,  draw = true)
             | _ ->
                 Reuse.Factory(fun flowModel doc ->
                     let doc = ImposingDocument(doc, args)
@@ -1355,15 +1364,115 @@ module _Reuses =
 
                     Reuses.SequencePages sequence
                     <+>
-                    Reuses.Impose_Raw(fun _ -> 
-                        { args with IsRepeated = false }
-                    ) 
+                    Reuses.Impose_Raw
+                        (
+                            (fun _ -> 
+                            { args with IsRepeated = false }),
+                            offsetLists = offsetLists,
+                            draw = true 
+                        )
                     ||>> fun doc -> 
                         doc.ReSetIsRepeated(args.IsRepeated)
                         doc
                 )
-                
 
+            |> Reuse.rename
+                "Impose"
+                ["imposingArguments" => args.ToString()]
+
+
+        static member Impose(fArgs) =
+            Reuses.Impose(fArgs, None)
+
+        static member CreatePageTemplate() =
+            fun flowModel (doc: SplitDocument) ->
+                let writer = doc.Writer
+
+                PdfDocument.getPages doc.Reader
+                |> List.iteri(fun i page ->
+                    let newPage = writer.AddNewPage(PageSize(page.GetPageSize()))
+
+                    newPage.SetPageBoxToPage(page) |> ignore
+
+                    let canvas = new Canvas(newPage, newPage.GetTrimBox())
+                    canvas
+                    |> Canvas.addRectangleToRootArea (fun args ->
+                        { args with StrokeColor = NullablePdfCanvasColor.valueColor FsDeviceRgb.BLUE }
+                    )
+                    |> Canvas.addText((i+1).ToString())  (fun args ->
+                        { args with 
+                            CanvasFontSize = 
+                                CanvasFontSize.OfRootArea 0.8
+                            Position = Position.Center(0., 0.)
+                        }
+                    )
+                    |> ignore
+                )
+
+            |> reuse "CreatePageSizeTemplate" []
+
+        static member ImposeVeritical(fArgs) =
+            let args = (ImposingArguments.Create fArgs)
+            match args.Value.IsRepeated with 
+            | true -> Reuses.Impose(fArgs) ||>> (fun m -> m.GetRotatableImposingSheets())
+            | false ->
+                
+                Reuses.Rotate(PageSelector.All, Rotation.Clockwise)
+                <+>
+                Reuse.Factory(fun flowModel doc ->
+                    let fArgs rotation (args: _ImposingArguments) = 
+                        (fArgs args).Rotate(rotation)
+                    let args = ImposingArguments.Create (fArgs Rotation.Clockwise)
+                    let imposingDoc = ImposingDocument(doc, args)
+                    imposingDoc.Build()
+                    let sheets = imposingDoc.GetSheets()
+
+                    let offsetLists =
+                        sheets
+                        |> List.map(fun sheet ->
+                            let sheetWidth = sheet.Width
+                            sheet.GetRows()
+                            |> List.map(fun row ->
+                                { X = sheetWidth - row.Width 
+                                  Y = 0. }
+                            )
+                        )
+
+                    let rec loop accum startPageNumber (sheets: ImposingSheet list) =
+                        match sheets with 
+                        | [] -> List.rev accum
+                        | sheet :: t ->
+                            let rows = sheet.GetRows()
+                            let sequence = 
+                                rows
+                                |> List.mapi(fun i row ->
+                                    let beforeRowsTotalCount = 
+                                        rows.[0 .. i-1]
+                                        |> List.sumBy(fun m -> m.Cells.Count)
+
+                                    [1 .. row.Cells.Count]
+                                    |> List.rev
+                                    |> List.map(fun num -> num + beforeRowsTotalCount + startPageNumber)
+                                )
+                                |> List.concat
+                                |> PageNumSequence.Create
+
+                            loop (sequence :: accum) (sequence.Value_Al1List.Length + startPageNumber) t
+
+                    let pageNumberSequence = 
+                        loop [] 0 (sheets)
+                        |> AtLeastOneList.Create
+                        |> PageNumSequence.Concat
+
+                    Reuses.SequencePages(pageNumberSequence)
+                    <+> Reuses.Impose(fArgs Rotation.Clockwise, Some offsetLists)
+                    <.+> Reuses.Rotate(PageSelector.All, Rotation.Counterclockwise)
+                )
+                ||>> (fun m -> m.GetRotatableImposingSheets().Rotate(Rotation.Counterclockwise))
+
+            |> Reuse.rename 
+                ("ImposeVertical")
+                ["imposingArguments" => args.ToString()]
 
         //static member Impose(fArgs) =
         //    let args = fArgs _ImposingArguments.DefaultValue
