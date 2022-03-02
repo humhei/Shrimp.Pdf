@@ -1,4 +1,5 @@
-﻿namespace Shrimp.Pdf.DSL
+﻿
+namespace Shrimp.Pdf.DSL
 open Shrimp.Pdf.Extensions
 open iText.Kernel.Pdf
 open System.Runtime.CompilerServices

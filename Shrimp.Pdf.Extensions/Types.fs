@@ -31,7 +31,14 @@ module ExtensionTypes =
               Height = rect.GetHeight()  |> float
             }
 
+        member private x.MMValue =
+            { X = userUnitToMM x.X
+              Y = userUnitToMM x.Y 
+              Width = userUnitToMM x.Width
+              Height = userUnitToMM x.Height }
+
         member x.LoggingText = 
+            let x = x.MMValue
             sprintf "RectMM %.1f %.1f %.1f %.1f" x.X x.Y x.Width x.Height
 
         override x.ToString() = x.LoggingText
@@ -62,7 +69,14 @@ module ExtensionTypes =
     type FsPoint =
         { X: float 
           Y: float }
+    with 
+        member private x.MMValue =
+            { X = userUnitToMM x.X
+              Y = userUnitToMM x.Y }
 
+        static member Zero =
+            { X = 0. 
+              Y = 0. }
 
     type Direction =
         | Vertical = 0

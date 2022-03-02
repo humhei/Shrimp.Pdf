@@ -74,17 +74,22 @@ let reuseTests =
         |> runTest "datas/reuse/Clipping Contents To PageBox2.pdf" 
         |> ignore
 
-    testCase "preimpose" <| fun _ -> 
+    ftestCase "preimpose" <| fun _ -> 
 
         let r = Reuses.PreImpose_Repeated_One
                     {_ImposingArguments.DefaultValue 
-                        with ColNums = [1]
-                             RowNum = 1
-                             Background = Background.Size (FsSize.A4)
+                        with ColNums = [7]
+                             RowNum = 7
+                             HSpaceExes = Spaces [mm 3.; mm 6.; mm 9.]
+                             VSpaceExes = Spaces [mm 3.; mm 6.; mm 9.]
+                             Background = Background.Size (FsSize.A0)
+                             Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(6.))
+
                              DesiredSizeOp  = 
-                                (FsSize.landscape FsSize.A4)
+                                (FsSize.landscape {Width = mm 50.; Height = mm 50.})
                                 |> Some
                         }
+        let k = r.ImposingSheet.GetTableBound(FsPoint.Zero)
         ()
 
 
@@ -181,10 +186,10 @@ let reuseTests =
         |> runTest "datas/reuse/create page template.pdf" 
         |> ignore
 
-    ftestCase "imposing N-UP4 tests" <| fun _ -> 
+    testCase "imposing N-UP4 tests" <| fun _ -> 
         let r = 
             Flow.Reuse (
-                Reuses.ImposeVeritical
+                Reuses.ImposeVertically
                     (fun args ->
                         { args with 
                             ColNums = [5]
@@ -200,6 +205,24 @@ let reuseTests =
             )
             |> runTest "datas/reuse/imposing N-UP4.pdf" 
         ()
+
+    testCase "imposing N-UP5 tests" <| fun _ -> 
+        let r = 
+            Flow.Reuse (
+                Reuses.ImposeVertically
+                    (fun args ->
+                        { args with 
+                            ColNums = [5]
+                            RowNum = 5
+                            Background = Background.Size FsSize.A0
+                            Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 6.))
+                            UseBleed = true
+                            IsRepeated = false
+                        }
+                    )
+            )
+            |> runTest "datas/reuse/imposing N-UP5.pdf" 
+        () 
 
     testCase "imposing stepAndRepeat tests" <| fun _ -> 
         Flow.Reuse (

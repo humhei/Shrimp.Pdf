@@ -1035,7 +1035,7 @@ module Imposing =
             )
                 
 
-        member internal x.ImposingDocument: ImposingDocument = imposingDocument
+        member x.ImposingDocument: ImposingDocument = imposingDocument
 
         member internal x.Y = y
 
@@ -1528,3 +1528,143 @@ module Imposing =
             x.GetSheets()
             |> List.map RotatableImposingSheet.Create
             |> RotatableImposingSheets
+
+
+
+    [<StructuredFormatDisplay("CellBound {Rect}")>]
+    type CellBound = CellBound of FsRectangle
+    with 
+        member x.Rect =
+            let (CellBound v) = x
+            v
+
+    type ImposingCell with 
+        member x.GetBound(leftBottomCoordinate: FsPoint) =
+            { 
+                X = leftBottomCoordinate.X + x.X
+                Y = leftBottomCoordinate.Y 
+                Width = x.Size.Width
+                Height = x.Size.Height
+            }
+            |> CellBound
+
+    [<StructuredFormatDisplay("RowBound {Rect}")>]
+    type RowBound = RowBound of CellBound list * spaces: float list
+    with 
+        member x.CellBounds =
+            let (RowBound (cells, spaces)) = x
+            cells
+
+        member x.Rect =
+            let (RowBound (cells, spaces)) = x
+            {
+                X = 
+                    cells.[0].Rect.X
+                Y = 
+                    cells
+                    |> List.map(fun m -> m.Rect.Y)
+                    |> List.min
+
+                Width =
+                    let spaces = 
+                        List.replicate cells.Length spaces
+                        |> List.concat
+
+                    let totalCellsWidth =
+                        cells
+                        |> List.sumBy(fun m -> m.Rect.Width)
+
+                    let totalSpaces = 
+                        spaces.[0..cells.Length-2]
+                        |> List.sum
+
+                    totalCellsWidth + totalSpaces
+
+                Height =
+                    cells
+                    |> List.map(fun m -> m.Rect.Height)
+                    |> List.max
+
+            }
+
+    type ImposingRow with 
+        member x.GetBound(leftBottomCoordinate: FsPoint) =
+            let rowHeight = x.Height
+            let cells = 
+                x.Cells
+                |> List.ofSeq
+                |> List.map(fun m -> 
+                    let leftBottomCoordinate =
+                        { leftBottomCoordinate with 
+                            Y = leftBottomCoordinate.Y + (rowHeight - m.Size.Height)
+                        }
+                    m.GetBound(leftBottomCoordinate)
+                )
+
+            let hspaces = x.ImposingArguments.Value.HSpaces
+            RowBound(cells, hspaces)
+
+        member private x.ZeroCoordinate_RowBound = x.GetBound(FsPoint.Zero)
+
+    [<StructuredFormatDisplay("TableBound {Rect}")>]
+    type TableBound = TableBound of RowBound list * spaces: float list
+    with 
+        member x.RowBounds =
+            let (TableBound (rows, spaces)) = x
+            rows
+
+        member x.Rect =
+            let (TableBound (rows, spaces)) = x
+            let rowRects = 
+                rows
+                |> List.map(fun m -> m.Rect)
+
+            let lastRowRect =
+                rowRects
+                |> List.last 
+
+            { X = 
+                rowRects
+                |> List.map(fun m -> m.X)
+                |> List.min
+
+              Y = lastRowRect.Y
+              Width =
+                rowRects
+                |> List.map(fun m -> m.Width)
+                |> List.max
+
+              Height =
+                let totalSpaces = 
+                    spaces.[0..rowRects.Length-2]
+                    |> List.sum
+                
+                let totalHeight =
+                    rowRects
+                    |> List.sumBy(fun m -> m.Height)
+                totalSpaces + totalHeight
+            }
+
+ 
+
+    type ImposingSheet with 
+        member x.GetTableBound(leftBottomCoordinate: FsPoint) =
+            let tableHeight = x.TableHeight
+            let rows = 
+                let rows = x.GetRows()
+                rows
+                |> List.mapi(fun i m -> 
+                    let leftBottomCoordinate =
+                        { leftBottomCoordinate with 
+                            Y = leftBottomCoordinate.Y + tableHeight - m.Y - m.Height 
+                        }
+                    m.GetBound(leftBottomCoordinate)
+                )
+
+            TableBound(rows, x.ImposingArguments.Value.VSpaces)
+
+        member private x.ZeroCoordinate_TableBound = x.GetTableBound(FsPoint.Zero)
+
+    //type PdfPage with 
+    //    member x.GetTableBound(sheet: ImposingSheet, tablePageKind: PageBoxKind) =
+    //        let tablePageBox = x.GetPageBox(tablePageKind)

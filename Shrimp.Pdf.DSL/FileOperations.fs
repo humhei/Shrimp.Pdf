@@ -12,6 +12,9 @@ type DocumentSplitOutputDirectoryOptions =
     | ReaderDirectoryPath_Next
     | CustomDirectoryPath of string
 
+
+
+
 type DocumentSplitArguments =
     { ChunkSize: int 
       OutputDirectory: DocumentSplitOutputDirectoryOptions
@@ -36,6 +39,10 @@ with
     static member DefalutValue =
         { TargetDocumentPath = Path.GetTempFileName() |> Path.changeExtension ".pdf"
           Override = false }
+
+type DocumentSplitSequenceTarget =
+    { PageNumSequence: ``Int>=1`` list 
+      TargetPdfPath: PdfPath }
 
 [<RequireQualifiedAccess>]
 module FileOperations =
@@ -83,12 +90,62 @@ module FileOperations =
 
         |> FileOperation
 
+
+
+    let splitDocumentBySequences(sequenceTargets: DocumentSplitSequenceTarget list, isOverride) =
+        fun (flowModels: FlowModel<'userState> list)  ->
+            flowModels
+            |> List.collect (fun flowModel ->
+                let readerDocument = new ReaderDocument(flowModel.File)
+                let reader = readerDocument.Reader
+
+                let readerPages = 
+                    reader
+                    |> PdfDocument.getPages
+
+                let newModels = 
+                    sequenceTargets
+                    |> List.map(fun sequenceTarget ->
+                        let fileFullPath = sequenceTarget.TargetPdfPath.Path
+                        match File.exists fileFullPath, isOverride with 
+                        | true, false -> failwithf "File %s already exists" fileFullPath
+                        | false, _ -> ()
+                        | true, true ->
+                            File.delete fileFullPath
+
+                        let writer = new PdfDocument(new PdfWriter(fileFullPath))
+
+                        sequenceTarget.PageNumSequence
+                        |> List.map(fun m -> readerPages.[m.Value-1])
+                        |> List.iter(fun readerPage ->
+                            let writerPageResource = readerPage.CopyTo(writer)
+                            writer.AddPage(writerPageResource) |> ignore
+                        )
+
+                        writer.Close()
+
+                        { PdfFile = PdfFile fileFullPath 
+                          UserState = flowModel.UserState }
+                    )
+
+                let newFiles = 
+                    newModels
+                    |> List.map (fun m -> 
+                        m.File
+                    )
+                    |> String.concat "\n"
+
+                Logger.info (sprintf "SPLIT document %s to %s" flowModel.File newFiles) 
+                reader.Close()
+                newModels
+        )
+        |> FileOperation
+
     let splitDocumentToMany (f: DocumentSplitArguments -> DocumentSplitArguments)  =
         let args = f DocumentSplitArguments.DefalutValue
 
-
         if args.ChunkSize <= 0 then failwithf "Page num %d per document must be bigger than 1" args.ChunkSize
-        fun (flowModels: FlowModel<'userState> list)  ->
+        fun (flowModels: FlowModel<'userState> list) ->
             flowModels
             |> List.collect (fun flowModel ->
                 let readerDocument = new ReaderDocument(flowModel.File)
@@ -149,6 +206,7 @@ module FileOperations =
         |> FileOperation
 
 
+
 type PdfRunner =
     static member MergeDocuments (inputs: PdfFile AtLeastTwoList, ?fArgs) =
         
@@ -184,6 +242,17 @@ type PdfRunner =
         
         let flow =
             FileOperations.splitDocumentToMany (defaultArg fArgs id)
+            |> Flow.FileOperation
+
+        let flowModel =  {PdfFile = inputPdfFile; UserState = () }
+
+        runWithFlowModel flowModel flow
+        |> List.map (fun m -> m.PdfFile)
+
+    static member SplitDocumentBySequences (inputPdfFile: PdfFile, sequenceTargets, ?isOverride) =
+        
+        let flow =
+            FileOperations.splitDocumentBySequences(sequenceTargets, defaultArg isOverride false)
             |> Flow.FileOperation
 
         let flowModel =  {PdfFile = inputPdfFile; UserState = () }

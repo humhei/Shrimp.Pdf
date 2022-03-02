@@ -1411,7 +1411,7 @@ module _Reuses =
 
             |> reuse "CreatePageSizeTemplate" []
 
-        static member ImposeVeritical(fArgs) =
+        static member ImposeVertically(fArgs) =
             let args = (ImposingArguments.Create fArgs)
             match args.Value.IsRepeated with 
             | true -> Reuses.Impose(fArgs) ||>> (fun m -> m.GetRotatableImposingSheets())
@@ -1430,10 +1430,10 @@ module _Reuses =
                     let offsetLists =
                         sheets
                         |> List.map(fun sheet ->
-                            let sheetWidth = sheet.Width
+                            let tableWidth = sheet.TableWidth
                             sheet.GetRows()
                             |> List.map(fun row ->
-                                { X = sheetWidth - row.Width 
+                                { X = tableWidth - row.Width 
                                   Y = 0. }
                             )
                         )
@@ -1471,8 +1471,13 @@ module _Reuses =
                 ||>> (fun m -> m.GetRotatableImposingSheets().Rotate(Rotation.Counterclockwise))
 
             |> Reuse.rename 
-                ("ImposeVertical")
+                ("ImposeVertically")
                 ["imposingArguments" => args.ToString()]
+
+        static member ImposeInDirection(direction, fArgs) =
+            match direction with 
+            | Direction.Horizontal -> Reuses.Impose(fArgs) ||>> (fun m -> m.GetRotatableImposingSheets())
+            | Direction.Vertical -> Reuses.ImposeVertically(fArgs)
 
         //static member Impose(fArgs) =
         //    let args = fArgs _ImposingArguments.DefaultValue
@@ -1541,6 +1546,7 @@ module _Reuses =
                     IsRepeated = false
                     UseBleed = defaultArg useBleed false
                     Background = Background.Size FsSize.MAXIMUN})
+            ||>> (fun m -> m.GetSheets() |> List.exactlyOne_DetailFailingText)
 
         /// default useBleed: false
         static member OneRow(?margin, ?useBleed, ?spaces) =
@@ -1554,6 +1560,7 @@ module _Reuses =
                     IsRepeated = false
                     UseBleed = defaultArg useBleed false
                     Background = Background.Size FsSize.MAXIMUN})
+            ||>> (fun m -> m.GetSheets() |> List.exactlyOne_DetailFailingText)
 
         
         /// 合并两页
