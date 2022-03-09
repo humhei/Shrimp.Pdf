@@ -4,6 +4,7 @@ open Akka.Configuration
 open Shrimp.Akkling.Cluster
 open Shrimp.Akkling.Cluster.Intergraction
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
+open Shrimp.FSharp.Plus
 
 [<AutoOpen>]
 module Core =
@@ -16,9 +17,29 @@ module Core =
         | ``Dot Gain 30%`` = 3
 
     [<RequireQualifiedAccess>]
+    module GrayIcc =
+        let ofStreamText (streamText) = 
+            match streamText with 
+            | String.Contains "Dot Gain 15%" -> Some GrayIcc.``Dot Gain 15%``
+            | String.Contains "Dot Gain 20%" -> Some GrayIcc.``Dot Gain 20%``
+            | String.Contains "Dot Gain 25%" -> Some GrayIcc.``Dot Gain 25%``
+            | String.Contains "Dot Gain 30%" -> Some GrayIcc.``Dot Gain 30%``
+            | _ -> None
+
+
+    [<RequireQualifiedAccess>]
     type CmykIcc =
         | JapanColor2001Coated = 0 
         | ``USWebCoatedSWOP`` = 1
+
+    [<RequireQualifiedAccess>]
+    module CmykIcc =
+        let ofStreamText (streamText) = 
+            match streamText with 
+            | String.Contains "Japan Color 2001 Coated" -> Some CmykIcc.JapanColor2001Coated
+            | String.Contains "U.S. Web Coated (SWOP) v2" -> Some CmykIcc.USWebCoatedSWOP
+            | _ -> None
+
 
     [<RequireQualifiedAccess>]
     type RgbIcc =
@@ -27,8 +48,26 @@ module Core =
         | AppleRGB = 2
 
     [<RequireQualifiedAccess>]
+    module RgbIcc =
+        let ofStreamText (streamText) =
+            match streamText with 
+            | String.Contains "sRGB IEC61966-2.1" -> Some RgbIcc.``SRGB Color Space Profile``
+            | String.Contains "Adobe RGB (1998)" -> Some RgbIcc.AdobeRGB1998
+            | String.Contains "Apple RGB" -> Some RgbIcc.AdobeRGB1998
+            | _ -> None
+
+
+    [<RequireQualifiedAccess>]
     type LabIcc =
         | ``CIE Lab`` = 0
+
+    [<RequireQualifiedAccess>]
+    module LabIcc =
+        let ofStreamText (streamText) =
+            match streamText with 
+            | String.Contains "CIE LAB" -> Some LabIcc.``CIE Lab``
+            | _ -> None
+
 
     
     [<RequireQualifiedAccess>]
@@ -44,6 +83,14 @@ module Core =
             | Icc.Cmyk v -> v.ToString()
             | Icc.Rgb  v -> v.ToString()
             | Icc.Lab  v -> v.ToString()
+
+        static member OfStreamText(streamText: string) =
+            match streamText with 
+            | Try GrayIcc.ofStreamText icc -> Icc.Gray icc
+            | Try RgbIcc.ofStreamText icc -> Icc.Rgb icc
+            | Try CmykIcc.ofStreamText icc -> Icc.Cmyk icc
+            | Try LabIcc.ofStreamText icc -> Icc.Lab icc
+            | _ -> failwithf "Not implemented: Cannot read iccEnum from %A" streamText
 
     type Intent = 
         | INTENT_PERCEPTUAL = 0u

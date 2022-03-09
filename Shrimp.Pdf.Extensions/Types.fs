@@ -24,6 +24,16 @@ module ExtensionTypes =
                   float32 x.Width,
                   float32 x.Height )
 
+        member x.Left = x.X
+
+        member x.Bottom = x.Y
+
+        member x.Right = x.Left + x.Width
+
+        member x.Top = x.Bottom + x.Height
+
+
+
         static member OfRectangle(rect: Rectangle) =
             { X      = rect.GetX()       |> float
               Y      = rect.GetY()       |> float
@@ -40,6 +50,12 @@ module ExtensionTypes =
         member x.LoggingText = 
             let x = x.MMValue
             sprintf "RectMM %.1f %.1f %.1f %.1f" x.X x.Y x.Width x.Height
+
+        static member create x y width height =
+            { X = x 
+              Y = y 
+              Width = width
+              Height = height }
 
         override x.ToString() = x.LoggingText
 
@@ -77,6 +93,12 @@ module ExtensionTypes =
         static member Zero =
             { X = 0. 
               Y = 0. }
+
+        static member OfPoint(point: Point) =
+            { X = point.x 
+              Y = point.y }
+
+        member x.AsPoint = Point(x.X, x.Y)
 
     type Direction =
         | Vertical = 0

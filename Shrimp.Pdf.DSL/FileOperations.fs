@@ -42,7 +42,7 @@ with
 
 type DocumentSplitSequenceTarget =
     { PageNumSequence: ``Int>=1`` list 
-      TargetPdfPath: PdfPath }
+      PathPart: string option }
 
 [<RequireQualifiedAccess>]
 module FileOperations =
@@ -103,15 +103,32 @@ module FileOperations =
                     reader
                     |> PdfDocument.getPages
 
+                let baseDir = (Path.getDirectory flowModel.File)
+
                 let newModels = 
+                    let fileFullPaths =
+                        sequenceTargets
+                        |> List.mapi(fun i sequenceTarget ->
+                            match sequenceTarget.PathPart with 
+                            | Some pathPart -> baseDir </> pathPart
+                            | None -> 
+                                let dir = baseDir </> (Path.GetFileNameWithoutExtension flowModel.File) 
+                                dir </> "Part_" + (i+1).ToString() + ".pdf"
+                        ) 
+
+                    fileFullPaths
+                    |> List.map(Path.getDirectory >> FsFullPath)
+                    |> List.distinct
+                    |> List.iter (FsFullPath.path >> Directory.ensure)
+
                     sequenceTargets
-                    |> List.map(fun sequenceTarget ->
-                        let fileFullPath = sequenceTarget.TargetPdfPath.Path
+                    |> List.mapi(fun i sequenceTarget ->
+                        let fileFullPath = fileFullPaths.[i]
+                            
                         match File.exists fileFullPath, isOverride with 
                         | true, false -> failwithf "File %s already exists" fileFullPath
                         | false, _ -> ()
-                        | true, true ->
-                            File.delete fileFullPath
+                        | true, true -> File.delete fileFullPath
 
                         let writer = new PdfDocument(new PdfWriter(fileFullPath))
 

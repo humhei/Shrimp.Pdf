@@ -1555,37 +1555,61 @@ module Imposing =
             let (RowBound (cells, spaces)) = x
             cells
 
-        member x.Rect =
+
+
+        member x.Height =
             let (RowBound (cells, spaces)) = x
+            cells
+            |> List.map(fun m -> m.Rect.Height)
+            |> List.max
+
+        member x.Width = 
+            let (RowBound (cells, spaces)) = x
+            let spaces = 
+                List.replicate cells.Length spaces
+                |> List.concat
+
+            let totalCellsWidth =
+                cells
+                |> List.sumBy(fun m -> m.Rect.Width)
+
+            let totalSpaces = 
+                spaces.[0..cells.Length-2]
+                |> List.sum
+
+
+            totalCellsWidth + totalSpaces
+
+        member x.X = 
+            let (RowBound (cells, spaces)) = x
+            cells.[0].Rect.X
+
+        member x.Y = 
+            let (RowBound (cells, spaces)) = x
+            cells
+            |> List.map(fun m -> m.Rect.Y)
+            |> List.min
+
+        member x.Rect =
             {
-                X = 
-                    cells.[0].Rect.X
-                Y = 
-                    cells
-                    |> List.map(fun m -> m.Rect.Y)
-                    |> List.min
-
-                Width =
-                    let spaces = 
-                        List.replicate cells.Length spaces
-                        |> List.concat
-
-                    let totalCellsWidth =
-                        cells
-                        |> List.sumBy(fun m -> m.Rect.Width)
-
-                    let totalSpaces = 
-                        spaces.[0..cells.Length-2]
-                        |> List.sum
-
-                    totalCellsWidth + totalSpaces
-
-                Height =
-                    cells
-                    |> List.map(fun m -> m.Rect.Height)
-                    |> List.max
-
+                X = x.X
+                Y = x.Y
+                Width = x.Width
+                Height = x.Height
             }
+
+        member x.LeftArea(width: float) =
+            let rect = x.Rect
+            let x = rect.X - width
+            let y = rect.Y
+            Rectangle.create x y width rect.Height
+
+        member x.RightArea(width: float) =
+            let rect = x.Rect
+            let x = rect.Right
+            let y = rect.Y
+            Rectangle.create x y width rect.Height
+
 
     type ImposingRow with 
         member x.GetBound(leftBottomCoordinate: FsPoint) =
@@ -1613,6 +1637,7 @@ module Imposing =
             let (TableBound (rows, spaces)) = x
             rows
 
+
         member x.Rect =
             let (TableBound (rows, spaces)) = x
             let rowRects = 
@@ -1624,7 +1649,7 @@ module Imposing =
                 |> List.last 
 
             { X = 
-                rowRects
+                rows
                 |> List.map(fun m -> m.X)
                 |> List.min
 
@@ -1662,6 +1687,9 @@ module Imposing =
                 )
 
             TableBound(rows, x.ImposingArguments.Value.VSpaces)
+
+        member x.GetTableBound(leftBottomCoordinate: Point) =
+            x.GetTableBound(FsPoint.OfPoint leftBottomCoordinate)
 
         member private x.ZeroCoordinate_TableBound = x.GetTableBound(FsPoint.Zero)
 

@@ -17,7 +17,7 @@ let reuseTests =
     testCase "add background tests" <| fun _ -> 
 
         Flow.Reuse (
-            Reuses.AddBackground(PdfFile @"datas/reuse/backgroundFile.pdf")
+            Reuses.AddBackground(PageBoxKind.ActualBox, PdfFile @"datas/reuse/backgroundFile.pdf")
         )
         |> runTest "datas/reuse/add background.pdf" 
         |> ignore
@@ -25,7 +25,7 @@ let reuseTests =
     testCase "add foreground tests" <| fun _ -> 
 
         Flow.Reuse (
-            Reuses.AddForeground(PdfFile @"datas/reuse/backgroundFile.pdf")
+            Reuses.AddForeground(PageBoxKind.ActualBox, PdfFile @"datas/reuse/backgroundFile.pdf")
         )
         |> runTest "datas/reuse/add foreground.pdf" 
         |> ignore
@@ -74,7 +74,7 @@ let reuseTests =
         |> runTest "datas/reuse/Clipping Contents To PageBox2.pdf" 
         |> ignore
 
-    ftestCase "preimpose" <| fun _ -> 
+    testCase "preimpose" <| fun _ -> 
 
         let r = Reuses.PreImpose_Repeated_One
                     {_ImposingArguments.DefaultValue 

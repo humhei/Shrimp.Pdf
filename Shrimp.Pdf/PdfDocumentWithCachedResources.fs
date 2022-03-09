@@ -128,7 +128,6 @@ type PdfDocumentWithCachedResources =
         { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = oldDocument.cache.Spawn(fun _ -> this :> PdfDocument) }
 
 
-
 type IntegratedDocument internal (reader: string, writer: string) =
     let mutable pdfDocument: Lazy<PdfDocumentWithCachedResources> option = None
     let mutable isOpened = false
@@ -152,7 +151,6 @@ type IntegratedDocument internal (reader: string, writer: string) =
             | Some (oldPdfDocument) ->
                 match oldPdfDocument with 
                 | Lazy.ValueCreated oldPdfDocument ->
-
                     if oldPdfDocument.IsClosed()
                     then 
                         pdfDocument <- Some (lazy new PdfDocumentWithCachedResources(reader, writer, oldPdfDocument))

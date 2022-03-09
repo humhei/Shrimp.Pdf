@@ -216,6 +216,8 @@ module iText =
             elif this.IsCrossOf(rect) then RelativePosition.CrossBox
             else failwith "invalid token"
 
+            
+
         member rect.GetPoint(position: Position) =
             let x = 
                 match position with 
@@ -231,6 +233,8 @@ module iText =
                 | Position.Bottom (x, y) -> rect.GetBottomF() + y
 
             new Point (x, y)
+
+        member rect.LeftBottom = rect.GetPoint(Position.LeftBottom(0., 0.))
 
 
     and Point with

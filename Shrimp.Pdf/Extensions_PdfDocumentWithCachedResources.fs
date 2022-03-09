@@ -188,7 +188,7 @@ module PdfDocumentWithCachedResources =
         let addLine (line: StraightLine) (mapping: PdfCanvasAddLineArguments -> PdfCanvasAddLineArguments) (canvas: PdfCanvas) =
             let args = mapping PdfCanvasAddLineArguments.DefaultValue
             let close = PdfCanvas.stroke
-            
+
             canvas
             |> PdfCanvas.SetStrokeColor(NullablePdfCanvasColor.OfPdfCanvasColor args.StrokeColor)
             |> PdfCanvas.setLineWidth args.LineWidth

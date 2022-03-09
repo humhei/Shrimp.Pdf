@@ -221,19 +221,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/xobject_change stroke color b255 to m100 and then change m100 to c100.pdf" 
         |> ignore
 
-    //testCase "black or white" <| fun _ -> 
-    //    Flow.Manipulate (
-    //        Modify.Create (
-    //            PageSelector.First,
-    //            [
-    //                { Name = "black or white"
-    //                  Selector = PathOrText(fun _ _ -> true)
-    //                  Modifiers = [Modifier.BlackOrWhite()] }
-    //            ]
-    //        )
-    //    )
-    //    |> runTest "datas/manipulate/black or white.pdf" 
-    //    |> ignore
+
 
     testCase "add bound to text" <| fun _ -> 
         Flow.Manipulate (
@@ -980,6 +968,8 @@ let manipulateTests =
         )
         |> runTest "datas/manipulate/testInfos.pdf" 
         |> ignore
+
+
 
 
   ]

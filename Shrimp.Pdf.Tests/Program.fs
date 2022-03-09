@@ -23,6 +23,7 @@ let allTests =
             FlowNameTests.flowNameTests
             BugFixmentTests.bugFixmentTests
             FlowTests.flowTests
+            icms2Tests.icmsTests
         ]
 
 [<EntryPoint>]

@@ -178,14 +178,14 @@ type Modifier =
                 ]
 
 
-    static member ReplaceColor(picker: (Color -> Color option), ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
+    static member ReplaceColor(picker: (FsColor -> Color option), ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
         let fillOrStrokeModifyingOptions = defaultArg fillOrStrokeModifyingOptions FillOrStrokeModifingOptions.FillAndStroke
 
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
             [
                 if IAbstractRenderInfo.hasFill args.CurrentRenderInfo 
                 then 
-                    match fillOrStrokeModifyingOptions, picker (args.CurrentRenderInfo.Value.GetFillColor()) with
+                    match fillOrStrokeModifyingOptions, picker (args.CurrentRenderInfo.Value.GetFillColor() |> FsColor.OfItextColor) with
                     | FillOrStrokeModifingOptions.Stroke, _ 
                     | _, None -> ()
                     | FillOrStrokeModifingOptions.Fill, Some (newColor) 
@@ -195,7 +195,7 @@ type Modifier =
 
                 if IAbstractRenderInfo.hasStroke args.CurrentRenderInfo 
                 then 
-                    match fillOrStrokeModifyingOptions, picker (args.CurrentRenderInfo.Value.GetStrokeColor()) with
+                    match fillOrStrokeModifyingOptions, picker (args.CurrentRenderInfo.Value.GetStrokeColor() |> FsColor.OfItextColor) with
                     | FillOrStrokeModifingOptions.Fill, _ 
                     | _, None -> ()
                     | FillOrStrokeModifingOptions.Stroke, Some (newColor) 
@@ -205,6 +205,13 @@ type Modifier =
                 PdfCanvas.writeOperatorRange args.Close
             ]
 
+    static member ReplaceAlternativeColor(picker: (AlternativeFsColor -> Color option), ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) =
+        let picker (fsColor: FsColor) =
+            match fsColor.AsAlternativeFsColor with 
+            | Some color -> picker color
+            | None -> None
+
+        Modifier.ReplaceColor(picker, ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions)
 
     static member ReplaceColor(colorKeyValuePairs: list<Color * Color>, ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
         let originColors = 
@@ -221,7 +228,7 @@ type Modifier =
             ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
             picker =
                 fun color ->
-                    let color = FsColor.OfItextColor color
+                    let color = color
                     match FsColors.tryFindIndex color originColors with 
                     | Some index -> Some newColors.[index]
                     | None -> None
@@ -232,10 +239,13 @@ type Modifier =
             ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
             picker = 
                 fun color ->
-                    (FsValueColor.OfItextColor color)
-                    |> FsValueColor.Invert
-                    |> FsValueColor.ToItextColor
-                    |> Some
+                    match color.AlterColor with 
+                    | None -> None
+                    | Some color ->
+                        (color)
+                        |> FsValueColor.Invert
+                        |> FsValueColor.ToItextColor
+                        |> Some
         )
     
     static member SetColor(color: Color, ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
@@ -525,6 +535,13 @@ type Modify =
             ]
         )
 
+    static member ReplaceAlternativeColors (picker, ?options: Modify_ReplaceColors_Options, ?nameAndParamters: NameAndParamters) =
+        let picker (fsColor: FsColor) =
+            match fsColor.AsAlternativeFsColor with 
+            | Some color -> picker color
+            | None -> None
+
+        Modify.ReplaceColors(picker, ?options = options, ?nameAndParamters = nameAndParamters)
 
     static member ReplaceColors (originColors: Color list, targetColor: Color, ?options: Modify_ReplaceColors_Options) =
         let originColors = 
@@ -545,7 +562,6 @@ type Modify =
             options = options,
             nameAndParamters = nameAndParamters,
             picker = fun color ->
-                let color = FsColor.OfItextColor color
                 if FsColors.contains color originColors
                 then Some targetColor
                 else None
@@ -579,7 +595,7 @@ type Modify =
         Modify.ReplaceColors(originColors, targetColor, ?options = options)
 
 
-    static member InvertColors(?predicate: Color -> bool, ?options: Modify_ReplaceColors_Options) =
+    static member InvertColors(?predicate: FsColor -> bool, ?options: Modify_ReplaceColors_Options) =
         let options = defaultArg options Modify_ReplaceColors_Options.DefaultValue
 
         let nameAndParamters =
@@ -597,9 +613,11 @@ type Modify =
                 fun color ->
                     if predicate color 
                     then
-                        (FsValueColor.OfItextColor color)
-                        |> FsValueColor.Invert
-                        |> FsValueColor.ToItextColor
-                        |> Some
+                        (color.AlterColor)
+                        |> Option.map(
+                            FsValueColor.Invert
+                            >> FsValueColor.ToItextColor
+                        )
+
                     else None
         )

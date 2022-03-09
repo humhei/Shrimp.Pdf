@@ -18,6 +18,7 @@
     <Compile Include="FileOperationTests.fs" />
     <Compile Include="RealSamplesTest.fs" />
     <Compile Include="ManipulateTests.fs" />
+    <Compile Include="icms2Tests.fs" />
     <Compile Include="ReuseTests.fs" />
     <Compile Include="FlowTests.fs" />
     <Compile Include="FlowNameTests.fs" />

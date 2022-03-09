@@ -1638,7 +1638,7 @@ module _Reuses =
                 []
      
 
-        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground) =
+        static member private AddBackgroundOrForeground(pageBoxKind: PageBoxKind, backgroundFile: BackgroundFile, choice: BackgroundOrForeground) =
             (fun flowModel (doc: SplitDocument) ->
                 let backgroundInfos =
                     let pageBoxs = BackgroundFile.getPageBoxes backgroundFile
@@ -1657,7 +1657,7 @@ module _Reuses =
                 |> List.mapi (fun i readerPage ->
                     let backgroundPageBox, backgroundXObject = backgroundInfos.GetPageBoxAndXObject(i+1)
 
-                    let readerPageBox = readerPage.GetActualBox()
+                    let readerPageBox = readerPage.GetPageBox(pageBoxKind)
                     let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
 
                     let pageSize = 
@@ -1665,16 +1665,17 @@ module _Reuses =
                         |> PageSize
 
                     let writerPage = doc.Writer.AddNewPage(pageSize)
+                    writerPage.SetPageBoxToPage(readerPage) |> ignore
                     let pdfCanvas = new PdfCanvas(writerPage)
                     match choice with 
                     | BackgroundOrForeground.Background ->
                         pdfCanvas
                             .AddXObject(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
-                            .AddXObject(readerXObject, -readerPageBox.GetX(), -readerPageBox.GetY())
+                            .AddXObject(readerXObject, 0.f, 0.f)
 
                     | BackgroundOrForeground.Foreground -> 
                         pdfCanvas
-                            .AddXObject(readerXObject, -readerPageBox.GetX(), -readerPageBox.GetY())
+                            .AddXObject(readerXObject, 0.f, 0.f)
                             .AddXObject(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
                 ) |> ignore
 
@@ -1682,14 +1683,51 @@ module _Reuses =
 
             )
             |> reuse 
+                "AddBackgroundOrForeground"
+                [
+                    "pageBoxKind" => pageBoxKind.ToString()
+                    "backgroundFile" => backgroundFile.ToString()
+                    "layer" => choice.ToString()
+                ]
+
+        static member AddBackground(pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) =
+            (fun flowModel (doc: SplitDocument) ->
+                let reader = doc.Reader
+                PdfDocument.getPages reader
+                |> List.mapi (fun i readerPage ->
+
+                    let readerPageBox = readerPage.GetPageBox(pageBoxKind)
+                    let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
+
+                    let pageSize = 
+                        readerPage.GetPageSize()
+                        |> PageSize
+
+                    let writerPage = doc.Writer.AddNewPage(pageSize)
+                    writerPage.SetPageBoxToPage(readerPage) |> ignore
+                    let pdfCanvas = new PdfCanvas(writerPage)
+                    PdfCanvas.useCanvas pdfCanvas (
+                        PdfCanvas.addRectangle readerPageBox rectOptions
+                    ) 
+
+                    pdfCanvas
+                        .AddXObject(readerXObject, 0.f, 0.f)
+
+                ) |> ignore
+            )
+            |> reuse 
                 "AddBackground"
-                []
+                [
+                    "pageBoxKind" => pageBoxKind.ToString()
+                    "rectOptions" => (rectOptions PdfCanvasAddRectangleArguments.DefaultValue).ToString()
+                ]
 
-        static member AddBackground (backgroundFile: PdfFile) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background)
 
-        static member AddForeground (backgroundFile: PdfFile) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Foreground)
+        static member AddBackground (pageBoxKind, backgroundFile: PdfFile) =
+            Reuses.AddBackgroundOrForeground(pageBoxKind, BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background)
+
+        static member AddForeground (pageBoxKind, backgroundFile: PdfFile) =
+            Reuses.AddBackgroundOrForeground(pageBoxKind, BackgroundFile.Create backgroundFile, BackgroundOrForeground.Foreground)
 
 
 

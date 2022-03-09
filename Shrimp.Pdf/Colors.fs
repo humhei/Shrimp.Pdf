@@ -115,8 +115,17 @@ module _Colors =
           b: float32 }
     with 
 
+        static member WHITE = { L = 100.f; a = 0.f; b = 0.f }
+
+        static member BLACK = { L = 0.f; a = 0.f; b = 0.f }
+
         member x.LoggingText = 
             sprintf "LAB %.1f %.1f %.1f" (x.L) x.a x.b
+
+        static member Create(l, a, b) =
+            { L = l 
+              a = a
+              b = b}
 
         member x.ToItextColor(?colorSpace: PdfCieBasedCs.Lab) =
             match colorSpace with 
@@ -159,7 +168,8 @@ module _Colors =
             { C = x.C * 100.f; M = x.M * 100.f; Y = x.Y * 100.f; K = x.K *100.f}
 
 
-
+        static member Create(c, m, y, k) =
+            { C = c; M = m; Y = y; K = k}
             
 
         static member CYAN = { C = 1.0f; M = 0.0f; Y = 0.0f; K = 0.0f }
@@ -204,6 +214,20 @@ module _Colors =
         | Lab of FsLab
         | Gray of FsGray
     with 
+
+        member x.ColorSpace =
+            match x with
+            | FsValueColor.Rgb  _ -> ColorSpace.Rgb
+
+            | FsValueColor.Cmyk _ -> ColorSpace.Cmyk
+
+            | FsValueColor.Gray _ -> ColorSpace.Gray
+
+            | FsValueColor.Lab _ -> ColorSpace.Lab
+
+
+        member x.IsInColorSpace(colorSpace: ColorSpace) =
+            x.ColorSpace = colorSpace
 
         static member CreateRGB(r, g, b: int) =
             FsDeviceRgb.Create(r, g, b)
@@ -259,6 +283,20 @@ module _Colors =
                 [ rgb.R; rgb.G; rgb.B ]
 
             | FsValueColor.Lab lab -> [ lab.L; lab.a; lab.b ]
+
+        member x.GetColorArrayValues() =
+            match x with 
+            | FsValueColor.Cmyk cmyk ->
+                [| cmyk.C; cmyk.M; cmyk.Y; cmyk.K |]
+
+            | FsValueColor.Gray (FsGray v) ->
+                [| v |]
+
+            | FsValueColor.Rgb rgb ->
+                [| rgb.R; rgb.G; rgb.B |]
+
+            | FsValueColor.Lab lab -> [| lab.L; lab.a; lab.b |]
+
 
         member x.IsEqualTo(y: FsValueColor, ?valueEqualOptions: ValueEqualOptions) =
             FsValueColor.IsEqual (x, y, defaultArg valueEqualOptions ValueEqualOptions.DefaultRoundedValue) 
@@ -522,20 +560,8 @@ module _Colors =
             
             let streamText = System.Text.Encoding.UTF8.GetString(byarrays.[0..500])
 
-            let icc =
-                match streamText with 
-                | String.Contains "sRGB IEC61966-2.1" -> Icc.Rgb RgbIcc.``SRGB Color Space Profile``
-                | String.Contains "Adobe RGB (1998)" -> Icc.Rgb RgbIcc.AdobeRGB1998
-                | String.Contains "Apple RGB" -> Icc.Rgb RgbIcc.AdobeRGB1998
-                | String.Contains "CIE LAB" -> Icc.Lab LabIcc.``CIE Lab``
-                | String.Contains "Dot Gain 15%" -> Icc.Gray GrayIcc.``Dot Gain 15%``
-                | String.Contains "Dot Gain 20%" -> Icc.Gray GrayIcc.``Dot Gain 20%``
-                | String.Contains "Dot Gain 25%" -> Icc.Gray GrayIcc.``Dot Gain 25%``
-                | String.Contains "Dot Gain 30%" -> Icc.Gray GrayIcc.``Dot Gain 30%``
-                | String.Contains "Japan Color 2001 Coated" -> Icc.Cmyk CmykIcc.JapanColor2001Coated
-                | String.Contains "U.S. Web Coated (SWOP) v2" -> Icc.Cmyk CmykIcc.USWebCoatedSWOP
-                | _ -> failwith "Not implemented"
-
+            let icc = Icc.OfStreamText streamText
+                
             icc
 
     
@@ -740,10 +766,6 @@ module _Colors =
 
             | _ -> false
 
-        static member Contains(valueEqualOptions) =
-            fun (color: Color) (fsSeparations: FsSeparation list) ->
-                fsSeparations
-                |> List.exists (fun m -> m.IsEqualTo(color, valueEqualOptions))
 
 
     let private fsIccBasedCache = new ConcurrentDictionary<PdfCieBasedCs.IccBased, Icc>()
@@ -771,12 +793,52 @@ module _Colors =
               Color = getAlterColor (icc.ColorSpace) (List.ofSeq (color.GetColorValue())) }
 
     [<RequireQualifiedAccess>]
+    type AlternativeFsColor =
+        | Separation of FsSeparation
+        | IccBased of FsIccBased
+        | ValueColor of FsValueColor
+    with 
+        member x.AlterColor =
+            match x with 
+            | AlternativeFsColor.ValueColor v -> v
+            | AlternativeFsColor.IccBased v ->   v.Color
+            | AlternativeFsColor.Separation v -> v.Color
+
+    [<RequireQualifiedAccess>]
     type FsColor =
         | Separation of FsSeparation
         | IccBased of FsIccBased
         | ValueColor of FsValueColor
         | PatternColor of PatternColor
     with 
+        member x.AsAlternativeFsColor =
+            match x with 
+            | FsColor.ValueColor v -> v  |> AlternativeFsColor.ValueColor  |> Some
+            | FsColor.IccBased v ->   v  |> AlternativeFsColor.IccBased    |> Some
+            | FsColor.Separation v -> v  |> AlternativeFsColor.Separation  |> Some
+            | FsColor.PatternColor _ -> None
+
+        member x.AlterColor = 
+            x.AsAlternativeFsColor
+            |> Option.map(fun m -> m.AlterColor)
+
+        member x.IsInColorSpace(colorSpace, ?includingAlterColor: bool) =
+            let value =
+                match defaultArg includingAlterColor true with 
+                | true -> x.AlterColor
+                | false ->
+                    match x with 
+                    | FsColor.ValueColor v -> Some v
+                    | FsColor.IccBased _
+                    | FsColor.Separation _  
+                    | FsColor.PatternColor _ -> None
+
+            match value with 
+            | Some value -> value.IsInColorSpace(colorSpace)
+            | None -> false
+
+
+
         member x.LoggingText =
             match x with 
             | FsColor.Separation v -> v.LoggingText
@@ -831,7 +893,18 @@ module _Colors =
             FsColor.ValueColor (FsValueColor.Gray valueColor)
 
 
+    type FsSeparation with 
+        member x.IsEqualTo(color, valueEqualOptions) =
+            match color with 
+            | FsColor.Separation separation ->
+                FsSeparation.IsEqual(x, separation, valueEqualOptions)
 
+            | _ -> false
+
+        static member Contains(valueEqualOptions) =
+            fun (color: FsColor) (fsSeparations: FsSeparation list) ->
+                fsSeparations
+                |> List.exists (fun m -> m.IsEqualTo(color, valueEqualOptions))
 
 
     [<RequireQualifiedAccess>]
@@ -1186,22 +1259,7 @@ module _Colors =
         member x.IsEqualTo(fsSeparation: FsSeparation, valueEqualOptions) =
             fsSeparation.IsEqualTo(x, valueEqualOptions)
 
-        member x.GetFsColorSpace() =
-            match x with 
-            | :? DeviceCmyk -> ColorSpace.Cmyk
-            | :? DeviceGray -> ColorSpace.Gray
-            | :? DeviceRgb -> ColorSpace.Rgb
-            | :? Lab -> ColorSpace.Lab 
-            | :? Separation as separation -> 
-                let alterateColor = 
-                    separation.GetAlterateColor()
-                    |> FsValueColor.ToItextColor
-                alterateColor.GetFsColorSpace()
-            | _ -> failwithf "Cannot get colorspace from %A" x
 
-
-        member x.IsInColorSpace(colorSpace: ColorSpace) =
-            x.GetFsColorSpace() = colorSpace
          
 
     [<RequireQualifiedAccess>]
