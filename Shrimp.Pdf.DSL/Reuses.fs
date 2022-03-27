@@ -1638,7 +1638,7 @@ module _Reuses =
                 []
      
 
-        static member private AddBackgroundOrForeground(pageBoxKind: PageBoxKind, backgroundFile: BackgroundFile, choice: BackgroundOrForeground) =
+        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground) =
             (fun flowModel (doc: SplitDocument) ->
                 let backgroundInfos =
                     let pageBoxs = BackgroundFile.getPageBoxes backgroundFile
@@ -1657,7 +1657,6 @@ module _Reuses =
                 |> List.mapi (fun i readerPage ->
                     let backgroundPageBox, backgroundXObject = backgroundInfos.GetPageBoxAndXObject(i+1)
 
-                    let readerPageBox = readerPage.GetPageBox(pageBoxKind)
                     let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
 
                     let pageSize = 
@@ -1685,7 +1684,6 @@ module _Reuses =
             |> reuse 
                 "AddBackgroundOrForeground"
                 [
-                    "pageBoxKind" => pageBoxKind.ToString()
                     "backgroundFile" => backgroundFile.ToString()
                     "layer" => choice.ToString()
                 ]
@@ -1723,11 +1721,11 @@ module _Reuses =
                 ]
 
 
-        static member AddBackground (pageBoxKind, backgroundFile: PdfFile) =
-            Reuses.AddBackgroundOrForeground(pageBoxKind, BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background)
+        static member AddBackground (backgroundFile: PdfFile) =
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background)
 
-        static member AddForeground (pageBoxKind, backgroundFile: PdfFile) =
-            Reuses.AddBackgroundOrForeground(pageBoxKind, BackgroundFile.Create backgroundFile, BackgroundOrForeground.Foreground)
+        static member AddForeground (backgroundFile: PdfFile) =
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Foreground)
 
 
 

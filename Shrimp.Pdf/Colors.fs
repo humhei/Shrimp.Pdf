@@ -305,7 +305,7 @@ module _Colors =
         static member WHITE = FsGray.WHITE |> FsValueColor.Gray
         static member GRAY = FsGray.GRAY |> FsValueColor.Gray
 
-
+ 
         static member RGB_BLACK = FsDeviceRgb.BLACK |> FsValueColor.Rgb
         static member RGB_WHITE = FsDeviceRgb.WHITE |> FsValueColor.Rgb
         static member RGB_RED = FsDeviceRgb.RED |> FsValueColor.Rgb
@@ -818,6 +818,12 @@ module _Colors =
             | FsColor.Separation v -> v  |> AlternativeFsColor.Separation  |> Some
             | FsColor.PatternColor _ -> None
 
+        static member OfAlternativeFsColor color =
+            match color with 
+            | AlternativeFsColor.IccBased v -> FsColor.IccBased v
+            | AlternativeFsColor.Separation v -> FsColor.Separation v
+            | AlternativeFsColor.ValueColor v -> FsColor.ValueColor v
+
         member x.AlterColor = 
             x.AsAlternativeFsColor
             |> Option.map(fun m -> m.AlterColor)
@@ -1094,7 +1100,6 @@ module _Colors =
         | Separation of FsSeparation
         | ColorCard of ColorCard
         | Registration
-        | Lab of FsLab
     with 
         member x.LoggingText =
             match x with 
@@ -1106,7 +1111,6 @@ module _Colors =
                 | ColorCard.Pantone colorEnum -> colorEnum.ToString()
                 | ColorCard.TPX tpxColorEnum -> tpxColorEnum.ToString()
 
-            | PdfCanvasColor.Lab labColor -> labColor.LoggingText
             | PdfCanvasColor.Registration -> "Registration"
 
         static member valueColor(valueColor: FsValueColor) =
@@ -1184,9 +1188,6 @@ module _Colors =
 
                     knownColor1.IsEqualTo(fsColor)
     
-            | PdfCanvasColor.Lab labColor1, _ -> 
-                (PdfCanvasColor.Value (FsValueColor.Lab labColor1)).IsEqualTo(fsColor)
-    
             | PdfCanvasColor.Registration, _ ->
                  PdfCanvasColor.Separation(FsSeparation.Registration).IsEqualTo(fsColor)
 
@@ -1199,7 +1200,10 @@ module _Colors =
             pdfCanvasColor
             |> List.exists(fun pdfCanvasColor -> pdfCanvasColor.IsEqualTo(color))
   
-        
+        static member Lab(color) = 
+            FsValueColor.Lab color
+            |> PdfCanvasColor.Value
+
 
     [<RequireQualifiedAccess>]
     type NullablePdfCanvasColor =
@@ -1208,7 +1212,6 @@ module _Colors =
         | Separation of FsSeparation
         | ColorCard of ColorCard
         | Registration
-        | Lab of FsLab
     with 
 
         static member OfPdfCanvasColor color =
@@ -1216,7 +1219,6 @@ module _Colors =
             | PdfCanvasColor.Value v ->                 NullablePdfCanvasColor.Value         v
             | PdfCanvasColor.Separation v ->            NullablePdfCanvasColor.Separation    v
             | PdfCanvasColor.ColorCard v ->             NullablePdfCanvasColor.ColorCard     v
-            | PdfCanvasColor.Lab v ->                   NullablePdfCanvasColor.Lab           v
             | PdfCanvasColor.Registration ->            NullablePdfCanvasColor.Registration  
                              
         static member BLACK = PdfCanvasColor.BLACK |> NullablePdfCanvasColor.OfPdfCanvasColor
@@ -1244,6 +1246,10 @@ module _Colors =
             PdfCanvasColor.OfITextColor(color) 
             |> NullablePdfCanvasColor.OfPdfCanvasColor
 
+        static member Lab(color) =
+            FsValueColor.Lab color
+            |> NullablePdfCanvasColor.Value
+
     [<RequireQualifiedAccess>]
     module NullablePdfCanvasColor =
         let (|Non|PdfCanvasColor|) = function
@@ -1251,7 +1257,6 @@ module _Colors =
             | NullablePdfCanvasColor.Value           v   -> PdfCanvasColor(PdfCanvasColor.Value        v)
             | NullablePdfCanvasColor.Separation      v   -> PdfCanvasColor(PdfCanvasColor.Separation   v)
             | NullablePdfCanvasColor.ColorCard       v   -> PdfCanvasColor(PdfCanvasColor.ColorCard    v)
-            | NullablePdfCanvasColor.Lab             v   -> PdfCanvasColor(PdfCanvasColor.Lab          v)
             | NullablePdfCanvasColor.Registration        -> PdfCanvasColor(PdfCanvasColor.Registration  )
 
 

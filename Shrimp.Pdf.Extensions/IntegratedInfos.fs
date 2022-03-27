@@ -18,6 +18,7 @@ module IntegratedInfos =
         { FillColor: iText.Kernel.Colors.Color 
           StrokeColor: iText.Kernel.Colors.Color 
           Bound: FsRectangle }
+
     [<Struct>]
     type IntegratedPathRenderInfo =
         { PathRenderInfo: PathRenderInfo 
@@ -30,7 +31,6 @@ module IntegratedInfos =
               Bound = 
                 let bound = (IPathRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo)
                 bound.FsRectangle()
-                
               }
 
 

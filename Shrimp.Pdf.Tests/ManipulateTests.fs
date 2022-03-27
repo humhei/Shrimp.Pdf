@@ -6,8 +6,10 @@ open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.icms2
+open Shrimp.FSharp.Plus
 open Shrimp.Pdf.RegisterableFonts.YaHei
 open Imposing
+open iText.IO.Font.Constants
 
 [<RequireQualifiedAccess>]
 module PageInfos =
@@ -31,8 +33,15 @@ module PageInfos =
 
 let manipulateTests =
   testList "Manipulates Tests" [
-
-
+    testCase "expand stroke width" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.ExpandStrokeWidth(
+                [FsColor.CMYK_BLACK; FsColor.BLACK],
+                mmZ 0.8,
+                PdfCanvasColor.valueColor FsDeviceCmyk.MAGENTA)
+        )
+        |> runTest "datas/manipulate/expand black stroke.pdf" 
+        |> ignore
 
     testCase "change separation color of pdfFunction2 PageNumber to m100" <| fun _ -> 
         
@@ -182,6 +191,22 @@ let manipulateTests =
             ) 
         )
         |> runTest "datas/manipulate/change red to black outside of trimbox.pdf" 
+        |> ignore
+
+    testCase "change gold to black" <| fun _ ->
+        let Gold: FsSeparation =
+            FsSeparation.Create("Gold", DeviceRgb(239, 227, 131))
+
+        Flow.Manipulate(
+            Modify.ReplaceColors(
+                picker = (fun color' ->
+                    match color' with 
+                    | FsColor.EqualTo (FsColor.Separation Gold) -> Some (FsValueColor.ToItextColor FsValueColor.BLACK)
+                    | _ -> None
+                )
+            )
+        )
+        |> runTest "datas/manipulate/change gold to black.pdf" 
         |> ignore
 
     testCase "xobject_change stroke color b255 to m100" <| fun _ -> 
@@ -915,6 +940,19 @@ let manipulateTests =
             flow
         )
         |> runTest "datas/manipulate/test tissue Infos.pdf" 
+        |> ignore
+
+    ftestCase "map arial to arial_bold" <| fun _ -> 
+        let flow =
+            Modify.MapFontAndSize(
+                ("ArialMT", 12.) =>
+                (FsPdfFontFactory.StandardFonts (StandardFonts.HELVETICA_BOLD), 12.)
+            )
+
+        Flow.Manipulate(
+            flow
+        )
+        |> runTest "datas/manipulate/map arial to arial_bold.pdf" 
         |> ignore
 
     

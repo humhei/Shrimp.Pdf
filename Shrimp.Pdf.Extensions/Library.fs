@@ -716,12 +716,20 @@ module iText =
                 let matrix = info.GetTextMatrix()
                 info.GetFontSize() * matrix.Get(0) |> float
 
+            member info.ToTransformedFontSize(actualFontSize: float) =
+                let matrix = info.GetTextMatrix()
+                actualFontSize / float(matrix.Get(0)) 
+
             member info.GetFontName() =
                 info.GetFont().GetFontProgram().GetFontNames().GetFontName()
         
         /// GetFontSize() * ctm.m00
         let getActualFontSize (info: ITextRenderInfo) =
             info.Value.GetActualFontSize()
+
+        /// actualFontSize / ctm.m00
+        let toTransformedFontSize actualFontSize (info: ITextRenderInfo) =
+            info.Value.ToTransformedFontSize(actualFontSize)
 
         let getHeight (info: ITextRenderInfo) =
             let info = info.Value
@@ -1117,6 +1125,9 @@ module iText =
         let setStrokeColor (color: Color) (canvas:PdfCanvas) =
             canvas.SetStrokeColor(color)
 
+        let setLineJoinStyle (style) (canvas: PdfCanvas) =
+            canvas.SetLineJoinStyle(style)
+
         let setLineWidth (width: float) (canvas: PdfCanvas) =
             canvas.SetLineWidth(float32 width)
 
@@ -1150,14 +1161,14 @@ module iText =
         let rectangle (rect: Rectangle) (canvas: PdfCanvas) =
             canvas.Rectangle(rect)
 
-        let setTextRendingMode textRenderingMode (canvas:PdfCanvas)=
-            canvas.SetTextRenderingMode(textRenderingMode)
-
         let addXObject (xobject: PdfFormXObject) (affineTransformRecord: AffineTransformRecord) (canvas: PdfCanvas) =
             canvas.AddXObject (xobject, affineTransformRecord)
 
         let beginText (canvas: PdfCanvas) =
             canvas.BeginText()
+
+        let setFontAndSize (font, size) (canvas: PdfCanvas) =   
+            canvas.SetFontAndSize(font, size)
 
         let endText (canvas: PdfCanvas) =
             canvas.EndText()

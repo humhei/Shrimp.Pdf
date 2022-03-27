@@ -18,12 +18,14 @@ module PdfDocumentWithCachedResources =
     type PdfCanvasAddRectangleArguments =
         { LineWidth: float 
           StrokeColor: NullablePdfCanvasColor
-          FillColor: NullablePdfCanvasColor }
+          FillColor: NullablePdfCanvasColor
+          IsFillOverprint: bool }
     with 
         static member DefaultValue =
             { LineWidth = mm 0.1 
               StrokeColor = NullablePdfCanvasColor.BLACK
-              FillColor = NullablePdfCanvasColor.N }
+              FillColor = NullablePdfCanvasColor.N
+              IsFillOverprint = false }
 
 
     type PdfCanvasAddLineArguments =
@@ -123,39 +125,16 @@ module PdfDocumentWithCachedResources =
 
 
     type PdfCanvas with 
+        member internal x.GetOrCreateExtGState(extGState: FsExtGState) =
+            let extGState =
+                let doc = x.GetDocument() :?> PdfDocumentWithCachedResources
+                doc.GetOrCreateExtGState(extGState)
+            
+            extGState
+
         member internal x.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =
-            match pdfCanvasColor with 
-            | PdfCanvasColor.Value color -> color |> FsValueColor.ToItextColor
-            | PdfCanvasColor.Separation separation ->
-                let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
-                let resourceColor = ResourceColor.CustomSeparation separation
-                pdfDocument.GetOrCreateColor(resourceColor) 
-
-            | PdfCanvasColor.Lab lab ->
-                let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
-                let resourceColor = ResourceColor.Lab lab
-                pdfDocument.GetOrCreateColor(resourceColor) 
-                
-            | PdfCanvasColor.ColorCard colorCard ->
-                match colorCard with 
-                | ColorCard.KnownColor knownColor ->
-                    DeviceRgb.fromKnownColor knownColor
-                    :> Color
-                | ColorCard.Pantone pantoneColor ->
-                    let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
-                    let resourceColor = ResourceColor.Pantone pantoneColor
-                    pdfDocument.GetOrCreateColor(resourceColor) 
-
-                | ColorCard.TPX tpxColor ->
-                    let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
-                    let resourceColor = ResourceColor.Tpx tpxColor
-                    pdfDocument.GetOrCreateColor(resourceColor) 
-
-            | PdfCanvasColor.Registration ->
-                    let pdfDocument = x.GetDocument() :?> PdfDocumentWithCachedResources
-                    let resourceColor = ResourceColor.Registration
-                    pdfDocument.GetOrCreateColor(resourceColor) 
-
+            let doc = x.GetDocument() :?> PdfDocumentWithCachedResources
+            doc.GetOrCreateColor(pdfCanvasColor)
 
         static member SetStrokeColor(strokeColor: NullablePdfCanvasColor) =
             fun (canvas: PdfCanvas) ->
@@ -197,6 +176,9 @@ module PdfDocumentWithCachedResources =
             |> PdfCanvas.lineTo line.End
             |> close
 
+        let setExtGState (extGState: FsExtGState) (canvas: PdfCanvas) =
+            let extGState = canvas.GetOrCreateExtGState(extGState)
+            canvas.SetExtGState(extGState)
 
         let addRectangle (rect: Rectangle) (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
             let args = mapping PdfCanvasAddRectangleArguments.DefaultValue
@@ -207,7 +189,13 @@ module PdfDocumentWithCachedResources =
                 | NullablePdfCanvasColor.N , _ -> PdfCanvas.stroke
                 | _, _ -> PdfCanvas.fillStroke
 
+            let trySetExtGState canvas = 
+                match args.IsFillOverprint with 
+                | true -> setExtGState (FsExtGState.FillOverprint) canvas
+                | false -> canvas
+
             canvas
+            |> trySetExtGState
             |> PdfCanvas.SetStrokeColor args.StrokeColor
             |> PdfCanvas.SetFillColor args.FillColor
             |> PdfCanvas.setLineWidth args.LineWidth

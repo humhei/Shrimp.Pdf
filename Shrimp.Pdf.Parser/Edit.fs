@@ -13,7 +13,9 @@ open Listeners
 open System.Threading
 open iText.IO.Source
 open System.IO
+open Shrimp.FSharp.Plus
 open Shrimp.Pdf.Parser.Helper
+open Constants.Operators
 
 [<Struct>]
 type OperatorRange =
@@ -48,7 +50,7 @@ type internal CallbackableContentOperator (originalOperator) =
             
             let processor = processor :?> OperatorRangeCallbackablePdfCanvasProcessor
             let operatorName = operator.ToString()
-            if operatorName <> "Do" then 
+            if operatorName <> Do then 
                 try 
                     this.OriginalOperator.Invoke(processor, operator, operands)
                 with ex ->
@@ -87,6 +89,7 @@ type _SelectionModifierFixmentArguments =
     { Close: OperatorRange
       CurrentRenderInfo: IIntegratedRenderInfo }
 
+
 type private Modifier = _SelectionModifierFixmentArguments -> list<PdfCanvas -> PdfCanvas>
 
 type internal ModifierPdfCanvas(contentStream, resources, document) =
@@ -96,6 +99,7 @@ type internal ModifierPdfCanvas(contentStream, resources, document) =
         let affineTransform = AffineTransform.ofMatrix(x.GetGraphicsState().GetCtm())
         let rect = affineTransform.InverseTransform(rect)
         base.Rectangle(rect)
+
 
 and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * Modifier>, document: PdfDocument) =
     inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(Map.map (fun _ -> fst) selectorModifierMapping))
@@ -114,13 +118,13 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
     let (|Path|_|) operatorName =
         match operatorName with 
-        | "f" | "F" | "f*" | "S" | "s" | "B" | "B*" | "b" | "b*" 
+        | ContainsBy [f; F; ``f*``; S; s; B; ``B*``; b; ``b*``] 
             when List.contains EventType.RENDER_PATH eventTypes-> Some ()
         | _ -> None
 
     let (|Text|_|) operatorName =
         match operatorName with 
-        | "Tj" | "TJ" when List.contains EventType.RENDER_TEXT eventTypes -> Some ()
+        | ContainsBy [Tj; TJ] when List.contains EventType.RENDER_TEXT eventTypes -> Some ()
         | _ -> None
 
     let (|PathOrText|_|) operatorName =
@@ -142,7 +146,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
         let operatorName = operatorRange.Operator.ToString()
 
         match operatorName with 
-        | "Do" ->
+        | Do ->
 
             let resources = resourcesStack.Peek()
             let name = operatorRange.Operands.[0] :?> PdfName

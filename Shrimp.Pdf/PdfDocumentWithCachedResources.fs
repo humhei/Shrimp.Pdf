@@ -46,11 +46,15 @@ type ResourceColor =
     | CustomSeparation of FsSeparation
     | Lab of FsLab
 
-type private PdfDocumentCache private (pdfDocument: unit -> PdfDocument, fontsCache: ConcurrentDictionary<FsPdfFontFactory, PdfFont>, colorsCache: ConcurrentDictionary<ResourceColor, Color>) =
+type private PdfDocumentCache private 
+    (pdfDocument: unit -> PdfDocument,
+     fontsCache: ConcurrentDictionary<FsPdfFontFactory, PdfFont>,
+     colorsCache: ConcurrentDictionary<ResourceColor, Color>,
+     extGStateCache: ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>) =
     let mutable labColorSpace = None
 
     member internal x.Spawn(pdfDocument: unit -> PdfDocument) =
-        PdfDocumentCache(pdfDocument, new ConcurrentDictionary<_, _>(), colorsCache)
+        PdfDocumentCache(pdfDocument, new ConcurrentDictionary<_, _>(), colorsCache,extGStateCache)
 
     member internal x.GetOrCreateColor(resourceColor: ResourceColor) =
         colorsCache.GetOrAdd((resourceColor), fun (color) ->
@@ -104,8 +108,21 @@ type private PdfDocumentCache private (pdfDocument: unit -> PdfDocument, fontsCa
             | pdfFont -> pdfFont
         )
 
+    member internal x.GetOrCreateExtGState(extGState: FsExtGState) = 
+        extGStateCache.GetOrAdd(extGState, fun (extGState) ->
+            let pdfExtGState = new Extgstate.PdfExtGState()
+            pdfExtGState
+                .SetOverprintMode(int extGState.OPM)
+                .SetFillOverPrintFlag(extGState.IsFillOverprint)
+                .SetStrokeOverPrintFlag(extGState.IsStrokeOverprint)
+        )
+
     new (pdfDocument: unit -> PdfDocument) =
-        PdfDocumentCache(pdfDocument, new ConcurrentDictionary<FsPdfFontFactory, PdfFont>(),  new ConcurrentDictionary<ResourceColor, Color>())
+        PdfDocumentCache
+            (pdfDocument,
+             new ConcurrentDictionary<FsPdfFontFactory, PdfFont>(),
+             new ConcurrentDictionary<ResourceColor, Color>(),
+             new ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>())
 
 type PdfDocumentWithCachedResources =
     inherit PdfDocument
@@ -117,6 +134,39 @@ type PdfDocumentWithCachedResources =
     member x.GetOrCreateColor(resourceColor: ResourceColor) =
         x.cache.GetOrCreateColor(resourceColor)
 
+    member pdfDocument.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =
+        match pdfCanvasColor with 
+        | PdfCanvasColor.Value color -> 
+            match color with 
+            | FsValueColor.Lab lab ->
+                let resourceColor = ResourceColor.Lab lab
+                pdfDocument.GetOrCreateColor(resourceColor) 
+            | _ -> color |> FsValueColor.ToItextColor
+
+        | PdfCanvasColor.Separation separation ->
+            let resourceColor = ResourceColor.CustomSeparation separation
+            pdfDocument.GetOrCreateColor(resourceColor) 
+
+        | PdfCanvasColor.ColorCard colorCard ->
+            match colorCard with 
+            | ColorCard.KnownColor knownColor ->
+                DeviceRgb.fromKnownColor knownColor
+                :> Color
+            | ColorCard.Pantone pantoneColor ->
+                let resourceColor = ResourceColor.Pantone pantoneColor
+                pdfDocument.GetOrCreateColor(resourceColor) 
+
+            | ColorCard.TPX tpxColor ->
+                let resourceColor = ResourceColor.Tpx tpxColor
+                pdfDocument.GetOrCreateColor(resourceColor) 
+
+        | PdfCanvasColor.Registration ->
+                let resourceColor = ResourceColor.Registration
+                pdfDocument.GetOrCreateColor(resourceColor) 
+
+    member x.GetOrCreateExtGState(extGState: FsExtGState) = 
+        x.cache.GetOrCreateExtGState(extGState)
+        
 
     new (writer: string) as this = 
         { inherit PdfDocument(new PdfWriter(writer)); cache = new PdfDocumentCache((fun _ -> this :> PdfDocument)) }

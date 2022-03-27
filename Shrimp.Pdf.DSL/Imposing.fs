@@ -277,6 +277,8 @@ module Imposing =
     type Spaces [<JsonConstructor>] (v) =
         inherit POCOBaseV<Space list>(v)
 
+        member x.Value = v
+
         new (value: float) =
             Spaces 
                 [

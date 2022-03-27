@@ -223,6 +223,20 @@ module Client =
 
             AlternativeFsColor.Is(predicate, ?predicateCompose = predicateCompose, ?labIcc = labIcc, ?intent = intent, ?inputIcc = inputIcc)
 
+        member internal x.AsSpecificOrWhite(specificColor, ?labIcc, ?intent, ?inputIcc) =
+            if AlternativeFsColor.IsCmsWhite(?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc) x
+            then (DeviceGray.WHITE :> Color)
+            else specificColor
+
+        member internal x.AsBlackOrWhite(?labIcc, ?intent, ?inputIcc) =
+            x.AsSpecificOrWhite(DeviceGray.BLACK, ?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc)
+
+        member internal x.AsBlackOrWhite_Inversed(?labIcc, ?intent, ?inputIcc) =
+            if AlternativeFsColor.IsCmsWhite(?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc) x
+            then (DeviceGray.BLACK :> Color)
+            else (DeviceGray.WHITE :> Color)
+
+
     [<RequireQualifiedAccess>]
     module private FsColor =
         let predicateByAlternativeFsColor predicate (fsColor: FsColor) =
@@ -241,7 +255,21 @@ module Client =
 
     
 
+
     type Modifier with
+        static member SepcificOrWhite(specificColor, ?fillOrStrokeModifyingOptions, ?labIcc, ?intent, ?inputIcc) =
+            fun (args: _SelectionModifierFixmentArguments<'userState>) ->
+                Modifier.ReplaceColor(
+                    ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
+                    picker = 
+                        fun color ->
+                            match color.AsAlternativeFsColor with 
+                            | None -> None
+                            | Some color ->
+                                color.AsSpecificOrWhite(specificColor, ?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc)
+                                |> Some
+                ) args
+
         static member BlackOrWhite(?fillOrStrokeModifyingOptions, ?labIcc, ?intent, ?inputIcc) =
             fun (args: _SelectionModifierFixmentArguments<'userState>) ->
                 Modifier.ReplaceColor(
@@ -251,9 +279,8 @@ module Client =
                             match color.AsAlternativeFsColor with 
                             | None -> None
                             | Some color ->
-                                if AlternativeFsColor.IsCmsWhite(?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc) color
-                                then Some (DeviceGray.WHITE :> Color)
-                                else Some (DeviceGray.BLACK :> Color)
+                                color.AsBlackOrWhite(?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc)
+                                |> Some
                 ) args
         
         
@@ -362,11 +389,10 @@ module Client =
               Modify_ConvertColorsTo_Options = Modify_ConvertColorsTo_Options.DefaultValue }
 
     type Modify with
-
-        static member ConvertColorsTo(outputIcc: Icc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParamters: NameAndParamters) =
+        static member ConvertColorsTo(outputIcc: Icc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParameters: NameAndParameters) =
             let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
 
-            let nameAndParamters = 
+            let nameAndParameters = 
                 { Name = "ConvertColorTo"
                   Parameters =
                     [
@@ -374,11 +400,11 @@ module Client =
                         "options" => options.ToString()
                     ]
                 }
-                |> defaultArg nameAndParamters
+                |> defaultArg nameAndParameters
 
             Modify.ReplaceAlternativeColors(
                 options = options.To_Modify_ReplaceColors_Options(),
-                nameAndParamters = nameAndParamters,
+                nameAndParameters = nameAndParameters,
                 picker = 
                     fun cmsColor -> 
                         let inputIcc = 
@@ -394,23 +420,23 @@ module Client =
             )
 
 
-        static member ConvertColorsToDeviceGray(?options: Modfy_ConvertColorsToDeviceGray_Options, ?nameAndParamters: NameAndParamters) =
+        static member ConvertColorsToDeviceGray(?options: Modfy_ConvertColorsToDeviceGray_Options, ?nameAndParameters: NameAndParameters) =
             let options = defaultArg options Modfy_ConvertColorsToDeviceGray_Options.DefaultValue
 
-            let nameAndParamters = 
+            let nameAndParameters = 
                 { Name = "ConvertColorToDeviceGray"
                   Parameters =
                     [
                         "options" => options.ToString()
                     ]
                 }
-                |> defaultArg nameAndParamters
+                |> defaultArg nameAndParameters
 
             let modify_ConvertColorsTo_Options = options.Modify_ConvertColorsTo_Options
 
             Modify.ConvertColorsTo(
                 Icc.Gray options.OutputIcc,
-                nameAndParamters = nameAndParamters,
+                nameAndParameters = nameAndParameters,
                 options = 
                     { modify_ConvertColorsTo_Options with 
                         Predicate = 
@@ -424,10 +450,40 @@ module Client =
                     }
                 )         
                 
-        static member BlackOrWhite(?labIcc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParamters: NameAndParamters) =
+        static member SpecificOrWhite(specificColor: PdfCanvasColor, ?labIcc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParameters: NameAndParameters) =
             let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
             let labIcc = defaultArg labIcc defaultLabIcc.Value
-            let nameAndParamters = 
+            let nameAndParameters = 
+                { Name = sprintf "Sepecific color %s Or White" specificColor.LoggingText
+                  Parameters =
+                    [
+                        "options" => options.ToString()
+                        "labIcc" => labIcc.ToString()
+                    ]
+                }
+                |> defaultArg nameAndParameters
+
+            Manipulate.Factory(fun _ doc ->
+                let specificColor = lazy doc.Value.GetOrCreateColor(specificColor)
+                Modify.ReplaceAlternativeColors(
+                    options = options.To_Modify_ReplaceColors_Options(),
+                    nameAndParameters = nameAndParameters,
+                    picker = 
+                        fun color ->
+                            let inputIccFactory = options.InputIccModifyArgs |> Option.map (fun m -> m.Factory)
+                            if options.Predicate color 
+                            then 
+                                color.AsSpecificOrWhite(specificColor.Value, labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory)
+                                |> Some
+                            else None
+                )
+            )
+
+
+        static member BlackOrWhite(?labIcc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParameters: NameAndParameters) =
+            let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
+            let labIcc = defaultArg labIcc defaultLabIcc.Value
+            let nameAndParameters = 
                 { Name = "BlackOrWhite"
                   Parameters =
                     [
@@ -435,25 +491,27 @@ module Client =
                         "labIcc" => labIcc.ToString()
                     ]
                 }
-                |> defaultArg nameAndParamters
+                |> defaultArg nameAndParameters
 
 
             Modify.ReplaceAlternativeColors(
                 options = options.To_Modify_ReplaceColors_Options(),
-                nameAndParamters = nameAndParamters,
+                nameAndParameters = nameAndParameters,
                 picker = 
                     fun color ->
                         let inputIccFactory = options.InputIccModifyArgs |> Option.map (fun m -> m.Factory)
-                        if options.Predicate color && AlternativeFsColor.IsCmsWhite(labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory) color
-                        then Some (DeviceGray.WHITE :> Color)
-                        else Some (DeviceGray.BLACK :> Color)
+                        if options.Predicate color 
+                        then 
+                            color.AsBlackOrWhite(labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory)
+                            |> Some
+                        else None
             )
                 
     type Flows with
-        static member BlackOrWhite_Negative_Film(?labIcc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParamters: NameAndParamters) =
+        static member BlackOrWhite_Negative_Film(?strokeWidthIncrement: StrokeWidthIncrenment, ?labIcc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParameters: NameAndParameters) =
             let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
             let labIcc = defaultArg labIcc defaultLabIcc.Value
-            let nameAndParamters = 
+            let nameAndParameters = 
                 { Name = "BlackOrWhite_Negative_Film"
                   Parameters =
                     [
@@ -461,7 +519,7 @@ module Client =
                         "labIcc" => labIcc.ToString()
                     ]
                 }
-                |> defaultArg nameAndParamters
+                |> defaultArg nameAndParameters
 
             Flow.Reuse(
                 Reuses.AddBackground(
@@ -478,14 +536,30 @@ module Client =
             Flow.Manipulate(
                 Modify.ReplaceAlternativeColors(
                     options = options.To_Modify_ReplaceColors_Options(),
-                    nameAndParamters = nameAndParamters,
+                    nameAndParameters = nameAndParameters,
                     picker = 
                         fun color ->
                             let inputIccFactory = options.InputIccModifyArgs |> Option.map (fun m -> m.Factory)
 
-                            if options.Predicate color && AlternativeFsColor.IsCmsWhite(labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory) color
-                            then Some (DeviceGray.BLACK :> Color)
-                            else Some (DeviceGray.WHITE :> Color)
+                            if options.Predicate color
+                            then 
+                                color.AsBlackOrWhite_Inversed(labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory)
+                                |> Some
+                            else None
+                )
+                <+>
+
+                (
+                    match strokeWidthIncrement with 
+                    | None -> Manipulate.dummy() ||>> ignore
+                    | Some strokeWidthIncrement ->
+
+                        Modify.ExpandStrokeWidth(
+                            [FsColor.WHITE],
+                            strokeWidthIncrement.Value,
+                            PdfCanvasColor.WHITE,
+                            lineJoinStyle = strokeWidthIncrement.LineJoinStyle
+                        )
                 )
             )
 

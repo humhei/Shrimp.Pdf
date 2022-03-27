@@ -166,6 +166,7 @@ type PageModifier =
             [ Canvas.addText text (mapping) ]
         ))
 
+
     static member AddLine(line, mapping) : PageModifier<_, _> =
         PageModifier.AddNew (fun args ->
             [ PdfCanvas.addLine line mapping ]
@@ -262,6 +263,15 @@ type PageModifier =
         PageModifier.AddNew (canvasAreaOptions, (fun args ->
             [ Canvas.addRectangleToRootArea mapping ]
         ))
+
+    static member AddVarnish(canvasAreaOptions, varnish) =
+        PageModifier.AddRectangleToCanvasRootArea(canvasAreaOptions, fun args ->
+            { args with 
+                FillColor = NullablePdfCanvasColor.Separation varnish
+                StrokeColor = NullablePdfCanvasColor.N
+                IsFillOverprint = true
+            }
+        )
 
     static member Batch(pageModifiers: PageModifier<_, _> list) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->

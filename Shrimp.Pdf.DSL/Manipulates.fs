@@ -196,6 +196,8 @@ module Manipulates =
                         fLine (pageNumber, RowOrColumnNumber.RowNumber rowNumber)
                 )
 
+
+
         static member TrimToVisible (pageSelector: PageSelector, ?margin: Margin)  =
             let margin = defaultArg margin (Margin.Create 0.)
             ModifyPage.Create(
@@ -207,10 +209,6 @@ module Manipulates =
                         renderInfos
                         |> Seq.choose (IIntegratedRenderInfo.tryGetVisibleBound BoundGettingStrokeOptions.WithStrokeWidth)
                         |> AtLeastOneList.TryCreate
-
-                    let m = 
-                        bounds
-                        |> Option.map(AtLeastOneList.map(fun m -> m.FsRectangle()))
 
                     let bound =
                         bounds

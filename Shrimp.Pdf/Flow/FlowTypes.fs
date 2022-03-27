@@ -5,7 +5,7 @@ open Fake.IO.FileSystemOperators
 open System.IO
 open Shrimp.FSharp.Plus
 
-type NameAndParamters =
+type NameAndParameters =
     { Name: string 
       Parameters: list<string * string>}
 
@@ -231,7 +231,7 @@ module internal Logger_FlowModel =
                             [ 
                           
                               sprintf "Name: %s" name
-                              "Paramters:" ]
+                              "Parameters:" ]
                             @ (
                                 paramters
                                 |> List.map (fun (paramter, paramterValue) ->

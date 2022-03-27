@@ -17,15 +17,14 @@ let reuseTests =
     testCase "add background tests" <| fun _ -> 
 
         Flow.Reuse (
-            Reuses.AddBackground(PageBoxKind.ActualBox, PdfFile @"datas/reuse/backgroundFile.pdf")
+            Reuses.AddBackground(PdfFile @"datas/reuse/backgroundFile.pdf")
         )
         |> runTest "datas/reuse/add background.pdf" 
         |> ignore
 
     testCase "add foreground tests" <| fun _ -> 
-
         Flow.Reuse (
-            Reuses.AddForeground(PageBoxKind.ActualBox, PdfFile @"datas/reuse/backgroundFile.pdf")
+            Reuses.AddForeground(PdfFile @"datas/reuse/backgroundFile.pdf")
         )
         |> runTest "datas/reuse/add foreground.pdf" 
         |> ignore

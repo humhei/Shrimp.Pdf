@@ -81,6 +81,37 @@ module ExtensionTypes =
             let height = List.max ys - y
             Rectangle(float32 x, float32 y, float32 width, float32 height)
     
+    type FsOPM =
+        | Standard = 0
+        | Illustractor = 1
+
+    type FsExtGState =
+        { 
+            OPM: FsOPM
+            IsStrokeOverprint: bool
+            IsFillOverprint: bool
+        }
+    with 
+        static member DefaultValue =
+            { OPM = FsOPM.Illustractor 
+              IsStrokeOverprint = false
+              IsFillOverprint = false }
+
+        static member StrokeOverprint =
+            { FsExtGState.DefaultValue with 
+                IsStrokeOverprint = true 
+            }
+
+        static member FillOverprint =
+            { FsExtGState.DefaultValue with 
+                IsFillOverprint = true 
+            }
+
+        static member FillStrokeOverprint =
+            { FsExtGState.DefaultValue with 
+                IsFillOverprint = true 
+                IsStrokeOverprint = true
+            }
 
     type FsPoint =
         { X: float 
@@ -609,6 +640,9 @@ module ExtensionTypes =
             | Position.Center (x, y) -> Position.Center (mapping (x, y))
 
     type TextRenderingMode = iText.Kernel.Pdf.Canvas.PdfCanvasConstants.TextRenderingMode
+    type LineJoinStyle = iText.Kernel.Pdf.Canvas.PdfCanvasConstants.LineJoinStyle
+    type LineCapStyle = iText.Kernel.Pdf.Canvas.PdfCanvasConstants.LineCapStyle
+    type FillingRule = iText.Kernel.Pdf.Canvas.PdfCanvasConstants.FillingRule
 
 
 

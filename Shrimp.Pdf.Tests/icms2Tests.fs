@@ -27,8 +27,8 @@ let icmsTests =
           |> runTest "datas/icms2/black or white.pdf" 
           |> ignore
 
-      ftestCase "black or white inversed" <| fun _ -> 
-          Flows.BlackOrWhite_Negative_Film()
+      testCase "black or white inversed" <| fun _ -> 
+          Flows.BlackOrWhite_Negative_Film(strokeWidthIncrement = StrokeWidthIncrenment.Create 0.3)
           |> runTest "datas/icms2/black or white inversed.pdf" 
           |> ignore
   ]

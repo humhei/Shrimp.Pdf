@@ -267,6 +267,7 @@ open Listeners
 
 
         
+open Constants
 
 type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener , additionalContentOperators) =
     inherit PdfCanvasProcessor(listener, additionalContentOperators)
@@ -293,7 +294,7 @@ type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener ,
     override this.InvokeOperator(operator, operands) =
         //printfn "%s %A" (operator.ToString())(List.ofSeq operands)
         match operator.ToString() with
-        | "Do" -> 
+        | Operators.Do -> 
             match this.GetEventListener() with 
             | :? FilteredEventListenerEx as listener ->
                 let name = operands.[0] :?> PdfName

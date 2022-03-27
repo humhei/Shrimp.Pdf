@@ -179,9 +179,12 @@ module internal rec ManipulateOrReuse =
                             flowModel.Document.TryCloseAndDisposeWriter_IfOpened()
                             FlowModel.mapTo newUserState flowModel
                         with ex ->
-                            let ex = 
-                                new System.Exception(
-                                    sprintf "OperateDocument: false\nError when invoke flow %A to pdfFile %s\nInnerException:\n%A" (flowModel.FlowName, flow) flowModel.File ex, ex) 
+                            let ex =
+                                AccumulatedException(
+                                    sprintf "OperateDocument: false\nError when invoke flow %A to pdfFile %s" (flowModel.FlowName, flow) flowModel.File,
+                                    ex
+                                )
+                            
                             raise ex
 
                     | true ->
@@ -192,14 +195,16 @@ module internal rec ManipulateOrReuse =
                             FlowModel.mapTo newUserState flowModel
 
                         with ex ->
-                            try 
-                                flowModel.Document.CloseAndDraft()
-                            with _ -> ()
+                            //try 
+                            //    flowModel.Document.CloseAndDraft()
+                            //with _ -> ()
                             
                             let ex = 
-                                new System.Exception(
-                                    sprintf "Error when invoke flow %A to pdfFile %s\nInnerException:\n%A" (flowModel.FlowName, flow) flowModel.File ex, ex) 
-                            
+                                AccumulatedException(
+                                    sprintf "OperateDocument: true\nError when invoke flow %A to pdfFile %s" (flowModel.FlowName, flow) flowModel.File,
+                                    ex
+                                )
+                                
                             raise ex
 
 
