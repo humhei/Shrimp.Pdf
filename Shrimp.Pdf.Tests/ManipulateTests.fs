@@ -7,7 +7,9 @@ open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.icms2
 open Shrimp.FSharp.Plus
+open Shrimp.Pdf.RegisterableFonts
 open Shrimp.Pdf.RegisterableFonts.YaHei
+open QuerableFontNames
 open Imposing
 open iText.IO.Font.Constants
 
@@ -574,13 +576,22 @@ let manipulateTests =
         |> runTest "datas/manipulate/add colored texts to position4.pdf" 
         |> ignore
 
-    testCase "add text to position" <| fun _ -> 
+    ftestCase "add text to position" <| fun _ -> 
         Flow.Manipulate (
             ModifyPage.Create
                 ("add text to position",
                   PageSelector.All,
                   Dummy,
                   PageModifier.Batch [
+                    PageModifier.AddText(PageBoxKind.ActualBox, "Arial", fun args ->
+                      { args with 
+                          PdfFontFactory = FsPdfFontFactory.Registerable (Arial.arial Arial.FontWeight.Italic)
+                          CanvasFontSize = CanvasFontSize.Numeric 25. 
+                          FontColor = PdfCanvasColor.Separation (FsSeparation.Create("专色1",FsValueColor.RGB_BLUE))
+                          FontRotation = Rotation.None 
+                          Position = Position.RightTop(0., 0.)}
+                    )
+
                     PageModifier.AddText(PageBoxKind.ActualBox, "你好Separation", fun args ->
                       { args with 
                           PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
@@ -945,8 +956,8 @@ let manipulateTests =
     ftestCase "map arial to arial_bold" <| fun _ -> 
         let flow =
             Modify.MapFontAndSize(
-                ("ArialMT", 12.) =>
-                (FsPdfFontFactory.StandardFonts (StandardFonts.HELVETICA_BOLD), 12.)
+                FontAndSizeQuery(ArialMT, 12.) =>
+                NewFontAndSize(FsPdfFontFactory.Registerable(yaHei FontWeight.Regular), 12.)
             )
 
         Flow.Manipulate(

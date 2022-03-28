@@ -26,7 +26,8 @@
     <None Include="Resources\Marks\*.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
-    <None Include="Resources\Fonts\微软雅黑\msyh.ttc" />
+      <None Include="Resources\Fonts\Arial\*.ttf" />
+      <None Include="Resources\Fonts\微软雅黑\msyh.ttc" />
     <None Include="Resources\Fonts\微软雅黑\msyhbd.ttc" />
     <None Include="Resources\Fonts\微软雅黑\msyhl.ttc" />
     <None Include="Resources\Fonts\Adobe\AdobeHeitiStd-Regular.otf" />
@@ -62,6 +63,8 @@
       <None Include="Resources\Colors\*\*.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
+
+      <EmbeddedResource Remove="Resources\Arial\**" />
 
     <None Update="Resources\Colors\registion.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>

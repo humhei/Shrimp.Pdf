@@ -8,6 +8,7 @@ open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Colors
+open iText.IO.Font.Constants
 open Shrimp.FSharp.Plus
 
 module private FontExtensions =
@@ -35,7 +36,11 @@ type FsPdfFontFactory =
     | Registerable of RegisterableFont
     /// StandardFonts: See iText.IO.Font.Constants.StandardFonts
     | StandardFonts of string
-
+with 
+    member x.LoggingText =
+        match x with 
+        | FsPdfFontFactory.Registerable v -> v.LoggingText
+        | FsPdfFontFactory.StandardFonts v -> v
 
 
 [<RequireQualifiedAccess>]

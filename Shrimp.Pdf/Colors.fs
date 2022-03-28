@@ -804,6 +804,15 @@ module _Colors =
             | AlternativeFsColor.IccBased v ->   v.Color
             | AlternativeFsColor.Separation v -> v.Color
 
+        member x.LoggingText =
+            match x with 
+            | AlternativeFsColor.ValueColor v -> v.LoggingText
+            | AlternativeFsColor.IccBased v ->   v.LoggingText
+            | AlternativeFsColor.Separation v -> v.LoggingText
+
+        static member BLACK = FsValueColor.BLACK |> AlternativeFsColor.ValueColor
+
+
     [<RequireQualifiedAccess>]
     type FsColor =
         | Separation of FsSeparation
@@ -858,7 +867,7 @@ module _Colors =
             | FsColor.IccBased x, FsColor.IccBased y -> x.IsEqualTo(y, valueEqualOptions)
             | FsColor.Separation x, FsColor.Separation y -> x.IsEqualTo(y, valueEqualOptions)
             | FsColor.ValueColor x, FsColor.ValueColor y -> x.IsEqualTo(y, valueEqualOptions)
-            | FsColor.PatternColor x, FsColor.PatternColor y -> false
+            | FsColor.PatternColor x, FsColor.PatternColor y -> x.Equals(y)
             | _, _ -> false
 
         static member RGB_BLACK = FsValueColor.RGB_BLACK  |> FsColor.ValueColor

@@ -1,6 +1,7 @@
 ﻿namespace Shrimp.Pdf.DSL
 
 open Shrimp.Pdf.Colors
+open Newtonsoft.Json
 
 #nowarn "0104"
 open iText.Kernel.Colors
@@ -98,6 +99,7 @@ open Constants.Operators
 
 
 type Modifier =
+
     static member SetFontAndSize(font, size: float) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
             match args.CurrentRenderInfo.Tag with 
@@ -107,15 +109,20 @@ type Modifier =
                 ]
 
             | IntegratedRenderInfoTag.Text ->
-                let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
                 let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
                 let size = ITextRenderInfo.toTransformedFontSize size info 
                 let text = ITextRenderInfo.getText info
-                let font = doc.GetOrCreatePdfFont(font)
                 [
                     PdfCanvas.setFontAndSize(font, float32 size)
+                    //PdfCanvas.writeOperatorRange args.Close
                     PdfCanvas.showText(text)
                 ]
+
+    static member SetFontAndSize(font, size: float) : Modifier<'userState> =
+        fun (args: _SelectionModifierFixmentArguments<'userState>) ->
+            let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
+            let font = doc.GetOrCreatePdfFont(font)
+            Modifier.SetFontAndSize(font, size) args
 
     static member CancelFillAndStroke() : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
@@ -644,6 +651,104 @@ module ModifyOperators =
                 )
             modify(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
 
+type FontAndSizeQuery [<JsonConstructor>] (fontName: string, ?fontSize: float, ?fillColor) =
+    inherit POCOBaseEquatable<string * float option * FsColor option>(fontName, fontSize, fillColor)
+
+    [<JsonProperty>]
+    member x.FontName = fontName
+
+    [<JsonProperty>]
+    member x.FontSize = fontSize
+
+    [<JsonProperty>]
+    member x.FillColor = fillColor
+
+    member x.LoggingText =
+        let fontSize = 
+            match fontSize with 
+            | Some fontSize -> fontSize.ToString()
+            | None -> ""
+
+        let fillColor =
+            match fillColor with 
+            | Some fillColor -> fillColor.LoggingText
+            | None -> ""
+
+        [ fontName 
+          fontSize 
+          fillColor ]
+        |> List.filter(fun m -> m <> "")
+        |> String.concat " "
+
+    member x.AsSelector() = 
+        Selector.Text(fun args textInfo ->
+            match fontSize with 
+            | Some fontSize -> TextInfo.FontNameAndSizeIs(fontName, fontSize) args textInfo
+            | None -> TextInfo.FontNameIs(fontName) args textInfo
+            && ( match fillColor with 
+                  | Some fillColor -> 
+                     let fillColor' = textInfo.TextRenderInfo.GetFillColor() |> FsColor.OfItextColor
+                     FsColor.equal (fillColor) fillColor'
+                  | None -> true
+               )
+
+        )
+
+module QuerableFontNames =
+    let [<Literal>] ArialMT = "ArialMT"
+
+type NewFontAndSize [<JsonConstructor>] (?font: FsPdfFontFactory, ?fontSize: float) = 
+    inherit POCOBase<FsPdfFontFactory option * float option>(font, fontSize)
+    let __checkArgsValid =
+        match font, fontSize with 
+        | None, None -> failwith "Cannot Create NewFontAndSize, both font and fontSize are empty"
+        | _ -> ()
+
+    [<JsonProperty>]
+    member x.Font = font
+
+    [<JsonProperty>]
+    member x.FontSize = fontSize
+
+
+    member x.LoggingText =
+        let font =
+            match font with 
+            | Some font -> font.LoggingText
+            | None -> ""
+
+        let fontSize = 
+            match fontSize with 
+            | Some fontSize -> fontSize.ToString()
+            | None -> ""
+
+        [ font 
+          fontSize ]
+        |> List.filter(fun m -> m <> "")
+        |> String.concat " "
+
+    member x.AsModifier(): Modifier<_> =
+        fun args ->
+            let font =
+                match font with 
+                | Some font -> 
+                    let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
+                    doc.GetOrCreatePdfFont(font)
+
+                | None ->
+                    let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
+                    info.TextRenderInfo.GetFont()
+
+            let size =
+                match fontSize with 
+                | Some fontSize -> fontSize
+                    
+
+                | None ->
+                    let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
+                    ITextRenderInfo.getActualFontSize info
+
+            Modifier.SetFontAndSize(font, size) args
 
 
 type Modify_ReplaceColors_Options = 
@@ -841,19 +946,19 @@ type Modify =
             nameAndParameters = nameAndParameters
         )
 
-    static member MapFontAndSize(oldFontAndSize: string * float, newFontAndSize) =
+    static member MapFontAndSize(oldFontAndSize: FontAndSizeQuery, newFontAndSize: NewFontAndSize) =
         Modify.Create_RecordEx(
             PageSelector.All,
             selectorAndModifiersList = [
                 { Name = "MapFonts"
-                  Selector = Selector.Text(TextInfo.FontNameAndSizeIs(oldFontAndSize))
+                  Selector = oldFontAndSize.AsSelector()
                   Modifiers = 
                     [
-                        Modifier.SetFontAndSize(newFontAndSize)
+                        newFontAndSize.AsModifier()
                     ]
                   PageInfosValidation = PageInfosValidation.ignore
                   Parameters = 
-                    ["oldFontAndSize" => oldFontAndSize.ToString()
+                    ["oldFontAndSize" => oldFontAndSize.LoggingText
                      "newFontAndSize" => newFontAndSize.ToString() ]
                 }
             ]

@@ -12,6 +12,8 @@ type RegisterableFont =
 with 
     member x.Path = x.File.Path
 
+    member x.LoggingText = x.FontFamily
+
 module RegisterableFonts =
 
 
@@ -54,8 +56,8 @@ module RegisterableFonts =
               FontFamily = "AdobeHeitiStd-Regular"
               File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/AdobeHeitiStd-Regular.otf")) }
 
-    module Arial =
-
+    module ArialUnicode =
+        
         type FontWeight =
             | Regular = 0
             | Bold = 1
@@ -69,6 +71,35 @@ module RegisterableFonts =
             { PdfEncodings = PdfEncodings.IDENTITY_H
               FontFamily = weightText
               File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/Arial-Unicode/" + (weightText.ToString()) + ".ttf")) }
+
+
+    module Arial =
+
+        type FontWeight =
+            | Regular = 0
+            | Bold = 1
+            | Italic = 2
+            | BoldItalic = 3
+
+        let arial (weight: FontWeight) =
+            let fontName =  
+                match weight with 
+                | FontWeight.Regular -> "Arial"
+                | FontWeight.Bold -> "Arialbd"
+                | FontWeight.BoldItalic -> "Arialbi"
+                | FontWeight.Italic -> "Ariali"
+
+            let fontFamily =
+                match weight with 
+                | FontWeight.Regular -> "Arial"
+                | FontWeight.Bold -> "Arial Bold"
+                | FontWeight.BoldItalic -> "Arial Bold Italic"
+                | FontWeight.Italic -> "Arial Italic"
+
+            { PdfEncodings = PdfEncodings.CP1252
+              FontFamily = fontFamily
+              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/Arial/" + (fontName.ToString()) + ".ttf")) }
+
 
     module YaHei =
         type FontWeight =
