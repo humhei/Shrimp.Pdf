@@ -14,9 +14,12 @@ with
 
     member x.LoggingText = x.FontFamily
 
+module FontNames =
+    module Query =
+        let [<Literal>] ArialMT = "ArialMT"
+
+
 module RegisterableFonts =
-
-
 
     //module AlibabaPuHuiTi = 
     //    type FontWeight =

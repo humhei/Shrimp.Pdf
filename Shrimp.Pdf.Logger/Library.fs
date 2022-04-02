@@ -33,17 +33,19 @@ module Logger =
             logger.Value.Info message
         | None -> printfn "%s" message
 
-    let textRenderModes: HashSet<int> = new HashSet<_>()
+    let private textRenderModes: HashSet<int> = new HashSet<_>()
+    let private locker = new obj()
 
     let unSupportedTextRenderMode(textRendingMode: int) =
-        //let stackTrace = new System.Diagnostics.StackTrace();
-        //()
-        match textRenderModes.Contains textRendingMode with 
-        | true -> ()
-        | false -> 
-            warning (sprintf "Unsupported text render mode %d" textRendingMode) (*(stackTrace.ToString()))*)
-            textRenderModes.Add(textRendingMode)
-            |> ignore
+        lock locker (fun () ->
+            match textRenderModes.Contains textRendingMode with 
+            | true -> ()
+            | false -> 
+                warning (sprintf "Unsupported text render mode %d" textRendingMode) (*(stackTrace.ToString()))*)
+                textRenderModes.Add(textRendingMode)
+                |> ignore
+        )
+
 
     let infoWithStopWatch message f =
         let stopWatch = Stopwatch.StartNew()

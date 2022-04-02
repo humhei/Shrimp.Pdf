@@ -694,8 +694,6 @@ type FontAndSizeQuery [<JsonConstructor>] (fontName: string, ?fontSize: float, ?
 
         )
 
-module QuerableFontNames =
-    let [<Literal>] ArialMT = "ArialMT"
 
 type NewFontAndSize [<JsonConstructor>] (?font: FsPdfFontFactory, ?fontSize: float) = 
     inherit POCOBase<FsPdfFontFactory option * float option>(font, fontSize)

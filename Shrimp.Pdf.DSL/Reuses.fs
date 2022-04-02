@@ -227,6 +227,8 @@ type PageResizingRotatingOptions =
     | ColckwiseIfNeeded = 1
     | CounterColckwiseIfNeeded = 2
 
+
+
 type RegularImposingSheet<'T> private (userState: 'T, imposingSheet: ImposingSheet) =
     let rows = imposingSheet.GetRows()
     let rowCount, columnCount =
@@ -1204,7 +1206,7 @@ module _Reuses =
 
 
     
-        static member private Impose_Raw (fArgs, offsetLists: option<FsPoint list list>, draw) =
+        static member internal Impose_Raw (fArgs, offsetLists: option<FsPoint list list>, draw) =
             let imposingArguments = ImposingArguments.Create fArgs
 
             fun flowModel (splitDocument: SplitDocument) ->
@@ -1224,31 +1226,6 @@ module _Reuses =
                 ["imposingArguments" => imposingArguments.ToString()]
 
         
-        static member PreImpose_Repeated_One(baseFArgs: _ImposingArguments) =
-            let preImposeFlow =
-                Reuses.Impose_Raw
-                    ((fun _ ->
-                        let args = (baseFArgs)
-
-                        { args with
-                              IsRepeated = true }
-                    ),
-                    offsetLists = None,
-                    draw = false )
-                |> Flow.Reuse
-
-
-            runWithBackup
-                (Path.GetTempFileName()
-                 |> Path.changeExtension ".pdf")
-                emptyPdf.Value
-                preImposeFlow
-            |> List.exactlyOne
-            |> fun flowModel -> 
-                match flowModel.UserState.GetSheets() with 
-                | [ sheet ] -> RegularImposingSheet<_>.Create sheet
-                | sheets -> failwithf "PreImpose_Repeated_One should generate one imposing sheet, but here is %d" sheets.Length
-
         static member ClippingContentsToPageBox(pageBoxKind: PageBoxKind, ?margin: Margin) =
             let margin = defaultArg margin Margin.Zero
 
@@ -1730,10 +1707,35 @@ module _Reuses =
 
 
     type PdfRunner with 
-        
         static member Reuse(pdfFile, ?backupPdfPath) = 
             fun reuse ->
                 PdfRunner.OneFileFlow(pdfFile, ?backupPdfPath = backupPdfPath) (Flow.Reuse reuse)
+
+        static member PreImpose_Repeated_One(baseFArgs: _ImposingArguments) =
+            let preImposeFlow =
+                Reuses.Impose_Raw
+                    ((fun _ ->
+                        let args = (baseFArgs)
+
+                        { args with
+                              IsRepeated = true }
+                    ),
+                    offsetLists = None,
+                    draw = false )
+                |> Flow.Reuse
+
+
+            runWithBackup
+                (Path.GetTempFileName()
+                 |> Path.changeExtension ".pdf")
+                emptyPdf.Value
+                preImposeFlow
+            |> List.exactlyOne
+            |> fun flowModel -> 
+                match flowModel.UserState.GetSheets() with 
+                | [ sheet ] -> RegularImposingSheet<_>.Create sheet
+                | sheets -> failwithf "PreImpose_Repeated_One should generate one imposing sheet, but here is %d" sheets.Length
+
 
         /// default useBleed: false
         static member OneColumn(?backupPdfPath, ?margin, ?useBleed, ?spaces) =
