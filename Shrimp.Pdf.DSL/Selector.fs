@@ -368,11 +368,21 @@ type Info =
         Info.ColorIs(FillOrStrokeOptions.Stroke, (fun color -> FsColors.contains color colors), not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
-    static member BoundIs (relativePosition, areaGettingOptions: AreaGettingOptions, ?boundGettingStrokeOptions) =
+
+    static member private BoundIs (isDense, relativePosition, areaGettingOptions: AreaGettingOptions, ?boundGettingStrokeOptions) =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
             let boundGettingOptions = defaultArg boundGettingStrokeOptions BoundGettingStrokeOptions.WithoutStrokeWidth
 
-            let bound = IAbstractRenderInfo.getBound boundGettingOptions info
+            let bound: iText.Kernel.Geom.Rectangle = 
+                match isDense with 
+                | true -> 
+                    match info with 
+                    | IIntegratedRenderInfo.Text textInfo -> 
+                        ITextRenderInfo.getDenseBound boundGettingOptions textInfo
+                    | _ ->
+                        IAbstractRenderInfo.getBound boundGettingOptions info
+
+                | false -> IAbstractRenderInfo.getBound boundGettingOptions info
 
             let rect = args.Page.GetArea(areaGettingOptions)
 
@@ -380,6 +390,10 @@ type Info =
             | RelativePosition.CrossBox -> bound.IsCrossOf(rect)
             | RelativePosition.Inbox -> bound.IsInsideOf(rect)
             | RelativePosition.OutBox -> bound.IsOutsideOf(rect)
+
+    static member BoundIs (relativePosition, areaGettingOptions: AreaGettingOptions, ?boundGettingStrokeOptions) =
+        Info.BoundIs(false, relativePosition, areaGettingOptions, ?boundGettingStrokeOptions = boundGettingStrokeOptions)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member BoundIs (args: Info_BoundIs_Args) =
         Info.BoundIs(args.RelativePosition, (args.AreaGettingOptions) , args.BoundGettingStrokeOptions)
@@ -405,10 +419,22 @@ type Info =
 
             point.IsInsideOf(rect)
 
+
+
     static member CenterPointOfBoundIsInsideOf (areaGettingOptions, ?boundGettingStrokeOptions) =
         Info.PointOfBoundIsInsideOf(Position.Center(0., 0.), areaGettingOptions, ?boundGettingStrokeOptions = boundGettingStrokeOptions)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
+    static member BottomPointOfBoundIsInsideOf (areaGettingOptions, ?boundGettingStrokeOptions, ?boundHeightPercentage) =
+        Info.PointOfBoundIsInsideOf(Position.Center(0., 0.), areaGettingOptions, ?boundGettingStrokeOptions = boundGettingStrokeOptions)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+
     static member BoundIsOutsideOf (areaGettingOptions, ?boundGettingOptions) =
         Info.BoundIs(RelativePosition.OutBox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+    static member DenseBoundIsOutsideOf (areaGettingOptions, ?boundGettingOptions) =
+        Info.BoundIs(true, RelativePosition.OutBox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+

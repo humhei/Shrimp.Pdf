@@ -343,7 +343,7 @@ module ModifyPageOperators =
 
 
     type PdfRunner with 
-        static member ReadInfos(pdfFile: PdfFile, selector,  pageModifier: PageModifier<_, _>, ?backupPdfPath, ?name, ?pageSelector) =
+        static member private ReadInfos(pdfFile: PdfFile, selector,  pageModifier: PageModifier<_, _>, ?backupPdfPath, ?name, ?pageSelector) =
             let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path
             let flow = 
                 ModifyPage.Create(

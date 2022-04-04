@@ -1014,6 +1014,35 @@ module _Colors =
                 |> not
             )
 
+    [<AutoOpen>]
+    module _FsColorExtensions =
+        [<RequireQualifiedAccess>]
+        module FsValueColors =
+            let tryFindIndex (color: FsValueColor) colors =
+                colors 
+                |> List.tryFindIndex (fun color' -> color.IsEqualTo(color'))
+
+            let contains (color: FsValueColor) colors =
+                colors |> List.exists (fun color' -> color.IsEqualTo(color'))
+      
+            let private comparer =
+                { new IEqualityComparer<FsValueColor> with 
+                    member __.Equals(x,y) = 
+                        FsValueColor.IsEqual(x, y, ValueEqualOptions.DefaultRoundedValue)
+    
+                    member __.GetHashCode(_) = 0
+                }
+
+            let distinct (colors: FsValueColor seq) =
+                colors.Distinct(comparer)
+    
+            let except colors1 colors2 =
+                colors2 |> List.filter (fun c -> 
+                    contains c colors1 
+                    |> not
+                )
+            
+
 
 
     [<RequireQualifiedAccess>]

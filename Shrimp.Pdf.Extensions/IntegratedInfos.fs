@@ -52,7 +52,9 @@ module IntegratedInfos =
           FillColor: iText.Kernel.Colors.Color 
           StrokeColor: iText.Kernel.Colors.Color 
           FontName: string
-          Bound: FsRectangle }
+          Bound: FsRectangle
+          DenseBound: FsRectangle }
+            
             
 
     [<Struct>]
@@ -70,6 +72,9 @@ module IntegratedInfos =
               StrokeColor = renderInfo.GetStrokeColor()
               Bound = 
                 let bound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo
+                bound.FsRectangle()
+              DenseBound =
+                let bound = ITextRenderInfo.getDenseBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo
                 bound.FsRectangle()
             }
 

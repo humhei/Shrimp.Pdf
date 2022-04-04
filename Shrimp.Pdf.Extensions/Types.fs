@@ -313,6 +313,20 @@ module ExtensionTypes =
               Right = f margin.Right
             }
 
+        let mapValuesByDirection direction f (margin: Margin) =
+            match direction with 
+            | Direction.Horizontal ->
+                { margin with 
+                    Left = f margin.Left
+                    Right = f margin.Right
+                }
+
+            | Direction.Vertical ->
+                { margin with 
+                    Top =    f margin.Top
+                    Bottom = f margin.Bottom
+                }
+
       
 
 
@@ -554,10 +568,12 @@ module ExtensionTypes =
     type YEffect =
         | Top = 0
         | Bottom  = 1
+        | Middle  = 2
 
     type XEffect =
         | Left = 0
         | Right = 1
+        | Middle  = 2
 
     [<RequireQualifiedAccess>]
     type Position =

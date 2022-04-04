@@ -142,7 +142,7 @@ module iText =
                 match effect with 
                 | YEffect.Top -> this.GetTopF() - newHeight
                 | YEffect.Bottom -> this.GetYF()
-
+                | YEffect.Middle -> this.GetYCenterF() - newHeight / 2.
 
             Rectangle(this.GetX(), float32 y, this.GetWidth(), float32 newHeight)
                     
@@ -154,6 +154,7 @@ module iText =
                 match effect with 
                 | XEffect.Left -> this.GetXF()
                 | XEffect.Right -> this.GetRightF() - newWidth
+                | XEffect.Middle -> this.GetXCenterF() - newWidth / 2.
 
             Rectangle(float32 x, this.GetY(), float32 newWidth, this.GetHeight())
                     
@@ -389,59 +390,34 @@ module iText =
             && rect1.GetYF() @= rect2.GetYF()
             && rect1.GetHeightF() @= rect2.GetHeightF()
 
-        /// only support Position.BottomEdge
-        let increaseHeight (origin: Position) (height:float) (rect: Rectangle) = 
-            match origin with 
-            | Position.BottomEdge _ ->
-                let x = rect.GetXF()
-                let y = rect.GetYF()
-                let w = rect.GetWidthF()
-                let h = rect.GetHeightF() + height
-                create x y w h
-            | _ -> failwith "not implemented"
+        let increaseHeight (effect) (height:float) (rect: Rectangle) = 
+            rect.setHeight(effect, fun m -> height + m)
 
-        /// only support Position.BottomEdge
-        let setHeight (origin: Position) (w: float) (rect: Rectangle) =
-            match origin with 
-            | Position.BottomEdge _ ->
-                let x = rect.GetXF()
-                let y = rect.GetYF()
-                let h = rect.GetHeightF()
-                create x y w h
-            | _ -> failwith "not implemented"
+        let setHeight (effect) (height: float) (rect: Rectangle) =
+            rect.setHeight(effect, fun _ -> height)
 
-        /// only support Position.LeftEdge
-        let increaseWidth (origin: Position) (width:float) (rect: Rectangle) = 
-            match origin with 
-            | Position.LeftEdge _ ->
-                let x = rect.GetXF()
-                let y = rect.GetYF()
-                let w = rect.GetWidthF() + width
-                let h = rect.GetHeightF()
-                create x y w h
+        let increaseWidth (effect) (width:float) (rect: Rectangle) = 
+            rect.setWidth(effect, fun m -> width + m)
 
-            | _ -> failwith "not implemented"
+        let setWidth (effect) (width: float) (rect: Rectangle) =
+            rect.setWidth(effect, fun _ -> width)
 
-        /// only support Position.LeftEdge
-        let setWidth (origin: Position) (w: float) (rect: Rectangle) =
-            match origin with 
-            | Position.LeftEdge _ ->
-                let x = rect.GetXF()
-                let y = rect.GetYF()
-                let h = rect.GetHeightF()
-                create x y w h
-            | _ -> failwith "not implemented"
+        let scale (xEffect: XEffect) yEffect scaleX scaleY (rect: Rectangle) =
+            let width = rect.GetWidthF() * scaleX
+            let height = rect.GetHeightF() * scaleY
 
-        /// only support Position.LeftBottomEdge
-        let scale (origin: Position) scaleX scaleY (rect: Rectangle) =
-            match origin with 
-            | Position.LeftBottom (0., 0.) ->
-                let width = rect.GetWidthF() * scaleX
-                let height = rect.GetHeightF() * scaleY
-                let x = rect.GetXF()
-                let y = rect.GetYF()
-                create x y width height
-            | _ -> failwith "not implemented"
+            rect
+                .setWidth(xEffect, fun _ -> width)
+                .setHeight(yEffect, fun _ -> height)
+
+
+        let scaleX (effect) scale (rect: Rectangle) =
+            let width = rect.GetWidthF() * scale
+            rect.setWidth(effect, fun _ -> width)
+
+        let scaleY (effect) scale (rect: Rectangle) =
+            let height = rect.GetHeightF() * scale
+            rect.setHeight(effect, fun _ -> height)
 
 
         let getTile (tileIndexer: TileIndexer) (rect: Rectangle) =
@@ -801,6 +777,10 @@ module iText =
                 else boundWithoutWidth
             | _ -> failwith "Invalid token"
         
+        let getDenseBound (boundGettingOptions: BoundGettingStrokeOptions) (info: ITextRenderInfo) =
+            let bound = (getBound boundGettingOptions info)
+            bound.setHeight(YEffect.Middle, fun m -> m * 0.42)
+
         let getFontName (info: ITextRenderInfo) = info.Value.GetFontName()
 
         let fontNameIs fontName (info: ITextRenderInfo) =

@@ -875,10 +875,10 @@ module _Reuses =
                     )
 
                 | PageResizingScalingOptions.Uniform ->
-                    Reuse(
-                        flowName = 
+                    Reuse(  
+                        flowName =    
                             FlowName.Override(
-                                "Resize,",
+                                "Resize",
                                 [
                                     "pageSelector" => pageSelector.ToString()
                                     "size" => fSize.ToString()
