@@ -169,7 +169,8 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                 let fixedStream: PdfStream = this.EditContent(xobjectResources, xobjectStream)
                 container.Put(name, fixedStream) |> ignore
 
-            | Image -> ()
+            | Image -> 
+                ()
             | Others -> ()
 
             PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas

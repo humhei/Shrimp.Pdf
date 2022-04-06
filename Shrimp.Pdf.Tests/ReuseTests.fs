@@ -75,7 +75,7 @@ let reuseTests =
 
     testCase "preimpose" <| fun _ -> 
 
-        let r = Reuses.PreImpose_Repeated_One
+        let r = PdfRunner.PreImpose_Repeated_One
                     {_ImposingArguments.DefaultValue 
                         with ColNums = [7]
                              RowNum = 7

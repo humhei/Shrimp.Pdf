@@ -9,7 +9,7 @@ open Shrimp.Pdf.icms2
 open Shrimp.FSharp.Plus
 open Shrimp.Pdf.RegisterableFonts
 open Shrimp.Pdf.RegisterableFonts.YaHei
-open QuerableFontNames
+open FontNames.Query
 open Imposing
 open iText.IO.Font.Constants
 
@@ -576,7 +576,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/add colored texts to position4.pdf" 
         |> ignore
 
-    ftestCase "add text to position" <| fun _ -> 
+    testCase "add text to position" <| fun _ -> 
         Flow.Manipulate (
             ModifyPage.Create
                 ("add text to position",
@@ -953,7 +953,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/test tissue Infos.pdf" 
         |> ignore
 
-    ftestCase "map arial to arial_bold" <| fun _ -> 
+    testCase "map arial to arial_bold" <| fun _ -> 
         let flow =
             Modify.MapFontAndSize(
                 FontAndSizeQuery(ArialMT, 12.) =>
@@ -967,7 +967,26 @@ let manipulateTests =
         |> ignore
 
     
-    
+    ftestCase "convert rgb image to gray" <| fun _ -> 
+        let flow =
+            Modify.Create_Record(
+                PageSelector.All,
+                selectorAndModifiersList = [
+                    { SelectorAndModifiersRecord.Name = "convert rgb image to gray" 
+                      Selector = Selector.Path(fun _ _ -> true)
+                      Modifiers = [
+                        
+                      ]}
+                ]
+                )
+
+        Flow.Manipulate(
+            flow
+        )
+        |> runTest "datas/manipulate/convert rgb image to gray.pdf" 
+        |> ignore
+
+
 
     let tryColoredSizeText() =
         Modify.Create(
