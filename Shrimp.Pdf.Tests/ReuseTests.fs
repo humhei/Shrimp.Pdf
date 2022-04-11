@@ -73,19 +73,17 @@ let reuseTests =
         |> runTest "datas/reuse/Clipping Contents To PageBox2.pdf" 
         |> ignore
 
-    testCase "preimpose" <| fun _ -> 
-
+    ftestCase "preimpose" <| fun _ -> 
+        let m = FsSize.A4
         let r = PdfRunner.PreImpose_Repeated_One
                     {_ImposingArguments.DefaultValue 
-                        with ColNums = [7]
-                             RowNum = 7
-                             HSpaceExes = Spaces [mm 3.; mm 6.; mm 9.]
-                             VSpaceExes = Spaces [mm 3.; mm 6.; mm 9.]
-                             Background = Background.Size (FsSize.A0)
+                        with ColNums = [0]
+                             RowNum = 0
+                             Background = Background.Size (FsSize.A4)
                              Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(6.))
 
                              DesiredSizeOp  = 
-                                (FsSize.landscape {Width = mm 50.; Height = mm 50.})
+                                (FsSize.landscape {Width = mm 210.; Height = mm 297.})
                                 |> Some
                         }
         let k = r.ImposingSheet.GetTableBound(FsPoint.Zero)

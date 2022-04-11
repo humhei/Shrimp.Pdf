@@ -13,8 +13,11 @@ open Shrimp.Pdf
 open iText.Kernel.Pdf
 
 
+
+
 [<RequireQualifiedAccess>]
 type RenderInfoSelector = 
+    | Image of (IntegratedImageRenderInfo -> bool)
     | PathOrText of (IIntegratedRenderInfo -> bool)
     | Path of (IntegratedPathRenderInfo -> bool)
     | Text of (IntegratedTextRenderInfo -> bool)
@@ -25,12 +28,10 @@ type RenderInfoSelector =
 
 [<RequireQualifiedAccess>]
 module RenderInfoSelector =
-    
-
-
     let toEventTypes selector =
         let rec loop selector =
             match selector with 
+            | RenderInfoSelector.Image _ -> [EventType.RENDER_IMAGE; EventType.CLIP_PATH_CHANGED]
             | RenderInfoSelector.PathOrText _ -> [EventType.RENDER_TEXT; EventType.RENDER_PATH; EventType.CLIP_PATH_CHANGED]
             | RenderInfoSelector.Path _ -> [EventType.RENDER_PATH; EventType.CLIP_PATH_CHANGED]
             | RenderInfoSelector.Text _ -> [EventType.RENDER_TEXT; EventType.CLIP_PATH_CHANGED]
@@ -46,11 +47,26 @@ module RenderInfoSelector =
         loop selector
         |> List.distinct
 
+
+    let checkNonImageSelectorExists(selectors: RenderInfoSelector list) =
+        let ets =    
+            selectors
+            |> List.collect toEventTypes
+            |> List.distinct
+        let containsImage =
+            ets
+            |> List.tryFind(fun m -> m = EventType.RENDER_IMAGE)
+            |> Option.isSome
+
+        match containsImage with 
+        | true -> failwithf "RenderInfoSelector %A contain imageSelector, please using NonInitialClippingPathPdfDocumentContentParser.parseIM instead" selectors
+        | false -> ()
+
+
     let toRenderInfoPredication (selector) =
         let rec loop selector =
-     
             match selector with 
-
+            | RenderInfoSelector.Image _ -> fun _ -> false
             | RenderInfoSelector.Path predicate ->
                 fun (renderInfo: IIntegratedRenderInfo) -> 
                     match renderInfo with 
@@ -59,7 +75,6 @@ module RenderInfoSelector =
                         match Seq.length(IPathRenderInfo.toActualPoints renderInfo) with 
                         | 0 -> false
                         | _ -> predicate renderInfo
-
 
             | RenderInfoSelector.Text predicate ->
                 fun (renderInfo: IIntegratedRenderInfo) ->
@@ -72,15 +87,11 @@ module RenderInfoSelector =
                     match renderInfo with 
                     | IIntegratedRenderInfo.Path renderInfo -> 
                         //loop (RenderInfoSelector.Text (fun info -> predicate(info :> IIntegratedRenderInfo))) (renderInfo :> IIntegratedRenderInfo)
-                        match renderInfo with 
-                        | IIntegratedRenderInfo.Text _ -> false
-                        | IIntegratedRenderInfo.Path renderInfo -> 
-                            match Seq.length(IPathRenderInfo.toActualPoints renderInfo) with 
-                            | 0 -> false
-                            | _ -> predicate renderInfo
+                        match Seq.length(IPathRenderInfo.toActualPoints renderInfo) with 
+                        | 0 -> false    
+                        | _ -> predicate renderInfo
 
-                    | IIntegratedRenderInfo.Text renderInfo -> 
-                        predicate renderInfo
+                    | IIntegratedRenderInfo.Text renderInfo -> predicate renderInfo
 
 
             | RenderInfoSelector.Dummy _ -> fun _ -> false
@@ -94,6 +105,58 @@ module RenderInfoSelector =
                 fun (renderInfo: IIntegratedRenderInfo) ->
                     selectors |> List.exists (fun selector -> loop selector renderInfo)
 
+
+
+
+        loop selector
+
+
+    let toRenderInfoIMPredication (selector) =
+        let rec loop selector =
+            match selector with 
+            | RenderInfoSelector.Image predicate -> 
+                (fun (renderInfo: IIntegratedRenderInfoIM) ->
+                    match renderInfo with 
+                    | IIntegratedRenderInfoIM.Image renderInfo -> predicate renderInfo
+                    | _ -> false
+                )
+            | RenderInfoSelector.AND selectors ->
+                fun (renderInfo: IIntegratedRenderInfoIM) ->
+                    selectors |> List.forall (fun selector -> loop selector renderInfo)
+
+            | RenderInfoSelector.OR selectors ->
+                fun (renderInfo: IIntegratedRenderInfoIM) ->
+                    selectors |> List.exists (fun selector -> loop selector renderInfo)
+
+            | RenderInfoSelector.Dummy _ -> fun _ -> false
+            | RenderInfoSelector.Path predicate ->
+                fun (renderInfo: IIntegratedRenderInfoIM) ->
+                    match renderInfo with 
+                    | IIntegratedRenderInfoIM.Text _ -> false
+                    | IIntegratedRenderInfoIM.Path renderInfo -> 
+                        match Seq.length(IPathRenderInfo.toActualPoints renderInfo) with 
+                        | 0 -> false
+                        | _ -> predicate renderInfo
+                    | IIntegratedRenderInfoIM.Image _ -> false
+
+            | RenderInfoSelector.PathOrText predicate -> 
+                fun (renderInfo: IIntegratedRenderInfoIM) ->
+                    match renderInfo with 
+                    | IIntegratedRenderInfoIM.Path renderInfo -> 
+                        //loop (RenderInfoSelector.Text (fun info -> predicate(info :> IIntegratedRenderInfo))) (renderInfo :> IIntegratedRenderInfo)
+                        match Seq.length(IPathRenderInfo.toActualPoints renderInfo) with 
+                        | 0 -> false    
+                        | _ -> predicate renderInfo
+
+                    | IIntegratedRenderInfoIM.Text renderInfo -> predicate renderInfo
+                    | IIntegratedRenderInfoIM.Image _ -> false
+                        
+            | RenderInfoSelector.Text predicate ->
+                fun (renderInfo: IIntegratedRenderInfoIM) ->
+                    match renderInfo with 
+                    | IIntegratedRenderInfoIM.Text renderInfo -> predicate renderInfo
+                    | IIntegratedRenderInfoIM.Path _ -> false
+                    | IIntegratedRenderInfoIM.Image _ -> false
 
 
 
@@ -119,17 +182,17 @@ module internal Listeners =
         let prediateMapping = 
             renderInfoSelectorMapping
             |> Map.map (fun token renderInfoSelector -> 
-                RenderInfoSelector.toRenderInfoPredication renderInfoSelector
+                RenderInfoSelector.toRenderInfoIMPredication renderInfoSelector
             )
 
         let mutable currentXObjectClippingBox = XObjectClippingBoxState.Init
 
-        let mutable currentRenderInfo: IIntegratedRenderInfo option = None
+        let mutable currentRenderInfo: IIntegratedRenderInfoIM option = None
         let mutable currentRenderInfoToken = None
         let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Selected
         let mutable currentClippingPathInfo = ClippingPathInfoState.Init
 
-        let parsedRenderInfos = List<IIntegratedRenderInfo>()
+        let parsedRenderInfos = List<IIntegratedRenderInfoIM>()
 
         let supportedEventTypes =
             let supportedEvents = 
@@ -147,7 +210,7 @@ module internal Listeners =
 
         member this.CurrentRenderInfoToken = currentRenderInfoToken
 
-        member this.ParsedRenderInfos = parsedRenderInfos :> seq<IIntegratedRenderInfo>
+        member this.ParsedRenderInfos = parsedRenderInfos :> seq<IIntegratedRenderInfoIM>
 
         member internal this.GetXObjectClippingBox() = currentXObjectClippingBox
 
@@ -193,14 +256,15 @@ module internal Listeners =
                                 { XObjectClippingBoxState = currentXObjectClippingBox
                                   ClippingPathInfoState = currentClippingPathInfo }
                               PathRenderInfo = pathRenderInfo }
-                            :> IIntegratedRenderInfo
+                            :> IIntegratedRenderInfoIM
 
                         | :? TextRenderInfo as textRenderInfo ->
                             { ClippingPathInfos = 
                                 { XObjectClippingBoxState = currentXObjectClippingBox
                                   ClippingPathInfoState = currentClippingPathInfo }
                               TextRenderInfo = textRenderInfo }
-                            :> IIntegratedRenderInfo
+                            :> IIntegratedRenderInfoIM
+
 
                         |_ -> failwith "Not implemented"
 
@@ -208,17 +272,23 @@ module internal Listeners =
                     let predicate _ filter =
                         filter renderInfo
 
-                    match Map.tryFindKey predicate prediateMapping with 
-                    | Some token ->
+                    let filtered = Map.filter predicate prediateMapping
+
+                    match filtered.IsEmpty with 
+                    | false ->
+                        let tokens =
+                            filtered
+                            |> Map.toList
+                            |> List.map fst
 
                         renderInfo.Value.PreserveGraphicsState()
 
                         parsedRenderInfos.Add(renderInfo)
-                        currentRenderInfoToken <- Some token
+                        currentRenderInfoToken <- Some tokens
                         currentRenderInfo <- Some renderInfo
                         currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
 
-                    | None -> 
+                    | true -> 
                         currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
                         currentRenderInfo <- None
 
@@ -361,12 +431,24 @@ type NonInitialClippingPathPdfDocumentContentParser(pdfDocument) =
 [<RequireQualifiedAccess>]
 module NonInitialClippingPathPdfDocumentContentParser =
     open Listeners
-    let parse (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: NonInitialClippingPathPdfDocumentContentParser) =
 
+    let parse (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: NonInitialClippingPathPdfDocumentContentParser) =
         let et = RenderInfoSelector.toEventTypes renderInfoSelector
 
         match et with 
         | [] -> [] :> seq<IIntegratedRenderInfo>
+        | _ ->
+            RenderInfoSelector.checkNonImageSelectorExists [renderInfoSelector]
+            let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled"}, renderInfoSelector]
+            let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
+            parser.ProcessContent(pageNum, listener).ParsedRenderInfos
+            |> Seq.map(fun m -> m :?> IIntegratedRenderInfo)
+
+    let parseIM (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: NonInitialClippingPathPdfDocumentContentParser) =
+        let et = RenderInfoSelector.toEventTypes renderInfoSelector
+
+        match et with 
+        | [] -> [] :> seq<IIntegratedRenderInfoIM>
         | _ ->
             let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled"}, renderInfoSelector]
             let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)

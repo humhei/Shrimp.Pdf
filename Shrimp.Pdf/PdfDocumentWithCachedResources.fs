@@ -51,6 +51,7 @@ type ResourceColor =
     | CustomSeparation of FsSeparation
     | Lab of FsLab
 
+
 type private PdfDocumentCache private 
     (pdfDocument: unit -> PdfDocument,
      fontsCache: ConcurrentDictionary<FsPdfFontFactory, PdfFont>,

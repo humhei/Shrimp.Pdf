@@ -1,5 +1,7 @@
 ﻿namespace Shrimp.Pdf.DSL
 
+open iText.Kernel.Pdf.Canvas.Parser
+
 
 
 #nowarn "0104"
@@ -145,9 +147,8 @@ with
 
 
 
-
-
 type Selector<'userState> =
+    | ImageX of (PageModifingArguments<'userState> -> IntegratedImageRenderInfo -> bool)
     | Path of (PageModifingArguments<'userState> -> IntegratedPathRenderInfo -> bool)
     | Text of (PageModifingArguments<'userState> -> IntegratedTextRenderInfo -> bool)
     | Factory of (PageModifingArguments<'userState> -> Selector<'userState>)
@@ -160,6 +161,7 @@ type Selector<'userState> =
 module Selector =
     let rec toRenderInfoSelector (args: PageModifingArguments<_>) selector =
         match selector with 
+        | Selector.ImageX factory -> factory args |> RenderInfoSelector.Image
         | Selector.Path factory -> factory args |> RenderInfoSelector.Path
         | Selector.Text factory -> factory args |> RenderInfoSelector.Text 
         | Selector.PathOrText factory -> factory args |> RenderInfoSelector.PathOrText
@@ -173,6 +175,10 @@ module Selector =
             selectors
             |> List.map (toRenderInfoSelector args)
             |> RenderInfoSelector.OR
+
+
+        
+        
 
 type Info_BoundIs_Args (relativePosition: RelativePosition, ?areaGettingOptions, ?boundGettingStrokeOptions) =
     member x.RelativePosition = relativePosition

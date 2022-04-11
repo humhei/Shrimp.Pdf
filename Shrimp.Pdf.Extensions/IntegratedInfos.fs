@@ -40,6 +40,10 @@ module IntegratedInfos =
         interface IAbstractRenderInfo with 
             member x.Value = x.PathRenderInfo :> AbstractRenderInfo
 
+        interface IIntegratedRenderInfoIM with 
+            member x.TagIM = IntegratedRenderInfoTagIM.Path
+            member x.ClippingPathInfos = x.ClippingPathInfos
+
         interface IIntegratedRenderInfo with 
             member x.Tag = IntegratedRenderInfoTag.Path
             member x.ClippingPathInfos = x.ClippingPathInfos
@@ -78,16 +82,44 @@ module IntegratedInfos =
                 bound.FsRectangle()
             }
 
+        interface IAbstractRenderInfoIM
+
         interface ITextRenderInfo with 
             member x.Value = x.TextRenderInfo
 
         interface IAbstractRenderInfo with 
             member x.Value = x.TextRenderInfo :> AbstractRenderInfo
 
+        interface IIntegratedRenderInfoIM with 
+            member x.TagIM = IntegratedRenderInfoTagIM.Text
+            member x.ClippingPathInfos = x.ClippingPathInfos
+            
         interface IIntegratedRenderInfo with 
             member x.Tag = IntegratedRenderInfoTag.Text
-
             member x.ClippingPathInfos = x.ClippingPathInfos
+
+
+    [<Struct>]
+    type IntegratedImageRenderInfo =
+        { ImageRenderInfo: ImageRenderInfo 
+          ClippingPathInfos: ClippingPathInfos }
+
+    with 
+
+        interface IAbstractRenderInfoIM
+
+        interface IImageRenderInfo with 
+            member x.Value = x.ImageRenderInfo
+
+        interface IAbstractRenderInfo with 
+            member x.Value = x.ImageRenderInfo :> AbstractRenderInfo
+
+        interface IIntegratedRenderInfoIM with 
+            member x.TagIM = IntegratedRenderInfoTagIM.Image
+            member x.ClippingPathInfos = x.ClippingPathInfos
+            
+
+
 
 
     [<RequireQualifiedAccess>]
@@ -126,4 +158,34 @@ module IntegratedInfos =
             | Text info -> Some (info)
             | _ -> None 
 
+    [<RequireQualifiedAccess>]
+    module IIntegratedRenderInfoIM =
 
+        let (|Text|Path|Image|) (info: IIntegratedRenderInfoIM) = 
+            match info.TagIM with 
+            | IntegratedRenderInfoTagIM.Path -> Path (info :?> IntegratedPathRenderInfo)
+            | IntegratedRenderInfoTagIM.Text -> Text (info :?> IntegratedTextRenderInfo)
+            | IntegratedRenderInfoTagIM.Image -> Image (info :?> IntegratedImageRenderInfo)
+            | _ -> failwith "Invalid token"
+
+        let (|Vector|Pixel|) (info: IIntegratedRenderInfoIM) = 
+            match info.TagIM with 
+            | IntegratedRenderInfoTagIM.Path -> Vector ((info :?> IntegratedPathRenderInfo) :> IIntegratedRenderInfo)
+            | IntegratedRenderInfoTagIM.Text -> Vector ((info :?> IntegratedPathRenderInfo) :> IIntegratedRenderInfo)
+            | IntegratedRenderInfoTagIM.Image -> Pixel (info :?> IntegratedImageRenderInfo)
+            | _ -> failwith "Invalid token"
+
+        let asIPathRenderInfo (info: IIntegratedRenderInfoIM) = 
+            match info with
+            | Path info -> Some (info)
+            | _ -> None 
+
+        let asITextRenderInfo (info: IIntegratedRenderInfoIM) =
+            match info with
+            | Text info -> Some (info)
+            | _ -> None 
+
+        let asIImageRenderInfo (info: IIntegratedRenderInfoIM) = 
+            match info with
+            | Image info -> Some (info)
+            | _ -> None 

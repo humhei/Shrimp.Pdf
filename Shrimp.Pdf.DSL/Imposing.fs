@@ -925,14 +925,13 @@ module Imposing =
 
             
 
-        member private x.PageSize = sheet.PageSize
-
         member internal x.AddToCanvas pageMargin cellContentAreas_ExtendByCropmarkDistance (pdfCanvas: PdfCanvas) = 
             (pdfCanvas, cells)
             ||> Seq.fold (ImposingCell.AddToPdfCanvas pageMargin cellContentAreas_ExtendByCropmarkDistance)
 
 
         member internal this.Push(readerPage: PdfPage) =
+            let pageSize = sheet.PageSize
             let args = this.ImposingArguments.Value
             let fillingMode = this.ImposingArguments.FillingMode
 
@@ -949,8 +948,8 @@ module Imposing =
                   Index = cells.Count
                   ImposingRow = this }
 
-            if newCell.Size.Width > this.PageSize.Width + tolerance.Value || newCell.Size.Height > this.PageSize.Height + tolerance.Value
-            then failwithf "desired size is exceeded %A to sheet page size %A" newCell.Size this.PageSize
+            if newCell.Size.Width > pageSize.Width + tolerance.Value || newCell.Size.Height > pageSize.Height + tolerance.Value
+            then failwithf "desired size %A is exceeded to sheet page size %A" newCell.Size pageSize
                   
             let addNewCell_UpdateState() =
                 x <- x + newCell.Size.Width + args.HSpaces.[cells.Count % args.HSpaces.Length]
@@ -959,7 +958,7 @@ module Imposing =
 
 
             let willWidthExceedPageWidth = 
-                let pageSize = this.PageSize
+                let pageSize = pageSize
                 let marginX =
                     match args.Sheet_PlaceTable with 
                     | Sheet_PlaceTable.Trim_CenterTable margin ->
@@ -1014,10 +1013,9 @@ module Imposing =
         member x.GetCells() = List.ofSeq cells
 
 
-    and ImposingSheet(imposingDocument: ImposingDocument, pageOrientation: PageOrientation) =
-        
+    and ImposingSheet(imposingDocument: ImposingDocument, pageOrientation: PageOrientation, pageSize: FsSize) =
         let pageSize = 
-            let size = Background.getSize imposingDocument.ImposingArguments.Value.Background
+            let size = pageSize
             FsPageSize.create (size) pageOrientation
 
         let rows = ResizeArray<ImposingRow>()
@@ -1314,15 +1312,15 @@ module Imposing =
 
             let readerPages = PdfDocument.getPages reader
 
-            let rec produceSheet readerPages (sheet: ImposingSheet) =
+            let rec produceSheet pageSize readerPages (sheet: ImposingSheet) =
                 match readerPages with 
                 | (readerPage : PdfPage) :: t ->
                     
                     if sheet.Push(readerPage) 
                     then 
                         if args.IsRepeated 
-                        then produceSheet readerPages sheet
-                        else produceSheet t sheet
+                        then produceSheet pageSize readerPages sheet
+                        else produceSheet pageSize t sheet
                     else 
 
                         match args.IsRepeated, t.Length with 
@@ -1338,24 +1336,23 @@ module Imposing =
                 | [] -> sheet, []
 
 
-            let rec produceSheets desiredPageOriention (readerPages: PdfPage list) (sheets: ImposingSheet list) =
+            let rec produceSheets pageSize desiredPageOriention (readerPages: PdfPage list) (sheets: ImposingSheet list) =
                 if readerPages.Length = 0 then sheets
                 else
                     match desiredPageOriention with 
                     | DesiredPageOrientation.PageOrientation pageOrientation ->
                         let producedSheet, leftPages = 
-                            produceSheet readerPages (new ImposingSheet(x, pageOrientation))
-                        produceSheets desiredPageOriention leftPages (producedSheet :: sheets)
+                            produceSheet pageSize readerPages (new ImposingSheet(x, pageOrientation, pageSize))
+                        produceSheets pageSize desiredPageOriention leftPages (producedSheet :: sheets)
 
                     | DesiredPageOrientation.Automatic ->
-                      
 
                         let producedSheet, leftPages = 
                             let producedSheet1, leftPages1 = 
-                                produceSheet readerPages (new ImposingSheet(x, PageOrientation.Landscape))
+                                produceSheet pageSize readerPages (new ImposingSheet(x, PageOrientation.Landscape, pageSize))
 
                             let producedSheet2, leftPages2 = 
-                                produceSheet readerPages (new ImposingSheet(x, PageOrientation.Portrait))
+                                produceSheet pageSize readerPages (new ImposingSheet(x, PageOrientation.Portrait, pageSize))
                         
                             if 
                                 (args.IsRepeated && producedSheet1.GetCellsCount() > producedSheet2.GetCellsCount())
@@ -1363,7 +1360,7 @@ module Imposing =
                             then producedSheet1, leftPages1
                             else producedSheet2, leftPages2
 
-                        produceSheets desiredPageOriention leftPages (producedSheet :: sheets)
+                        produceSheets pageSize desiredPageOriention leftPages (producedSheet :: sheets)
 
                     | _ -> failwith "Invalid token"
 
@@ -1379,7 +1376,7 @@ module Imposing =
                               else FsSize.ofRectangle(readerPage.GetActualBox()) 
                     )
 
-                let desiredPageOriention =
+                let desiredPageOriention, pageSize =
                     let margin =
                         match args.Sheet_PlaceTable with 
                         | Sheet_PlaceTable.Trim_CenterTable margin -> margin
@@ -1388,43 +1385,77 @@ module Imposing =
                     let backgroundSize =
                          Background.getSize args.Background
 
+                    let (|ValidOrientation|InvalidOrientation|) (orientation, backgroundSize) =
+                        let backgroundSize = 
+                            match orientation with 
+                            | PageOrientation.Landscape -> FsSize.landscape backgroundSize
+                            | PageOrientation.Portrait -> FsSize.portrait backgroundSize
+
+                    
+                        let exceedHorizontal =
+                            cellSizes 
+                            |> List.tryFind(fun cellSize ->
+                                cellSize.Width + margin.Left + margin.Right >= backgroundSize.Width + tolerance.Value
+                            )
+
+                        let exceedVertical =
+                            cellSizes 
+                            |> List.tryFind(fun cellSize ->
+                                cellSize.Height + margin.Top + margin.Bottom >= backgroundSize.Height + tolerance.Value
+                            )
+
+                        match exceedHorizontal, exceedVertical with 
+                        | None _, None _ -> ValidOrientation
+                        | Some v, _ 
+                        | _, Some v -> InvalidOrientation v
+
+
                     match args.DesiredPageOrientation with 
                     | DesiredPageOrientation.Automatic  ->
-                        let (|ValidOrientation|InvalidOrientation|) (orientation) =
-                            let backgroundSize = 
-                                match orientation with 
-                                | PageOrientation.Landscape -> FsSize.landscape backgroundSize
-                                | PageOrientation.Portrait -> FsSize.portrait backgroundSize
+                        let getDesiredPageOrientation (backgroundSize) =
+                            match (PageOrientation.Portrait, backgroundSize) , (PageOrientation.Landscape, backgroundSize) with 
+                            | ValidOrientation, ValidOrientation ->     Result.Ok DesiredPageOrientation.Automatic
+                            | ValidOrientation, InvalidOrientation _ -> Result.Ok DesiredPageOrientation.Portrait
+                            | InvalidOrientation _, ValidOrientation -> Result.Ok DesiredPageOrientation.Landscape
+                            | InvalidOrientation size, InvalidOrientation _ -> Result.Error size
 
-                        
-                            let exceedHorizontal =
-                                cellSizes 
-                                |> List.tryFind(fun cellSize ->
-                                    cellSize.Width + margin.Left + margin.Right >= backgroundSize.Width + tolerance.Value
-                                )
+                        match getDesiredPageOrientation backgroundSize with 
+                        | Result.Ok desiredPageOrientation -> desiredPageOrientation, backgroundSize
+                        | Result.Error size ->
 
-                            let exceedVertical =
-                                cellSizes 
-                                |> List.tryFind(fun cellSize ->
-                                    cellSize.Height + margin.Top + margin.Bottom >= backgroundSize.Height + tolerance.Value
-                                )
-
-                            match exceedHorizontal, exceedVertical with 
-                            | None _, None _ -> ValidOrientation
-                            | Some v, _ 
-                            | _, Some v -> InvalidOrientation v
+                            match args.Background with 
+                            | Background.Size backgroundSize ->
+                                let backgroundSize_extented_byMargin = backgroundSize |> FsSize.applyMargin margin
+                                match getDesiredPageOrientation backgroundSize_extented_byMargin with 
+                                | Result.Ok desiredPageOrientation -> 
+                                    desiredPageOrientation, backgroundSize_extented_byMargin
+                                | Result.Error size -> 
+                                    failwithf "desired size %A + margin %A is exceeded to sheet page size %A" size margin backgroundSize
 
 
-                        match PageOrientation.Portrait, PageOrientation.Landscape with 
-                        | ValidOrientation, ValidOrientation -> DesiredPageOrientation.Automatic
-                        | ValidOrientation, InvalidOrientation _ -> DesiredPageOrientation.Portrait
-                        | InvalidOrientation _, ValidOrientation -> DesiredPageOrientation.Landscape
-                        | InvalidOrientation size, InvalidOrientation _ -> 
-                            failwithf "desired size is exceeded %A to sheet page size %A" size backgroundSize
+                            | Background.File _ ->
+                                failwithf "desired size %A + margin %A is exceeded to sheet page size %A" size margin backgroundSize
 
-                    | _ -> args.DesiredPageOrientation
+                    | _ -> 
+                        let pageOrientation =
+                            match args.DesiredPageOrientation with 
+                            | DesiredPageOrientation.Portrait -> PageOrientation.Portrait
+                            | DesiredPageOrientation.Landscape -> PageOrientation.Landscape
+                            | _ -> failwith "Invalid token"
+                                
 
-                produceSheets desiredPageOriention readerPages []
+                        match (pageOrientation, backgroundSize) with 
+                        | ValidOrientation -> args.DesiredPageOrientation, backgroundSize
+                        | InvalidOrientation _ ->
+                            let backgroundSize_extented_byMargin = backgroundSize |> FsSize.applyMargin margin
+                            match (pageOrientation, backgroundSize_extented_byMargin) with 
+                            | ValidOrientation -> args.DesiredPageOrientation, backgroundSize_extented_byMargin
+                            | InvalidOrientation size ->
+                                failwithf "desired size %A + margin %A is exceeded to sheet page size %A" size margin backgroundSize
+                                
+
+
+                produceSheets pageSize desiredPageOriention readerPages []
 
             sheets.AddRange(List.rev producedSheets)
 

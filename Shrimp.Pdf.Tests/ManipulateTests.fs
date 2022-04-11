@@ -127,6 +127,21 @@ let manipulateTests =
         |> runTest "datas/manipulate/change separation color of pdfFunction0 Registration to m100.pdf" 
         |> ignore
 
+    testCase "change stroke color b255 to m100_0" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.Expr(PageSelectorExpr.create "1"),
+                [
+                    { Name = "change stroke color b255 to m100"
+                      Selector = Path(Info.StrokeColorIs FsColor.RGB_BLUE)
+                      Modifiers = [Modifier.SetStrokeColor(DeviceCmyk.MAGENTA)]
+                    }
+                ]
+            ) 
+        )
+        |> runTest "datas/manipulate/change stroke color b255 to m100_0.pdf" 
+        |> ignore
+
     testCase "change stroke color b255 to m100" <| fun _ -> 
         Flow.Manipulate (
             Modify.Create(
@@ -967,13 +982,13 @@ let manipulateTests =
         |> ignore
 
     
-    ftestCase "convert rgb image to gray" <| fun _ -> 
+    ptestCase "convert rgb image to gray" <| fun _ -> 
         let flow =
-            Modify.Create_Record(
+            Modify.Create_RecordIM(
                 PageSelector.All,
                 selectorAndModifiersList = [
-                    { SelectorAndModifiersRecord.Name = "convert rgb image to gray" 
-                      Selector = Selector.Path(fun _ _ -> true)
+                    { SelectorAndModifiersRecordIM.Name = "convert rgb image to gray" 
+                      Selector = Selector.ImageX(fun _ _ -> true)
                       Modifiers = [
                         
                       ]}
@@ -1012,7 +1027,25 @@ let manipulateTests =
             ]
         )
 
-    testCase "test infos" <| fun _ -> 
+    ftestCase "test infos" <| fun _ -> 
+        let reuse =
+            Modify.ReplaceColors(
+                ColorMappings.WhiteTo(PdfCanvasColor.valueColor FsDeviceCmyk.GREEN)
+            )
+        let pdfFile = 
+            @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\Lpb\.btw\健耐 V221003-B\.shrimp.pdf\外箱A6贴标绿色.raw\10_ReplaceColors.pdf"
+            |> PdfFile
+
+        let testFile = 
+            System.IO.Path.ChangeExtension(pdfFile.Path, ".test.pdf")
+            
+        let r = 
+            PdfRunner.Manipulate(
+                pdfFile, testFile
+            ) reuse
+
+        printf ""
+
         let flow =
             ModifyPage.Create(
                 "trim to visible",

@@ -378,8 +378,7 @@ module _Colors =
             | FsValueColor.Cmyk cmyk -> new DeviceCmyk(cmyk.C, cmyk.M, cmyk.Y, cmyk.K) :> Color
 
             | FsValueColor.Gray (FsGray v) ->
-                let grayColor = new DeviceGray()
-                grayColor.SetColorValue([|v|]) 
+                let grayColor = new DeviceGray(v)
                 grayColor :> Color
 
             | FsValueColor.Rgb rgb ->
@@ -811,6 +810,17 @@ module _Colors =
             | AlternativeFsColor.Separation v -> v.LoggingText
 
         static member BLACK = FsValueColor.BLACK |> AlternativeFsColor.ValueColor
+        
+        static member WHITE = FsValueColor.WHITE |> AlternativeFsColor.ValueColor
+
+        static member Whites = 
+            [ FsValueColor.WHITE
+              FsValueColor.CMYK_WHITE
+              FsValueColor.RGB_WHITE ]
+            |> List.map AlternativeFsColor.ValueColor
+
+        override x.ToString() = x.GetType().Name + " " + x.LoggingText
+            
 
 
     [<RequireQualifiedAccess>]
@@ -860,6 +870,8 @@ module _Colors =
             | FsColor.IccBased v -> v.LoggingText
             | FsColor.ValueColor v -> v.LoggingText
             | FsColor.PatternColor _ -> "PatternColor"
+
+        override x.ToString() = x.GetType().Name + " " + x.LoggingText
 
         member x.IsEqualTo(y, ?valueEqualOptions) =
             let valueEqualOptions = defaultArg valueEqualOptions ValueEqualOptions.DefaultRoundedValue
@@ -1151,6 +1163,9 @@ module _Colors =
 
             | PdfCanvasColor.Registration -> "Registration"
 
+        override x.ToString() = 
+            x.GetType().Name + " " + x.LoggingText
+
         static member valueColor(valueColor: FsValueColor) =
             PdfCanvasColor.Value valueColor
 
@@ -1297,6 +1312,14 @@ module _Colors =
             | NullablePdfCanvasColor.ColorCard       v   -> PdfCanvasColor(PdfCanvasColor.ColorCard    v)
             | NullablePdfCanvasColor.Registration        -> PdfCanvasColor(PdfCanvasColor.Registration  )
 
+
+    type NullablePdfCanvasColor with 
+        member x.LoggingText =
+            match x with 
+            | NullablePdfCanvasColor.Non -> "N"
+            | NullablePdfCanvasColor.PdfCanvasColor v -> v.LoggingText
+
+        override x.ToString() = x.GetType().Name + x.LoggingText
 
     type Color with 
         member x.IsEqualTo(fsSeparation: FsSeparation, valueEqualOptions) =

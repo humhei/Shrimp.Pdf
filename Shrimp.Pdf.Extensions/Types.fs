@@ -10,6 +10,9 @@ open Shrimp.FSharp.Plus
 [<AutoOpen>]
 module ExtensionTypes =
 
+    type PdfLiteral with 
+        member x.Text() = x.ToString()
+
     [<StructuredFormatDisplay("{LoggingText}")>]
     type FsRectangle =
         { X: float 
@@ -158,9 +161,12 @@ module ExtensionTypes =
 
 
 
-
     type IAbstractRenderInfo =
         abstract member Value: AbstractRenderInfo
+
+    type IAbstractRenderInfoIM =
+        inherit IAbstractRenderInfo
+        
 
     type IPathRenderInfo =
         inherit IAbstractRenderInfo
@@ -170,9 +176,25 @@ module ExtensionTypes =
         inherit IAbstractRenderInfo
         abstract member Value: TextRenderInfo
 
+    type IImageRenderInfo =
+        inherit IAbstractRenderInfoIM
+        abstract member Value: ImageRenderInfo
+
     type IntegratedRenderInfoTag =
         | Path = 0
         | Text = 1
+
+    type IntegratedRenderInfoTagIM =
+        | Path = 0
+        | Text = 1
+        | Image = 2
+
+    [<RequireQualifiedAccess>]
+    module IntegratedRenderInfoTagIM =
+        let asIntegratedRenderInfoTag = function
+            | IntegratedRenderInfoTagIM.Path -> IntegratedRenderInfoTag.Path |> Some
+            | IntegratedRenderInfoTagIM.Text -> IntegratedRenderInfoTag.Text |> Some
+            | IntegratedRenderInfoTagIM.Image -> None
 
     [<RequireQualifiedAccess; Struct>]
     type XObjectClippingBoxState =
@@ -228,10 +250,16 @@ module ExtensionTypes =
           ClippingPathInfoState: ClippingPathInfoState }
 
 
+    type IIntegratedRenderInfoIM =
+        inherit IAbstractRenderInfoIM
+        abstract member TagIM: IntegratedRenderInfoTagIM
+        abstract member ClippingPathInfos: ClippingPathInfos
+
     type IIntegratedRenderInfo =
         inherit IAbstractRenderInfo
         abstract member Tag: IntegratedRenderInfoTag
         abstract member ClippingPathInfos: ClippingPathInfos
+
 
 
 

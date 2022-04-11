@@ -32,7 +32,7 @@ let flowTests =
         Flows.FilterPages(
             PageFilter(
                 InfosSelector.Text(fun args infos ->
-                    (TextInfos.ExistsText_In_OneLine(fun text -> text.Contains "EEXPE")) args infos
+                    (TextInfos.ExistsText_In_OneLine(fun text -> text.Contains "EXPE")) args infos
                 )
             )
         )

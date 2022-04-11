@@ -73,7 +73,7 @@ module RegisterableFonts =
 
             { PdfEncodings = PdfEncodings.IDENTITY_H
               FontFamily = weightText
-              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/Arial-Unicode/" + (weightText.ToString()) + ".ttf")) }
+              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/Arial-Unicode/" + (weightText) + ".ttf")) }
 
 
     module Arial =
@@ -101,7 +101,7 @@ module RegisterableFonts =
 
             { PdfEncodings = PdfEncodings.CP1252
               FontFamily = fontFamily
-              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/Arial/" + (fontName.ToString()) + ".ttf")) }
+              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/Arial/" + (fontName) + ".ttf")) }
 
 
     module YaHei =

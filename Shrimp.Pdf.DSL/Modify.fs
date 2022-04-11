@@ -37,12 +37,23 @@ with
 
     member x.Page = x.PageModifingArguments.Page
 
+type _SelectionModifierFixmentArgumentsIM<'userState> =
+    { CurrentRenderInfoIM: IIntegratedRenderInfoIM 
+      PageModifingArguments: PageModifingArguments<'userState> }
+with 
+    member x.PageNum = x.PageModifingArguments.PageNum
+
+    member x.UserState = x.PageModifingArguments.UserState
+
+    member x.Page = x.PageModifingArguments.Page
+
 type _SelectionModifierFixmentArguments<'userState> =
-    { Close: OperatorRange
-      CurrentRenderInfo: IIntegratedRenderInfo 
+    { CurrentRenderInfo: IIntegratedRenderInfo 
       PageModifingArguments: PageModifingArguments<'userState> }
 
 with 
+    member internal x.Tag = x.CurrentRenderInfo.Tag
+
     member x.PageNum = x.PageModifingArguments.PageNum
 
     member x.UserState = x.PageModifingArguments.UserState
@@ -69,54 +80,142 @@ module PageInfosValidation =
         fun _ _ -> ()
         |> PageInfosValidation
 
-type Modifier<'userState> = _SelectionModifierFixmentArguments<'userState> -> list<PdfCanvas -> PdfCanvas>
+type PageInfosValidationIM = PageInfosValidationIM of (PageNumber -> seq<IIntegratedRenderInfoIM> -> unit)
+with 
+    member x.Value =
+        let (PageInfosValidationIM value) = x
+        value
+
+[<RequireQualifiedAccess>]
+module PageInfosValidationIM =
+    let atLeastOne =
+        fun (pageNumber) infos ->
+            let length = (Seq.length infos)
+            if length = 0 then failwith "Didn't selector any page infos"
+
+        |> PageInfosValidationIM
+
+    let ignore = 
+        fun _ _ -> ()
+        |> PageInfosValidationIM
+
+    let internal ofPageInfosValidation (pageInfosValidation: PageInfosValidation) =
+        PageInfosValidationIM(fun pageNumber infos ->
+            let infos = infos |> Seq.map(fun info -> info :?> IIntegratedRenderInfo)
+            pageInfosValidation.Value pageNumber infos
+            
+        )
+
+
+
+type Modifier<'userState> = _SelectionModifierFixmentArguments<'userState> -> ModifierPdfCanvasActions
+type ModifierIM<'userState> = _SelectionModifierFixmentArgumentsIM<'userState> -> ModifierPdfCanvasActions
  
 [<RequireQualifiedAccess>]
+module private Modifier =
+    let toIM (modifier: Modifier<_>): ModifierIM<_> =
+        fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
+            { CurrentRenderInfo = args.CurrentRenderInfoIM :?> IIntegratedRenderInfo
+              PageModifingArguments = args.PageModifingArguments }
+            |> modifier
+
+
+[<RequireQualifiedAccess>]
 module private Modifiers =
-    let toSelectionModifier (pageModifingArguments: PageModifingArguments<_>) (modifiers: Modifier<_> list) =
+    let private toSelectionModifierCommon (pageModifingArguments: PageModifingArguments<_>) (modifiers: _ list) fArgs  =
         fun (args: _SelectionModifierFixmentArguments) ->
             let actions = 
-                let args  = 
-                    { Close = args.Close
-                      PageModifingArguments = pageModifingArguments
-                      CurrentRenderInfo = args.CurrentRenderInfo }
-                
-                let l = modifiers.Length
+                let tag = (IntegratedRenderInfoTagIM.asIntegratedRenderInfoTag args.CurrentRenderInfo.TagIM).Value
+                let args  = fArgs args
 
                 modifiers
                 |> List.mapi (fun i factory -> 
-                    let actions = factory args
-                    match i = modifiers.Length - 1 with 
-                    | true -> actions
-                    | false -> List.take (l-1) actions
+                    let actions: ModifierPdfCanvasActions = factory args
+                    actions
                 )
-                |> List.concat
+                |> ModifierPdfCanvasActions.ConcatOrKeep tag
                 
             actions
 
+    let toSelectionModifier (pageModifingArguments: PageModifingArguments<_>) (modifiers: Modifier<_> list) =
+        toSelectionModifierCommon pageModifingArguments modifiers (fun args ->
+            { PageModifingArguments = pageModifingArguments
+              CurrentRenderInfo = args.CurrentRenderInfo :?> IIntegratedRenderInfo }
+        )
+      
+
+    let toSelectionModifierIM (pageModifingArguments: PageModifingArguments<_>) (modifiers: ModifierIM<_> list) =
+        toSelectionModifierCommon pageModifingArguments modifiers (fun args ->
+            { PageModifingArguments = pageModifingArguments
+              CurrentRenderInfoIM = args.CurrentRenderInfo }
+        )
+       
+
 open Constants.Operators
 
+type ColorMapping =
+    { OriginColors: AlternativeFsColor al1List 
+      NewColor: PdfCanvasColor }
+        
+with 
+    static member WhiteTo(newColor) =
+        { OriginColors = AtLeastOneList.Create AlternativeFsColor.Whites
+          NewColor =  newColor }
 
+type ColorMappings = ColorMappings of ColorMapping al1List
+with 
+    member x.Add(newColorMapping) =
+        let (ColorMappings colorMapping) = x
+        colorMapping.Add [newColorMapping]
+        |> ColorMappings
+
+    static member WhiteTo(newColor) =
+        ColorMapping.WhiteTo(newColor)
+        |> List.singleton
+        |> AtLeastOneList.Create
+        |> ColorMappings
+
+
+    member internal x.AsPicker() =
+        let (ColorMappings colorMappings) = x
+        fun (fsColor: FsColor) ->
+            colorMappings.AsList
+            |> List.tryPick(fun colorMapping ->
+                let colors = List.map FsColor.OfAlternativeFsColor colorMapping.OriginColors.AsList
+                match FsColors.contains fsColor colors with 
+                | true -> Some colorMapping.NewColor
+                    
+                | false -> None
+            )
+        
 
 type Modifier =
 
     static member SetFontAndSize(font, size: float) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
-            match args.CurrentRenderInfo.Tag with 
+            match args.Tag with 
             | IntegratedRenderInfoTag.Path ->
-                [
-                    PdfCanvas.writeOperatorRange args.Close
-                ]
+                ModifierPdfCanvasActions.Keep(args.Tag)
 
             | IntegratedRenderInfoTag.Text ->
                 let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
                 let size = ITextRenderInfo.toTransformedFontSize size info 
                 let text = ITextRenderInfo.getText info
-                [
-                    PdfCanvas.setFontAndSize(font, float32 size)
-                    //PdfCanvas.writeOperatorRange args.Close
-                    PdfCanvas.showText(text)
-                ]
+                { Actions =
+                    [
+                        PdfCanvas.setFontAndSize(font, float32 size)
+                        //PdfCanvas.writeOperatorRange args.Close
+                    ]
+                    
+                  Close = 
+                    CloseOperatorUnion.Text(
+                        { Fill = CloseOperator.Keep 
+                          Stroke = CloseOperator.Keep
+                          Text = Some text }
+                    )
+                  SuffixActions = []
+                }
+
 
     static member SetFontAndSize(font, size: float) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
@@ -126,179 +225,46 @@ type Modifier =
 
     static member CancelFillAndStroke() : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
-            match args.CurrentRenderInfo.Tag with 
-            | IntegratedRenderInfoTag.Path ->
-                let newClose = 
-                    { args.Close with 
-                        Operator = new PdfLiteral(n)
-                        Operands = ResizeArray [new PdfLiteral(n) :> PdfObject]}
-                [
-                    PdfCanvas.writeOperatorRange newClose
-                ]
-
-            | IntegratedRenderInfoTag.Text ->
-                [
-                    PdfCanvas.setTextRenderingMode(TextRenderingMode.INVISIBLE) 
-                    PdfCanvas.writeOperatorRange args.Close
-                ]
+            ModifierPdfCanvasActions.CreateCloseOperator(
+                tag = args.Tag,
+                fill = CloseOperator.Close,
+                stroke = CloseOperator.Close
+            )
+         
+         
 
     static member OpenFill() : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
-            match args.CurrentRenderInfo.Tag with 
-            | IntegratedRenderInfoTag.Path ->
-                let newOperatorName =
-                    match args.Close.Operator.ToString() with 
-                    | EQ s -> b
-                    | EQ S -> B
-                    | operatorName -> 
-                        match operatorName with 
-                        | ContainsBy [b; B; ``B*``;``b*``] 
-                        | ContainsBy [f; F; ``f*``] -> operatorName
-                        | _ -> failwithf "Unexcepted operator %s" operatorName
-
-
-                let newClose = 
-                    { args.Close with 
-                        Operator = new PdfLiteral(newOperatorName)
-                        Operands = ResizeArray [new PdfLiteral(newOperatorName) :> PdfObject]}
-                [
-                    PdfCanvas.writeOperatorRange newClose
-                ]
-
-            | IntegratedRenderInfoTag.Text ->
-                let newTextRenderingMode =
-                    match args.CurrentRenderInfo.Value.GetGraphicsState().GetTextRenderingMode() with 
-                    | PdfCanvasConstants.TextRenderingMode.FILL_STROKE -> PdfCanvasConstants.TextRenderingMode.FILL_STROKE
-                    | PdfCanvasConstants.TextRenderingMode.FILL -> PdfCanvasConstants.TextRenderingMode.FILL
-                    | PdfCanvasConstants.TextRenderingMode.STROKE -> TextRenderingMode.FILL_STROKE
-                    | textRenderMode -> 
-                        Logger.unSupportedTextRenderMode textRenderMode
-                        TextRenderingMode.INVISIBLE
-
-                [
-                    PdfCanvas.setTextRenderingMode(newTextRenderingMode) 
-                    PdfCanvas.writeOperatorRange args.Close
-                ]
+            ModifierPdfCanvasActions.CreateCloseOperator(
+                tag = args.Tag,
+                fill = CloseOperator.Open
+            )
+         
 
     static member OpenStroke() : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
-            match args.CurrentRenderInfo.Tag with 
-            | IntegratedRenderInfoTag.Path ->
-                let newOperatorName =
-                    match args.Close.Operator.ToString() with 
-                    | EQ f -> b
-                    | EQ F -> B
-                    | EQ ``f*`` -> ``b*``
-                    | operatorName -> 
-                        match operatorName with 
-                        | ContainsBy [b; B; ``B*``; ``b*``] 
-                        | ContainsBy [s; S] -> operatorName
-                        | _ -> failwithf "Unexcepted operator %s" operatorName
-
-
-                let newClose = 
-                    { args.Close with 
-                        Operator = new PdfLiteral(newOperatorName)
-                        Operands = ResizeArray [new PdfLiteral(newOperatorName) :> PdfObject]}
-                [
-                    PdfCanvas.writeOperatorRange newClose
-                ]
-
-            | IntegratedRenderInfoTag.Text ->
-                let newTextRenderingMode =
-                    match args.CurrentRenderInfo.Value.GetGraphicsState().GetTextRenderingMode() with 
-                    | PdfCanvasConstants.TextRenderingMode.FILL_STROKE -> PdfCanvasConstants.TextRenderingMode.FILL_STROKE
-                    | PdfCanvasConstants.TextRenderingMode.FILL -> PdfCanvasConstants.TextRenderingMode.FILL_STROKE
-                    | PdfCanvasConstants.TextRenderingMode.STROKE -> TextRenderingMode.STROKE
-                    | textRenderMode -> 
-                        Logger.unSupportedTextRenderMode textRenderMode
-                        TextRenderingMode.INVISIBLE
-
-                [
-                    PdfCanvas.setTextRenderingMode(newTextRenderingMode) 
-                    PdfCanvas.writeOperatorRange args.Close
-                ]
+            ModifierPdfCanvasActions.CreateCloseOperator(
+                tag = args.Tag,
+                stroke = CloseOperator.Open
+            )
+        
 
     static member CancelStroke() : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
-            match args.CurrentRenderInfo.Tag with 
-            | IntegratedRenderInfoTag.Path ->
-                let newOperatorName =
-                    match args.Close.Operator.ToString() with 
-                    | EQ b -> f
-                    | EQ B -> F
-                    | EQ ``b*`` -> ``f*``
-                    | EQ ``B*`` -> F
-                    | operatorName -> 
-                        match operatorName with 
-                        | ContainsBy [f; F; ``f*``]  -> operatorName
-                        | ContainsBy [s; S] -> n
-                        | _ -> failwithf "Unexcepted operator %s" operatorName
-
-
-                let newClose = 
-                    { args.Close with 
-                        Operator = new PdfLiteral(newOperatorName)
-                        Operands = ResizeArray [new PdfLiteral(newOperatorName) :> PdfObject]}
-                [
-                    PdfCanvas.writeOperatorRange newClose
-                ]
-
-            | IntegratedRenderInfoTag.Text ->
-                let newTextRenderingMode =
-                    match args.CurrentRenderInfo.Value.GetGraphicsState().GetTextRenderingMode() with 
-                    | PdfCanvasConstants.TextRenderingMode.FILL_STROKE -> PdfCanvasConstants.TextRenderingMode.FILL
-                    | PdfCanvasConstants.TextRenderingMode.FILL -> PdfCanvasConstants.TextRenderingMode.FILL
-                    | PdfCanvasConstants.TextRenderingMode.STROKE -> TextRenderingMode.INVISIBLE
-                    | textRenderMode -> 
-                        Logger.unSupportedTextRenderMode textRenderMode
-                        TextRenderingMode.INVISIBLE
-
-                [
-                    PdfCanvas.setTextRenderingMode(newTextRenderingMode) 
-                    PdfCanvas.writeOperatorRange args.Close
-                ]
+            ModifierPdfCanvasActions.CreateCloseOperator(
+                tag = args.Tag,
+                stroke = CloseOperator.Close
+            )
+       
 
 
     static member CancelFill() : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
-            match args.CurrentRenderInfo.Tag with 
-            | IntegratedRenderInfoTag.Path ->
-                let newOperatorName =
-                    match args.Close.Operator.ToString() with 
-                    | EQ b -> s
-                    | EQ B -> S
-                    | EQ ``b*`` -> s
-                    | EQ ``B*`` -> S
-                    | operatorName -> 
-                        match operatorName with 
-                        | ContainsBy [s; S] -> operatorName
-                        | ContainsBy [f; F; ``f*``] -> n
-                        | _ -> failwithf "Unexcepted operator %s" operatorName
-
-
-                let newClose = 
-                    { args.Close with 
-                        Operator = new PdfLiteral(newOperatorName)
-                        Operands = ResizeArray [new PdfLiteral(newOperatorName) :> PdfObject]}
-                [
-                    PdfCanvas.writeOperatorRange newClose
-                ]
-
-            | IntegratedRenderInfoTag.Text ->
-                let newTextRenderingMode =
-                    match args.CurrentRenderInfo.Value.GetGraphicsState().GetTextRenderingMode() with 
-                    | TextRenderingMode.FILL_STROKE -> TextRenderingMode.STROKE
-                    | TextRenderingMode.STROKE -> TextRenderingMode.STROKE
-                    | TextRenderingMode.FILL -> TextRenderingMode.INVISIBLE
-                    | textRenderMode -> 
-                        Logger.unSupportedTextRenderMode textRenderMode
-                        TextRenderingMode.INVISIBLE
-
-                [
-                    PdfCanvas.setTextRenderingMode(newTextRenderingMode) 
-                    PdfCanvas.writeOperatorRange args.Close
-                ]
+            ModifierPdfCanvasActions.CreateCloseOperator(
+                tag = args.Tag,
+                fill = CloseOperator.Close
+            )
+        
 
 
     static member ReplaceColor(picker: (FsColor -> Color option), ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
@@ -325,8 +291,19 @@ type Modifier =
                     | FillOrStrokeModifingOptions.FillAndStroke, Some (newColor) ->
                         PdfCanvas.setStrokeColor(newColor)
 
-                PdfCanvas.writeOperatorRange args.Close
-            ]
+            ] |> ModifierPdfCanvasActions.createActions args.Tag 
+
+    static member ReplaceColors(colorMappings: ColorMappings, ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) =
+        fun (args: _SelectionModifierFixmentArguments<'userState>) ->
+            let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
+            let picker = 
+                colorMappings.AsPicker() >> Option.map(fun color ->
+                doc.GetOrCreateColor(color)
+            )
+                
+
+            Modifier.ReplaceColor(picker, ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions)
+            
 
     static member ReplaceAlternativeColor(picker: (AlternativeFsColor -> Color option), ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) =
         let picker (fsColor: FsColor) =
@@ -394,10 +371,13 @@ type Modifier =
     static member AddRectangleToBound(mapping) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
             let border = IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithStrokeWidth args.CurrentRenderInfo
-            [
-                PdfCanvas.writeOperatorRange args.Close
-                PdfCanvas.addRectangle border mapping
-            ]
+
+            ModifierPdfCanvasActions.createSuffix 
+                args.Tag 
+                [
+                    PdfCanvas.addRectangle border mapping
+                ]
+                
 
     static member ExpandStrokeWidth(targetColor: PdfCanvasColor, width: ``ufloat>0``, ?lineJoinStyle, ?overprint) =
         let width = width.Value
@@ -421,35 +401,29 @@ type Modifier =
                 match info with 
                 | IIntegratedRenderInfo.Path pathInfo ->
                     let strokeWidth = pathInfo.PathRenderInfo.GetLineWidth()
-                    [
-                        yield! setStroke (float strokeWidth +  width)
-                        yield PdfCanvas.writeOperatorRange args.Close
-                    ]
+                    setStroke (float strokeWidth +  width)
 
                 | IIntegratedRenderInfo.Text textInfo ->
                     let strokeWidth = textInfo.TextRenderInfo.GetGraphicsState().GetLineWidth()
-                    [
-                        yield! setStroke (float strokeWidth +  width)
-                        PdfCanvas.writeOperatorRange args.Close
-                    ]
+                    setStroke (float strokeWidth +  width)
+
+                |> ModifierPdfCanvasActions.createActions args.Tag  
 
             | If IIntegratedRenderInfo.isFillVisible ->
+                let addPrefix prefixActions (modifierPdfCanvasActions: ModifierPdfCanvasActions) = 
+                    { modifierPdfCanvasActions with 
+                        Actions = prefixActions @ modifierPdfCanvasActions.Actions
+                    }
+
                 match info with 
                 | IIntegratedRenderInfo.Path pathInfo ->
-                    [
-                        yield! setStroke (width)
-                        yield! Modifier.OpenStroke() args
-                    ]
-
+                    addPrefix (setStroke (width)) (Modifier.OpenStroke() args)
                 | IIntegratedRenderInfo.Text textInfo ->
-                    [
-                        yield! setStroke (width)
-                        yield! Modifier.OpenStroke() args
-                    ]
+                    addPrefix (setStroke (width)) (Modifier.OpenStroke() args)
+
             | _ -> 
-                [
-                    PdfCanvas.writeOperatorRange args.Close
-                ]
+                ModifierPdfCanvasActions.Keep(args.Tag)
+
 
     static member AddVarnish(varnish: FsSeparation, width) =
         Modifier.ExpandStrokeWidth(
@@ -460,10 +434,16 @@ type Modifier =
         )
 
 
+type SelectorAndModifiersRecordIM<'userState> =
+    { Name: string 
+      Selector: Selector<'userState> 
+      Modifiers: ModifierIM<'userState> list }
+
 type SelectorAndModifiersRecord<'userState> =
     { Name: string 
       Selector: Selector<'userState> 
       Modifiers: Modifier<'userState> list }
+
 
 type SelectorAndModifiersRecordEx<'userState> =
     { Name: string 
@@ -485,6 +465,31 @@ type SelectorAndModifiers<'userState>(name, selector: Selector<'userState>, modi
 
     member x.PageInfosValidation = pageInfosValidation
 
+type SelectorAndModifiersIM<'userState>(name, selector: Selector<'userState>, modifiers: ModifierIM<'userState> list, ?parameters: list<string * string>, ?pageInfosValidation) =
+    let pageInfosValidation = defaultArg pageInfosValidation PageInfosValidationIM.ignore
+
+    member x.Name = name
+
+    member x.Selector = selector
+
+    member x.Modifiers = modifiers
+
+    member x.Parameters = parameters
+
+    member x.PageInfosValidation = pageInfosValidation
+
+type SelectorAndModifiers<'userState> with 
+    member internal x.ToIM() =
+        let modifiers =
+            x.Modifiers
+            |> List.map(Modifier.toIM)
+
+        let pageInfosValidation =
+            PageInfosValidationIM.ofPageInfosValidation x.PageInfosValidation
+
+        SelectorAndModifiersIM(x.Name, x.Selector, modifiers, ?parameters = x.Parameters, pageInfosValidation = pageInfosValidation)
+
+
 [<AutoOpen>]
 module ModifyOperators =
 
@@ -495,19 +500,27 @@ module ModifyOperators =
 
     [<RequireQualifiedAccess>]
     module IntegratedDocument =
-        type private Modifier = _SelectionModifierFixmentArguments -> list<PdfCanvas -> PdfCanvas>
+        type private Modifier = _SelectionModifierFixmentArguments -> ModifierPdfCanvasActions
         
-        let modify (pageSelector: PageSelector) (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfo seq -> unit)>) (document: IntegratedDocument) =
+        let private modifyCommon (pageSelector: PageSelector) (selectorModifierPageInfosValidationMappingFactory) modify (document: IntegratedDocument) =
             let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
             let totalNumberOfPages = document.Value.GetNumberOfPages()
             for i = 1 to totalNumberOfPages do
                 if List.contains i selectedPageNumbers then
                     let page = document.Value.GetPage(i)
-                    let selectorModifierMapping = selectorModifierPageInfosValidationMappingFactory (PageNumber i, page)
+                    let selectorModifierMapping: Map<_, _> = selectorModifierPageInfosValidationMappingFactory (PageNumber i, page)
                     for pair in selectorModifierMapping do
                         let renderInfoSelector, modifier, pageInfosValidation = pair.Value
-                        pageInfosValidation (PageNumber i) (PdfPage.modify (Map.ofList[pair.Key, (renderInfoSelector, modifier)]) page)
+                        pageInfosValidation (PageNumber i) (modify (Map.ofList[pair.Key, (renderInfoSelector, modifier)]) page)
     
+
+        let modify (pageSelector: PageSelector) (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfo seq -> unit)>) (document: IntegratedDocument) =
+            modifyCommon pageSelector selectorModifierPageInfosValidationMappingFactory PdfPage.modify document
+
+        let modifyIM (pageSelector: PageSelector) (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfoIM seq -> unit)>) (document: IntegratedDocument) =
+            modifyCommon pageSelector selectorModifierPageInfosValidationMappingFactory PdfPage.modifyIM document
+            
+
 
     [<RequireQualifiedAccess>]
     module private Manipulate =
@@ -519,6 +532,7 @@ module ModifyOperators =
                 | _ , 1 -> f totalNumberOfPages id flowModel document
                 | ModifyingAsyncWorker.PageNumberEveryWorker i, _ when i < 1 -> failwith "Async worker number should bigger than 1"
                 | ModifyingAsyncWorker.PageNumberEveryWorker i, j when i > 0 && j > 1 ->
+                    failwithf "Async worker is disabled now"
                     let splitedFlowModels = 
                         runWithFlowModel flowModel (Flow.FileOperation (FileOperations.splitDocumentToMany (fun args -> { args with Override = true; ChunkSize = i})))
 
@@ -560,17 +574,18 @@ module ModifyOperators =
             |> Manipulate
 
 
+
     /// async may doesn't make any sense for cpu bound computation?
-    let private modify (modifyingAsyncWorker, pageSelector, (selectorAndModifiersList: list<SelectorAndModifiers<'userState>>)) =
+    let private modifyIM (modifyingAsyncWorker, pageSelector, (selectorAndModifiersList: list<SelectorAndModifiersIM<'userState>>)) =
         let names = 
             selectorAndModifiersList
             |> List.map (fun selectorAndModifier -> selectorAndModifier.Name)
 
         if names.Length <> (List.distinct names).Length then failwithf "Duplicated keys in SelectorAndModifiers %A" selectorAndModifiersList
 
-        let asyncManiputation (selectorAndModifiersList: SelectorAndModifiers<_> list) = 
+        let asyncManiputation (selectorAndModifiersList: SelectorAndModifiersIM<_> list) = 
             fun (totalNumberOfPages) (transformPageNum: PageNumber -> PageNumber) (flowModel: FlowModel<_>) (document: IntegratedDocument) ->
-                IntegratedDocument.modify
+                IntegratedDocument.modifyIM
                     pageSelector 
                     (
                         fun (pageNum, pdfPage) ->
@@ -583,7 +598,7 @@ module ModifyOperators =
                                       TotalNumberOfPages = totalNumberOfPages }
                                 ( { Name = selectorAndModifiers.Name }, 
                                     ( Selector.toRenderInfoSelector pageModifingArguments selectorAndModifiers.Selector,
-                                      Modifiers.toSelectionModifier pageModifingArguments selectorAndModifiers.Modifiers,
+                                      Modifiers.toSelectionModifierIM pageModifingArguments selectorAndModifiers.Modifiers,
                                       selectorAndModifiers.PageInfosValidation.Value
                                     )
                                 )
@@ -620,7 +635,9 @@ module ModifyOperators =
         |> Manipulate.Batch()
         ||>> ignore
         
-
+    /// async may doesn't make any sense for cpu bound computation?
+    let private modify (modifyingAsyncWorker, pageSelector, (selectorAndModifiersList: list<SelectorAndModifiers<'userState>>)) =
+        modifyIM (modifyingAsyncWorker, pageSelector, selectorAndModifiersList |> List.map (fun m -> m.ToIM()))
 
 
     type Modify =
@@ -628,6 +645,12 @@ module ModifyOperators =
             let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
 
             modify(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
+
+        static member CreateIM(pageSelector, selectorAndModifiersList: SelectorAndModifiersIM<'userState> list, ?modifyingAsyncWorker) =
+            let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
+
+            modifyIM(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
+
 
         static member Create (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecord<'userState> list, ?modifyingAsyncWorker) =
             let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
@@ -640,6 +663,15 @@ module ModifyOperators =
 
         static member Create_Record (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecord<'userState> list, ?modifyingAsyncWorker) =
             Modify.Create(pageSelector, selectorAndModifiersList, ?modifyingAsyncWorker = modifyingAsyncWorker)
+
+        static member Create_RecordIM (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecordIM<'userState> list, ?modifyingAsyncWorker) =
+            let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
+            let selectorAndModifiersList =
+                selectorAndModifiersList
+                |> List.map (fun m ->
+                    SelectorAndModifiersIM(m.Name, m.Selector, m.Modifiers)
+                )
+            modifyIM(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
 
 
         static member Create_RecordEx (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecordEx<'userState> list, ?modifyingAsyncWorker) =
@@ -893,6 +925,34 @@ type Modify =
             let seperationColor = splitDocument.Value.GetOrCreateColor(ResourceColor.CustomSeparation targetColor)
             Modify.ReplaceColors(originColors, seperationColor, ?options = options)
         )
+
+    static member ReplaceColors (colorMapping: ColorMappings, ?options: Modify_ReplaceColors_Options) =
+        Manipulate.Factory(fun flowModel splitDocument ->
+            let picker = 
+                colorMapping.AsPicker() 
+                >> (fun color -> color |> Option.map(fun color -> 
+                    splitDocument.Value.GetOrCreateColor(color))
+                )
+            let options = defaultArg options Modify_ReplaceColors_Options.DefaultValue
+            let nameAndParameters =
+                { Name = "ReplaceColors"
+                  Parameters = 
+                    ["colorMapping" => colorMapping.ToString()
+                     "options" => options.ToString() ]
+                }
+
+            Modify.ReplaceColors(picker, options = options, nameAndParameters = nameAndParameters)
+        )
+
+    static member ReplaceColors1 (colorMapping: ColorMappings, ?options: Modify_ReplaceColors_Options) =
+        let options =
+            options 
+            |> Option.map (fun options ->
+                { options with  
+                    PageInfosValidation = PageInfosValidation.atLeastOne }
+            )
+
+        Modify.ReplaceColors(colorMapping, ?options = options)
 
     static member ReplaceColors1 (originColors: Color list, targetColor: Color, ?options: Modify_ReplaceColors_Options) =
         let options =

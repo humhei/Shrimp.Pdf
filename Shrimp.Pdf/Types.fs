@@ -122,7 +122,7 @@ module FsSize =
 
     let A3 = ofPageSize PageSize.A3
 
-    let A4 = ofPageSize PageSize.A4
+    let A4 = { Width = mm 210.; Height = mm 297. }
 
     let MAXIMUN = 
         { Width = mm Shrimp.Pdf.Constants.MAXIMUM_MM_WIDTH
