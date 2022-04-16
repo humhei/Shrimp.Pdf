@@ -698,21 +698,27 @@ module _Colors =
 
                         let a = 
                             let range = ranges.[1]
-                            match int range.Last - int range.Start with 
-                            | v when v >= 0 -> v
-                            | _ -> failwithf "Cannot parse PdfFunction0SamplesKind %A to lab" samples.Kind
+                            int range.Last - int range.Start
 
                         let b = 
                             let range = ranges.[2]
-                            match int range.Last - int range.Start with 
-                            | v when v >= 0 -> v
-                            | _ -> failwithf "Cannot parse PdfFunction0SamplesKind %A to lab" samples.Kind
+                            int range.Last - int range.Start 
 
 
                         [ l; float32 a; float32 b ]
 
                     | ColorSpace.Cmyk ->
-                        failwith "Not implemnted"
+                        let __checkdictionaryRangeValid = 
+                            match dictionaryRange with 
+                            | [0.f; 1.f; 0.f; 1.f; 0.f; 1.f; 0.f; 1.f] -> ()
+                            | _ -> failwith "Not implemented"
+                        let getValue (range: PdfFunction0SamplesRange) =
+                            match range.Start with 
+                            | 0uy -> float32 range.Last / 255.f
+                            | _ -> failwithf "Cannot parse PdfFunction0SamplesKind %A to cmyk" samples.Kind
+
+                        ranges
+                        |> List.map getValue
 
                     | _ -> failwith "Not implemnted"
 
