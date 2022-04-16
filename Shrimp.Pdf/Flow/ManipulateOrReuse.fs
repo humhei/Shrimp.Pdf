@@ -580,11 +580,11 @@ module Reuse =
             operateDocument = false
         )
 
-    let rename (name: string) (paramters: list<string * string>) =
+    let rename (name: string) (parameters: list<string * string>) =
         fun (reuse: Reuse<_, _>) ->
             Reuse(
                 Flow.NamedFlow(
-                    FlowName.Override(name, paramters),
+                    FlowName.Override(name, parameters),
                     reuse.Flow
                 )
             )
@@ -687,11 +687,11 @@ module Manipulate =
             operateDocument = false 
         )
 
-    let rename (name: string) (paramters: list<string * string>) =
+    let rename (name: string) (parameters: list<string * string>) =
         fun (reuse: Manipulate<_, _>) ->
             Manipulate(
                 Flow.NamedFlow(
-                    FlowName.Override(name, paramters),
+                    FlowName.Override(name, parameters),
                     reuse.Flow
                 )
             )

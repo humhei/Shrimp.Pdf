@@ -697,8 +697,10 @@ module iText =
                 actualFontSize / float(matrix.Get(0)) 
 
             member info.GetFontName() =
-                info.GetFont().GetFontProgram().GetFontNames().GetFontName()
-        
+                info.GetFont().GetFontProgram().GetFontNames()
+                |> FsFontName.Create
+
+
         /// GetFontSize() * ctm.m00
         let getActualFontSize (info: ITextRenderInfo) =
             info.Value.GetActualFontSize()
@@ -783,15 +785,9 @@ module iText =
 
         let getFontName (info: ITextRenderInfo) = info.Value.GetFontName()
 
-        let fontNameIs fontName (info: ITextRenderInfo) =
+        let fontNameIs (fontName: string) (info: ITextRenderInfo) =
             let fontName' = getFontName info
-
-            StringIC fontName = StringIC fontName'
-            || (
-                    if fontName'.Contains "+"
-                    then StringIC(fontName'.RightOf("+").Value) = StringIC fontName
-                    else false
-                )
+            FsFontName(fontName).ShortFontName = fontName'.ShortFontName
 
             
 
@@ -1287,7 +1283,7 @@ module iText =
         member x.GetArea(areaGettingOptions: AreaGettingOptions) =
             match areaGettingOptions with 
             | AreaGettingOptions.PageBox pageBoxKind -> x.GetPageBox(pageBoxKind)
-            | AreaGettingOptions.Specfic rect -> rect
+            | AreaGettingOptions.FsSpecfic rect -> rect.AsRectangle
             | AreaGettingOptions.PageBoxWithOffset (pageBoxKind, margin) ->
                 x.GetPageBox(pageBoxKind)
                 |> Rectangle.applyMargin margin

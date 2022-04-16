@@ -1,6 +1,7 @@
 ﻿namespace Shrimp.Pdf.DSL
 
 open iText.Kernel.Pdf.Canvas.Parser
+open Newtonsoft.Json
 
 
 
@@ -180,14 +181,23 @@ module Selector =
         
         
 
-type Info_BoundIs_Args (relativePosition: RelativePosition, ?areaGettingOptions, ?boundGettingStrokeOptions) =
+type Info_BoundIs_Args [<JsonConstructor>] (relativePosition: RelativePosition, ?areaGettingOptionsOp, ?boundGettingStrokeOptionsOp) =
+    inherit POCOBaseEquatable<RelativePosition * AreaGettingOptions option * BoundGettingStrokeOptions option>(relativePosition, areaGettingOptionsOp, boundGettingStrokeOptionsOp)
+    
+    [<JsonProperty>]
     member x.RelativePosition = relativePosition
 
-    member x.AreaGettingOptions = defaultArg areaGettingOptions (AreaGettingOptions.PageBox PageBoxKind.ActualBox)
+    [<JsonProperty>]
+    member private x.AreaGettingOptionsOP = areaGettingOptionsOp
+
+
+    member x.AreaGettingOptions = defaultArg areaGettingOptionsOp (AreaGettingOptions.PageBox PageBoxKind.ActualBox)
 
     member val BoundGettingStrokeOptions = 
-        defaultArg boundGettingStrokeOptions BoundGettingStrokeOptions.WithoutStrokeWidth
+        defaultArg boundGettingStrokeOptionsOp BoundGettingStrokeOptions.WithoutStrokeWidth
 
+    [<JsonProperty>]
+    member private x.BoundGettingStrokeOptionsOP = boundGettingStrokeOptionsOp
 
 
 
@@ -207,10 +217,14 @@ type TextInfo =
         fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
             ITextRenderInfo.fontNameIs fontName info
         
+    static member FontSizeIs(fontSize) =
+        fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
+            fontSize @= ITextRenderInfo.getActualFontSize info
+
     static member FontNameAndSizeIs(fontName, fontSize: float) =
         fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
             ITextRenderInfo.fontNameIs fontName info
-            && (fontSize @= float(ITextRenderInfo.getActualFontSize info))
+            && (fontSize @= ITextRenderInfo.getActualFontSize info)
         
 
 
@@ -440,7 +454,16 @@ type Info =
         Info.BoundIs(RelativePosition.OutBox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
+    static member DenseBoundIs (relativePosition, areaGettingOptions, ?boundGettingOptions) =
+        Info.BoundIs(true, relativePosition, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+
     static member DenseBoundIsOutsideOf (areaGettingOptions, ?boundGettingOptions) =
         Info.BoundIs(true, RelativePosition.OutBox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
+
+    static member DenseBoundIsInsideOf (areaGettingOptions, ?boundGettingOptions) =
+        Info.BoundIs(true, RelativePosition.Inbox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)

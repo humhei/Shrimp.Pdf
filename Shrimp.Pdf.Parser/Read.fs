@@ -177,13 +177,15 @@ module internal Listeners =
 
     [<AllowNullLiteral>]
     /// a type named FilteredEventListener is already defined in itext7
-    /// OR Between selectors of renderInfoSelectorMapping
+    /// renderInfoSelectorMapping bitwise relation: OR 
     type FilteredEventListenerEx(renderInfoSelectorMapping: Map<SelectorModiferToken, RenderInfoSelector>) =
         let prediateMapping = 
             renderInfoSelectorMapping
             |> Map.map (fun token renderInfoSelector -> 
                 RenderInfoSelector.toRenderInfoIMPredication renderInfoSelector
             )
+        let mutable isShowingText = false
+        let mutable concatedTextInfos = ResizeArray() 
 
         let mutable currentXObjectClippingBox = XObjectClippingBoxState.Init
 
@@ -203,6 +205,15 @@ module internal Listeners =
                 |> RenderInfoSelector.toEventTypes
               
             List supportedEvents :> ICollection<_>
+
+
+
+        member internal x.BeginShowText() = isShowingText <- true
+        member internal x.EndShoeText() = 
+            concatedTextInfos.Clear()
+            isShowingText <- false
+
+        member internal this.ConcatedTextInfos = concatedTextInfos :> seq<IntegratedTextRenderInfo>
 
         member this.CurrentRenderInfo = currentRenderInfo.Value
 
@@ -282,6 +293,14 @@ module internal Listeners =
                             |> List.map fst
 
                         renderInfo.Value.PreserveGraphicsState()
+
+                        match isShowingText with 
+                        | true ->
+                            match renderInfo.TagIM with 
+                            | IntegratedRenderInfoTagIM.Text -> 
+                                concatedTextInfos.Add(renderInfo :?> IntegratedTextRenderInfo)
+                            | _ -> ()
+                        | false -> ()
 
                         parsedRenderInfos.Add(renderInfo)
                         currentRenderInfoToken <- Some tokens
@@ -388,6 +407,7 @@ type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener ,
 
             | _ -> base.InvokeOperator(operator, operands)
         | _ ->  
+
             base.InvokeOperator(operator, operands)
             //match operator.ToString() with 
             //| "cm" ->

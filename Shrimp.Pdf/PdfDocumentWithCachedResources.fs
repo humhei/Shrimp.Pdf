@@ -10,6 +10,9 @@ open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Colors
 open iText.IO.Font.Constants
 open Shrimp.FSharp.Plus
+open iText.IO.Font
+open iText.IO.Font.Otf
+
 
 module private FontExtensions =
     let private fontRegisterCache = new ConcurrentDictionary<string, RegisterableFont>()
@@ -29,18 +32,27 @@ module private FontExtensions =
 
 open FontExtensions
 open iText.Kernel.Pdf.Colorspace
+open Newtonsoft.Json
 
+
+
+
+
+        
 
 [<RequireQualifiedAccess>]
 type FsPdfFontFactory =
     | Registerable of RegisterableFont
     /// StandardFonts: See iText.IO.Font.Constants.StandardFonts
     | StandardFonts of string
+    | DocumentFont of FsFontName
 with 
     member x.LoggingText =
         match x with 
         | FsPdfFontFactory.Registerable v -> v.LoggingText
         | FsPdfFontFactory.StandardFonts v -> v
+        | FsPdfFontFactory.DocumentFont (documentFont) -> documentFont.LoggingText
+
 
 
 [<RequireQualifiedAccess>]
@@ -53,14 +65,26 @@ type ResourceColor =
 
 
 type private PdfDocumentCache private 
-    (pdfDocument: unit -> PdfDocument,
+    (pdfDocument: unit -> PdfDocumentWithCachedResources,
      fontsCache: ConcurrentDictionary<FsPdfFontFactory, PdfFont>,
      colorsCache: ConcurrentDictionary<ResourceColor, Color>,
      extGStateCache: ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>) =
     let mutable labColorSpace = None
 
-    member internal x.Spawn(pdfDocument: unit -> PdfDocument) =
+    member internal x.Clear() = 
+        fontsCache.Clear()
+        colorsCache.Clear()
+        extGStateCache.Clear()
+
+    member internal x.Spawn(pdfDocument: unit -> PdfDocumentWithCachedResources) =
         PdfDocumentCache(pdfDocument, new ConcurrentDictionary<_, _>(), colorsCache,extGStateCache)
+
+    member internal x.CacheDocumentFonts(fonts) =
+        for (font: PdfFont) in fonts do
+            let fontNames = font.GetFontProgram().GetFontNames()
+            fontsCache.GetOrAdd(FsPdfFontFactory.DocumentFont(FsFontName.Create(fontNames)), fun _ ->
+                font
+            ) |> ignore
 
     member internal x.GetOrCreateColor(resourceColor: ResourceColor) =
         colorsCache.GetOrAdd((resourceColor), fun (color) ->
@@ -92,15 +116,19 @@ type private PdfDocumentCache private
 
     member internal x.GetOrCreateFont(fontFactory: FsPdfFontFactory) =
         fontsCache.GetOrAdd((fontFactory), fun (fontFactory) ->
-
-            let fontFamily, fontPdfEncodings = 
+            
+            let font = 
                 match fontFactory with 
                 | FsPdfFontFactory.Registerable fontFactory ->
-                    fontFactory.FontFamily, fontFactory.PdfEncodings
+                    (pdfDocument()).FindFont(fontFactory.FontFamily, fontFactory.PdfEncodings)
                 | FsPdfFontFactory.StandardFonts fontFamily ->
-                    fontFamily,""
+                    (pdfDocument()).FindFont(fontFamily,"")
+                | FsPdfFontFactory.DocumentFont font -> 
+                    fontsCache.GetOrAdd(fontFactory, fun _ ->
+                        failwithf "Cannot create document font %s, please cache it before using it with ModifyPage.CacheDocumentFonts" font.LoggingText
+                    )
 
-            match (pdfDocument()).FindFont(fontFamily, fontPdfEncodings) with
+            match font with
             | null -> 
                 match fontFactory with 
                 | FsPdfFontFactory.StandardFonts fontName -> PdfFontFactory.CreateFont(fontName)
@@ -110,7 +138,10 @@ type private PdfDocumentCache private
                         match PdfFontFactory.CreateFont(registerableFont) with 
                         | null -> failwithf "Cannot create font %s by %A" registerableFont.Path registerableFont
                         | font -> font
-                    else failwithf "Cannot find font %s" registerableFont.Path
+                    else failwithf "Cannot find registerable font %s" registerableFont.Path
+                | FsPdfFontFactory.DocumentFont documentFont ->
+                    failwithf "Cannot find document font %s" documentFont.LoggingText
+
             | pdfFont -> pdfFont
         )
 
@@ -123,22 +154,56 @@ type private PdfDocumentCache private
                 .SetStrokeOverPrintFlag(extGState.IsStrokeOverprint)
         )
 
-    new (pdfDocument: unit -> PdfDocument) =
+    new (pdfDocument: unit -> PdfDocumentWithCachedResources) =
         PdfDocumentCache
             (pdfDocument,
              new ConcurrentDictionary<FsPdfFontFactory, PdfFont>(),
              new ConcurrentDictionary<ResourceColor, Color>(),
              new ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>())
 
-type PdfDocumentWithCachedResources =
+and PdfDocumentWithCachedResources =
     inherit PdfDocument
     val private cache: PdfDocumentCache
+
+
 
     member x.GetOrCreatePdfFont(fontFactory: FsPdfFontFactory) =
         x.cache.GetOrCreateFont(fontFactory)
 
+    //member private x.ClearCache() = x.cache.Clear()
+
+    /// defaultPageSelector is First
+    member x.CacheDocumentFonts(?pageSelector: PageSelector) =
+        let pageSelector = defaultArg pageSelector PageSelector.First
+        let pageNumbers = 
+            x.GetPageNumbers(pageSelector) 
+            |> List.distinct
+
+        let parser = new NonInitialClippingPathPdfDocumentContentParser(x)
+
+        let infos = 
+            pageNumbers
+            |> List.collect(fun pageNumber ->
+                NonInitialClippingPathPdfDocumentContentParser.parse
+                    pageNumber
+                    (RenderInfoSelector.Text(fun _ -> true))
+                    parser
+                |> List.ofSeq
+                |> List.choose IIntegratedRenderInfo.asITextRenderInfo
+            )
+
+        let fonts = 
+            infos
+            |> List.ofSeq
+            |> List.choose IIntegratedRenderInfo.asITextRenderInfo
+            |> List.map(fun info -> info.TextRenderInfo.GetFont())
+
+        x.cache.CacheDocumentFonts(fonts)
+
     member x.GetOrCreateColor(resourceColor: ResourceColor) =
         x.cache.GetOrCreateColor(resourceColor)
+
+    member internal x.GetDocumentFontsInternal() = base.GetDocumentFonts()
 
     member pdfDocument.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =
         match pdfCanvasColor with 
@@ -173,15 +238,18 @@ type PdfDocumentWithCachedResources =
     member x.GetOrCreateExtGState(extGState: FsExtGState) = 
         x.cache.GetOrCreateExtGState(extGState)
         
+    //member x.CloseAndClearCache() = 
+    //    x.ClearCache()
+    //    x.Close()
 
     new (writer: string) as this = 
-        { inherit PdfDocument(new PdfWriter(writer)); cache = new PdfDocumentCache((fun _ -> this :> PdfDocument)) }
+        { inherit PdfDocument(new PdfWriter(writer)); cache = new PdfDocumentCache((fun _ -> this)) }
 
     new (reader: string, writer: string) as this =  
-        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = new PdfDocumentCache(fun _ -> this :> PdfDocument) }
+        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = new PdfDocumentCache((fun _ -> this)) }
 
     new (reader: string, writer: string, oldDocument: PdfDocumentWithCachedResources) as this =  
-        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = oldDocument.cache.Spawn(fun _ -> this :> PdfDocument) }
+        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = oldDocument.cache.Spawn(fun _ -> this) }
 
 
 type IntegratedDocument internal (reader: string, writer: string) =

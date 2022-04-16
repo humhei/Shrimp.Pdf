@@ -1,4 +1,8 @@
 ﻿namespace Shrimp.Pdf
+
+open Newtonsoft.Json
+open iText.IO.Font
+
 #nowarn "0104"
 open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas.Parser.Data
@@ -12,6 +16,29 @@ module ExtensionTypes =
 
     type PdfLiteral with 
         member x.Text() = x.ToString()
+
+    let private shortFontName (fontName: string) =
+        if fontName.Contains "+"
+        then fontName.RightOf("+").Value
+        else fontName
+
+    type FsFontName [<JsonConstructor>] (fontName: string) =
+        inherit POCOBase<StringIC>(fontName |> shortFontName |> StringIC)
+    
+        let shortFontName = shortFontName fontName
+            
+        [<JsonProperty>]
+        member private x.FontName = fontName
+    
+        member x.ShortFontName = shortFontName
+    
+        member x.LoggingText = shortFontName
+    
+        static member Create (fontName: FontNames) =
+            let fontName = fontName.GetFontName()
+            FsFontName(fontName)
+    
+    
 
     [<StructuredFormatDisplay("{LoggingText}")>]
     type FsRectangle =
@@ -570,15 +597,21 @@ module ExtensionTypes =
     type AreaGettingOptions =
         | PageBox of PageBoxKind
         | PageBoxWithOffset of PageBoxKind * Margin
-        | Specfic of Rectangle
+        | FsSpecfic of FsRectangle
+    with    
+        static member Specfic(rect) = 
+            AreaGettingOptions.FsSpecfic(FsRectangle.OfRectangle rect)
+
 
 
     [<RequireQualifiedAccess>]
     type CanvasFontSize =
         | Numeric of size: float
         | OfRootArea of scale: float
-        | OfArea of Rectangle
-
+        | OfFsArea of FsRectangle
+    with    
+        static member OfArea(rect) =
+            CanvasFontSize.OfFsArea(FsRectangle.OfRectangle rect)
 
     [<RequireQualifiedAccess>]
     type RelativePosition =

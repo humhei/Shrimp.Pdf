@@ -88,22 +88,22 @@ type FlowName private (flowNameKind: FlowNameKind, ?parentFlowName) =
 
         | None -> None
      
-    static member Override (name: string, ?paramters) = 
-        let paramters = defaultArg paramters []
+    static member Override (name: string, ?parameters) = 
+        let parameters = defaultArg parameters []
         if name.IndexOfAny(Path.GetInvalidFileNameChars()) > 0 then failwithf "Invalid flowName path %s" name
         if name.Length > 100 then failwithf "flowName %s 's length is bigger than 100" name
-        (name, paramters)
+        (name, parameters)
         |> FlowNameKind.Override
         |> FlowName
 
     member internal x.SetParentFlowName(parentFlowName) = 
         FlowName(x.FlowNameKind, parentFlowName)
 
-    static member New (name: string, ?paramters) = 
-        let paramters = defaultArg paramters []
+    static member New (name: string, ?parameters) = 
+        let parameters = defaultArg parameters []
         if name.IndexOfAny(Path.GetInvalidFileNameChars()) > 0 then failwithf "Invalid flowName %s" name
         if name.Length > 100 then failwithf "flowName %s 's length is bigger 100" name
-        (name, paramters)
+        (name, parameters)
         |> FlowNameKind.New
         |> FlowName
 
@@ -212,7 +212,7 @@ module internal Logger_FlowModel =
             match flowModel.FlowName with 
             | Some flowName ->
                 match flowName.FlowNameKind.NameAndParameters with 
-                | Some (name, paramters) ->
+                | Some (name, parameters) ->
                     let indentsCount = flowName.RelativeDirectoryNames.Length
 
                     let indentText =
@@ -233,7 +233,7 @@ module internal Logger_FlowModel =
                               sprintf "Name: %s" name
                               "Parameters:" ]
                             @ (
-                                paramters
+                                parameters
                                 |> List.map (fun (paramter, paramterValue) ->
                                     sprintf "    %s: %s" paramter paramterValue
                                 )

@@ -73,7 +73,7 @@ let reuseTests =
         |> runTest "datas/reuse/Clipping Contents To PageBox2.pdf" 
         |> ignore
 
-    ftestCase "preimpose" <| fun _ -> 
+    testCase "preimpose" <| fun _ -> 
         let m = FsSize.A4
         let r = PdfRunner.PreImpose_Repeated_One
                     {_ImposingArguments.DefaultValue 

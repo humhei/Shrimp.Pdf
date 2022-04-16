@@ -304,12 +304,7 @@ module _Types_Ex =
         member x.Is(fontName: string, fontSize: float, ?fillColor: FsColor) =
             
             let ifFontNameTheSame = 
-                StringIC fontName = StringIC x.FontName
-                || (
-                        if x.FontName.Contains "+"
-                        then StringIC(x.FontName.RightOf("+").Value) = StringIC fontName
-                        else false
-                    )
+                StringIC fontName = StringIC x.FontName.ShortFontName
     
             ifFontNameTheSame
             && fontSize @= x.FontSize

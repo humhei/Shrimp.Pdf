@@ -364,6 +364,12 @@ type internal CallbackableContentOperator (originalOperator) =
             
             let processor = processor :?> OperatorRangeCallbackablePdfCanvasProcessor
             let operatorName = operator.Text()
+            match operatorName with 
+            | ContainsBy [Tj; TJ] -> 
+                processor.Listener.BeginShowText()
+            | _ -> ()
+
+
             if operatorName <> Do then 
                 try 
                     this.OriginalOperator.Invoke(processor, operator, operands)
@@ -377,11 +383,21 @@ type internal CallbackableContentOperator (originalOperator) =
 
                     else reraise()
 
-            processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
+            match operatorName with 
+            | ContainsBy [Tj; TJ] -> 
+                processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
+                processor.Listener.EndShoeText()
+
+            | _ -> 
+                processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
+
+            
 
 and private OperatorRangeCallbackablePdfCanvasProcessor(listener) =
     inherit NonInitialCallbackablePdfCanvasProcessor(listener)
     abstract member InvokeOperatorRange: OperatorRange -> unit
+
+    member internal x.Listener: FilteredEventListenerEx = listener
 
     default this.InvokeOperatorRange(operatorRange) = ()
 
@@ -400,7 +416,8 @@ and private OperatorRangeCallbackablePdfCanvasProcessor(listener) =
 
 [<Struct>]
 type _SelectionModifierFixmentArguments =
-    { CurrentRenderInfo: IIntegratedRenderInfoIM }
+    { CurrentRenderInfo: IIntegratedRenderInfoIM
+      ConcatedTextInfos: IntegratedTextRenderInfo seq }
 
 
 type private Modifier = _SelectionModifierFixmentArguments -> ModifierPdfCanvasActions
@@ -505,7 +522,6 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
 
         | PathOrText ->
-
             match eventListener.CurrentRenderInfoStatus with 
             | CurrentRenderInfoStatus.Skiped -> 
                 PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
@@ -525,7 +541,8 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                     eventListener.CurrentRenderInfoToken.Value
                     |> List.map(fun token -> 
                         let fix = snd selectorModifierMapping.[token]
-                        fix { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
+                        fix { CurrentRenderInfo = eventListener.CurrentRenderInfo
+                              ConcatedTextInfos = eventListener.ConcatedTextInfos }    
                     )
                     |> ModifierPdfCanvasActions.ConcatOrKeep tag
 

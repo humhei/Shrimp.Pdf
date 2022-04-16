@@ -164,6 +164,10 @@ module PdfDocumentWithCachedResources =
 
     [<RequireQualifiedAccess>]
     module PdfCanvas =
+        let setTextMatrix (matrix: Matrix) (canvas: PdfCanvas) =
+            let transform = AffineTransform.ofMatrix matrix
+            canvas.SetTextMatrix(transform)
+
         let addLine (line: StraightLine) (mapping: PdfCanvasAddLineArguments -> PdfCanvasAddLineArguments) (canvas: PdfCanvas) =
             let args = mapping PdfCanvasAddLineArguments.DefaultValue
             let close = PdfCanvas.stroke
@@ -220,8 +224,8 @@ module PdfDocumentWithCachedResources =
                 let area = canvas.GetRootArea()
                 PdfFont.fontSizeOfArea area text pdfFont * scale
 
-            | CanvasFontSize.OfArea (area) ->
-                PdfFont.fontSizeOfArea area text pdfFont
+            | CanvasFontSize.OfFsArea (area) ->
+                PdfFont.fontSizeOfArea area.AsRectangle text pdfFont
 
         member canvas.CalcTextLineWidthUnits (text, args: CanvasAddTextArguments) = 
             let pdfFont = 

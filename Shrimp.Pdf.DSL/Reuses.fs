@@ -316,7 +316,7 @@ module _Reuses =
         | EmptyPage of targetPage: PdfPage option
         | Token of PageNumSequenceToken * PdfPage
 
-    let private reuse name paramters f = Reuse(f = f, flowName = FlowName.Override(name, paramters))
+    let private reuse name parameters f = Reuse(f = f, flowName = FlowName.Override(name, parameters))
 
     type PageInsertingOptions =
         | BeforePoint = 0

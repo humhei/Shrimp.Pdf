@@ -305,9 +305,7 @@ module ModifyPageOperators =
                         |> List.distinctBy(fun (key, _) -> key.Trim().ToLower())
                    
 
-                FlowName.Override(name, 
-                    parameters
-                )
+                FlowName.Override(name, parameters)
 
             let f =
                 fun (flowModel: FlowModel<_>) (integratedDocument: IntegratedDocument) ->
@@ -342,7 +340,9 @@ module ModifyPageOperators =
             )
 
 
+
     type PdfRunner with 
+        
         static member private ReadInfos(pdfFile: PdfFile, selector,  pageModifier: PageModifier<_, _>, ?backupPdfPath, ?name, ?pageSelector) =
             let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path
             let flow = 

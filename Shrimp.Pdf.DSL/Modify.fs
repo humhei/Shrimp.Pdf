@@ -12,6 +12,7 @@ open Shrimp.Pdf
 open System.IO
 open iText.Kernel.Pdf
 open Shrimp.FSharp.Plus
+open Shrimp.FSharp.Plus.Text
 
 type StrokeWidthIncrenment =
     { Value: ``ufloat>0`` 
@@ -39,7 +40,8 @@ with
 
 type _SelectionModifierFixmentArgumentsIM<'userState> =
     { CurrentRenderInfoIM: IIntegratedRenderInfoIM 
-      PageModifingArguments: PageModifingArguments<'userState> }
+      PageModifingArguments: PageModifingArguments<'userState>
+      ConcatedTextInfos: seq<IntegratedTextRenderInfo>}
 with 
     member x.PageNum = x.PageModifingArguments.PageNum
 
@@ -49,7 +51,8 @@ with
 
 type _SelectionModifierFixmentArguments<'userState> =
     { CurrentRenderInfo: IIntegratedRenderInfo 
-      PageModifingArguments: PageModifingArguments<'userState> }
+      PageModifingArguments: PageModifingArguments<'userState>
+      ConcatedTextInfos: seq<IntegratedTextRenderInfo>}
 
 with 
     member internal x.Tag = x.CurrentRenderInfo.Tag
@@ -116,7 +119,8 @@ module private Modifier =
     let toIM (modifier: Modifier<_>): ModifierIM<_> =
         fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
             { CurrentRenderInfo = args.CurrentRenderInfoIM :?> IIntegratedRenderInfo
-              PageModifingArguments = args.PageModifingArguments }
+              PageModifingArguments = args.PageModifingArguments
+              ConcatedTextInfos = args.ConcatedTextInfos }
             |> modifier
 
 
@@ -140,14 +144,16 @@ module private Modifiers =
     let toSelectionModifier (pageModifingArguments: PageModifingArguments<_>) (modifiers: Modifier<_> list) =
         toSelectionModifierCommon pageModifingArguments modifiers (fun args ->
             { PageModifingArguments = pageModifingArguments
-              CurrentRenderInfo = args.CurrentRenderInfo :?> IIntegratedRenderInfo }
+              CurrentRenderInfo = args.CurrentRenderInfo :?> IIntegratedRenderInfo
+              ConcatedTextInfos = args.ConcatedTextInfos }
         )
       
 
     let toSelectionModifierIM (pageModifingArguments: PageModifingArguments<_>) (modifiers: ModifierIM<_> list) =
         toSelectionModifierCommon pageModifingArguments modifiers (fun args ->
             { PageModifingArguments = pageModifingArguments
-              CurrentRenderInfoIM = args.CurrentRenderInfo }
+              CurrentRenderInfoIM = args.CurrentRenderInfo
+              ConcatedTextInfos = args.ConcatedTextInfos }
         )
        
 
@@ -190,6 +196,7 @@ with
         
 
 type Modifier =
+
 
     static member SetFontAndSize(font, size: float) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
@@ -683,8 +690,8 @@ module ModifyOperators =
                 )
             modify(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
 
-type FontAndSizeQuery [<JsonConstructor>] (fontName: string, ?fontSize: float, ?fillColor) =
-    inherit POCOBaseEquatable<string * float option * FsColor option>(fontName, fontSize, fillColor)
+type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?info_BoundIs_Args, ?textPattern) =
+    inherit POCOBaseEquatable<string option * float option * FsColor option * Info_BoundIs_Args option * TextMatchingPattern option>(fontName, fontSize, fillColor, info_BoundIs_Args, textPattern)
 
     [<JsonProperty>]
     member x.FontName = fontName
@@ -695,34 +702,66 @@ type FontAndSizeQuery [<JsonConstructor>] (fontName: string, ?fontSize: float, ?
     [<JsonProperty>]
     member x.FillColor = fillColor
 
+    [<JsonProperty>]
+    member x.Info_BoundIs_Args = info_BoundIs_Args
+
+    [<JsonProperty>]
+    member x.TextPattern = textPattern
+
     member x.LoggingText =
         let fontSize = 
             match fontSize with 
-            | Some fontSize -> fontSize.ToString()
-            | None -> ""
+            | Some fontSize -> Some (fontSize.ToString())
+            | None -> None
 
         let fillColor =
             match fillColor with 
-            | Some fillColor -> fillColor.LoggingText
-            | None -> ""
+            | Some fillColor -> Some fillColor.LoggingText
+            | None -> None
+
+        let textPattern = textPattern |> Option.map (fun m -> m.ToString())
+        let info_BoundIs_Args = info_BoundIs_Args |> Option.map(fun m -> m.ToString())
+
+            
 
         [ fontName 
           fontSize 
-          fillColor ]
+          fillColor
+          textPattern
+          info_BoundIs_Args ]
+        |> List.choose id
         |> List.filter(fun m -> m <> "")
         |> String.concat " "
 
     member x.AsSelector() = 
         Selector.Text(fun args textInfo ->
-            match fontSize with 
-            | Some fontSize -> TextInfo.FontNameAndSizeIs(fontName, fontSize) args textInfo
-            | None -> TextInfo.FontNameIs(fontName) args textInfo
+            match textPattern with 
+            | Some textPattern -> 
+                let text = ITextRenderInfo.getText textInfo
+                textPattern.Predicate text
+            | None -> true
+            &&
+            match fontName, fontSize with 
+            | Some fontName, Some fontSize -> TextInfo.FontNameAndSizeIs(fontName, fontSize) args textInfo
+            | Some fontName, None -> TextInfo.FontNameIs(fontName) args textInfo
+            | None, Some fontSize -> TextInfo.FontSizeIs(fontSize) args textInfo
+            | None, None -> true 
             && ( match fillColor with 
                   | Some fillColor -> 
                      let fillColor' = textInfo.TextRenderInfo.GetFillColor() |> FsColor.OfItextColor
                      FsColor.equal (fillColor) fillColor'
                   | None -> true
                )
+            &&
+            match info_BoundIs_Args with 
+            | Some args2 ->
+                let args2 = args2 
+                Info.DenseBoundIs(
+                    args2.RelativePosition,
+                    args2.AreaGettingOptions,
+                    args2.BoundGettingStrokeOptions
+                ) args textInfo
+            | None -> true
 
         )
 
@@ -772,8 +811,6 @@ type NewFontAndSize [<JsonConstructor>] (?font: FsPdfFontFactory, ?fontSize: flo
             let size =
                 match fontSize with 
                 | Some fontSize -> fontSize
-                    
-
                 | None ->
                     let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
                     ITextRenderInfo.getActualFontSize info
@@ -1004,12 +1041,30 @@ type Modify =
             nameAndParameters = nameAndParameters
         )
 
+    static member MapFontAndSizeF(fOldFontAndSize: PageModifingArguments<_> -> FontAndSizeQuery, newFontAndSize: NewFontAndSize) =
+        Modify.Create_RecordEx(
+            PageSelector.All,
+            selectorAndModifiersList = [
+                { Name = "MapFonts"
+                  Selector = Selector.Factory(fun args -> (fOldFontAndSize args).AsSelector())
+                  Modifiers = 
+                    [
+                        newFontAndSize.AsModifier()
+                    ]
+                  PageInfosValidation = PageInfosValidation.ignore
+                  Parameters = 
+                    ["oldFontAndSize" => fOldFontAndSize.ToString()
+                     "newFontAndSize" => newFontAndSize.ToString() ]
+                }
+            ]
+        )
+
     static member MapFontAndSize(oldFontAndSize: FontAndSizeQuery, newFontAndSize: NewFontAndSize) =
         Modify.Create_RecordEx(
             PageSelector.All,
             selectorAndModifiersList = [
                 { Name = "MapFonts"
-                  Selector = oldFontAndSize.AsSelector()
+                  Selector = Selector.Factory(fun args -> oldFontAndSize.AsSelector())
                   Modifiers = 
                     [
                         newFontAndSize.AsModifier()
@@ -1019,5 +1074,44 @@ type Modify =
                     ["oldFontAndSize" => oldFontAndSize.LoggingText
                      "newFontAndSize" => newFontAndSize.ToString() ]
                 }
+            ]
+        )
+
+    static member SplitTextLineToWords() =
+        Modify.Create_Record(
+            PageSelector.All,
+            selectorAndModifiersList = [
+                { SelectorAndModifiersRecord.Name = "split text line to words"
+                  Selector = Text(fun _ _ -> true)
+                  Modifiers = [
+                    (fun args ->
+                        let textInfos = List.ofSeq args.ConcatedTextInfos
+                        let lastTextInfo = List.last textInfos
+                        let actions =
+                            textInfos
+                            |> List.mapi (fun i textInfo ->
+                                let matrix = textInfo.TextRenderInfo.GetTextMatrix()
+                                let lastIndex = (textInfos.Length - 1)
+                                match i with 
+                                | 0 -> [PdfCanvas.showText(ITextRenderInfo.getText textInfo)]
+                                | EqualTo lastIndex -> 
+                                    [
+                                        PdfCanvas.setTextMatrix(matrix)
+                                    ]
+                                | _ ->
+                                    [
+                                        PdfCanvas.setTextMatrix matrix
+                                        PdfCanvas.showText(ITextRenderInfo.getText textInfo)
+                                    ]
+                            )
+                            |> List.concat
+
+                        { ModifierPdfCanvasActions.Actions = actions 
+                          SuffixActions = []
+                          Close = CloseOperatorUnion.CreateText(text = ITextRenderInfo.getText lastTextInfo)
+                        }
+                    )
+                  ]
+                  }
             ]
         )

@@ -11,6 +11,7 @@ open Shrimp.Pdf.RegisterableFonts
 open Shrimp.Pdf.RegisterableFonts.YaHei
 open FontNames.Query
 open Imposing
+open Shrimp.Pdf.Parser
 open iText.IO.Font.Constants
 
 [<RequireQualifiedAccess>]
@@ -981,6 +982,27 @@ let manipulateTests =
         |> runTest "datas/manipulate/map arial to arial_bold.pdf" 
         |> ignore
 
+    ftestCase "map font for horizontal line" <| fun _ -> 
+
+
+        let flow =
+            Modify.SplitTextLineToWords()
+            <+>
+            Manipulate.Factory(fun flowModel doc ->
+                
+                doc.Value.CacheDocumentFonts()
+                Modify.MapFontAndSize(
+                    FontAndSizeQuery(textPattern = Text.TextMatchingPattern.Equal (StringIC "34")) =>
+                    NewFontAndSize(FsPdfFontFactory.DocumentFont(FsFontName("Tahoma-Bold")))
+                )
+            )
+
+
+        Flow.Manipulate(
+            flow
+        )
+        |> runTest "datas/manipulate/map font for horizontal line.pdf" 
+        |> ignore
     
     ptestCase "convert rgb image to gray" <| fun _ -> 
         let flow =
@@ -1027,24 +1049,13 @@ let manipulateTests =
             ]
         )
 
-    ftestCase "test infos" <| fun _ -> 
-        let reuse =
-            Modify.ReplaceColors(
-                ColorMappings.WhiteTo(PdfCanvasColor.valueColor FsDeviceCmyk.GREEN)
-            )
+    testCase "test infos" <| fun _ -> 
+
         let pdfFile = 
-            @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\Lpb\.btw\健耐 V221003-B\.shrimp.pdf\外箱A6贴标绿色.raw\10_ReplaceColors.pdf"
+            @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\CUTBACK\.btw\健耐 21DY232087\Lapolar吊牌反面.pdf"
             |> PdfFile
 
-        let testFile = 
-            System.IO.Path.ChangeExtension(pdfFile.Path, ".test.pdf")
-            
-        let r = 
-            PdfRunner.Manipulate(
-                pdfFile, testFile
-            ) reuse
-
-        printf ""
+        let textInfos = PdfRunner.ReadTextInfos(pdfFile)
 
         let flow =
             ModifyPage.Create(

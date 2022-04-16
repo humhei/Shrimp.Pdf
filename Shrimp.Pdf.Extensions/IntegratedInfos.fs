@@ -55,7 +55,7 @@ module IntegratedInfos =
           FontSize: float 
           FillColor: iText.Kernel.Colors.Color 
           StrokeColor: iText.Kernel.Colors.Color 
-          FontName: string
+          FontName: FsFontName
           Bound: FsRectangle
           DenseBound: FsRectangle }
             
