@@ -610,7 +610,7 @@ module _Colors =
 
 
         let kind =
-            match ranges |> List.forall (fun m -> m.Length = 2 && m.Range = 255) with 
+            match ranges |> List.forall (fun m -> m.Range = 255) with 
             | true -> PdfFunction0SamplesKind.Default
             | false ->
                 match ranges |> List.forall (fun m -> m.Length = 255) with 

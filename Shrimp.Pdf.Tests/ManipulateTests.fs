@@ -1061,7 +1061,7 @@ let manipulateTests =
     ftestCase "test infos" <| fun _ -> 
 
         let pdfFile = 
-            @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\CUTBACK\.btw\健耐 21DY232086\CUTBACK吊牌反面.raw.pdf"
+            @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\CUTBACK\.flow\#2022-04-14#(健耐, 21DY232086, 21DY232087)\DigitalPrinting\健耐 21DY232086\挂钩.duplicate.pdf"
             |> PdfFile
 
         let colors = PdfRunner.ReadColors(pdfFile)

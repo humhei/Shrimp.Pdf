@@ -23,6 +23,9 @@
     <None Include="Resources\Icc\**">
           <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </None>
+      <None Include="Resources\**\*.xlsx">
+          <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      </None>
     <None Include="Resources\Marks\*.pdf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
