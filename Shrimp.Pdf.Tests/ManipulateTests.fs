@@ -992,7 +992,7 @@ let manipulateTests =
                 
                 doc.Value.CacheDocumentFonts()
                 Modify.MapFontAndSize(
-                    FontAndSizeQuery(textPattern = Text.TextMatchingPattern.Equal (StringIC "34")) =>
+                    FontAndSizeQuery(textPattern = Text.TextMatchingPattern.EqualTo (StringIC "34")) =>
                     NewFontAndSize(FsPdfFontFactory.DocumentFont(FsFontName("Tahoma-Bold")), fontSize = 12., alignment = XEffect.Middle)
                 )
             )
