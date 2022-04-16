@@ -108,6 +108,11 @@ module _Colors =
         static member Create(r, g, b) =
             FsDeviceRgb.Create(float32 r / 255.f, float32 g / 255.f, float32 b / 255.f)
 
+        static member FromKnownColor(knownColor: KnownColor) =
+            let color = Color.FromName(knownColor.ToString())
+            { R = float color.R / 255. |> float32 
+              G = float color.G / 255. |> float32 
+              B = float color.B / 255. |> float32 }
 
     type FsLab =
         { L: float32 
@@ -122,10 +127,11 @@ module _Colors =
         member x.LoggingText = 
             sprintf "LAB %.1f %.1f %.1f" (x.L) x.a x.b
 
+
         static member Create(l, a, b) =
             { L = l 
               a = a
-              b = b}
+              b = b }
 
         member x.ToItextColor(?colorSpace: PdfCieBasedCs.Lab) =
             match colorSpace with 
@@ -563,10 +569,60 @@ module _Colors =
                 
             icc
 
-    
+
+
+    type private PdfFunction0SamplesRange(values: byte list) =
+        
+        let head = values.[0]
+        let last = List.last values
+        let length = values.Length
+        let range = int last - int head
+        member x.Values = values
+        member x.Start = head
+        member x.Last = last
+        member x.Range = range
+        member x.Length = length
+
+        override x.ToString() = 
+            sprintf "%d-%d" head last
+
+    [<RequireQualifiedAccess>]
+    type private PdfFunction0SamplesKind =
+        /// 0	0	0
+        /// 255	255	255
+        | Default
+        | Valid of PdfFunction0SamplesRange list
+
+
+    type private PdfFunction0Samples(bytes: byte [], alterColorSpace: ColorSpace) =
+        let chunkSize =
+            match alterColorSpace with 
+            | ColorSpace.Lab -> 3
+            | ColorSpace.Cmyk -> 4
+            | ColorSpace.Gray -> 1
+            | ColorSpace.Rgb -> 3
+
+        let ranges =
+            bytes
+            |> List.ofArray
+            |> List.splitIntoGroup chunkSize
+            |> List.map PdfFunction0SamplesRange
+
+
+        let kind =
+            match ranges |> List.forall (fun m -> m.Length = 2 && m.Range = 255) with 
+            | true -> PdfFunction0SamplesKind.Default
+            | false ->
+                match ranges |> List.forall (fun m -> m.Length = 255) with 
+                | true -> PdfFunction0SamplesKind.Valid(ranges)
+                | false -> failwithf "Cannot determine PdfFunction0SamplesKind from %A" ranges
+                
+        member x.Ranges = ranges
+
+        member x.Kind = kind
 
     type private PdfSpecialCs.Separation with 
-        member x.GetAlternateSpace() =
+        member internal x.GetAlternateSpace() =
             let pdfName = 
                 let colorSpacePdfArray = x.GetPdfObject() :?> PdfArray
                 match colorSpacePdfArray.Get(2) with
@@ -587,33 +643,79 @@ module _Colors =
             let colorSpacePdfFunction = 
                 match colorSpacePdfArray.GetAsDictionary(3) with
                 | null ->
-                    colorSpacePdfArray.GetAsStream(3) :> PdfDictionary
+                    let stream = colorSpacePdfArray.GetAsStream(3)
+                    stream :> PdfDictionary
                 | v -> v
+
+
             let pdfFunctionType = colorSpacePdfFunction.GetAsInt(PdfName.FunctionType)
 
             match pdfFunctionType.Value with
             | 0 ->
+
                 let alterColorSpace = x.GetAlternateSpace()
-                let range = 
+
+                let dictionaryRange = 
                     colorSpacePdfFunction.GetAsArray(PdfName.Range)
                     |> List.ofSeq
                     |> List.map (fun m -> (m :?> PdfNumber).FloatValue())
 
-                match alterColorSpace with 
-                | ColorSpace.Lab ->
+                let samples =
+                    let stream = colorSpacePdfFunction :?> PdfStream
+                    PdfFunction0Samples(stream.GetBytes(), alterColorSpace)
 
-                    let getColorValue valueGroup = 
-                        match valueGroup with 
-                        | [0.f; v] -> v
-                        | [v; 0.f] -> v
-                        | _ -> failwith "Invalid token"
+                match samples.Kind with 
+                | PdfFunction0SamplesKind.Default ->
+                    match alterColorSpace with 
+                    | ColorSpace.Lab ->
+                        let getColorValue valueGroup = 
+                            match valueGroup with 
+                            | [0.f; v] -> v
+                            | [v; 0.f] -> v
+                            | _ -> failwith "Invalid token"
+                        [ dictionaryRange.[0]; getColorValue dictionaryRange.[2..3]; getColorValue dictionaryRange.[4..5] ]
 
-                    [ range.[0]; getColorValue range.[2..3]; getColorValue range.[4..5] ]
+                    | ColorSpace.Cmyk ->
+                        [ dictionaryRange.[1]; dictionaryRange.[3]; dictionaryRange.[5]; dictionaryRange.[7] ]
 
-                | ColorSpace.Cmyk ->
-                    [ range.[1]; range.[3]; range.[5]; range.[7] ]
+                    | _ -> failwith "Not implemnted"
 
-                | _ -> failwith "Not implemnted"
+                | PdfFunction0SamplesKind.Valid ranges ->
+                    match alterColorSpace with 
+                    | ColorSpace.Lab ->
+                        let __checkdictionaryRangeValid = 
+                            match dictionaryRange with 
+                            | [0.f; 100.f; -128.f; 128.f; -128.f; 128.f] -> ()
+                            | _ -> failwith "Not implemented"
+
+                        let l =
+                            let headRange = ranges.[0]
+                            if headRange.Start = 255uy 
+                            then float32 headRange.Last / 255f * 100.f
+                            elif headRange.Start >= headRange.Last 
+                            then float32 headRange.Last / float32 headRange.Start * 100.f
+                            else failwithf "Cannot parse PdfFunction0SamplesKind %A to lab" samples.Kind
+
+                        let a = 
+                            let range = ranges.[1]
+                            match int range.Last - int range.Start with 
+                            | v when v >= 0 -> v
+                            | _ -> failwithf "Cannot parse PdfFunction0SamplesKind %A to lab" samples.Kind
+
+                        let b = 
+                            let range = ranges.[2]
+                            match int range.Last - int range.Start with 
+                            | v when v >= 0 -> v
+                            | _ -> failwithf "Cannot parse PdfFunction0SamplesKind %A to lab" samples.Kind
+
+
+                        [ l; float32 a; float32 b ]
+
+                    | ColorSpace.Cmyk ->
+                        failwith "Not implemnted"
+
+                    | _ -> failwith "Not implemnted"
+
             | 2 ->
                 colorSpacePdfFunction.GetAsArray(PdfName.C1)
                 |> List.ofSeq
@@ -737,16 +839,19 @@ module _Colors =
                 fsSeparationCache.GetOrAdd(colorSpace, fun _ ->
                     let colorSpacePdfArray = 
                         colorSpace.GetPdfObject() :?> PdfArray
-    
-                    let colorName = 
-                        let uri = 
-                            (colorSpacePdfArray.Get(1)
-                             |> string).TrimStart('/')
+                    
+                    match colorSpacePdfArray.IsFlushed() with 
+                    | true -> failwithf "%A  is alrealy flushed" separation
+                    | false ->
+                        let colorName = 
+                            let uri = 
+                                (colorSpacePdfArray.Get(1)
+                                 |> string).TrimStart('/')
 
-                        uri.Replace("#20", " ")
+                            uri.Replace("#20", " ")
     
 
-                    FsSeparation.Create(colorName, separation.GetAlterateColor())
+                        FsSeparation.Create(colorName, separation.GetAlterateColor())
                 )
 
             { v with Transparency = float transparency }

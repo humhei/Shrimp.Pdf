@@ -394,6 +394,28 @@ module ModifyPageOperators =
                 ?pageSelector = pageSelector
             )
 
+        static member ReadColors(pdfFile: PdfFile, ?backupPdfPath, ?name, ?pageSelector) =
+            PdfRunner.ReadInfos(
+                pdfFile, 
+                Selector.Path (fun _ _ -> true),
+                pageModifier = (fun args infos ->
+                    infos
+                    |> List.ofSeq
+                    |> List.collect (fun m -> 
+                        [
+                            FsColor.OfItextColor <| m.Value.GetFillColor()
+                            FsColor.OfItextColor <| m.Value.GetStrokeColor()
+                        ] 
+                    )
+                ),
+                ?backupPdfPath = backupPdfPath,
+                ?name = name,
+                ?pageSelector = pageSelector
+            )
+            |> List.concat
+            |> FsColors.distinct
+            |> List.ofSeq
+
         /// default pageSelector is PageSelector.First
         static member CheckInfos(pageSelector, pdfFile: PdfFile, selector, ?name, ?backupPdfPath) =
             let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path

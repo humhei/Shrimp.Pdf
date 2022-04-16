@@ -1,0 +1,10 @@
+﻿[0]------------------------------------------------------------------
+
+BEGIN
+    Name: Read infos fromchange separation color of pdfFunction0 PageNumber to m100
+    Parameters:
+        pageSelctor: ALL
+        selector: Path <fun:PdfRunner-ReadColors-Static@400>
+
+END Read infos fromchange separation color of pdfFunction0 PageNumber to m100 in 00:00:00.8507417 
+
