@@ -525,6 +525,14 @@ module ExtensionTypes =
 
         member x.m12 = x.TranslateY
         
+        static member DefaultValue =
+            { ScaleX = 1. 
+              ScaleY = 1. 
+              TranslateX = 0.
+              TranslateY = 0.
+              ShearX = 0.
+              ShearY = 0. }
+
     module AffineTransformRecord =
         let ofAffineTransform (affineTransform: AffineTransform) =
             { ScaleX = affineTransform.GetScaleX() 

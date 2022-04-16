@@ -13,6 +13,7 @@ open System.IO
 open iText.Kernel.Pdf
 open Shrimp.FSharp.Plus
 open Shrimp.FSharp.Plus.Text
+open iText.Kernel.Geom
 
 type StrokeWidthIncrenment =
     { Value: ``ufloat>0`` 
@@ -198,19 +199,48 @@ with
 type Modifier =
 
 
-    static member SetFontAndSize(font, size: float) : Modifier<'userState> =
+    static member SetFontAndSize(font, size: float, ?alignment: XEffect) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
+            let alignment = defaultArg alignment XEffect.Left
             match args.Tag with 
             | IntegratedRenderInfoTag.Path ->
                 ModifierPdfCanvasActions.Keep(args.Tag)
 
             | IntegratedRenderInfoTag.Text ->
                 let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
-                let size = ITextRenderInfo.toTransformedFontSize size info 
+                let transformedFontSize = ITextRenderInfo.toTransformedFontSize size info 
                 let text = ITextRenderInfo.getText info
+                let difference() =
+                    let originWidth = ITextRenderInfo.getWidth info
+                    let currentWidth =
+                        let widthUnits = PdfFont.calcLineWidthUnits text font
+                        List.max widthUnits * size
+                    currentWidth - originWidth
+
+                let originTransform() = 
+                    info.TextRenderInfo.GetTextMatrix()
+                    |> AffineTransform.ofMatrix
+
                 { Actions =
                     [
-                        PdfCanvas.setFontAndSize(font, float32 size)
+                        match alignment with 
+                        | XEffect.Left -> ()
+                        | XEffect.Middle ->
+                            let offset = -(difference() / 2.) * transformedFontSize / size
+                            let transform = originTransform()
+                            transform.Translate(offset, 0.)
+                            PdfCanvas.setTextMatrixByTransform(AffineTransformRecord.ofAffineTransform transform)
+
+                        | XEffect.Right ->
+                            let offset = difference()
+                            let transform = 
+                                { AffineTransformRecord.DefaultValue with 
+                                    TranslateX = offset }
+                            PdfCanvas.setTextMatrixByTransform(transform)
+
+
+
+                        PdfCanvas.setFontAndSize(font, float32 transformedFontSize)
                         //PdfCanvas.writeOperatorRange args.Close
                     ]
                     
@@ -224,11 +254,11 @@ type Modifier =
                 }
 
 
-    static member SetFontAndSize(font, size: float) : Modifier<'userState> =
+    static member SetFontAndSize(font, size: float, ?alignment) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
             let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
             let font = doc.GetOrCreatePdfFont(font)
-            Modifier.SetFontAndSize(font, size) args
+            Modifier.SetFontAndSize(font, size, ?alignment = alignment) args
 
     static member CancelFillAndStroke() : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
@@ -766,8 +796,8 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
         )
 
 
-type NewFontAndSize [<JsonConstructor>] (?font: FsPdfFontFactory, ?fontSize: float) = 
-    inherit POCOBase<FsPdfFontFactory option * float option>(font, fontSize)
+type NewFontAndSize [<JsonConstructor>] (?font: FsPdfFontFactory, ?fontSize: float, ?alignment) = 
+    inherit POCOBase<FsPdfFontFactory option * float option * XEffect option>(font, fontSize, alignment)
     let __checkArgsValid =
         match font, fontSize with 
         | None, None -> failwith "Cannot Create NewFontAndSize, both font and fontSize are empty"
@@ -779,21 +809,29 @@ type NewFontAndSize [<JsonConstructor>] (?font: FsPdfFontFactory, ?fontSize: flo
     [<JsonProperty>]
     member x.FontSize = fontSize
 
+    [<JsonProperty>]
+    member x.Alignment = alignment
 
     member x.LoggingText =
         let font =
             match font with 
-            | Some font -> font.LoggingText
-            | None -> ""
+            | Some font -> font.LoggingText |> Some 
+            | None -> None
 
         let fontSize = 
             match fontSize with 
-            | Some fontSize -> fontSize.ToString()
-            | None -> ""
+            | Some fontSize -> fontSize.ToString() |> Some 
+            | None -> None
+
+        let alignment = 
+            match alignment with 
+            | Some alignment -> alignment.ToString() |> Some 
+            | None -> None
 
         [ font 
-          fontSize ]
-        |> List.filter(fun m -> m <> "")
+          fontSize
+          alignment ]
+        |> List.choose id
         |> String.concat " "
 
     member x.AsModifier(): Modifier<_> =
@@ -815,7 +853,7 @@ type NewFontAndSize [<JsonConstructor>] (?font: FsPdfFontFactory, ?fontSize: flo
                     let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
                     ITextRenderInfo.getActualFontSize info
 
-            Modifier.SetFontAndSize(font, size) args
+            Modifier.SetFontAndSize(font, size, ?alignment = alignment) args
 
 
 type Modify_ReplaceColors_Options = 

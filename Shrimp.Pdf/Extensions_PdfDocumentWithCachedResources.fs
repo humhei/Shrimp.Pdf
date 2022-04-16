@@ -168,6 +168,10 @@ module PdfDocumentWithCachedResources =
             let transform = AffineTransform.ofMatrix matrix
             canvas.SetTextMatrix(transform)
 
+        let setTextMatrixByTransform (transform: AffineTransformRecord) (canvas: PdfCanvas) =
+            canvas.SetTextMatrix(AffineTransformRecord.toAffineTransform transform)
+
+
         let addLine (line: StraightLine) (mapping: PdfCanvasAddLineArguments -> PdfCanvasAddLineArguments) (canvas: PdfCanvas) =
             let args = mapping PdfCanvasAddLineArguments.DefaultValue
             let close = PdfCanvas.stroke
