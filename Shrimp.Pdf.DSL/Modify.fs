@@ -1126,23 +1126,30 @@ type Modify =
                         let textInfos = List.ofSeq args.ConcatedTextInfos
                         let lastTextInfo = List.last textInfos
                         let actions =
-                            textInfos
-                            |> List.mapi (fun i textInfo ->
-                                let matrix = textInfo.TextRenderInfo.GetTextMatrix()
-                                let lastIndex = (textInfos.Length - 1)
-                                match i with 
-                                | 0 -> [PdfCanvas.showText(ITextRenderInfo.getText textInfo)]
-                                | EqualTo lastIndex -> 
-                                    [
-                                        PdfCanvas.setTextMatrix(matrix)
-                                    ]
-                                | _ ->
-                                    [
-                                        PdfCanvas.setTextMatrix matrix
-                                        PdfCanvas.showText(ITextRenderInfo.getText textInfo)
-                                    ]
-                            )
-                            |> List.concat
+                            match textInfos with 
+                            | [_] -> []
+                            | _ ->
+                                textInfos
+                                |> List.mapi (fun i textInfo ->
+                                    let matrix = textInfo.TextRenderInfo.GetTextMatrix()
+                                    let lastIndex = (textInfos.Length - 1)
+                                    match i with 
+                                    | 0 -> 
+                                        [
+                                            PdfCanvas.setTextMatrix matrix
+                                            PdfCanvas.showText(ITextRenderInfo.getText textInfo)
+                                        ]
+                                    | EqualTo lastIndex -> 
+                                        [
+                                            PdfCanvas.setTextMatrix(matrix)
+                                        ]
+                                    | _ ->
+                                        [
+                                            PdfCanvas.setTextMatrix matrix
+                                            PdfCanvas.showText(ITextRenderInfo.getText textInfo)
+                                        ]
+                                )
+                                |> List.concat
 
                         { ModifierPdfCanvasActions.Actions = actions 
                           SuffixActions = []

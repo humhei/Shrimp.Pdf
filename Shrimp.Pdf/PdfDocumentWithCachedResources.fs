@@ -38,7 +38,7 @@ open Newtonsoft.Json
 
 
 
-        
+open Shrimp.Pdf.FontNames.Query
 
 [<RequireQualifiedAccess>]
 type FsPdfFontFactory =
@@ -47,6 +47,10 @@ type FsPdfFontFactory =
     | StandardFonts of string
     | DocumentFont of FsFontName
 with 
+    static member CreateDocumentFont(fontName: FontNames) =
+        fontName.FsFontName
+        |> FsPdfFontFactory.DocumentFont
+
     member x.LoggingText =
         match x with 
         | FsPdfFontFactory.Registerable v -> v.LoggingText
@@ -125,7 +129,7 @@ type private PdfDocumentCache private
                     (pdfDocument()).FindFont(fontFamily,"")
                 | FsPdfFontFactory.DocumentFont font -> 
                     fontsCache.GetOrAdd(fontFactory, fun _ ->
-                        failwithf "Cannot create document font %s, please cache it before using it with ModifyPage.CacheDocumentFonts" font.LoggingText
+                        failwithf "Cannot create document font %s, please cache it before using it with PdfDocumentWithCachedResources.CacheDocumentFonts" font.LoggingText
                     )
 
             match font with

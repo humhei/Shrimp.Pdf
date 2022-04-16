@@ -1411,8 +1411,12 @@ module FontNames =
             | ``FZZZHUNHJW-GB1-0`` = 1392
             
         
+        [<AutoOpen>]
+        module _FontNamesExtension =
+            type FontNames with 
+                member x.FsFontName = FsFontName(x.ToString())
+
         let [<Literal>] ArialMT = "ArialMT"
-        let [<Literal>] Tahama = "ArialMT"
 
 
 module RegisterableFonts =
