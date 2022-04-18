@@ -982,7 +982,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/map arial to arial_bold.pdf" 
         |> ignore
 
-    testCase "split textLine to words" <| fun _ -> 
+    ftestCase "split textLine to words" <| fun _ -> 
         let flow =
             Modify.SplitTextLineToWords()
 
@@ -990,7 +990,7 @@ let manipulateTests =
         Flow.Manipulate(
             flow
         )
-        |> runTest "datas/manipulate/split textLine to words.pdf" 
+        |> runTest @"C:\Users\Jia\Desktop\Lapolar吊牌反面.pdf"
         |> ignore
 
     testCase "map font for horizontal line" <| fun _ -> 
@@ -1058,13 +1058,18 @@ let manipulateTests =
             ]
         )
 
-    ftestCase "test infos" <| fun _ -> 
+    testCase "test infos" <| fun _ -> 
 
         let pdfFile = 
-            @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\CUTBACK\.btw\健耐 21DY232087\GrilChess吊牌反面.raw.pdf"
+            @"C:\Users\Jia\Desktop\456456456456.pdf"
             |> PdfFile
 
-        let colors = PdfRunner.ReadColors(pdfFile)
+        let m = 
+            Modify.SplitTextLineToWords()
+            |> PdfRunner.Manipulate(pdfFile, @"C:\Users\Jia\Desktop\tests.pdf")
+
+
+        let colors = PdfRunner.ReadColors(pdfFile, @"C:\Users\Jia\Desktop\tests.pdf")
 
         let flow =
             ModifyPage.Create(

@@ -1127,7 +1127,9 @@ type Modify =
                         let lastTextInfo = List.last textInfos
                         let actions =
                             match textInfos with 
-                            | [_] -> []
+                            | [textInfo] -> 
+                                let matrix = textInfo.TextRenderInfo.GetTextMatrix()
+                                [PdfCanvas.setTextMatrix matrix]
                             | _ ->
                                 textInfos
                                 |> List.mapi (fun i textInfo ->

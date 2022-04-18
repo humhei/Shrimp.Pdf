@@ -73,6 +73,11 @@ module _Colors =
         static member WHITE = { R = 1.0f; G = 1.0f; B = 1.0f }
         static member GRAY = { R = 0.5f; G = 0.5f; B = 0.5f }
 
+        member x.MapValue(mapping) =
+            { R = mapping x.R
+              G = mapping x.G 
+              B = mapping x.B }
+
         member x.LoggingText = 
             let colorName = 
                 match x with 
