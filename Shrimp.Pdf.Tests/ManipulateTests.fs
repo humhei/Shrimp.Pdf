@@ -982,7 +982,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/map arial to arial_bold.pdf" 
         |> ignore
 
-    ftestCase "split textLine to words" <| fun _ -> 
+    testCase "split textLine to words" <| fun _ -> 
         let flow =
             Modify.SplitTextLineToWords()
 
@@ -990,10 +990,11 @@ let manipulateTests =
         Flow.Manipulate(
             flow
         )
-        |> runTest @"C:\Users\Jia\Desktop\Lapolar吊牌反面.pdf"
+        |> runTest "datas/manipulate/split textLine to words.pdf" 
+        //|> runTest @"C:\Users\Jia\Desktop\Lapolar吊牌反面.pdf"
         |> ignore
 
-    testCase "map font for horizontal line" <| fun _ -> 
+    ftestCase "map font for horizontal line" <| fun _ -> 
 
         let flow =
             Modify.SplitTextLineToWords()
@@ -1001,7 +1002,7 @@ let manipulateTests =
             Manipulate.Factory(fun flowModel doc ->
                 doc.Value.CacheDocumentFonts()
                 Modify.MapFontAndSize(
-                    FontAndSizeQuery(textPattern = Text.TextMatchingPattern.EqualTo (StringIC "36")) =>
+                    FontAndSizeQuery(textPattern = Text.TextMatchingPattern.EqualTo (StringIC "30")) =>
                     NewFontAndSize(FsPdfFontFactory.CreateDocumentFont(FontNames.``Tahoma-Bold``), fontSize = 12., alignment = XEffect.Middle)
                 )
             )
