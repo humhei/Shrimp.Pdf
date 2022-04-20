@@ -1,0 +1,10 @@
+﻿[0]------------------------------------------------------------------
+
+BEGIN
+    Name: split text line to words
+    Parameters:
+        pageSelctor: ALL
+        selector: Text <fun:SplitTextLineToWords@1125>
+
+END split text line to words in 00:00:00.9626199 
+

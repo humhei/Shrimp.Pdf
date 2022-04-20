@@ -12,7 +12,10 @@ open Shrimp.Pdf.RegisterableFonts.YaHei
 open FontNames.Query
 open Imposing
 open Shrimp.Pdf.Parser
+open Fake.IO
 open iText.IO.Font.Constants
+open iText.IO.Font
+open iText.Kernel.Font
 
 [<RequireQualifiedAccess>]
 module PageInfos =
@@ -986,12 +989,11 @@ let manipulateTests =
         let flow =
             Modify.SplitTextLineToWords()
 
-
         Flow.Manipulate(
             flow
         )
-        |> runTest "datas/manipulate/split textLine to words.pdf" 
-        //|> runTest @"C:\Users\Jia\Desktop\Lapolar吊牌反面.pdf"
+        //|> runTest "datas/manipulate/split textLine to words.pdf" 
+        |> runTest @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\123.pdf"
         |> ignore
 
     ftestCase "map font for horizontal line" <| fun _ -> 
@@ -1013,6 +1015,58 @@ let manipulateTests =
         )
         |> runTest "datas/manipulate/map font for horizontal line.pdf" 
         |> ignore
+        
+        //let m0 =
+        //    PdfFontFactory.GetRegisteredFamilies()
+        //    |> List.ofSeq
+        
+
+        //let b0 = 
+        //    PdfFontFactory.GetRegisteredFonts()
+        //    |> List.ofSeq
+
+        //let fonts = 
+        //    [
+        //        @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf\Resources\Fonts\Arial\arial.ttf"
+        //        @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf\Resources\Fonts\Arial\arialbi.ttf"
+        //        @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf\Resources\Fonts\Arial\arialbd.ttf"
+        //        @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf\Resources\Fonts\Arial\arial.ttf"
+        //        @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf\Resources\Fonts\Arial\ariali.ttf"
+        //        @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf\Resources\Fonts\Arial\ariblk.ttf"
+        //        @"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\ARIALN.ttf"
+        //        @"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\ARIALNB.ttf"
+        //        @"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\ARIALNBI.ttf"
+        //        @"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\ARIALNI.ttf"
+
+        //    ]
+
+        //for font in fonts do 
+        //    PdfFontFactory.Register font
+
+        //PdfFontFactory.Register(@"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\arialbd.ttf")
+        //PdfFontFactory.Register(@"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\arialbd.ttf")
+        //PdfFontFactory.Register(@"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\arialbd.ttf")
+
+        //let m1 =
+        //    PdfFontFactory.GetRegisteredFamilies()
+        //    |> List.ofSeq
+        
+        //let b1 = 
+        //    PdfFontFactory.GetRegisteredFonts()
+        //    |> List.ofSeq
+
+        ////PdfFontFactory.Register(@"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\Arial.ttf")
+
+        //let m2 =
+        //    PdfFontFactory.GetRegisteredFamilies()
+        //    |> List.ofSeq
+
+        //let b2 = 
+        //    PdfFontFactory.GetRegisteredFonts()
+        //    |> List.ofSeq
+        //    |> List.sort
+        //()
+
     
     ptestCase "convert rgb image to gray" <| fun _ -> 
         let flow =

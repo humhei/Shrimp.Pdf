@@ -18,9 +18,16 @@ module ExtensionTypes =
         member x.Text() = x.ToString()
 
     let private shortFontName (fontName: string) =
-        if fontName.Contains "+"
-        then fontName.RightOf("+").Value
-        else fontName
+        let plusCount = 
+            fontName.ToCharArray()
+            |> Array.filter (fun m -> m = '+')
+            |> Array.length
+
+        match plusCount with 
+        | 0 -> fontName
+        | 1 -> fontName.RightOf("+").Value
+        | _ -> failwithf "Multiple '+' exists in %s" fontName
+
 
     type FsFontName [<JsonConstructor>] (fontName: string) =
         inherit POCOBase<StringIC>(fontName |> shortFontName |> StringIC)

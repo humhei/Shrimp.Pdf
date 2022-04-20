@@ -14,8 +14,12 @@ with
 
     member x.LoggingText = x.FontFamily
 
+/// PostScript FontNames
 module FontNames =
-    module Query =
+    /// PostScript FontNames
+    module Query =  
+
+        /// PostScript FontNames
         type FontNames =
             | ``301-CAI978`` = 1
             | ``A1 MinchoStd-Bold`` = 2
@@ -1457,7 +1461,7 @@ module RegisterableFonts =
         let AdobeHeitiStd_Regular = 
             { PdfEncodings = PdfEncodings.IDENTITY_H
               FontFamily = "AdobeHeitiStd-Regular"
-              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/AdobeHeitiStd-Regular.otf")) }
+              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/Adobe/AdobeHeitiStd-Regular.otf")) }
 
     module ArialUnicode =
         
