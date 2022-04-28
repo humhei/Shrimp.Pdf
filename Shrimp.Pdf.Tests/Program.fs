@@ -5,7 +5,17 @@ open Expecto
 open Expecto.Logging
 open System.Threading
 open Shrimp.Pdf.icms2
+open Shrimp.Pdf.Colors
+open Shrimp.Pdf.DSL
+open Shrimp.FSharp.Plus
+open System.Drawing
 
+[<RequireQualifiedAccess>]
+type MaterialBorders =
+    | All
+    | Outer
+    | OuterAndHorizontal
+    | None
 
 let testConfig =  
     { Expecto.Tests.defaultConfig with 
@@ -24,11 +34,16 @@ let allTests =
             BugFixmentTests.bugFixmentTests
             FlowTests.flowTests
             icms2Tests.icmsTests
+            ImageTests.imageTests
         ]
 
 [<EntryPoint>]
 let main argv =
-    //SetClientContext()
+    //let m = BitmapUtils.ReadColorValues(Bitmap(@"C:\Users\Jia\Desktop\convert cmyk image to gray3.jpg"))
+    //let p = 
+    //    m.Values
+    //    |> String.concat "\n"
+    //failwith ""
     runTests testConfig allTests
     Console.Read()
     0

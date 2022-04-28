@@ -1,6 +1,10 @@
 ﻿namespace Shrimp.Pdf.Parser
+
+open iText.IO.Image
+
 #nowarn "0104"
 open iText.Kernel.Pdf
+open iText.Kernel.Pdf.Xobject
 open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf.Extensions
 open System.Collections.Generic
@@ -15,6 +19,7 @@ open iText.IO.Source
 open System.IO
 open Shrimp.FSharp.Plus
 open Shrimp.Pdf.Parser.Helper
+
 open Constants.Operators
 
 [<Struct>]
@@ -180,20 +185,22 @@ with
                 | _ -> failwith "Invalid token"
 
             | CloseOperator.Open, CloseOperator.Open -> TextRenderingMode.FILL_STROKE
-                
-
             | CloseOperator.Close, CloseOperator.Close -> TextRenderingMode.INVISIBLE
                 
         | _ -> 
             Logger.unSupportedTextRenderMode textRenderingMode
             textRenderingMode
-            
-
+    
+[<RequireQualifiedAccess>]
+type ImageCloseOperator =
+    | Keep
+    | New of ctm: AffineTransformRecord * ImageData
 
 [<RequireQualifiedAccess>]
 type CloseOperatorUnion =
     | Text of TextCloseOperator
     | Path of PathCloseOperator
+    | Image of ImageCloseOperator
 with 
     static member Keep(tag) =
         match tag with 
@@ -250,7 +257,8 @@ module private CloseOperatorUnion =
                 |> AtLeastOneList.map(fun m ->
                     match m with 
                     | CloseOperatorUnion.Path path -> path
-                    | CloseOperatorUnion.Text _ -> failwith "Current close operator %A should be path Close Operator"
+                    | CloseOperatorUnion.Text _
+                    | CloseOperatorUnion.Image _ -> failwith "Current close operator %A should be path Close Operator"
                 )
                 |> concatPath
 
@@ -264,7 +272,8 @@ module private CloseOperatorUnion =
                 |> AtLeastOneList.map(fun m ->
                     match m with 
                     | CloseOperatorUnion.Text text -> text 
-                    | CloseOperatorUnion.Path _ -> failwith "Current close operator %A should be text Close Operator"
+                    | CloseOperatorUnion.Path _ 
+                    | CloseOperatorUnion.Image _ -> failwith "Current close operator %A should be text Close Operator"
                 )
                 |> concatText
 
@@ -281,6 +290,15 @@ with
           Close = CloseOperatorUnion.Keep(tag)
           SuffixActions = [] }
 
+    static member KeepImage() =  
+        { Actions = [] 
+          Close = CloseOperatorUnion.Image (ImageCloseOperator.Keep)
+          SuffixActions = [] }
+
+    static member NewImage(originCtm, image) =  
+        { Actions = [] 
+          Close = CloseOperatorUnion.Image (ImageCloseOperator.New (originCtm, image))
+          SuffixActions = [] }
 
     static member CreateCloseOperator(tag, ?fill, ?stroke) =
         { Actions = []
@@ -341,6 +359,17 @@ with
 
                 PdfCanvas.writeOperatorRange newOperator canvas
 
+            | CloseOperatorUnion.Image close -> 
+                match close with 
+                | ImageCloseOperator.Keep ->
+                    PdfCanvas.writeOperatorRange originCloseOperatorRange canvas
+                    
+                | ImageCloseOperator.New (ctm, image) ->
+                    canvas.AddImage(image, ctm) |> ignore
+                    canvas
+
+                    
+
     member x.WriteCloseAndSuffixActions(originCloseOperatorRange: OperatorRange, textRenderingMode) =
         fun (canvas: PdfCanvas) ->
             let pdfActions = 
@@ -383,6 +412,15 @@ type internal CallbackableContentOperator (originalOperator) =
 
                     else reraise()
 
+            else 
+                let resource = processor.CurrentResource()
+                let image = resource.GetImage(operands.[0] :?> PdfName)
+                match image with 
+                | null -> ()
+                | _ -> 
+                    this.OriginalOperator.Invoke(processor, operator, operands)
+                
+
             match operatorName with 
             | ContainsBy [Tj; TJ] -> 
                 processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
@@ -396,8 +434,11 @@ type internal CallbackableContentOperator (originalOperator) =
 and private OperatorRangeCallbackablePdfCanvasProcessor(listener) =
     inherit NonInitialCallbackablePdfCanvasProcessor(listener)
     abstract member InvokeOperatorRange: OperatorRange -> unit
+    abstract member CurrentResource: unit -> PdfResources
 
     member internal x.Listener: FilteredEventListenerEx = listener
+
+    default this.CurrentResource() = failwithf "Invalid token"
 
     default this.InvokeOperatorRange(operatorRange) = ()
 
@@ -445,6 +486,14 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
     let renderImage =
         List.contains EventType.RENDER_IMAGE eventTypes
 
+    let __checkModifierValid =
+        match renderImage, selectorModifierMapping.Count with 
+        | true, 1 -> ()
+        | true, _ -> 
+            let keys = selectorModifierMapping |> Map.toList |> List.map fst
+            failwithf "Multiple modifiers %A are not supported when image is selectable" keys
+        | _ -> ()
+
     let renderText =
         List.contains EventType.RENDER_TEXT eventTypes
 
@@ -486,6 +535,8 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
         then Image
         else Others
 
+    override this.CurrentResource() = resourcesStack.Peek()
+
     override this.InvokeOperatorRange (operatorRange: OperatorRange) =
         
         let currentPdfCanvas = pdfCanvasStack.Peek()
@@ -496,14 +547,15 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
             let resources = resourcesStack.Peek()
             let name = operatorRange.Operands.[0] :?> PdfName
-
             let container = resources.GetResource(PdfName.XObject)
             let xobjectStream = 
                 let pdfStream = (container.Get(name) :?> PdfStream)
-                pdfStream.Clone() :?> PdfStream
+                pdfStream
             let subType = xobjectStream.GetAsName(PdfName.Subtype)
             match subType with 
             | Form ->
+                let xobjectStream = xobjectStream.Clone() :?> PdfStream
+
                 let xobjectResources = 
                     let subResources = xobjectStream.GetAsDictionary(PdfName.Resources)
                     match subResources with 
@@ -513,12 +565,39 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                 let fixedStream: PdfStream = this.EditContent(xobjectResources, xobjectStream)
                 container.Put(name, fixedStream) |> ignore
 
-            | Image -> failwith ""
-                
-            | Others -> ()
+                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                |> ignore
 
-            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-            |> ignore
+            | Image ->  
+                match eventListener.CurrentRenderInfoStatus with 
+                | CurrentRenderInfoStatus.Skiped -> 
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
+
+                | CurrentRenderInfoStatus.Selected ->
+                    let currentGS = this.GetGraphicsState()
+                    let modifierPdfCanvasActions =
+                        match eventListener.CurrentRenderInfoToken.Value with 
+                        | [token] ->
+                            let fix = snd selectorModifierMapping.[token]
+                            fix { CurrentRenderInfo = eventListener.CurrentRenderInfo
+                                  ConcatedTextInfos = eventListener.ConcatedTextInfos  }    
+                        | _ -> 
+                            let keys = eventListener.CurrentRenderInfoToken.Value
+                            failwithf "Multiple modifiers %A are not supported  when image is selectable" keys
+
+                    PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
+                        (canvas, modifierPdfCanvasActions.Actions)
+                        ||> List.fold(fun canvas action ->
+                            action canvas 
+                        )
+                        |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
+                    )
+
+            | Others ->
+
+                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                |> ignore
 
 
         | PathOrText ->

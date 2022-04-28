@@ -298,18 +298,8 @@ module _Reuses =
         | Background = 0
         | Foreground = 1
 
-    let private emptyPdf =
-        lazy
-            (let path = Path.GetTempPath() </> "empty.pdf"
 
-             if File.exists path then
-                 path
-             else
-                 let doc = new PdfDocument(new PdfWriter(path))
-                 doc.AddNewPage() |> ignore
-                 doc.Close()
-                 path)
-
+    let private emptyPdf = lazy PdfUtils.NewTempEmptyPdf()
 
 
     type private PageSequeningUnion =
@@ -705,6 +695,19 @@ module _Reuses =
 
         static member SequencePages (pageNumSequence: PageNumSequence) =
             Reuses.SequencePages(EmptablePageNumSequence.Create pageNumSequence)
+
+        static member SelectPages (pageSelector: PageSelector) =
+            Reuse.Factory(fun flowModel doc ->
+                let pageNumberSequence = 
+                    doc.Reader.GetPageNumbers(pageSelector)
+                    |> PageNumSequence.Create
+
+                Reuses.SequencePages(pageNumberSequence)
+            )
+            |> Reuse.rename 
+                (sprintf "SelectPages %s" (pageSelector.Text))
+                []
+                
 
 
         static member Rotate (pageSelector: PageSelector, fRotation: PageNumber -> Rotation) =
@@ -1134,9 +1137,9 @@ module _Reuses =
                                 |> List.map (fun info -> 
                                     IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth info
                                 )
+                                |> Rectangle.removeInboxes
 
                             sorter.Sort (rects)
-
 
 
                         for bound in bounds do

@@ -3,7 +3,28 @@ namespace Shrimp.Pdf.DSL
 open Shrimp.Pdf.Extensions
 open iText.Kernel.Pdf
 open System.Runtime.CompilerServices
+open System.IO
+open Shrimp.FSharp.Plus
+open iText.Kernel.Geom
+open Shrimp.Pdf
+open Fake.IO
+open Fake.IO.FileSystemOperators
+type PdfUtils =
+    static member NewTempEmptyPdf(?pageNumber: int, ?pageSize) =   
+        let pageNumber = defaultArg pageNumber 1
+        let pageSize = defaultArg pageSize FsSize.A4
+        let path = Path.GetTempPath() </> "empty.pdf"
 
+        if File.exists path then
+            path
+        else
+            let doc = new PdfDocument(new PdfWriter(path))
+            for _ = 0 to (pageNumber-1) do
+                doc.AddNewPage(FsSize.toPageSize pageSize) |> ignore
+
+            doc.Close()
+            path
+        
 
 type PageModifingArguments<'userState> =
     { UserState: 'userState

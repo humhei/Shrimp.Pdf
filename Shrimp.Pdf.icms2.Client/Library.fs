@@ -95,6 +95,14 @@ module Client =
     let private msgCache = new ConcurrentDictionary<ServerMsg, float32[]>()
 
 
+    type ColorSpace with 
+        static member DefaultIcc(colorSpace) =
+            match colorSpace with
+            | ColorSpace.Rgb  -> Icc.Rgb defaultRgbIcc.Value
+            | ColorSpace.Cmyk  -> Icc.Cmyk defaultCmykIcc.Value
+            | ColorSpace.Gray  -> Icc.Gray defaultGrayIcc.Value
+            | ColorSpace.Lab  -> Icc.Lab defaultLabIcc.Value
+
     type AlternativeFsColor 
     with 
         member x.IsWhite() =
@@ -116,12 +124,7 @@ module Client =
         static member DefaultIcc (cmsColor: AlternativeFsColor) =
             match cmsColor with 
             | AlternativeFsColor.IccBased iccBased -> iccBased.Icc
-            | _ ->
-                match cmsColor.AlterColor.ColorSpace with
-                | ColorSpace.Rgb  -> Icc.Rgb defaultRgbIcc.Value
-                | ColorSpace.Cmyk  -> Icc.Cmyk defaultCmykIcc.Value
-                | ColorSpace.Gray  -> Icc.Gray defaultGrayIcc.Value
-                | ColorSpace.Lab  -> Icc.Lab defaultLabIcc.Value
+            | _ -> ColorSpace.DefaultIcc cmsColor.AlterColor.ColorSpace
 
         member x.AsLab() =
             match x.AlterColor with 
@@ -166,7 +169,7 @@ module Client =
                         return FsValueColor.Lab( {L = outputValues.[0]; a = outputValues.[1]; b = outputValues.[2]} )
 
                     | Icc.Cmyk _ -> return FsValueColor.Cmyk(FsDeviceCmyk.Create(outputValues.[0], outputValues.[1], outputValues.[2], outputValues.[3]))
-                    | Icc.Gray _ -> return FsValueColor.Gray(FsGray(Array.exactlyOne outputValues))
+                    | Icc.Gray _ -> return FsValueColor.Gray(FsGray(outputValues.[0]))
                     | Icc.Rgb _ -> return FsValueColor.Rgb(FsDeviceRgb.Create(outputValues.[0], outputValues.[1], outputValues.[2]))
         }
 
@@ -431,6 +434,8 @@ module Client =
                     ]
                 }
                 |> defaultArg nameAndParameters
+
+
 
             let modify_ConvertColorsTo_Options = options.Modify_ConvertColorsTo_Options
 

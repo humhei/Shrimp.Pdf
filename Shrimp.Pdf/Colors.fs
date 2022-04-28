@@ -27,14 +27,6 @@ module _Colors =
             let color = System.Drawing.Color.FromArgb(hex)
             DeviceRgb(int color.R, int color.G, int color.B)
 
-    [<RequireQualifiedAccess>]
-    type ValueEqualOptions =
-        | Exactly
-        | RoundedValue of digits: int
-
-    with 
-        static member DefaultRoundedValue = ValueEqualOptions.RoundedValue 3
-
     type ColorSpace =
         | Gray = 0
         | Rgb = 1
@@ -49,11 +41,45 @@ module _Colors =
             | Icc.Lab _-> ColorSpace.Lab
             | Icc.Gray _-> ColorSpace.Gray
 
+    type ToleranceColorValue = ToleranceColorValue of float
+    with    
+        member x.Value =
+            let (ToleranceColorValue v) = x
+            v
+
+    /// Unserializable
+    type NearbyColorValue(v: float, tolerance: ToleranceColorValue) =
+        inherit CustomEquatable<float>(v, fun a b ->
+            (abs (a-b)) <= tolerance.Value
+        )
+
+        member x.Value = v
+
+
+    [<RequireQualifiedAccess>]
+    type ValueEqualOptions =
+        | Exactly
+        | RoundedValue of (ColorSpace -> ToleranceColorValue)
+
+    with 
+        static member DefaultRoundedValue = 
+            ValueEqualOptions.RoundedValue(fun colorSpace ->
+                match colorSpace with 
+                | ColorSpace.Rgb -> ToleranceColorValue 0.0025
+                | _ -> ToleranceColorValue 0.001
+            )
+
+
+
+
+
+
     let private whitePoint = 
         lazy 
             config.Value.GetFloatList("shrimp.pdf.colors.labWhitePoint")
             |> Array.ofSeq
 
+    /// valueRange: 0 -> 1
     type FsDeviceRgb =
         { R: float32 
           G: float32 
@@ -91,7 +117,7 @@ module _Colors =
                 | EqualTo FsDeviceRgb.GRAY -> "GRAY"
                 | _ ->
                     let range255 = x.Range255
-                    sprintf "%.1f %.1f %.1f" (range255.R) range255.G range255.B
+                    sprintf "%.2f %.2f %.2f" (range255.R) range255.G range255.B
 
             "RGB " + colorName
 
@@ -118,10 +144,13 @@ module _Colors =
             { R = float color.R / 255. |> float32 
               G = float color.G / 255. |> float32 
               B = float color.B / 255. |> float32 }
-
     type FsLab =
-        { L: float32 
+        { 
+          /// 0 -> 100.
+          L: float32 
+          /// -128 -> 127
           a: float32
+          /// -128 -> 127
           b: float32 }
     with 
 
@@ -169,6 +198,7 @@ module _Colors =
             FsLab.OfHex (int pantoneColor)
 
 
+    /// valueRange: 0 -> 1
     type FsDeviceCmyk =
         { C: float32 
           M: float32
@@ -204,15 +234,16 @@ module _Colors =
                 | EqualTo FsDeviceCmyk.WHITE -> "WHITE"
                 | EqualTo FsDeviceCmyk.GRAY -> "GRAY"
                 | _ ->
-                    sprintf "%.1f %.1f %.1f %.1f" (x.C) x.M x.Y x.K
+                    sprintf "%.2f %.2f %.2f %.2f" (x.C) x.M x.Y x.K
 
             "CMYK " + colorName
 
+    /// valueRange: Black 0 -> White 1
     type FsGray = FsGray of float32
     with 
         member x.LoggingText = 
             let (FsGray v) = x
-            sprintf "K %.1f" v
+            sprintf "K %.2f" v
 
         static member BLACK = FsGray 0.0f
         static member WHITE = FsGray 1.0f
@@ -331,15 +362,13 @@ module _Colors =
         static member CMYK_YELLOW = FsDeviceCmyk.YELLOW |> FsValueColor.Cmyk
 
         static member IsEqual (color1: FsValueColor, color2: FsValueColor, valueEqualOptions: ValueEqualOptions) =
-            let isColorSpaceEqual =
-                match color1, color2 with
-                | FsValueColor.Rgb _, FsValueColor.Rgb _
-                | FsValueColor.Cmyk _, FsValueColor.Cmyk _
-                | FsValueColor.Lab _, FsValueColor.Lab _
-                | FsValueColor.Gray _, FsValueColor.Gray _ -> true
-                | _ -> false
+            let colorSpaces =
+                [ color1.ColorSpace
+                  color2.ColorSpace ]
+                |> List.distinct
 
-            isColorSpaceEqual &&
+            match colorSpaces with 
+            | [colorSpace] ->
                 match valueEqualOptions with 
                 | ValueEqualOptions.Exactly -> 
                     let colorValue1 =
@@ -350,16 +379,18 @@ module _Colors =
 
                     colorValue1 = colorValue2
 
-                | ValueEqualOptions.RoundedValue digits ->
+                | ValueEqualOptions.RoundedValue fTolearance ->
                     let colorValue1 =
                         color1.GetColorValue()
-                        |> List.map (fun v -> System.Math.Round(float v, digits) )
+                        |> List.map (fun v -> NearbyColorValue(float v, fTolearance(colorSpace)) )
 
                     let colorValue2 =
                         color2.GetColorValue()
-                        |> List.map (fun v -> System.Math.Round(float v, digits) )
-
+                        |> List.map (fun v -> NearbyColorValue(float v, fTolearance(colorSpace)) )
                     colorValue1 = colorValue2
+            | _ :: _ -> false
+            | [] -> failwith "Invalid token"
+
 
         static member Invert = function
             | FsValueColor.Rgb rgbColor ->
@@ -725,12 +756,58 @@ module _Colors =
                         ranges
                         |> List.map getValue
 
+                    | ColorSpace.Rgb ->
+                        let __checkdictionaryRangeValid = 
+                            match dictionaryRange with 
+                            | [0.f; 1.f; 0.f; 1.f; 0.f; 1.f] -> ()
+                            | _ -> failwith "Not implemented"
+                        let getValue (range: PdfFunction0SamplesRange) =
+                            match range.Start with 
+                            | 255uy -> float32 range.Last / 255.f
+                            | _ -> failwithf "Cannot parse PdfFunction0SamplesKind %A to cmyk" samples.Kind
+                        ranges
+                        |> List.map getValue
+
                     | _ -> failwith "Not implemnted"
 
             | 2 ->
                 colorSpacePdfFunction.GetAsArray(PdfName.C1)
                 |> List.ofSeq
                 |> List.map (fun m -> (m :?> PdfNumber).FloatValue())
+            | 4 ->
+                let dictionaryRange = 
+                    colorSpacePdfFunction.GetAsArray(PdfName.Range)
+                    |> List.ofSeq
+                    |> List.map (fun m -> (m :?> PdfNumber).FloatValue())
+
+                let alterColorSpace = x.GetAlternateSpace()
+
+                let values = 
+                    let pdfStream = colorSpacePdfFunction :?> PdfStream
+                    let bytes = pdfStream.GetBytes()
+                    let result = System.Text.Encoding.UTF8.GetString(bytes)
+                    match result with 
+                    | ParseRegex.NamedMany1F ("(?<token>\d+\.?\d*)\s+mul", "token") values -> 
+                        values
+                        |> List.map System.Single.Parse
+
+                match alterColorSpace with 
+                | ColorSpace.Lab ->
+                    let __checkdictionaryRangeValid = 
+                        match dictionaryRange with 
+                        | [0.f; 100.f; -128.f; 128.f; -128.f; 128.f] -> ()
+                        | _ -> failwith "Not implemented"
+
+                    failwith "Not implemented"
+
+                | ColorSpace.Cmyk ->
+                    let __checkdictionaryRangeValid = 
+                        match dictionaryRange with 
+                        | [0.f; 1.f; 0.f; 1.f; 0.f; 1.f; 0.f; 1.f] -> ()
+                        | _ -> failwith "Not implemented"
+                    values
+
+                | _ -> failwith "Not implemnted"
 
             | _ -> failwith "Not implemnted"
 
@@ -861,8 +938,10 @@ module _Colors =
 
                             uri.Replace("#20", " ")
     
-
-                        FsSeparation.Create(colorName, separation.GetAlterateColor())
+                        try 
+                            FsSeparation.Create(colorName, separation.GetAlterateColor())
+                        with ex ->
+                            raise (new AccumulatedException(sprintf "Error when parsing separation color %s" colorName, ex))
                 )
 
             { v with Transparency = float transparency }
@@ -1347,7 +1426,10 @@ module _Colors =
                     
                     match fsColor with 
                     | FsColor.Separation separation2 ->
-                        separation1.IsEqualTo(separation2, ValueEqualOptions.RoundedValue 0)
+                        separation1.IsEqualTo(
+                            separation2,
+                            ValueEqualOptions.RoundedValue (fun _ -> ToleranceColorValue 1.)
+                        )
                     | _ -> false
 
                 | ColorCard.KnownColor knownColor1 ->

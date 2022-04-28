@@ -171,7 +171,7 @@ module IntegratedInfos =
         let (|Vector|Pixel|) (info: IIntegratedRenderInfoIM) = 
             match info.TagIM with 
             | IntegratedRenderInfoTagIM.Path -> Vector ((info :?> IntegratedPathRenderInfo) :> IIntegratedRenderInfo)
-            | IntegratedRenderInfoTagIM.Text -> Vector ((info :?> IntegratedPathRenderInfo) :> IIntegratedRenderInfo)
+            | IntegratedRenderInfoTagIM.Text -> Vector ((info :?> IntegratedTextRenderInfo) :> IIntegratedRenderInfo)
             | IntegratedRenderInfoTagIM.Image -> Pixel (info :?> IntegratedImageRenderInfo)
             | _ -> failwith "Invalid token"
 

@@ -14,7 +14,6 @@ open iText.Kernel.Pdf
 
 
 
-
 [<RequireQualifiedAccess>]
 type RenderInfoSelector = 
     | Image of (IntegratedImageRenderInfo -> bool)
@@ -191,7 +190,7 @@ module internal Listeners =
 
         let mutable currentRenderInfo: IIntegratedRenderInfoIM option = None
         let mutable currentRenderInfoToken = None
-        let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Selected
+        let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Skiped
         let mutable currentClippingPathInfo = ClippingPathInfoState.Init
 
         let parsedRenderInfos = List<IIntegratedRenderInfoIM>()
@@ -276,6 +275,12 @@ module internal Listeners =
                               TextRenderInfo = textRenderInfo }
                             :> IIntegratedRenderInfoIM
 
+                        | :? ImageRenderInfo as imageRenderInfo ->
+                            { ClippingPathInfos = 
+                                { XObjectClippingBoxState = currentXObjectClippingBox
+                                  ClippingPathInfoState = currentClippingPathInfo }
+                              ImageRenderInfo = imageRenderInfo }
+                            :> IIntegratedRenderInfoIM
 
                         |_ -> failwith "Not implemented"
 

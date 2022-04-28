@@ -291,6 +291,7 @@ module iText =
 
     [<RequireQualifiedAccess>]
     module Rectangle = 
+        let toPageSize (rect: Rectangle) = PageSize(rect)
 
         let (|Portrait|Landscape|Uniform|) (rect: Rectangle) =
             let width = rect.GetWidth()
@@ -324,7 +325,6 @@ module iText =
             match rects.AsList with 
             | [rect] -> rect
             | rects ->
-
                 rects |> Seq.collect (fun rect ->
                     let x = rect.GetXF()
                     let y = rect.GetYF()
@@ -334,6 +334,25 @@ module iText =
                 ) 
                 |> AtLeastTwoList.Create
                 |> Rectangle.ofPoints
+
+        let removeInboxes(rects: Rectangle list) =
+            let rec loop accum (rects: Rectangle list) =
+                match rects with 
+                | rect :: t ->
+                    let searchers = accum @ t
+                    searchers
+                    |> List.tryFind(fun searcher ->
+                        let searcher = searcher.applyMargin(Margin.Create tolerance.Value)
+                        rect.IsInsideOf searcher
+                    )
+                    |> function 
+                        | Some _ -> loop accum t
+                        | None -> loop (rect :: accum) t
+
+                | [] -> accum
+
+            loop [] rects
+                    
 
 
         let toPdfArray (rect: Rectangle) =
@@ -581,6 +600,27 @@ module iText =
             |> AtLeastTwoList.map (fun p -> AffineTransform.inverseTransform p this) 
             |> Rectangle.ofPoints
 
+    
+    [<RequireQualifiedAccess>]
+    module CanvasGraphicsState =
+        let getDashPattern (gs: CanvasGraphicsState) =
+            let dashPattern = gs.GetDashPattern()
+            let values = dashPattern |> Array.ofSeq
+            let l = values.Length
+            let dashArray = 
+                values.[0..l-2] 
+                |> Array.collect (fun dashArray -> 
+                    dashArray :?> PdfArray 
+                    |> Array.ofSeq 
+                    |> Array.map (fun dashValue -> 
+                        let number = dashValue :?> PdfNumber
+                        number.GetValue()
+                    ))
+            let phase = (values.[l-1] :?> PdfNumber).GetValue()
+
+            { DashArray = dashArray 
+              Phase = phase }
+
 
 
     type AbstractRenderInfo with 
@@ -623,6 +663,8 @@ module iText =
     module IPathRenderInfo =
 
         let [<Literal>] FILLANDSTROKE = PathRenderInfo.FILL ||| PathRenderInfo.STROKE
+
+
 
         /// without ctm applied
         let toRawPoints (info: IPathRenderInfo) =
@@ -825,9 +867,12 @@ module iText =
             match info with 
             | :? ITextRenderInfo as trInfo -> fTextRenderInfo trInfo
             | :? IPathRenderInfo as prInfo -> fPathRenderInfo prInfo 
+            | :? IImageRenderInfo -> failwith "Invaid token"
             | _ -> failwith "Invaid token"
 
         let getBound boundGettingOptions info = cata (ITextRenderInfo.getBound boundGettingOptions) (IPathRenderInfo.getBound boundGettingOptions) info
+        
+        let getDenseBound boundGettingOptions info = cata (ITextRenderInfo.getDenseBound boundGettingOptions) (IPathRenderInfo.getBound boundGettingOptions) info
         
         let getColors (info: IAbstractRenderInfo) = cata ITextRenderInfo.getColors IPathRenderInfo.getColors info
 
@@ -847,6 +892,21 @@ module iText =
 
         let boundIsInsideOf  boundGettingOptions rect (info: IAbstractRenderInfo) =
             (getBound boundGettingOptions info).IsInsideOf(rect)
+
+        let getDashPattern (info: IAbstractRenderInfo) = 
+            let info = info.Value
+            CanvasGraphicsState.getDashPattern <| info.GetGraphicsState()
+
+        let isDashLine (info: IAbstractRenderInfo) =
+            let dashPattern = getDashPattern info
+            not dashPattern.IsEmpty
+
+        let (|DashLine|EntityLine|) (info: IAbstractRenderInfo) =
+            let dashPattern = getDashPattern info
+            match dashPattern.IsEmpty with 
+            | true -> EntityLine
+            | false -> DashLine dashPattern
+
 
     type IAbstractRenderInfo with 
         static member ColorIs(fillOrStrokeOptions: FillOrStrokeOptions, predicate: Color -> bool) =
@@ -983,26 +1043,6 @@ module iText =
         let isVisible (info: IIntegratedRenderInfo) =
             IAbstractRenderInfo.isVisible FillOrStrokeOptions.FillOrStroke info.ClippingPathInfos info
 
-    [<RequireQualifiedAccess>]
-    module CanvasGraphicsState =
-        let getDashPattern (gs: CanvasGraphicsState) =
-            let dashPattern = gs.GetDashPattern()
-            let values = dashPattern |> Array.ofSeq
-            let l = values.Length
-            let dashArray = 
-                values.[0..l-2] 
-                |> Array.collect (fun dashArray -> 
-                    dashArray :?> PdfArray 
-                    |> Array.ofSeq 
-                    |> Array.map (fun dashValue -> 
-                        let number = dashValue :?> PdfNumber
-                        number.GetValue()
-                    ))
-            let phase = (values.[l-1] :?> PdfNumber).GetValue()
-
-            { DashArray = dashArray 
-              Phase = phase }
-
 
 
     [<RequireQualifiedAccess>]
@@ -1068,8 +1108,18 @@ module iText =
 
     type PdfCanvas with 
         member x.AddXObject(xObject: PdfXObject, affineTransformRecord: AffineTransformRecord) =
-            x.AddXObject
+            x.AddXObjectWithTransformationMatrix
                 ( xObject,
+                  float32 affineTransformRecord.m00,
+                  float32 affineTransformRecord.m10,
+                  float32 affineTransformRecord.m01,
+                  float32 affineTransformRecord.m11,
+                  float32 affineTransformRecord.m02,
+                  float32 affineTransformRecord.m12 )
+
+        member x.AddImage(image, affineTransformRecord: AffineTransformRecord) =
+            x.AddImageWithTransformationMatrix
+                ( image,
                   float32 affineTransformRecord.m00,
                   float32 affineTransformRecord.m10,
                   float32 affineTransformRecord.m01,

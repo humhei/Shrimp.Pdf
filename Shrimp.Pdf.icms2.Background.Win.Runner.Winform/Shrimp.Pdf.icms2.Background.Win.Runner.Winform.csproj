@@ -171,14 +171,11 @@
     <Reference Include="Shrimp.Akkling.Cluster.Intergraction, Version=0.2.53.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Shrimp.Akkling.Cluster.Intergraction.0.2.53\lib\netstandard2.0\Shrimp.Akkling.Cluster.Intergraction.dll</HintPath>
     </Reference>
-    <Reference Include="Shrimp.FSharp.Plus, Version=1.1.363.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Shrimp.FSharp.Plus.1.1.363\lib\net462\Shrimp.FSharp.Plus.dll</HintPath>
+    <Reference Include="Shrimp.FSharp.Plus, Version=1.1.374.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Shrimp.FSharp.Plus.1.1.374\lib\net462\Shrimp.FSharp.Plus.dll</HintPath>
     </Reference>
-    <Reference Include="Shrimp.FSharp.Plus.CSharp, Version=1.1.363.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Shrimp.FSharp.Plus.CSharp.1.1.363\lib\netstandard2.0\Shrimp.FSharp.Plus.CSharp.dll</HintPath>
-    </Reference>
-    <Reference Include="Shrimp.Pdf.icms2, Version=0.0.517.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Shrimp.Pdf.icms2.0.0.517\lib\netstandard2.0\Shrimp.Pdf.icms2.dll</HintPath>
+    <Reference Include="Shrimp.FSharp.Plus.CSharp, Version=1.1.374.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Shrimp.FSharp.Plus.CSharp.1.1.374\lib\netstandard2.0\Shrimp.FSharp.Plus.CSharp.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.AppContext, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
@@ -216,6 +213,9 @@
       <HintPath>..\packages\System.Diagnostics.Tracing.4.3.0\lib\net462\System.Diagnostics.Tracing.dll</HintPath>
       <Private>True</Private>
       <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Drawing.Common, Version=6.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Drawing.Common.6.0.0\lib\net461\System.Drawing.Common.dll</HintPath>
     </Reference>
     <Reference Include="System.Globalization.Calendars, Version=4.0.2.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Globalization.Calendars.4.3.0\lib\net46\System.Globalization.Calendars.dll</HintPath>
@@ -464,6 +464,10 @@
     <ProjectReference Include="..\Shrimp.Pdf.icms2.Server\Shrimp.Pdf.icms2.Server.fsproj">
       <Project>{5c5bcd51-2e7b-4cbe-87ce-83dc3bed1680}</Project>
       <Name>Shrimp.Pdf.icms2.Server</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Shrimp.Pdf.icms2\Shrimp.Pdf.icms2.fsproj">
+      <Project>{1c7f98d8-ce4e-41ee-8feb-3053a35052e8}</Project>
+      <Name>Shrimp.Pdf.icms2</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

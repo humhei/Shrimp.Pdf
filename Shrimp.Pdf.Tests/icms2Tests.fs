@@ -21,6 +21,7 @@ let icmsTests =
                       { Name = "black or white"
                         Selector = PathOrText(fun _ _ -> true)
                         Modifiers = [Modifier.BlackOrWhite()] }
+                        //Modifiers = [Modifier.ConvertColorsTo(Icc.Cmyk CmykIcc.JapanColor2001Coated)] }
                   ]
               )
           )

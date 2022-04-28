@@ -388,28 +388,32 @@ type Info =
         Info.ColorIs(FillOrStrokeOptions.Stroke, (fun color -> FsColors.contains color colors), not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
+    static member BoundSizeIs (predicate, ?isDense, ?boundGettingStrokeOptions) = 
+        fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
+                let boundGettingOptions = defaultArg boundGettingStrokeOptions BoundGettingStrokeOptions.WithoutStrokeWidth
+                let isDense = defaultArg isDense true
+
+                let bound: iText.Kernel.Geom.Rectangle = 
+                    match isDense with 
+                    | true -> IAbstractRenderInfo.getDenseBound boundGettingOptions info
+                    | false -> IAbstractRenderInfo.getBound boundGettingOptions info
+
+                predicate bound
 
     static member private BoundIs (isDense, relativePosition, areaGettingOptions: AreaGettingOptions, ?boundGettingStrokeOptions) =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-            let boundGettingOptions = defaultArg boundGettingStrokeOptions BoundGettingStrokeOptions.WithoutStrokeWidth
+            Info.BoundSizeIs(
+                isDense = isDense,
+                ?boundGettingStrokeOptions = boundGettingStrokeOptions,
+                predicate = fun bound ->
+                    let rect = args.Page.GetArea(areaGettingOptions)
+                    match relativePosition with 
+                    | RelativePosition.CrossBox -> bound.IsCrossOf(rect)
+                    | RelativePosition.Inbox -> bound.IsInsideOf(rect)
+                    | RelativePosition.OutBox -> bound.IsOutsideOf(rect)
+            ) args info
 
-            let bound: iText.Kernel.Geom.Rectangle = 
-                match isDense with 
-                | true -> 
-                    match info with 
-                    | IIntegratedRenderInfo.Text textInfo -> 
-                        ITextRenderInfo.getDenseBound boundGettingOptions textInfo
-                    | _ ->
-                        IAbstractRenderInfo.getBound boundGettingOptions info
 
-                | false -> IAbstractRenderInfo.getBound boundGettingOptions info
-
-            let rect = args.Page.GetArea(areaGettingOptions)
-
-            match relativePosition with 
-            | RelativePosition.CrossBox -> bound.IsCrossOf(rect)
-            | RelativePosition.Inbox -> bound.IsInsideOf(rect)
-            | RelativePosition.OutBox -> bound.IsOutsideOf(rect)
 
     static member BoundIs (relativePosition, areaGettingOptions: AreaGettingOptions, ?boundGettingStrokeOptions) =
         Info.BoundIs(false, relativePosition, areaGettingOptions, ?boundGettingStrokeOptions = boundGettingStrokeOptions)
@@ -445,7 +449,7 @@ type Info =
         Info.PointOfBoundIsInsideOf(Position.Center(0., 0.), areaGettingOptions, ?boundGettingStrokeOptions = boundGettingStrokeOptions)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
-    static member BottomPointOfBoundIsInsideOf (areaGettingOptions, ?boundGettingStrokeOptions, ?boundHeightPercentage) =
+    static member BottomPointOfBoundIsInsideOf (areaGettingOptions, ?boundGettingStrokeOptions) =
         Info.PointOfBoundIsInsideOf(Position.Center(0., 0.), areaGettingOptions, ?boundGettingStrokeOptions = boundGettingStrokeOptions)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 

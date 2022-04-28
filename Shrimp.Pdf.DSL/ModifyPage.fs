@@ -343,14 +343,14 @@ module ModifyPageOperators =
 
     type PdfRunner with 
         
-        static member private ReadInfos(pdfFile: PdfFile, selector,  pageModifier: PageModifier<_, _>, ?backupPdfPath, ?name, ?pageSelector) =
+        static member ReadInfos(pdfFile: PdfFile, selector, fInfos, ?backupPdfPath, ?name, ?pageSelector) =
             let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path
             let flow = 
                 ModifyPage.Create(
-                    defaultArg name ("Read infos from" + pdfFileName),
+                    defaultArg name ("Read infos from " + pdfFileName),
                     defaultArg pageSelector PageSelector.All,
                     selector,
-                    pageModifier
+                    (fun args infos -> fInfos infos)
                 )
                 |> Flow.Manipulate
 
@@ -368,7 +368,7 @@ module ModifyPageOperators =
             PdfRunner.ReadInfos(
                 pdfFile, 
                 Selector.Text (fun _ _ -> true),
-                pageModifier = (fun args infos ->
+                fInfos = (fun infos ->
                     infos
                     |> List.ofSeq
                     |> List.choose (IIntegratedRenderInfo.asITextRenderInfo)
@@ -383,7 +383,7 @@ module ModifyPageOperators =
             PdfRunner.ReadInfos(
                 pdfFile, 
                 Selector.Path (fun _ _ -> true),
-                pageModifier = (fun args infos ->
+                fInfos = (fun infos ->
                     infos
                     |> List.ofSeq
                     |> List.choose (IIntegratedRenderInfo.asIPathRenderInfo)
@@ -398,7 +398,7 @@ module ModifyPageOperators =
             PdfRunner.ReadInfos(
                 pdfFile, 
                 Selector.Path (fun _ _ -> true),
-                pageModifier = (fun args infos ->
+                fInfos = (fun infos ->
                     infos
                     |> List.ofSeq
                     |> List.collect (fun m -> 

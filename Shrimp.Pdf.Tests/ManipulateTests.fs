@@ -16,6 +16,7 @@ open Fake.IO
 open iText.IO.Font.Constants
 open iText.IO.Font
 open iText.Kernel.Font
+open Shrimp.Pdf.Image
 
 [<RequireQualifiedAccess>]
 module PageInfos =
@@ -48,6 +49,28 @@ let manipulateTests =
         )
         |> runTest "datas/manipulate/expand black stroke.pdf" 
         |> ignore
+
+    testCase "read separation colors" <| fun _ -> 
+        let pdfFile = PdfFile @"datas/manipulate/read separation colors.pdf"
+        let testFile = Path.changeExtension ".tests.pdf" (pdfFile.Path)
+        let infos =
+            PdfRunner.ReadColors(
+                pdfFile,
+                testFile
+            )
+
+        ()
+       
+    testCase "read separation colors2" <| fun _ -> 
+        let pdfFile = PdfFile @"datas/manipulate/read separation colors2.pdf"
+        let testFile = Path.changeExtension ".tests.pdf" (pdfFile.Path)
+        let infos =
+            PdfRunner.ReadColors(
+                pdfFile,
+                testFile
+            )
+
+        ()
 
     testCase "change separation color of pdfFunction2 PageNumber to m100" <| fun _ -> 
         
@@ -996,7 +1019,7 @@ let manipulateTests =
         |> runTest @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\123.pdf"
         |> ignore
 
-    ftestCase "map font for horizontal line" <| fun _ -> 
+    testCase "map font for horizontal line" <| fun _ -> 
 
         let flow =
             Modify.SplitTextLineToWords()
@@ -1068,25 +1091,6 @@ let manipulateTests =
         //()
 
     
-    ptestCase "convert rgb image to gray" <| fun _ -> 
-        let flow =
-            Modify.Create_RecordIM(
-                PageSelector.All,
-                selectorAndModifiersList = [
-                    { SelectorAndModifiersRecordIM.Name = "convert rgb image to gray" 
-                      Selector = Selector.ImageX(fun _ _ -> true)
-                      Modifiers = [
-                        
-                      ]}
-                ]
-                )
-
-        Flow.Manipulate(
-            flow
-        )
-        |> runTest "datas/manipulate/convert rgb image to gray.pdf" 
-        |> ignore
-
 
 
     let tryColoredSizeText() =

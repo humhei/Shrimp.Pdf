@@ -5,9 +5,67 @@ open Shrimp.Akkling.Cluster
 open Shrimp.Akkling.Cluster.Intergraction
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
 open Shrimp.FSharp.Plus
+open System.Drawing.Imaging
+open System.Drawing
 
 [<AutoOpen>]
 module Core =
+    type BitmapColorValues with 
+        member x.GetAsRgbValues() =
+            x.Values
+            |> Array.map(fun value ->
+                float32 value / 255.f
+            )
+            |> Array.chunkBySize 4
+            |> Array.map (Array.skip 1)
+
+        member x.GetAsGrayValues() =
+            x.Values
+            |> Array.map(fun value ->
+                float32 value / 255.f
+            )
+            |> Array.chunkBySize 4
+            |> Array.map (Array.take 1)
+
+        member x.GetAsCMYKValues() =
+            x.Values
+            |> Array.map(fun value ->
+                float32 value / 255.f * 100.f
+            )
+            |> Array.chunkBySize 4
+
+        static member OfRawFile(rawFile: RawFile) =
+            System.IO.File.ReadAllBytes rawFile.Path
+            |> BitmapColorValues
+
+    [<AutoOpen>]
+    module _Image =
+        open System.Drawing
+        type Bitmap with 
+            member x.GetPixelsList() =
+                [0.. x.Height-1 ]
+                |> List.map(fun i ->
+                    [0 .. x.Width-1 ]
+                    |> List.map(fun j ->
+                        x.GetPixel(j, i)
+                    )
+                )
+                
+
+
+            member x.GetPixels() =
+                [|
+                    for i = 0 to (x.Height-1) do 
+                        for j = 0 to (x.Width-1) do
+                            yield x.GetPixel(j, i)
+                |]
+                
+
+            member x.MapPixel(mapping) =
+                for i = 0 to (x.Height-1) do 
+                    for j = 0 to (x.Width-1) do
+                        mapping <| x.GetPixel(j, i)
+
 
     [<RequireQualifiedAccess>]
     type GrayIcc =
@@ -92,6 +150,13 @@ module Core =
             | Try LabIcc.ofStreamText icc -> Icc.Lab icc
             | _ -> failwithf "Not implemented: Cannot read iccEnum from %A" streamText
 
+        member x.ColorValuesCount =
+            match x with 
+            | Icc.Gray _ -> 1
+            | Icc.Cmyk _ -> 4
+            | Icc.Rgb _ -> 3
+            | Icc.Lab _ -> 3
+
     type Intent = 
         | INTENT_PERCEPTUAL = 0u
         | INTENT_RELATIVE_COLORIMETRIC = 1u
@@ -108,6 +173,7 @@ module Core =
     [<RequireQualifiedAccess>]
     type ServerMsg =
         | CalcColor of inputIcc: Icc * inputValues: float32 []  * outputIcc: Icc * indent: Intent
+        | ConvertImageColorSpace of inputIcc: Icc * bmpFile: RawFile * outputIcc: Icc * indent: Intent
 
     type private AssemblyFinder = AssemblyFinder
 

@@ -17,6 +17,7 @@ module Constants =
                 .FromResource<AssemblyFinder>("Shrimp.Pdf.Extensions.reference.conf")
             |> Configuration.fallBackByApplicationConf
 
+    /// default is 0.1
     let tolerance = 
         lazy
             config.Value.GetDouble("shrimp.pdf.tolerance")

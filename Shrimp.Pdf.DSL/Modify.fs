@@ -2,6 +2,8 @@
 
 open Shrimp.Pdf.Colors
 open Newtonsoft.Json
+open iText.Kernel.Pdf.Xobject
+open iText.IO.Image
 
 #nowarn "0104"
 open iText.Kernel.Colors
@@ -42,7 +44,7 @@ with
 type _SelectionModifierFixmentArgumentsIM<'userState> =
     { CurrentRenderInfoIM: IIntegratedRenderInfoIM 
       PageModifingArguments: PageModifingArguments<'userState>
-      ConcatedTextInfos: seq<IntegratedTextRenderInfo>}
+      ConcatedTextInfos: seq<IntegratedTextRenderInfo> }
 with 
     member x.PageNum = x.PageModifingArguments.PageNum
 
@@ -130,16 +132,24 @@ module private Modifiers =
     let private toSelectionModifierCommon (pageModifingArguments: PageModifingArguments<_>) (modifiers: _ list) fArgs  =
         fun (args: _SelectionModifierFixmentArguments) ->
             let actions = 
-                let tag = (IntegratedRenderInfoTagIM.asIntegratedRenderInfoTag args.CurrentRenderInfo.TagIM).Value
-                let args  = fArgs args
+                match args.CurrentRenderInfo with 
+                | IIntegratedRenderInfoIM.Vector vectorRenderInfo ->
+                    let args  = fArgs args
 
-                modifiers
-                |> List.mapi (fun i factory -> 
-                    let actions: ModifierPdfCanvasActions = factory args
-                    actions
-                )
-                |> ModifierPdfCanvasActions.ConcatOrKeep tag
+                    modifiers
+                    |> List.mapi (fun i factory -> 
+                        let actions: ModifierPdfCanvasActions = factory args
+                        actions
+                    )
+                    |> ModifierPdfCanvasActions.ConcatOrKeep (vectorRenderInfo.Tag)
                 
+                | IIntegratedRenderInfoIM.Pixel pixelRenderInfo  ->
+                    match modifiers with 
+                    | [modifier] ->
+                        let args  = fArgs args
+                        modifier args
+                    | _ -> failwithf "Multiple modifiers are not supported when render info tag is %A" args.CurrentRenderInfo.TagIM
+
             actions
 
     let toSelectionModifier (pageModifingArguments: PageModifingArguments<_>) (modifiers: Modifier<_> list) =
@@ -160,14 +170,38 @@ module private Modifiers =
 
 open Constants.Operators
 
+[<StructuredFormatDisplay("{LoggingText}")>]
 type ColorMapping =
     { OriginColors: AlternativeFsColor al1List 
-      NewColor: PdfCanvasColor }
+      NewColor: NullablePdfCanvasColor }
         
 with 
     static member WhiteTo(newColor) =
         { OriginColors = AtLeastOneList.Create AlternativeFsColor.Whites
-          NewColor =  newColor }
+          NewColor =  NullablePdfCanvasColor.OfPdfCanvasColor newColor }
+
+    member x.LoggingText =
+        let colors = x.OriginColors
+        let loggingText =
+            match colors with 
+            | AtLeastOneList.One color -> color.LoggingText
+            | AtLeastOneList.Many strokeColors -> 
+                let colorsText =
+                    strokeColors.AsList
+                    |> List.map (fun m -> ValidFileName.Create m.LoggingText )
+                    |> AtLeastOneList.Create
+                    |> ConcactedText
+
+                sprintf "multiple %d[%s]" 
+                    strokeColors.Length 
+                    (
+                        colorsText.RangeText(50)
+                    )
+        sprintf "OriginColors: %s, NewColor:%O" loggingText x.NewColor
+        
+
+    override x.ToString() = x.LoggingText
+        
 
 type ColorMappings = ColorMappings of ColorMapping al1List
 with 
@@ -196,8 +230,9 @@ with
             )
         
 
-type Modifier =
 
+
+type Modifier =
 
     static member SetFontAndSize(font, size: float, ?alignment: XEffect) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
@@ -304,42 +339,82 @@ type Modifier =
         
 
 
-    static member ReplaceColor(picker: (FsColor -> Color option), ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
+    static member internal ReplaceColorCommon(picker: (_ -> FsColor -> Choice<Color, NullablePdfCanvasColor> option), ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
         let fillOrStrokeModifyingOptions = defaultArg fillOrStrokeModifyingOptions FillOrStrokeModifingOptions.FillAndStroke
 
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
-            [
+            let getOrCreateColor (color: Choice<Color, NullablePdfCanvasColor>) =
+                match color with 
+                | Choice.Choice1Of2 color -> Some color
+                | Choice.Choice2Of2 color ->
+                    let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
+                    match color with 
+                    | NullablePdfCanvasColor.Non -> None
+                    | NullablePdfCanvasColor.PdfCanvasColor color ->
+                        doc.GetOrCreateColor(color)
+                        |> Some
+
+            let cancelOperation1 = 
                 if IAbstractRenderInfo.hasFill args.CurrentRenderInfo 
                 then 
-                    match fillOrStrokeModifyingOptions, picker (args.CurrentRenderInfo.Value.GetFillColor() |> FsColor.OfItextColor) with
+                    match fillOrStrokeModifyingOptions, picker args (args.CurrentRenderInfo.Value.GetFillColor() |> FsColor.OfItextColor) with
                     | FillOrStrokeModifingOptions.Stroke, _ 
-                    | _, None -> ()
+                    | _, None -> ModifierPdfCanvasActions.Keep(args.Tag)
                     | FillOrStrokeModifingOptions.Fill, Some (newColor) 
                     | FillOrStrokeModifingOptions.FillAndStroke, Some (newColor) ->
-                        PdfCanvas.setFillColor(newColor)
-
+                        match getOrCreateColor newColor with 
+                        | Some newColor ->
+                            [PdfCanvas.setFillColor(newColor)]
+                            |> ModifierPdfCanvasActions.createActions args.Tag
+                        | None ->
+                            ModifierPdfCanvasActions.CreateCloseOperator(args.Tag, fill = CloseOperator.Close)
+                else ModifierPdfCanvasActions.Keep(args.Tag)
+                         
+            let cancelOperation2 = 
 
                 if IAbstractRenderInfo.hasStroke args.CurrentRenderInfo 
                 then 
-                    match fillOrStrokeModifyingOptions, picker (args.CurrentRenderInfo.Value.GetStrokeColor() |> FsColor.OfItextColor) with
+                    match fillOrStrokeModifyingOptions, picker args (args.CurrentRenderInfo.Value.GetStrokeColor() |> FsColor.OfItextColor) with
                     | FillOrStrokeModifingOptions.Fill, _ 
-                    | _, None -> ()
+                    | _, None -> ModifierPdfCanvasActions.Keep(args.Tag)
                     | FillOrStrokeModifingOptions.Stroke, Some (newColor) 
                     | FillOrStrokeModifingOptions.FillAndStroke, Some (newColor) ->
-                        PdfCanvas.setStrokeColor(newColor)
+                        match getOrCreateColor newColor with 
+                        | Some newColor ->
+                            [PdfCanvas.setStrokeColor(newColor)]
+                            |> ModifierPdfCanvasActions.createActions args.Tag
 
-            ] |> ModifierPdfCanvasActions.createActions args.Tag 
+                        | None -> 
+                            ModifierPdfCanvasActions.CreateCloseOperator(args.Tag, stroke = CloseOperator.Close)
+                else ModifierPdfCanvasActions.Keep(args.Tag)
+
+            ModifierPdfCanvasActions.ConcatOrKeep args.Tag [cancelOperation1; cancelOperation2]
+
+    static member private ReplaceColorEx(picker: (_ -> FsColor -> Color option), ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
+        Modifier.ReplaceColorCommon((fun args color -> picker args color |> Option.map Choice1Of2), ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions)
+
+    static member ReplaceColorNullable(picker: (_ -> FsColor -> NullablePdfCanvasColor option), ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
+        Modifier.ReplaceColorCommon(
+            picker = (fun info color -> picker info color |> Option.map Choice2Of2),
+            ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions
+        )
+
+
+    static member ReplaceColor(picker: (FsColor -> Color option), ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) : Modifier<'userState> =
+        Modifier.ReplaceColorCommon(
+            picker = (fun info color -> picker color |> Option.map Choice1Of2),
+            ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions
+        )
 
     static member ReplaceColors(colorMappings: ColorMappings, ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
             let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
             let picker = 
                 colorMappings.AsPicker() >> Option.map(fun color ->
-                doc.GetOrCreateColor(color)
+                color
             )
-                
 
-            Modifier.ReplaceColor(picker, ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions)
+            Modifier.ReplaceColorNullable((fun args color -> picker color), ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions)
             
 
     static member ReplaceAlternativeColor(picker: (AlternativeFsColor -> Color option), ?fillOrStrokeModifyingOptions: FillOrStrokeModifingOptions) =
@@ -905,7 +980,7 @@ type Modify =
             ]
         )
 
-    static member ReplaceColors (picker, ?options: Modify_ReplaceColors_Options, ?nameAndParameters: NameAndParameters) =
+    static member ReplaceColorsCommon (picker, ?options: Modify_ReplaceColors_Options, ?nameAndParameters: NameAndParameters) =
         let options = defaultArg options Modify_ReplaceColors_Options.DefaultValue
         let fillOrStrokeOptions = options.FillOrStrokeOptions
 
@@ -933,11 +1008,13 @@ type Modify =
                     name = nameAndParameters.Name,
                     selector =
                         (
-                            let colorInfo = Info.ColorIs(fillOrStrokeOptions, fun color -> 
-                                match picker color with 
-                                | Some _ -> true
-                                | None -> false
-                            )
+                            let colorInfo = 
+                                fun args info ->
+                                    Info.ColorIs(fillOrStrokeOptions, fun color -> 
+                                        match picker (args, info) color with 
+                                        | Some _ -> true
+                                        | None -> false
+                                    ) args info
 
                             let info =
                                 match options.Info_BoundIs_Args with 
@@ -951,9 +1028,11 @@ type Modify =
                             | SelectorTag.Text -> Text info
                         ),
                     modifiers = [
-                        Modifier.ReplaceColor(
+                        Modifier.ReplaceColorCommon(
                             fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
-                            picker = picker
+                            picker = (fun args color ->
+                                picker (args.PageModifingArguments, args.CurrentRenderInfo) color
+                            )
                         )
                     ],
                     pageInfosValidation = pageInfosValidation,
@@ -961,7 +1040,12 @@ type Modify =
                 )
             ]
         )
+    static member ReplaceColorsEx (picker, ?options: Modify_ReplaceColors_Options, ?nameAndParameters: NameAndParameters) =
+        Modify.ReplaceColorsCommon(picker = (fun info color -> picker info color |> Option.map Choice1Of2), ?options = options, ?nameAndParameters = nameAndParameters)
 
+    static member ReplaceColors (picker, ?options: Modify_ReplaceColors_Options, ?nameAndParameters: NameAndParameters) =
+        Modify.ReplaceColorsEx(picker = (fun info color -> picker color), ?options = options, ?nameAndParameters = nameAndParameters)
+    
     static member ReplaceAlternativeColors (picker, ?options: Modify_ReplaceColors_Options, ?nameAndParameters: NameAndParameters) =
         let picker (fsColor: FsColor) =
             match fsColor.AsAlternativeFsColor with 
@@ -1005,9 +1089,7 @@ type Modify =
         Manipulate.Factory(fun flowModel splitDocument ->
             let picker = 
                 colorMapping.AsPicker() 
-                >> (fun color -> color |> Option.map(fun color -> 
-                    splitDocument.Value.GetOrCreateColor(color))
-                )
+                
             let options = defaultArg options Modify_ReplaceColors_Options.DefaultValue
             let nameAndParameters =
                 { Name = "ReplaceColors"
@@ -1016,7 +1098,8 @@ type Modify =
                      "options" => options.ToString() ]
                 }
 
-            Modify.ReplaceColors(picker, options = options, nameAndParameters = nameAndParameters)
+
+            Modify.ReplaceColorsCommon((fun args color -> picker color |> Option.map Choice2Of2), options = options, nameAndParameters = nameAndParameters)
         )
 
     static member ReplaceColors1 (colorMapping: ColorMappings, ?options: Modify_ReplaceColors_Options) =

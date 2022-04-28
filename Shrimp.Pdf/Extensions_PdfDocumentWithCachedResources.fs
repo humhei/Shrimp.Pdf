@@ -228,8 +228,8 @@ module PdfDocumentWithCachedResources =
                 let area = canvas.GetRootArea()
                 PdfFont.fontSizeOfArea area text pdfFont * scale
 
-            | CanvasFontSize.OfFsArea (area) ->
-                PdfFont.fontSizeOfArea area.AsRectangle text pdfFont
+            | CanvasFontSize.OfFsArea (area, scale) ->
+                PdfFont.fontSizeOfArea area.AsRectangle text pdfFont * scale
 
         member canvas.CalcTextLineWidthUnits (text, args: CanvasAddTextArguments) = 
             let pdfFont = 
@@ -282,11 +282,14 @@ module PdfDocumentWithCachedResources =
                         .SetFont(pdfFont)
                         .SetFontColor(fontColor)
                         .SetFontSize(float32 fontSize)
-                        .ShowTextAligned(text,float32 point.x,float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getRadians fontRotation) )
+                        .ShowTextAligned(text, float32 point.x, float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getRadians fontRotation) )
 
                 canvas
 
 
+        let addRectangle rect (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: Canvas) =
+            PdfCanvas.addRectangle rect mapping (canvas.GetPdfCanvas()) |> ignore
+            canvas
 
 
         let addRectangleToRootArea (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: Canvas) =

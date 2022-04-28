@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Library.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Shrimp.Pdf.icms2.Client\Shrimp.Pdf.icms2.Client.fsproj" />
+  </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Update="FSharp.Core" Version="5.0.1" />
+    </ItemGroup>
+
+</Project>

@@ -23,6 +23,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Shrimp.Pdf.Parser.Helper", 
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.Logger", "Shrimp.Pdf.Logger\Shrimp.Pdf.Logger.fsproj", "{84CD7906-F832-409B-A253-DBB56D9AE66A}"
 EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.Image", "Shrimp.Pdf.Image\Shrimp.Pdf.Image.fsproj", "{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -216,6 +218,24 @@ Global
 		{84CD7906-F832-409B-A253-DBB56D9AE66A}.Release|x64.Build.0 = Release|Any CPU
 		{84CD7906-F832-409B-A253-DBB56D9AE66A}.Release|x86.ActiveCfg = Release|Any CPU
 		{84CD7906-F832-409B-A253-DBB56D9AE66A}.Release|x86.Build.0 = Release|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Debug|x64.Build.0 = Debug|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Debug|x86.Build.0 = Debug|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.MiniBuild|Any CPU.ActiveCfg = Debug|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.MiniBuild|Any CPU.Build.0 = Debug|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.MiniBuild|x64.ActiveCfg = Debug|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.MiniBuild|x64.Build.0 = Debug|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.MiniBuild|x86.ActiveCfg = Debug|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.MiniBuild|x86.Build.0 = Debug|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Release|x64.ActiveCfg = Release|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Release|x64.Build.0 = Release|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Release|x86.ActiveCfg = Release|Any CPU
+		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

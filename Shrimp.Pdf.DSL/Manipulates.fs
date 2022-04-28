@@ -182,6 +182,7 @@ module Manipulates =
                 ]
             )  ||>> (List.head)
 
+        /// After Imposing
         static member AddSpaceMiddleLines(rowOrColumn, fLine: PageNumber * RowOrColumnNumber -> SpaceMiddleLine option) =
             match rowOrColumn with 
             | RowOrColumn.Column ->

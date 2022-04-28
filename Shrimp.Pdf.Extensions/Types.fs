@@ -194,7 +194,6 @@ module ExtensionTypes =
         member x.Value = v
 
 
-
     type IAbstractRenderInfo =
         abstract member Value: AbstractRenderInfo
 
@@ -596,6 +595,8 @@ module ExtensionTypes =
             { DashArray = [|value|]
               Phase = value }
 
+        member x.IsEmpty = x = DashPattern.Empty
+
         static member Empty = {DashArray = [||]; Phase = 0.}
 
     type PageBoxKind =
@@ -623,10 +624,10 @@ module ExtensionTypes =
     type CanvasFontSize =
         | Numeric of size: float
         | OfRootArea of scale: float
-        | OfFsArea of FsRectangle
+        | OfFsArea of FsRectangle * scale: float
     with    
-        static member OfArea(rect) =
-            CanvasFontSize.OfFsArea(FsRectangle.OfRectangle rect)
+        static member OfArea(rect, ?scale) =
+            CanvasFontSize.OfFsArea(FsRectangle.OfRectangle rect, defaultArg scale 1.)
 
     [<RequireQualifiedAccess>]
     type RelativePosition =
@@ -840,6 +841,8 @@ module ExtensionTypes =
 
                 else 
                     numbers
+
+        member x.Text = x.ToString()
 
         static member Number(pageNumber: int) =
             AtLeastOneSet.Create [pageNumber]
