@@ -429,3 +429,5 @@ module Operators =
     let userUnitToMM (userUnit: float) =
         userUnit / 72. * 25.4
 
+    let inchToMM (inch: float) =
+        inch * 25.4

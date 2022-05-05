@@ -10,7 +10,7 @@ open Microsoft.Extensions.DependencyInjection
 open Giraffe
 open NLog.Web
 open System.Reflection
-
+open System.Threading
 
 
 // ---------------------------------
@@ -114,6 +114,8 @@ let buildWebhost args =
     let webRoot     = Path.Combine(contentRoot, "WebRoot")
 
     RemoteServer.run()
+
+    (new ManualResetEventSlim(false)).Wait()
 
     WebHostBuilder()
         .UseKestrel()

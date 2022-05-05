@@ -81,7 +81,7 @@ type private PdfDocumentCache private
         extGStateCache.Clear()
 
     member internal x.Spawn(pdfDocument: unit -> PdfDocumentWithCachedResources) =
-        PdfDocumentCache(pdfDocument, new ConcurrentDictionary<_, _>(), colorsCache,extGStateCache)
+        PdfDocumentCache(pdfDocument, new ConcurrentDictionary<_, _>(), new ConcurrentDictionary<_, _>() (*colorsCache*),extGStateCache)
 
     member internal x.CacheDocumentFonts(fonts) =
         for (font: PdfFont) in fonts do

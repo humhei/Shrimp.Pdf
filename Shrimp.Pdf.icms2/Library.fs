@@ -5,19 +5,31 @@ open Shrimp.Akkling.Cluster
 open Shrimp.Akkling.Cluster.Intergraction
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
 open Shrimp.FSharp.Plus
+open System.IO
 open System.Drawing.Imaging
 open System.Drawing
 
 [<AutoOpen>]
 module Core =
+    type BitmapColorValuesStorage =
+        { File: RawFile 
+          Stride: int 
+          Size: Size }
+    with 
+        member x.Path = x.File.Path
+
     type BitmapColorValues with 
         member x.GetAsRgbValues() =
             x.Values
             |> Array.map(fun value ->
                 float32 value / 255.f
             )
-            |> Array.chunkBySize 4
-            |> Array.map (Array.skip 1)
+            |> Array.chunkBySize x.Stride
+            |> Array.collect (fun strideValues ->
+                Array.take (x.Size.Width * 3) strideValues
+                |> Array.chunkBySize 3
+            )
+            |> Array.map (Array.rev)
 
         member x.GetAsGrayValues() =
             x.Values
@@ -34,9 +46,16 @@ module Core =
             )
             |> Array.chunkBySize 4
 
-        static member OfRawFile(rawFile: RawFile) =
-            System.IO.File.ReadAllBytes rawFile.Path
-            |> BitmapColorValues
+        member x.ToStorage() =
+            let rawFile = System.IO.Path.ChangeExtension(Path.GetTempFileName(), ".raw")
+            File.WriteAllBytes(rawFile, x.Values)
+            { File = RawFile rawFile 
+              Stride = x.Stride
+              Size = x.Size }
+
+        static member OfStorage(v: BitmapColorValuesStorage) =
+            let bytes = System.IO.File.ReadAllBytes v.File.Path
+            BitmapColorValues(bytes, v.Stride, v.Size)
 
     [<AutoOpen>]
     module _Image =
@@ -173,7 +192,7 @@ module Core =
     [<RequireQualifiedAccess>]
     type ServerMsg =
         | CalcColor of inputIcc: Icc * inputValues: float32 []  * outputIcc: Icc * indent: Intent
-        | ConvertImageColorSpace of inputIcc: Icc * bmpFile: RawFile * outputIcc: Icc * indent: Intent
+        | ConvertImageColorSpace of inputIcc: Icc * bmpFile: BitmapColorValuesStorage * outputIcc: Icc * indent: Intent
 
     type private AssemblyFinder = AssemblyFinder
 

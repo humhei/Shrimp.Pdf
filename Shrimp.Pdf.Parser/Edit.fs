@@ -310,6 +310,11 @@ with
           Close = CloseOperatorUnion.Keep(tag)
           SuffixActions = [] }
 
+    static member createSuffix_Image (suffixPdfActions) = 
+        { Actions = []
+          Close = CloseOperatorUnion.Image (ImageCloseOperator.Keep)
+          SuffixActions = suffixPdfActions }
+
     static member createSuffix tag (suffixPdfActions) = 
         { Actions = []
           Close = CloseOperatorUnion.Keep(tag)

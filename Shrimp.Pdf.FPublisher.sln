@@ -25,6 +25,8 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.Logger", "Shrimp
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.Image", "Shrimp.Pdf.Image\Shrimp.Pdf.Image.fsproj", "{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Shrimp.Pdf.icms2.Helper", "Shrimp.Pdf.icms2.Helper\Shrimp.Pdf.icms2.Helper.csproj", "{3D857146-9674-4885-AFA1-B8BB141B427C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -236,6 +238,24 @@ Global
 		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Release|x64.Build.0 = Release|Any CPU
 		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Release|x86.ActiveCfg = Release|Any CPU
 		{A8A9233F-271D-46B8-BDBD-E03C3BAC920C}.Release|x86.Build.0 = Release|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.Debug|x64.Build.0 = Debug|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.Debug|x86.Build.0 = Debug|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.MiniBuild|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.MiniBuild|Any CPU.Build.0 = Debug|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.MiniBuild|x64.ActiveCfg = Debug|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.MiniBuild|x64.Build.0 = Debug|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.MiniBuild|x86.ActiveCfg = Debug|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.MiniBuild|x86.Build.0 = Debug|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.Release|x64.ActiveCfg = Release|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.Release|x64.Build.0 = Release|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.Release|x86.ActiveCfg = Release|Any CPU
+		{3D857146-9674-4885-AFA1-B8BB141B427C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

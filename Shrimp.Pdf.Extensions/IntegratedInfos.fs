@@ -99,12 +99,18 @@ module IntegratedInfos =
             member x.ClippingPathInfos = x.ClippingPathInfos
 
 
+
+    type ImageRenderInfoRecord =
+        { Bound: FsRectangle }
+
     [<Struct>]
     type IntegratedImageRenderInfo =
         { ImageRenderInfo: ImageRenderInfo 
           ClippingPathInfos: ClippingPathInfos }
 
     with 
+        member x.RecordValue =
+            { Bound = IImageRenderInfo.getBound x |> FsRectangle.OfRectangle }
 
         interface IAbstractRenderInfoIM
 

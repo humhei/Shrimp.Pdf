@@ -1,6 +1,4 @@
-﻿using iText.Kernel.Pdf;
-using iText.Kernel.Pdf.Canvas;
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.CompilerServices;
@@ -23,7 +21,6 @@ namespace System.Drawing
 
             // Get the address of the first line.
             IntPtr ptr = bmpData.Scan0;
-
             // Declare an array to hold the bytes of the bitmap.
             int length = Math.Abs(bmpData.Stride) * bmp.Height;
             byte[] colorValues = new byte[length];
@@ -33,7 +30,7 @@ namespace System.Drawing
 
             // Unlock the bits.
             bmp.UnlockBits(bmpData);
-            return new BitmapColorValues(colorValues);
+            return new BitmapColorValues(colorValues, bmpData.Stride, bmp.Size);
 
         }
    
@@ -41,11 +38,15 @@ namespace System.Drawing
 
     public class BitmapColorValues
     {
-        public BitmapColorValues(byte[] values)
+        public BitmapColorValues(byte[] values, int stride, Size size)
         {
+            this.Stride = stride;
+            this.Size = size;
             this.Values = values;
         }
 
         public byte[] Values { get; }
+        public int Stride { get; }
+        public Size Size { get; }
     }
 }

@@ -81,7 +81,7 @@ let run() =
                 let indent = enum<Indent> (int indent)
                 let icms2 = getOrAddIcms(inputIcc, outputIcc, indent)
                 
-                let bitmap = BitmapColorValues.OfRawFile bmpFile
+                let bitmap = BitmapColorValues.OfStorage (bmpFile)
                 let writer = Path.ChangeExtension(bmpFile.Path, ".writer.raw")
 
                 let colorValueLists =

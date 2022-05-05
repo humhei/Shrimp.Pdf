@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Shrimp.Pdf.Parser.Helper\Shrimp.Pdf.Parser.Helper.csproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.icms2.Helper\Shrimp.Pdf.icms2.Helper.csproj" />
   </ItemGroup>
 
   <ItemGroup>

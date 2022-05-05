@@ -19,13 +19,28 @@ module PdfDocumentWithCachedResources =
         { LineWidth: float 
           StrokeColor: NullablePdfCanvasColor
           FillColor: NullablePdfCanvasColor
+          IsStrokeOverprint: bool
           IsFillOverprint: bool }
     with 
         static member DefaultValue =
             { LineWidth = mm 0.1 
               StrokeColor = NullablePdfCanvasColor.BLACK
               FillColor = NullablePdfCanvasColor.N
-              IsFillOverprint = false }
+              IsFillOverprint = false
+              IsStrokeOverprint = false }
+            
+        member x.FsExtGState: FsExtGState option = 
+            match x.StrokeColor, x.FillColor with 
+            | NullablePdfCanvasColor.Non, NullablePdfCanvasColor.Non -> None
+
+            | NullablePdfCanvasColor.Non, NullablePdfCanvasColor.PdfCanvasColor _ -> 
+                Some (FsExtGState.FillOverprint)
+
+            | NullablePdfCanvasColor.PdfCanvasColor _, NullablePdfCanvasColor.Non -> 
+                Some (FsExtGState.FillOverprint)
+
+            | NullablePdfCanvasColor.PdfCanvasColor _, NullablePdfCanvasColor.PdfCanvasColor _ -> 
+                Some (FsExtGState.FillOverprint)
 
 
     type PdfCanvasAddLineArguments =
@@ -164,6 +179,13 @@ module PdfDocumentWithCachedResources =
 
     [<RequireQualifiedAccess>]
     module PdfCanvas =
+        let concatMatrix (matrix: Matrix) (canvas: PdfCanvas) =
+            let transform = AffineTransform.ofMatrix matrix
+            canvas.ConcatMatrix(transform)
+
+        let concatMatrixByTransform (transform: AffineTransformRecord) (canvas: PdfCanvas) =
+            canvas.ConcatMatrix(AffineTransformRecord.toAffineTransform transform)
+
         let setTextMatrix (matrix: Matrix) (canvas: PdfCanvas) =
             let transform = AffineTransform.ofMatrix matrix
             canvas.SetTextMatrix(transform)
@@ -198,9 +220,9 @@ module PdfDocumentWithCachedResources =
                 | _, _ -> PdfCanvas.fillStroke
 
             let trySetExtGState canvas = 
-                match args.IsFillOverprint with 
-                | true -> setExtGState (FsExtGState.FillOverprint) canvas
-                | false -> canvas
+                match args.FsExtGState with 
+                | Some extGState -> setExtGState extGState canvas
+                | None -> canvas
 
             canvas
             |> trySetExtGState

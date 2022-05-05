@@ -980,7 +980,7 @@ type Modify =
             ]
         )
 
-    static member ReplaceColorsCommon (picker, ?options: Modify_ReplaceColors_Options, ?nameAndParameters: NameAndParameters) =
+    static member private ReplaceColorsCommon (picker, ?options: Modify_ReplaceColors_Options, ?nameAndParameters: NameAndParameters) =
         let options = defaultArg options Modify_ReplaceColors_Options.DefaultValue
         let fillOrStrokeOptions = options.FillOrStrokeOptions
 

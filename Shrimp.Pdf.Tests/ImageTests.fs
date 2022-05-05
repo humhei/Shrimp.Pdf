@@ -20,50 +20,12 @@ open Shrimp.Pdf.Image
 let imageTests = 
     testList "ImageTests" <| [
     
-        //ftestCase "convert rgb image to gray" <| fun _ -> 
-        //    let flow =
-        //        Modify.Create_RecordIM(
-        //            PageSelector.All,
-        //            selectorAndModifiersList = [
-        //                { SelectorAndModifiersRecordIM.Name = "convert rgb image to gray" 
-        //                  Selector = Selector.ImageX(fun _ _ -> true)
-        //                  Modifiers = [
-        //                    ModifierIM.ConvertImageToGray()
-        //                  ]}
-        //            ]
-        //            )
-
-        //    Flow.Manipulate(
-        //        flow
-        //    )
-        //    |> runTest "datas/image/convert rgb image to gray.pdf" 
-        //    |> ignore
-
-        //ftestCase "convert rgb image to gray2" <| fun _ -> 
-        //    let flow =
-        //        Modify.Create_RecordIM(
-        //            PageSelector.All,
-        //            selectorAndModifiersList = [
-        //                { SelectorAndModifiersRecordIM.Name = "convert rgb image to gray" 
-        //                  Selector = Selector.ImageX(fun _ _ -> true)
-        //                  Modifiers = [
-        //                    ModifierIM.ConvertImageToGray()
-        //                  ]}
-        //            ]
-        //            )
-
-        //    Flow.Manipulate(
-        //        flow
-        //    )
-        //    |> runTest "datas/image/convert rgb image to gray2.pdf" 
-        //    |> ignore
-
-        testCase "convert cmyk image to gray1" <| fun _ -> 
+        testCase "convert rgb image to gray" <| fun _ -> 
             let flow =
                 Modify.Create_RecordIM(
                     PageSelector.All,
                     selectorAndModifiersList = [
-                        { SelectorAndModifiersRecordIM.Name = "convert cmyk image to gray1" 
+                        { SelectorAndModifiersRecordIM.Name = "convert rgb image to gray" 
                           Selector = Selector.ImageX(fun _ _ -> true)
                           Modifiers = [
                             ModifierIM.ConvertImageToGray()
@@ -74,55 +36,34 @@ let imageTests =
             Flow.Manipulate(
                 flow
             )
-            |> runTest "datas/image/convert cmyk image to gray1.pdf" 
+            |> runTest "datas/image/convert rgb image to gray.pdf" 
             |> ignore
 
-        testCase "convert cmyk image to gray2" <| fun _ -> 
+        ftestCase "add image border" <| fun _ -> 
             let flow =
                 Modify.Create_RecordIM(
                     PageSelector.All,
                     selectorAndModifiersList = [
-                        { SelectorAndModifiersRecordIM.Name = "convert cmyk image to gray2" 
+                        { SelectorAndModifiersRecordIM.Name = "add image border" 
                           Selector = Selector.ImageX(fun _ _ -> true)
                           Modifiers = [
-                            ModifierIM.ConvertImageToGray()
+                            ModifierIM.AddImageBorder()
                           ]}
-                    ]
-                    )
-
-            Flow.Manipulate(
-                flow
-            )
-            |> runTest "datas/image/convert cmyk image to gray2.pdf" 
-            |> ignore
-
-        ftestCase "convert cmyk image to gray3" <| fun _ -> 
-            let flow =
-                Modify.Create_RecordIM(
-                    PageSelector.All,
-                    selectorAndModifiersList = [
-                        { SelectorAndModifiersRecordIM.Name = "convert cmyk image to gray3" 
-                          Selector = Selector.ImageX(fun _ _ -> true)
-                          Modifiers = [
-                            ModifierIM.ConvertImageToGray()
-                          ]
-                        }
                     ]
                 )
 
             Flow.Manipulate(
                 flow
             )
-            |> runTest "datas/image/convert cmyk image to gray3.pdf" 
-            //|> runTest "D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\manipulate\cmyk\C.pdf"
+            |> runTest "datas/image/add image border.pdf" 
             |> ignore
 
-        testCase "convert cmyk image to gray4" <| fun _ -> 
+        testCase "convert rgb image to gray2" <| fun _ -> 
             let flow =
                 Modify.Create_RecordIM(
                     PageSelector.All,
                     selectorAndModifiersList = [
-                        { SelectorAndModifiersRecordIM.Name = "convert cmyk image to gray4" 
+                        { SelectorAndModifiersRecordIM.Name = "convert rgb image to gray" 
                           Selector = Selector.ImageX(fun _ _ -> true)
                           Modifiers = [
                             ModifierIM.ConvertImageToGray()
@@ -133,7 +74,142 @@ let imageTests =
             Flow.Manipulate(
                 flow
             )
-            |> runTest "datas\manipulate\convert cmyk image to gray4.pdf"
+            |> runTest "datas/image/convert rgb image to gray2.pdf" 
             |> ignore
+
+        //testCase "convert cmyk image to gray1" <| fun _ -> 
+        //    let flow =
+        //        Modify.Create_RecordIM(
+        //            PageSelector.All,
+        //            selectorAndModifiersList = [
+        //                { SelectorAndModifiersRecordIM.Name = "convert cmyk image to gray1" 
+        //                  Selector = Selector.ImageX(fun _ _ -> true)
+        //                  Modifiers = [
+        //                    ModifierIM.ConvertImageToGray()
+        //                  ]}
+        //            ]
+        //            )
+
+        //    Flow.Manipulate(
+        //        flow
+        //    )
+        //    |> runTest "datas/image/convert cmyk image to gray1.pdf" 
+        //    |> ignore
+
+        //testCase "convert cmyk image to gray2" <| fun _ -> 
+        //    let flow =
+        //        Modify.Create_RecordIM(
+        //            PageSelector.All,
+        //            selectorAndModifiersList = [
+        //                { SelectorAndModifiersRecordIM.Name = "convert cmyk image to gray2" 
+        //                  Selector = Selector.ImageX(fun _ _ -> true)
+        //                  Modifiers = [
+        //                    ModifierIM.ConvertImageToGray()
+        //                  ]}
+        //            ]
+        //            )
+
+        //    Flow.Manipulate(
+        //        flow
+        //    )
+        //    |> runTest "datas/image/convert cmyk image to gray2.pdf" 
+        //    |> ignore
+
+        //testCase "convert cmyk image to gray3" <| fun _ -> 
+        //    let flow =
+        //        Modify.Create_RecordIM(
+        //            PageSelector.All,
+        //            selectorAndModifiersList = [
+        //                { SelectorAndModifiersRecordIM.Name = "convert cmyk image to gray3" 
+        //                  Selector = Selector.ImageX(fun _ _ -> true)
+        //                  Modifiers = [
+        //                    ModifierIM.ConvertImageToGray()
+        //                  ]
+        //                }
+        //            ]
+        //        )
+
+        //    Flow.Manipulate(
+        //        flow
+        //    )
+        //    |> runTest "datas/image/convert cmyk image to gray3.pdf" 
+        //    //|> runTest "D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\image\cmyk\C.pdf"
+        //    |> ignore
+
+        //testCase "convert cmyk image to gray4" <| fun _ -> 
+        //    let flow =
+        //        Modify.Create_RecordIM(
+        //            PageSelector.All,
+        //            selectorAndModifiersList = [
+        //                { SelectorAndModifiersRecordIM.Name = "convert cmyk image to gray4" 
+        //                  Selector = Selector.ImageX(fun _ _ -> true)
+        //                  Modifiers = [
+        //                    ModifierIM.ConvertImageToGray()
+        //                  ]}
+        //            ]
+        //            )
+
+        //    Flow.Manipulate(
+        //        flow
+        //    )
+        //    |> runTest "datas\image\convert cmyk image to gray4.pdf"
+        //    |> ignore
+
+        //testCase "convert cmyk image to gray5" <| fun _ -> 
+        //    let flow =
+        //        Modify.Create_RecordIM(
+        //            PageSelector.All,
+        //            selectorAndModifiersList = [
+        //                { SelectorAndModifiersRecordIM.Name = "convert cmyk image to gray5" 
+        //                  Selector = Selector.ImageX(fun _ _ -> true)
+        //                  Modifiers = [
+        //                    ModifierIM.ConvertImageToGray()
+        //                  ]}
+        //            ]
+        //            )
+
+        //    Flow.Manipulate(
+        //        flow
+        //    )
+        //    |> runTest "datas\image\convert cmyk image to gray5.pdf"
+        //    |> ignore
+
+        //testCase "convert cmyk image to gray6" <| fun _ -> 
+        //    let flow =
+        //        Modify.Create_RecordIM(
+        //            PageSelector.All,
+        //            selectorAndModifiersList = [
+        //                { SelectorAndModifiersRecordIM.Name = "convert cmyk image to gray6" 
+        //                  Selector = Selector.ImageX(fun _ _ -> true)
+        //                  Modifiers = [
+        //                    ModifierIM.ConvertImageToGray()
+        //                  ]}
+        //            ]
+        //            )
+
+        //    Flow.Manipulate(
+        //        flow
+        //    )
+        //    |> runTest "datas\image\cmyk\cmyk2.pdf"
+        //    |> ignore
+
+        //ftestCase "convert cmyk image to gray7" <| fun _ -> 
+        //    let flow =
+        //        Modify.Create_RecordIM(
+        //            PageSelector.All,
+        //            selectorAndModifiersList = [
+        //                { SelectorAndModifiersRecordIM.Name = "convert cmyk image to gray7" 
+        //                  Selector = Selector.ImageX(fun _ _ -> true)
+        //                  Modifiers = [
+        //                    ModifierIM.ConvertImageToGray()
+        //                  ]}
+        //            ]
+        //            )
+
+        //    Flow.Manipulate(
+        //        flow
+        //    )
+        //    |> runTest "datas\image\cmyk\cmyk.pdf"
+        //    |> ignore
     
     ]

@@ -9,6 +9,7 @@ open Shrimp.Pdf.Colors
 open Shrimp.Pdf.DSL
 open Shrimp.FSharp.Plus
 open System.Drawing
+open System.IO
 
 [<RequireQualifiedAccess>]
 type MaterialBorders =
@@ -39,11 +40,6 @@ let allTests =
 
 [<EntryPoint>]
 let main argv =
-    //let m = BitmapUtils.ReadColorValues(Bitmap(@"C:\Users\Jia\Desktop\convert cmyk image to gray3.jpg"))
-    //let p = 
-    //    m.Values
-    //    |> String.concat "\n"
-    //failwith ""
     runTests testConfig allTests
     Console.Read()
     0

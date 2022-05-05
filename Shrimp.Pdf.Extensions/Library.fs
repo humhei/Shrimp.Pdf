@@ -539,13 +539,15 @@ module iText =
             let p1 = new Point()
             affineTransform.InverseTransform(p0,p1)
 
+        let inverse (affineTransform: AffineTransform) =
+            affineTransform.CreateInverse()
 
     type AffineTransform with 
         member this.Transform(p: Point) =
             let p1 = new Point()
             this.Transform(p,p1)
 
-        member this.InverseTranform(p: Point) =
+        member this.InverseTransform(p: Point) =
             let p1 = new Point()
             this.InverseTransform(p,p1)
 
@@ -858,6 +860,16 @@ module iText =
                 Logger.unSupportedTextRenderMode others
                 []
 
+    [<RequireQualifiedAccess>]
+    module IImageRenderInfo =   
+        let getBound (info: IImageRenderInfo) =
+            let image = info.Value
+
+            let ctm = 
+                image.GetImageCtm()
+                |> AffineTransformRecord.ofMatrix
+
+            Rectangle.create ctm.TranslateX ctm.TranslateY ctm.ScaleX ctm.ScaleY
 
 
 

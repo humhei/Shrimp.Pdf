@@ -28,28 +28,32 @@ module _ModifierIM =
           XDpi: float }
 
     let private cache = 
-        new ConcurrentDictionary<PdfImageXObject, RawFile * Size * ImageData>()
+        new ConcurrentDictionary<PdfImageXObject, BitmapColorValuesStorage * ImageData>()
 
     let private client  = lazy GetDefaultClusterIcm2Client()
 
 
+
+
     type ImageRenderInfo with 
-        member x.SaveToTmpColorValuesRawFile() =
+
+        member x.SaveToTmpColorValuesStorage() =
             let image = x.GetImage()
             cache.GetOrAdd(image, fun image ->
                 let bytes = image.GetImageBytes()
+
                 let imageData = ImageDataFactory.Create(bytes)
-                use stream = new MemoryStream(bytes)
-                let bitmap = new Bitmap(stream)
-                let colorValues = BitmapUtils.ReadColorValues(bitmap)
-                let text =
-                    colorValues.Values
-                    |> Array.map string
-                    |> String.concat "\n"
-                let rawFile = Path.GetTempFileName() |> Path.changeExtension ".raw" 
-                File.WriteAllBytes(rawFile, colorValues.Values)
-                RawFile rawFile, bitmap.Size, imageData
+
+                let storage = 
+                    use stream = new MemoryStream(bytes)
+                    use bitmap = new Bitmap(stream)
+                    let colorValues = BitmapUtils.ReadColorValues(bitmap)
+                    colorValues.ToStorage()
+
+                storage, imageData
             )
+
+
 
     type ImageData with 
         member x.FsColorSpace =
@@ -59,13 +63,28 @@ module _ModifierIM =
             | 4 -> ColorSpace.Cmyk
             | colorSpaceNumber -> failwithf "Cannot get colorSpace from %d" colorSpaceNumber
 
+        //member imageData.FsSize() = 
+        //    let dpi_x = imageData.GetDpiX()
+        //    let dpi_y = imageData.GetDpiY()
+
+        //    let size_px =
+        //        { Width =  imageData.GetWidth() |> float
+        //          Height = imageData.GetHeight()|> float }
+            
+        //    let size_inch =
+        //        { Width =  size_px.Width  / float dpi_x
+        //          Height = size_px.Height / float dpi_y }
+
+        //    size_inch.MapValue(inchToMM)
+
+
     type ModifierIM =
         static member ConvertImageColorSpace(inputIcc: Icc option, outputIcc: Icc, intent): ModifierIM<'userState> =
             fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
                 match args.CurrentRenderInfoIM with 
                 | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->
-                    let rawFile, size, imageData = imageRenderInfo.ImageRenderInfo.SaveToTmpColorValuesRawFile()
-                    
+                    let storage, imageData = imageRenderInfo.ImageRenderInfo.SaveToTmpColorValuesStorage()
+                    let size = storage.Size
                     let inputIcc = 
                         match inputIcc with 
                         | Some inputIcc ->
@@ -82,39 +101,47 @@ module _ModifierIM =
                         match inputIcc = outputIcc with 
                         | true -> ModifierPdfCanvasActions.KeepImage()
                         | false ->  
-                            let components =
-                                match outputIcc.ColorSpace with 
-                                | ColorSpace.Cmyk -> 4
-                                | ColorSpace.Gray -> 1
-                                | ColorSpace.Rgb  -> 3
-                                | ColorSpace.Lab  -> 3
+                            match inputIcc with 
+                            | Icc.Cmyk _ 
+                            | Icc.Gray _ 
+                            | Icc.Lab _ ->  
+                                ModifierPdfCanvasActions.KeepImage()
+                                /// Some filters are not supported in itext, e.g DCT Decode filter, and so on 
+                                //failwithf "Only rgb input image is supported for converting colorspace"
 
-                            let newArrayRawFile: RawFile = 
-                                client.Value <? 
-                                    ServerMsg.ConvertImageColorSpace (
-                                        inputIcc,
-                                        rawFile,
-                                        outputIcc,
-                                        intent
+                            | Icc.Rgb _ ->
+                                let components =
+                                    match outputIcc.ColorSpace with 
+                                    | ColorSpace.Cmyk -> 4
+                                    | ColorSpace.Gray -> 1
+                                    | ColorSpace.Rgb  -> 3
+                                    | ColorSpace.Lab  -> 3
+
+                                let newArrayRawFile: RawFile = 
+                                    client.Value <? 
+                                        ServerMsg.ConvertImageColorSpace (
+                                            inputIcc,
+                                            storage,
+                                            outputIcc,
+                                            intent
+                                        )
+                                    |> Async.RunSynchronously
+
+                                let bytes = File.ReadAllBytes newArrayRawFile.Path
+
+                                let image = 
+                                    ImageDataFactory.Create(
+                                        width = size.Width,
+                                        height = size.Height,
+                                        components = components,
+                                        bpc = 8,
+                                        data = bytes,
+                                        transparency = null
                                     )
-                                |> Async.RunSynchronously
-
-                            let bytes = File.ReadAllBytes newArrayRawFile.Path
-
-                            let image = 
-                                ImageDataFactory.Create(
-                                    width = size.Width,
-                                    height = size.Height,
-                                    components = components,
-                                    bpc = 8,
-                                    data = bytes,
-                                    transparency = null
-                                )
                     
-                            let ctm = AffineTransformRecord.DefaultValue
+                                let ctm = AffineTransformRecord.DefaultValue
 
-                            ModifierPdfCanvasActions.NewImage(ctm, image)
-                            
+                                ModifierPdfCanvasActions.NewImage(ctm, image)
                 
                     | None -> ModifierPdfCanvasActions.KeepImage()
                         
@@ -125,12 +152,37 @@ module _ModifierIM =
         static member ConvertImageToGray() =
             ModifierIM.ConvertImageColorSpace(None, Icc.Gray defaultGrayIcc.Value, defaultIntent.Value)
 
-        static member SetMaximunDpi(maximunDpi: int) =
+            
+        static member AddImageBorder(?fArgs): ModifierIM<'userState> =
             fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
-                match args.CurrentRenderInfoIM with 
-                | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->
-                    let bmpFile, size, imageData = imageRenderInfo.ImageRenderInfo.SaveToTmpColorValuesRawFile()
-                    failwith ""
+                 match args.CurrentRenderInfoIM with 
+                 | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->
+                    let bound = 
+                        IImageRenderInfo.getBound imageRenderInfo
 
-                | IIntegratedRenderInfoIM.Vector renderInfo ->
-                    ModifierPdfCanvasActions.Keep(renderInfo.Tag)
+                    let ctm = 
+                        AffineTransform.ofMatrix (imageRenderInfo.ImageRenderInfo.GetImageCtm())
+                        |> AffineTransform.inverse
+
+                    let transformedBound =  ctm.Transform(bound)
+
+                    ModifierPdfCanvasActions.createSuffix_Image(
+                        [ PdfCanvas.concatMatrixByTransform (AffineTransformRecord.ofAffineTransform ctm)
+                          PdfCanvas.addRectangle transformedBound (defaultArg fArgs id)
+                        ]
+                    )
+
+                 | IIntegratedRenderInfoIM.Vector renderInfo ->
+                     ModifierPdfCanvasActions.Keep(renderInfo.Tag)
+
+
+
+        //static member SetMaximunDpi(maximunDpi: int) =
+        //    fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
+        //        match args.CurrentRenderInfoIM with 
+        //        | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->
+        //            let bmpFile, size, imageData = imageRenderInfo.ImageRenderInfo.SaveToTmpColorValuesRawFile()
+        //            failwith ""
+
+        //        | IIntegratedRenderInfoIM.Vector renderInfo ->
+        //            ModifierPdfCanvasActions.Keep(renderInfo.Tag)

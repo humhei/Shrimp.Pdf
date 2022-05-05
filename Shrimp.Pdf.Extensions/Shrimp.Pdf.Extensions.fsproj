@@ -22,11 +22,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!--<ProjectReference Include="..\..\..\Github\itext7-dotnet\itext\itext.font-asian\itext.font-asian.netstandard.csproj" />
-    <ProjectReference Include="..\..\..\Github\itext7-dotnet\itext\itext.forms\itext.forms.netstandard.csproj" />
-    <ProjectReference Include="..\..\..\Github\itext7-dotnet\itext\itext.io\itext.io.netstandard.csproj" />
-    <ProjectReference Include="..\..\..\Github\itext7-dotnet\itext\itext.kernel\itext.kernel.netstandard.csproj" />
-    <ProjectReference Include="..\..\..\Github\itext7-dotnet\itext\itext.layout\itext.layout.netstandard.csproj" />-->
     <ProjectReference Include="..\Shrimp.Pdf.Logger\Shrimp.Pdf.Logger.fsproj" />
   </ItemGroup>
 
