@@ -15,6 +15,7 @@ open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf.Xobject
 open Shrimp.Pdf
 open Shrimp.Pdf.Constants
+open iText.IO.Image
 
 
 
@@ -861,6 +862,16 @@ module iText =
                 []
 
     [<RequireQualifiedAccess>]
+    module ImageData = 
+        let colorSpace (imageData: ImageData)=
+            match imageData.GetColorEncodingComponentsNumber() with 
+            | 1 -> ColorSpace.Gray
+            | 3 -> ColorSpace.Rgb
+            | 4 -> ColorSpace.Cmyk
+            | colorSpaceNumber -> failwithf "Cannot get colorSpace from %d" colorSpaceNumber
+
+
+    [<RequireQualifiedAccess>]
     module IImageRenderInfo =   
         let getBound (info: IImageRenderInfo) =
             let image = info.Value
@@ -870,6 +881,7 @@ module iText =
                 |> AffineTransformRecord.ofMatrix
 
             Rectangle.create ctm.TranslateX ctm.TranslateY ctm.ScaleX ctm.ScaleY
+
 
 
 

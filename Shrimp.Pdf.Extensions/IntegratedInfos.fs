@@ -8,6 +8,8 @@ open iText.Kernel.Pdf.Canvas.Parser.Data
 open FParsec
 open iText.Kernel.Pdf
 open Shrimp.FSharp.Plus
+open iText.IO.Image
+
 
 
 [<AutoOpen>]
@@ -38,6 +40,9 @@ module IntegratedInfos =
             member x.Value = x.PathRenderInfo
 
         interface IAbstractRenderInfo with 
+            member x.Value = x.PathRenderInfo :> AbstractRenderInfo
+
+        interface IAbstractRenderInfoIM with 
             member x.Value = x.PathRenderInfo :> AbstractRenderInfo
 
         interface IIntegratedRenderInfoIM with 
@@ -82,7 +87,8 @@ module IntegratedInfos =
                 bound.FsRectangle()
             }
 
-        interface IAbstractRenderInfoIM
+        interface IAbstractRenderInfoIM with 
+            member x.Value = x.TextRenderInfo :> AbstractRenderInfo
 
         interface ITextRenderInfo with 
             member x.Value = x.TextRenderInfo
@@ -101,24 +107,38 @@ module IntegratedInfos =
 
 
     type ImageRenderInfoRecord =
-        { Bound: FsRectangle }
+        { Bound: FsRectangle
+          ColorSpace: ColorSpace }
 
     [<Struct>]
     type IntegratedImageRenderInfo =
         { ImageRenderInfo: ImageRenderInfo 
-          ClippingPathInfos: ClippingPathInfos }
+          ClippingPathInfos: ClippingPathInfos
+          LazyImageData: Lazy<ImageData> }
 
     with 
-        member x.RecordValue =
-            { Bound = IImageRenderInfo.getBound x |> FsRectangle.OfRectangle }
+        member x.ImageData = x.LazyImageData.Value
 
-        interface IAbstractRenderInfoIM
+        member x.ColorSpace = ImageData.colorSpace x.ImageData
+
+        member x.Dpi =
+            let bound =  IImageRenderInfo.getBound x
+            let width = x.ImageData.GetWidth()
+            let height = x.ImageData.GetHeight()
+            let dpi_x = float width / userUnitToMM (bound.GetWidthF())     |> inchToMM |> round |> int
+            let dpi_y = float height / userUnitToMM (bound.GetHeightF())  |> inchToMM |> round |> int
+            {| X = dpi_x
+               Y = dpi_y |}
+
+        member x.RecordValue =
+            { Bound = IImageRenderInfo.getBound x |> FsRectangle.OfRectangle
+              ColorSpace = x.ColorSpace }
+
+        interface IAbstractRenderInfoIM with 
+            member x.Value = x.ImageRenderInfo :> AbstractRenderInfo
 
         interface IImageRenderInfo with 
             member x.Value = x.ImageRenderInfo
-
-        interface IAbstractRenderInfo with 
-            member x.Value = x.ImageRenderInfo :> AbstractRenderInfo
 
         interface IIntegratedRenderInfoIM with 
             member x.TagIM = IntegratedRenderInfoTagIM.Image

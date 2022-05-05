@@ -14,22 +14,26 @@ module Core =
     type BitmapColorValuesStorage =
         { File: RawFile 
           Stride: int 
-          Size: Size }
+          Size: Size
+          PixelFormat: PixelFormat }
     with 
         member x.Path = x.File.Path
 
     type BitmapColorValues with 
         member x.GetAsRgbValues() =
+            let depth = 
+                Bitmap.GetPixelFormatSize(x.PixelFormat) / 8
+                
             x.Values
             |> Array.map(fun value ->
                 float32 value / 255.f
             )
             |> Array.chunkBySize x.Stride
             |> Array.collect (fun strideValues ->
-                Array.take (x.Size.Width * 3) strideValues
-                |> Array.chunkBySize 3
+                Array.take (x.Size.Width * depth) strideValues
+                |> Array.chunkBySize depth
             )
-            |> Array.map (Array.rev)
+            |> Array.map (Array.take 3 >> Array.rev)
 
         member x.GetAsGrayValues() =
             x.Values
@@ -51,11 +55,12 @@ module Core =
             File.WriteAllBytes(rawFile, x.Values)
             { File = RawFile rawFile 
               Stride = x.Stride
-              Size = x.Size }
+              Size = x.Size
+              PixelFormat = x.PixelFormat }
 
         static member OfStorage(v: BitmapColorValuesStorage) =
             let bytes = System.IO.File.ReadAllBytes v.File.Path
-            BitmapColorValues(bytes, v.Stride, v.Size)
+            BitmapColorValues(bytes, v.Stride, v.Size, v.PixelFormat)
 
     [<AutoOpen>]
     module _Image =

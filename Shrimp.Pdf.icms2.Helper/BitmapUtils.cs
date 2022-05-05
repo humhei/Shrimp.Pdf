@@ -27,10 +27,9 @@ namespace System.Drawing
 
             // Copy the RGB values into the array.
             System.Runtime.InteropServices.Marshal.Copy(ptr, colorValues, 0, length);
-
             // Unlock the bits.
             bmp.UnlockBits(bmpData);
-            return new BitmapColorValues(colorValues, bmpData.Stride, bmp.Size);
+            return new BitmapColorValues(colorValues, bmpData.Stride, bmp.Size, bmp.PixelFormat);
 
         }
    
@@ -38,14 +37,16 @@ namespace System.Drawing
 
     public class BitmapColorValues
     {
-        public BitmapColorValues(byte[] values, int stride, Size size)
+        public BitmapColorValues(byte[] values, int stride, Size size, PixelFormat pixelFormat)
         {
             this.Stride = stride;
             this.Size = size;
             this.Values = values;
+            this.PixelFormat = pixelFormat;
         }
 
         public byte[] Values { get; }
+        public PixelFormat PixelFormat { get; }
         public int Stride { get; }
         public Size Size { get; }
     }

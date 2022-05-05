@@ -10,6 +10,7 @@ open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf.Extensions
 open Shrimp.FSharp.Plus
 open Shrimp.Pdf
+open iText.IO.Image
 open iText.Kernel.Pdf
 
 
@@ -279,7 +280,10 @@ module internal Listeners =
                             { ClippingPathInfos = 
                                 { XObjectClippingBoxState = currentXObjectClippingBox
                                   ClippingPathInfoState = currentClippingPathInfo }
-                              ImageRenderInfo = imageRenderInfo }
+                              ImageRenderInfo = imageRenderInfo
+                              LazyImageData = 
+                                lazy (ImageDataFactory.Create(imageRenderInfo.GetImage().GetImageBytes()))
+                              }
                             :> IIntegratedRenderInfoIM
 
                         |_ -> failwith "Not implemented"

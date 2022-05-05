@@ -21,8 +21,8 @@ type FsSize =
       Height: float }
 with 
     member internal x.MMValues =
-        { Width = userUnitToMM x.Width 
-          Height = userUnitToMM x.Height}
+        {| Width = userUnitToMM x.Width 
+           Height = userUnitToMM x.Height |}
 
     member internal x.Round() =
         { Width = x.Width

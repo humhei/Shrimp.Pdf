@@ -27,11 +27,6 @@ module _Colors =
             let color = System.Drawing.Color.FromArgb(hex)
             DeviceRgb(int color.R, int color.G, int color.B)
 
-    type ColorSpace =
-        | Gray = 0
-        | Rgb = 1
-        | Cmyk = 2
-        | Lab = 3
 
     type Icc with 
         member x.ColorSpace = 
@@ -86,9 +81,9 @@ module _Colors =
           B: float32 }
     with 
         member x.Range255 =
-            {| R = x.R * 255.f 
+            {  R = x.R * 255.f 
                G = x.G * 255.f
-               B = x.B * 255.f |}
+               B = x.B * 255.f }
 
         static member RED = { R = 1.0f; G = 0.0f; B = 0.0f }
         static member GREEN = { R = 0.0f; G = 1.0f; B = 0.0f }

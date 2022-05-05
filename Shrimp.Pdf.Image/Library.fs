@@ -35,15 +35,15 @@ module _ModifierIM =
 
 
 
-    type ImageRenderInfo with 
+    type IntegratedImageRenderInfo with 
 
         member x.SaveToTmpColorValuesStorage() =
-            let image = x.GetImage()
+            
+            let image = x.ImageRenderInfo.GetImage()
             cache.GetOrAdd(image, fun image ->
                 let bytes = image.GetImageBytes()
 
-                let imageData = ImageDataFactory.Create(bytes)
-
+                let imageData = x.ImageData
                 let storage = 
                     use stream = new MemoryStream(bytes)
                     use bitmap = new Bitmap(stream)
@@ -54,46 +54,22 @@ module _ModifierIM =
             )
 
 
-
-    type ImageData with 
-        member x.FsColorSpace =
-            match x.GetColorEncodingComponentsNumber() with 
-            | 1 -> ColorSpace.Gray
-            | 3 -> ColorSpace.Rgb
-            | 4 -> ColorSpace.Cmyk
-            | colorSpaceNumber -> failwithf "Cannot get colorSpace from %d" colorSpaceNumber
-
-        //member imageData.FsSize() = 
-        //    let dpi_x = imageData.GetDpiX()
-        //    let dpi_y = imageData.GetDpiY()
-
-        //    let size_px =
-        //        { Width =  imageData.GetWidth() |> float
-        //          Height = imageData.GetHeight()|> float }
-            
-        //    let size_inch =
-        //        { Width =  size_px.Width  / float dpi_x
-        //          Height = size_px.Height / float dpi_y }
-
-        //    size_inch.MapValue(inchToMM)
-
-
     type ModifierIM =
         static member ConvertImageColorSpace(inputIcc: Icc option, outputIcc: Icc, intent): ModifierIM<'userState> =
             fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
                 match args.CurrentRenderInfoIM with 
                 | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->
-                    let storage, imageData = imageRenderInfo.ImageRenderInfo.SaveToTmpColorValuesStorage()
+                    let storage, imageData = imageRenderInfo.SaveToTmpColorValuesStorage()
                     let size = storage.Size
                     let inputIcc = 
                         match inputIcc with 
                         | Some inputIcc ->
-                            match inputIcc.ColorSpace = imageData.FsColorSpace with
+                            match inputIcc.ColorSpace = imageRenderInfo.ColorSpace with
                             | false -> Some inputIcc
                             | true -> None
 
                         | _ -> 
-                            ColorSpace.DefaultIcc imageData.FsColorSpace
+                            ColorSpace.DefaultIcc imageRenderInfo.ColorSpace
                             |> Some
             
                     match inputIcc with 
@@ -177,12 +153,62 @@ module _ModifierIM =
 
 
 
-        //static member SetMaximunDpi(maximunDpi: int) =
-        //    fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
-        //        match args.CurrentRenderInfoIM with 
-        //        | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->
-        //            let bmpFile, size, imageData = imageRenderInfo.ImageRenderInfo.SaveToTmpColorValuesRawFile()
-        //            failwith ""
+        static member SetMaximunDpi(maximunDpi: int) =
+            fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
+                match args.CurrentRenderInfoIM with 
+                | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->  
+                    let imageData = imageRenderInfo.ImageData
+                    match imageRenderInfo.ColorSpace with 
+                    | ColorSpace.Rgb ->
+                        let dpi = imageRenderInfo.Dpi
+                        match dpi.X, dpi.Y with 
+                        | SmallerOrEqual maximunDpi, SmallerOrEqual maximunDpi ->
+                            ModifierPdfCanvasActions.KeepImage()
+                        
+                        | dpi_x, dpi_y ->
+                            use bmp =   
+                                let bytes = imageData.GetData()
+                                new Bitmap(new MemoryStream(bytes))
+                    
+                            let newSize = 
+                                let scaleX =(float maximunDpi / float dpi_x)  
 
-        //        | IIntegratedRenderInfoIM.Vector renderInfo ->
-        //            ModifierPdfCanvasActions.Keep(renderInfo.Tag)
+                                let scaleY = (float maximunDpi / float dpi_y) 
+
+                                let multipleScale (px: int) (scale) = float px * scale |> round |> int
+
+                                let baseSize = bmp.Size
+                                Size(multipleScale baseSize.Width scaleX, multipleScale baseSize.Height scaleY)
+
+                            use newBitmap = new Bitmap(bmp, newSize)
+
+                            let colorValues = BitmapUtils.ReadColorValues(newBitmap)
+                            let rgbValues = colorValues.GetAsRgbValues()
+
+                            let rgbByteValues = 
+                                rgbValues
+                                |> Array.concat
+                                |> Array.map (fun v -> v * 255.f |> byte)
+
+                            let image = 
+                                ImageDataFactory.Create(
+                                    width = newSize.Width,
+                                    height = newSize.Height,
+                                    components = 3,
+                                    bpc = 8,
+                                    data = rgbByteValues,
+                                    transparency = null
+                                )
+                    
+                            let ctm = AffineTransformRecord.DefaultValue
+
+                            ModifierPdfCanvasActions.NewImage(ctm, image)
+
+                    | _ ->
+                        ModifierPdfCanvasActions.KeepImage()
+                        /// Some filters are not supported in itext, e.g DCT Decode filter, and so on 
+                        //failwithf "Only rgb input image is supported for converting colorspace"
+
+
+                | IIntegratedRenderInfoIM.Vector renderInfo ->
+                    ModifierPdfCanvasActions.Keep(renderInfo.Tag)

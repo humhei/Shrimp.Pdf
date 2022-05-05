@@ -26,7 +26,7 @@ let imageTests =
                     PageSelector.All,
                     selectorAndModifiersList = [
                         { SelectorAndModifiersRecordIM.Name = "convert rgb image to gray" 
-                          Selector = Selector.ImageX(fun _ _ -> true)
+                          Selector = Selector.ImageX(fun _ image -> true)
                           Modifiers = [
                             ModifierIM.ConvertImageToGray()
                           ]}
@@ -39,7 +39,7 @@ let imageTests =
             |> runTest "datas/image/convert rgb image to gray.pdf" 
             |> ignore
 
-        ftestCase "add image border" <| fun _ -> 
+        testCase "add image border" <| fun _ -> 
             let flow =
                 Modify.Create_RecordIM(
                     PageSelector.All,
@@ -58,23 +58,45 @@ let imageTests =
             |> runTest "datas/image/add image border.pdf" 
             |> ignore
 
-        testCase "convert rgb image to gray2" <| fun _ -> 
+        testCase "convert rgb image to gray inside pageBox" <| fun _ -> 
             let flow =
                 Modify.Create_RecordIM(
                     PageSelector.All,
                     selectorAndModifiersList = [
-                        { SelectorAndModifiersRecordIM.Name = "convert rgb image to gray" 
-                          Selector = Selector.ImageX(fun _ _ -> true)
+                        { SelectorAndModifiersRecordIM.Name = "convert rgb image to gray inside pageBox" 
+                          Selector = Selector.ImageX(fun args image -> 
+                            let actualBox = args.Page.GetActualBox()
+                            let bound = IImageRenderInfo.getBound image
+                            bound.IsInsideOf(actualBox)
+                          )
                           Modifiers = [
                             ModifierIM.ConvertImageToGray()
                           ]}
-                    ]
-                    )
+                    ])
 
             Flow.Manipulate(
                 flow
             )
-            |> runTest "datas/image/convert rgb image to gray2.pdf" 
+            |> runTest "datas/image/convert rgb image to gray inside pageBox.pdf" 
+            |> ignore
+
+
+        testCase "set image maximun dpi to 150" <| fun _ -> 
+            let flow =
+                Modify.Create_RecordIM(
+                    PageSelector.All,
+                    selectorAndModifiersList = [
+                        { SelectorAndModifiersRecordIM.Name = "set image maximun dpi to 150" 
+                          Selector = Selector.ImageX(fun args image -> true)
+                          Modifiers = [
+                            ModifierIM.SetMaximunDpi(150)
+                          ]}
+                    ])
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/set image maximun dpi to 150.pdf" 
             |> ignore
 
         //testCase "convert cmyk image to gray1" <| fun _ -> 

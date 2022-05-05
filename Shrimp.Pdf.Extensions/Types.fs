@@ -13,6 +13,12 @@ open Shrimp.FSharp.Plus
 
 [<AutoOpen>]
 module ExtensionTypes =
+    
+    type ColorSpace =
+        | Gray = 0
+        | Rgb = 1
+        | Cmyk = 2
+        | Lab = 3
 
     type PdfLiteral with 
         member x.Text() = x.ToString()
@@ -79,10 +85,10 @@ module ExtensionTypes =
             }
 
         member private x.MMValue =
-            { X = userUnitToMM x.X
-              Y = userUnitToMM x.Y 
-              Width = userUnitToMM x.Width
-              Height = userUnitToMM x.Height }
+            {| X = userUnitToMM x.X
+               Y = userUnitToMM x.Y 
+               Width = userUnitToMM x.Width
+               Height = userUnitToMM x.Height |}
 
         member x.LoggingText = 
             let x = x.MMValue
@@ -155,8 +161,8 @@ module ExtensionTypes =
           Y: float }
     with 
         member private x.MMValue =
-            { X = userUnitToMM x.X
-              Y = userUnitToMM x.Y }
+            {| X = userUnitToMM x.X
+               Y = userUnitToMM x.Y |}
 
         static member Zero =
             { X = 0. 
@@ -198,7 +204,7 @@ module ExtensionTypes =
         abstract member Value: AbstractRenderInfo
 
     type IAbstractRenderInfoIM =
-        inherit IAbstractRenderInfo
+        abstract member Value: AbstractRenderInfo
         
 
     type IPathRenderInfo =
