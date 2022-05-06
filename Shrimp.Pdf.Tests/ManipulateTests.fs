@@ -3,8 +3,12 @@ open Expecto
 open Shrimp.Pdf
 open Shrimp.Pdf.Colors
 open iText.Kernel.Colors
+open iText.Kernel.Geom
+open iText.Kernel.Pdf.Canvas
+open iText.Layout
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
+open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf.icms2
 open Shrimp.FSharp.Plus
 open Shrimp.Pdf.RegisterableFonts
@@ -40,6 +44,13 @@ module PageInfos =
 
 let manipulateTests =
   testList "Manipulates Tests" [
+    testCase "make combound path from blue strokes" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.CreateCompoundPath(Info.StrokeColorIs FsColor.RGB_BLUE)
+        )
+        |> runTest "datas/manipulate/make combound path from blue strokes.pdf" 
+        |> ignore
+
     testCase "expand stroke width" <| fun _ -> 
         Flow.Manipulate (
             Modify.ExpandStrokeWidth(

@@ -52,6 +52,7 @@ with
 
     member x.Page = x.PageModifingArguments.Page
 
+
 type _SelectionModifierFixmentArguments<'userState> =
     { CurrentRenderInfo: IIntegratedRenderInfo 
       PageModifingArguments: PageModifingArguments<'userState>
@@ -65,6 +66,8 @@ with
     member x.UserState = x.PageModifingArguments.UserState
 
     member x.Page = x.PageModifingArguments.Page
+
+
 
 
 type PageInfosValidation = PageInfosValidation of (PageNumber -> seq<IIntegratedRenderInfo> -> unit)
@@ -1246,4 +1249,63 @@ type Modify =
                   ]
                   }
             ]
+        )
+
+    static member CreateCompoundPath(selector: PageModifingArguments<_> -> _ -> bool) =
+        Manipulate.Func(fun userState ->
+            ModifyPage.Create
+                ("read compound path infos",
+                  PageSelector.All,
+                  //Selector.Path(selector),
+                  Selector.Path(fun args info -> selector (args.MapUserState(fun _ -> userState)) info),
+                  (fun args infos ->
+                    let pathInfos = 
+                        infos
+                        |> List.ofSeq
+                        |> List.choose IIntegratedRenderInfo.asIPathRenderInfo
+
+                    pathInfos
+                    |> List.map(fun pathInfo -> pathInfo.Renewable())
+                  )
+                )
+            <.+>
+            Modify.Create_Record
+                ( PageSelector.All,
+                  [
+                    { 
+                        SelectorAndModifiersRecord.Name = "cancel compound paths"
+                        //Selector = Selector.Path(selector)
+                        Selector = Selector.Path(fun args info -> selector (args.MapUserState(fun _ -> userState)) info)
+                        Modifiers =[
+                            Modifier.CancelFillAndStroke()
+                        ]
+                    }
+                  ]
+                )
+            <+>
+            ModifyPage.Create
+                ("add compound path",
+                  PageSelector.All,
+                  Dummy,
+                  (fun args _ ->
+                    let renewablePathInfos = args.UserState.[args.PageNum-1]
+                    match renewablePathInfos with 
+                    | [] -> ()
+                    | _ ->
+                        let canvas = new PdfCanvas(args.Page)
+                        let accumulatedPathOperatorRanges =
+                            renewablePathInfos
+                            |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
+
+                        let head = renewablePathInfos.Head
+
+                        PdfCanvas.setPathRenderColorByOperation head.Operation head.FillColor (head.StrokeColor) canvas |> ignore
+
+                        for operatorRange in accumulatedPathOperatorRanges do
+                            PdfCanvas.writeOperatorRange operatorRange canvas
+                            |> ignore
+
+                        PdfCanvas.closePathByOperation head.Operation canvas |> ignore
+                  )
+                )
         )

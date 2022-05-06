@@ -12,7 +12,7 @@ open Shrimp.FSharp.Plus
 open Shrimp.Pdf
 open iText.IO.Image
 open iText.Kernel.Pdf
-
+open Shrimp.Pdf.Constants.Operators
 
 
 [<RequireQualifiedAccess>]
@@ -186,6 +186,7 @@ module internal Listeners =
             )
         let mutable isShowingText = false
         let mutable concatedTextInfos = ResizeArray() 
+        let mutable accumulatedPathOperatorRanges = ResizeArray()
 
         let mutable currentXObjectClippingBox = XObjectClippingBoxState.Init
 
@@ -207,10 +208,11 @@ module internal Listeners =
             List supportedEvents :> ICollection<_>
 
 
+        member internal x.AddPathOperatorRange(operatorRange) = accumulatedPathOperatorRanges.Add(operatorRange)
 
         member internal x.BeginShowText() = isShowingText <- true
         member internal x.EndShoeText() = 
-            concatedTextInfos.Clear()
+            concatedTextInfos <- new ResizeArray<_>()
             isShowingText <- false
 
         member internal this.ConcatedTextInfos = concatedTextInfos :> seq<IntegratedTextRenderInfo>
@@ -263,11 +265,16 @@ module internal Listeners =
                     let renderInfo = 
                         match data with 
                         | :? PathRenderInfo as pathRenderInfo ->
-                            { ClippingPathInfos  = 
-                                { XObjectClippingBoxState = currentXObjectClippingBox
-                                  ClippingPathInfoState = currentClippingPathInfo }
-                              PathRenderInfo = pathRenderInfo }
-                            :> IIntegratedRenderInfoIM
+                            let info = 
+                                { ClippingPathInfos  = 
+                                    { XObjectClippingBoxState = currentXObjectClippingBox
+                                      ClippingPathInfoState = currentClippingPathInfo }
+                                  PathRenderInfo = pathRenderInfo
+                                  AccumulatedPathOperatorRanges = accumulatedPathOperatorRanges }
+                                :> IIntegratedRenderInfoIM
+
+                            accumulatedPathOperatorRanges <- ResizeArray<_>()
+                            info
 
                         | :? TextRenderInfo as textRenderInfo ->
                             { ClippingPathInfos = 
@@ -368,8 +375,12 @@ open Listeners
         
 open Constants
 
-type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener , additionalContentOperators) =
+type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventListenerEx, additionalContentOperators) =
     inherit PdfCanvasProcessor(listener, additionalContentOperators)
+
+    member internal x.GetResources() = x.GetResources()
+
+    member this.Listener = listener
 
     member internal this.InitClippingPath(page: PdfPage) =
         let clippingPath = new Path()
@@ -445,16 +456,74 @@ type private NonInitialCallbackablePdfCanvasProcessor(listener: IEventListener ,
 
         this.ProcessContent(page.GetContentBytes(), page.GetResources());
 
+    new (listener) = NonInitialCallbackablePdfCanvasProcessor(listener, dict [])
 
 
-    new (listener: IEventListener) = NonInitialCallbackablePdfCanvasProcessor(listener, dict [])
+type internal RenderInfoAccumulatableContentOperator (originalOperator, fCurrentResource) =
+    member this.OriginalOperator: IContentOperator = originalOperator
+
+    interface IContentOperator with 
+        member this.Invoke(processor,operator,operands) =
+            
+            let processor = processor :?> NonInitialCallbackablePdfCanvasProcessor
+            let operatorName = operator.Text()
+            match operatorName with 
+            | ContainsBy [Tj; TJ] -> 
+                processor.Listener.BeginShowText()
+            | _ -> ()
+
+            if operatorName <> Do then 
+                try 
+                    this.OriginalOperator.Invoke(processor, operator, operands)
+                with ex ->
+                    if ex.Message = "Dictionary doesn't have supported font data." 
+                    then
+                        Logger.warning (sprintf "Skip checking MM font %A" operator)
+                        let size = (operands.[1]) :?> PdfNumber
+                        let size = size.FloatValue()
+                        processor.GetGraphicsState().SetFontSize(size)
+
+                    else reraise()
+
+            else 
+                let resource: PdfResources = fCurrentResource processor
+                let image = resource.GetImage(operands.[0] :?> PdfName)
+                match image with 
+                | null -> ()
+                | _ -> 
+                    this.OriginalOperator.Invoke(processor, operator, operands)
+
+            match operatorName with 
+            | ContainsBy [Tj; TJ] -> 
+                processor.Listener.EndShoeText()
+
+            | ContainsBy [m; v; c; y; l; re] -> 
+                processor.Listener.AddPathOperatorRange({ Operator = operator; Operands = ResizeArray(operands)})
+
+            | _ -> ()
+
+type internal ReaderPdfCanvasProcessor(listener: FilteredEventListenerEx, additionalContentOperators) =
+    inherit NonInitialCallbackablePdfCanvasProcessor(listener, additionalContentOperators)
+
+    override this.RegisterContentOperator(operatorString: string, operator: IContentOperator) : IContentOperator =
+        let wrapper = new RenderInfoAccumulatableContentOperator(operator, fun processor ->
+            processor.GetResources()
+        )
+        let formOperator = base.RegisterContentOperator(operatorString, wrapper)
+        
+        match formOperator with 
+        | :? RenderInfoAccumulatableContentOperator as wrapper -> wrapper.OriginalOperator
+        | _ -> formOperator
+
 
 type NonInitialClippingPathPdfDocumentContentParser(pdfDocument) =
     inherit PdfDocumentContentParser(pdfDocument)
-    override this.ProcessContent(pageNumber, renderListener, additionalContentOperators) =
-            let processor = new NonInitialCallbackablePdfCanvasProcessor(renderListener, additionalContentOperators)
-            processor.ProcessPageContent(pdfDocument.GetPage(pageNumber));
-            renderListener
+    override this.ProcessContent(pageNumber, renderListener, additionalContentOperators) =  
+        
+        let listener = (renderListener :> IEventListener) :?> FilteredEventListenerEx
+        let processor = new ReaderPdfCanvasProcessor(listener, additionalContentOperators)
+        processor.ProcessPageContent(pdfDocument.GetPage(pageNumber));
+        renderListener
 
 
 [<RequireQualifiedAccess>]

@@ -592,6 +592,24 @@ module iText =
 
             newPath
 
+        member this.Transform(values: float []) = 
+            match values.Length % 2 with 
+            | 0 -> 
+                values
+                |> Array.chunkBySize 2
+                |> Array.map (fun values ->
+                    this.Transform(Point(values.[0], values.[1]))
+                )
+                |> Array.collect(fun point ->
+                    [|point.x; point.y|]
+                )
+                //let dst: float [] = Array.zeroCreate values.Length
+                //this.Transform(values, 0, dst, 0, values.Length / 2)
+                //dst
+
+            | _ -> failwithf "Cannot transform odd values %d" values.Length
+
+
 
         member this.InverseTransform(rect: Rectangle) = 
             let p1 = new Point (rect.GetXF(),rect.GetYF())
@@ -662,12 +680,15 @@ module iText =
 
 
 
+
+
     [<RequireQualifiedAccess>]
     module IPathRenderInfo =
 
         let [<Literal>] FILLANDSTROKE = PathRenderInfo.FILL ||| PathRenderInfo.STROKE
 
 
+            
 
         /// without ctm applied
         let toRawPoints (info: IPathRenderInfo) =
@@ -1183,6 +1204,24 @@ module iText =
 
         let setFillColor (color: Color) (canvas:PdfCanvas) =
             canvas.SetFillColor(color)
+
+        let setPathRenderColorByOperation (operation: int) (fillColor: Color) (strokeColor) (canvas:PdfCanvas) =
+            match operation with 
+            | PathRenderInfo.FILL -> setFillColor fillColor canvas
+            | PathRenderInfo.STROKE -> setStrokeColor strokeColor canvas
+            | IPathRenderInfo.FILLANDSTROKE -> 
+                canvas
+                |> setFillColor fillColor
+                |> setStrokeColor strokeColor
+
+            | _ -> canvas
+
+        let closePathByOperation (operation: int) (canvas:PdfCanvas) =
+            match operation with 
+            | PathRenderInfo.FILL -> canvas.Fill()
+            | PathRenderInfo.STROKE -> canvas.Stroke()
+            | IPathRenderInfo.FILLANDSTROKE -> canvas.FillStroke()
+            | _ -> canvas.EndPath()
 
         let setTextRenderingMode (textRenderingMode: int) (canvas:PdfCanvas) =
             canvas.SetTextRenderingMode(textRenderingMode)

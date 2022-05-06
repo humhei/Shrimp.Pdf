@@ -157,6 +157,13 @@ type Selector<'userState> =
     | Dummy
     | AND of Selector<'userState> list
     | OR of Selector<'userState> list
+with 
+    static member All(predicate: PageModifingArguments<'userState> -> _ -> bool) = 
+        Selector.OR[
+            Selector.ImageX(fun args info -> predicate args (info:> IIntegratedRenderInfoIM) )
+            Selector.Path(fun args info -> predicate args (info:> IIntegratedRenderInfoIM) )
+            Selector.Text(fun args info -> predicate args (info:> IIntegratedRenderInfoIM) )
+        ]
 
 [<RequireQualifiedAccess>]
 module Selector =

@@ -22,10 +22,6 @@ open Shrimp.Pdf.Parser.Helper
 
 open Constants.Operators
 
-[<Struct>]
-type OperatorRange =
-    { Operator: PdfLiteral 
-      Operands: IList<PdfObject> }
 
 [<RequireQualifiedAccess>]
 module PdfCanvas =
@@ -390,49 +386,22 @@ with
 
 
 
+
+
 type internal CallbackableContentOperator (originalOperator) =
+    let listenterConnectedContentOperator = 
+        RenderInfoAccumulatableContentOperator(originalOperator, (fun processor ->
+            let processor = processor :?> OperatorRangeCallbackablePdfCanvasProcessor
+            processor.CurrentResource()
+        ))
+
     member this.OriginalOperator: IContentOperator = originalOperator
 
     interface IContentOperator with 
         member this.Invoke(processor,operator,operands) =
-            
+            (listenterConnectedContentOperator :> IContentOperator).Invoke(processor,operator,operands)
             let processor = processor :?> OperatorRangeCallbackablePdfCanvasProcessor
-            let operatorName = operator.Text()
-            match operatorName with 
-            | ContainsBy [Tj; TJ] -> 
-                processor.Listener.BeginShowText()
-            | _ -> ()
-
-
-            if operatorName <> Do then 
-                try 
-                    this.OriginalOperator.Invoke(processor, operator, operands)
-                with ex ->
-                    if ex.Message = "Dictionary doesn't have supported font data." 
-                    then
-                        Logger.warning (sprintf "Skip checking MM font %A" operator)
-                        let size = (operands.[1]) :?> PdfNumber
-                        let size = size.FloatValue()
-                        processor.GetGraphicsState().SetFontSize(size)
-
-                    else reraise()
-
-            else 
-                let resource = processor.CurrentResource()
-                let image = resource.GetImage(operands.[0] :?> PdfName)
-                match image with 
-                | null -> ()
-                | _ -> 
-                    this.OriginalOperator.Invoke(processor, operator, operands)
-                
-
-            match operatorName with 
-            | ContainsBy [Tj; TJ] -> 
-                processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
-                processor.Listener.EndShoeText()
-
-            | _ -> 
-                processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
+            processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
 
             
 
@@ -447,9 +416,10 @@ and private OperatorRangeCallbackablePdfCanvasProcessor(listener) =
 
     default this.InvokeOperatorRange(operatorRange) = ()
 
-    override this.RegisterContentOperator(operatorString: string , operator: IContentOperator) : IContentOperator =
+    override this.RegisterContentOperator(operatorString: string, operator: IContentOperator) : IContentOperator =
         let wrapper = new CallbackableContentOperator(operator)
         let formOperator = base.RegisterContentOperator(operatorString, wrapper)
+        
         match formOperator with 
         | :? CallbackableContentOperator as wrapper -> wrapper.OriginalOperator
         | _ -> formOperator

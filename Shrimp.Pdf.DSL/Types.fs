@@ -31,6 +31,19 @@ type PageModifingArguments<'userState> =
       Page: PdfPage
       TotalNumberOfPages: int
       PageNum: int }
+with 
+
+    member x.MapUserState(fUserState) =
+        { UserState = fUserState x.UserState
+          Page = x.Page
+          TotalNumberOfPages = x.TotalNumberOfPages
+          PageNum = x.PageNum }
+
+    member x.DisposeUserState() =   
+        { UserState = () 
+          Page = x.Page
+          TotalNumberOfPages = x.TotalNumberOfPages
+          PageNum = x.PageNum }
 
 [<Extension>]
 type PageModifingArgumentsExtensions() =

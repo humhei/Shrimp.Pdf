@@ -295,6 +295,7 @@ module ExtensionTypes =
         abstract member ClippingPathInfos: ClippingPathInfos
 
     type IIntegratedRenderInfo =
+        inherit IIntegratedRenderInfoIM
         inherit IAbstractRenderInfo
         abstract member Tag: IntegratedRenderInfoTag
         abstract member ClippingPathInfos: ClippingPathInfos

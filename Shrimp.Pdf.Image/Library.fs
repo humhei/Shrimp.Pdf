@@ -54,6 +54,13 @@ module _ModifierIM =
             )
 
 
+    [<RequireQualifiedAccess>]
+    module private SelectionModifierFixmentArguments =
+        let OfIM(args: _SelectionModifierFixmentArgumentsIM<_>, info) =
+            { CurrentRenderInfo = info 
+              PageModifingArguments = args.PageModifingArguments
+              ConcatedTextInfos = args.ConcatedTextInfos }
+
     type ModifierIM =
         static member ConvertImageColorSpace(inputIcc: Icc option, outputIcc: Icc, intent): ModifierIM<'userState> =
             fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
@@ -125,8 +132,21 @@ module _ModifierIM =
                 | IIntegratedRenderInfoIM.Vector renderInfo ->
                     ModifierPdfCanvasActions.Keep(renderInfo.Tag)
 
+
         static member ConvertImageToGray() =
             ModifierIM.ConvertImageColorSpace(None, Icc.Gray defaultGrayIcc.Value, defaultIntent.Value)
+
+
+        static member ConvertAllObjectsToDeviceGray() =
+            fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
+                match args.CurrentRenderInfoIM with 
+                | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->
+                    ModifierIM.ConvertImageToGray() args
+
+                | IIntegratedRenderInfoIM.Vector renderInfo ->
+                    //ModifierPdfCanvasActions.Keep(renderInfo.Tag)
+                    let args = SelectionModifierFixmentArguments.OfIM(args, renderInfo) 
+                    Modifier.ConvertColorsTo(Icc.Gray defaultGrayIcc.Value) args
 
             
         static member AddImageBorder(?fArgs): ModifierIM<'userState> =
