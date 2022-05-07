@@ -19,21 +19,53 @@ module Core =
     with 
         member x.Path = x.File.Path
 
+
+
+    [<RequireQualifiedAccess>]
+    type IndexableBitmapColorValuesStorage =
+        | Indexed of Size * RawFile
+        | Origin of BitmapColorValuesStorage
+    with 
+        member x.File = 
+            match x with 
+            | IndexableBitmapColorValuesStorage.Indexed (size, file) -> file
+            | IndexableBitmapColorValuesStorage.Origin v -> v.File
+
+        member x.Size =
+            match x with 
+            | IndexableBitmapColorValuesStorage.Indexed (size, _) -> size
+            | IndexableBitmapColorValuesStorage.Origin v -> v.Size
+
     type BitmapColorValues with 
-        member x.GetAsRgbValues() =
+        member x.RemovePlaceHolder() =
             let depth = 
                 Bitmap.GetPixelFormatSize(x.PixelFormat) / 8
                 
             x.Values
-            |> Array.map(fun value ->
-                float32 value / 255.f
-            )
             |> Array.chunkBySize x.Stride
-            |> Array.collect (fun strideValues ->
+            |> Array.map (fun strideValues ->
                 Array.take (x.Size.Width * depth) strideValues
-                |> Array.chunkBySize depth
+            )
+
+
+        member private x.GetAsRgbValues_Byte() =
+            let depth = 
+                Bitmap.GetPixelFormatSize(x.PixelFormat) / 8
+                
+            x.RemovePlaceHolder()
+            |> Array.collect(fun rowValues ->
+                let batchColorValues = 
+                    rowValues
+                    |> Array.chunkBySize depth
+                batchColorValues
             )
             |> Array.map (Array.take 3 >> Array.rev)
+
+        member x.GetAsRgbValues() =
+            x.GetAsRgbValues_Byte()
+            |> Array.map (Array.map(fun m ->
+                float32 m / 255.f
+            ))
 
         member x.GetAsGrayValues() =
             x.Values
@@ -50,6 +82,7 @@ module Core =
             )
             |> Array.chunkBySize 4
 
+
         member x.ToStorage() =
             let rawFile = System.IO.Path.ChangeExtension(Path.GetTempFileName(), ".raw")
             File.WriteAllBytes(rawFile, x.Values)
@@ -58,9 +91,9 @@ module Core =
               Size = x.Size
               PixelFormat = x.PixelFormat }
 
-        static member OfStorage(v: BitmapColorValuesStorage) =
-            let bytes = System.IO.File.ReadAllBytes v.File.Path
-            BitmapColorValues(bytes, v.Stride, v.Size, v.PixelFormat)
+        static member OfStorage(storage: BitmapColorValuesStorage) =
+            let bytes = System.IO.File.ReadAllBytes storage.File.Path
+            BitmapColorValues(bytes, storage.Stride, storage.Size, storage.PixelFormat)
 
     [<AutoOpen>]
     module _Image =
@@ -197,7 +230,7 @@ module Core =
     [<RequireQualifiedAccess>]
     type ServerMsg =
         | CalcColor of inputIcc: Icc * inputValues: float32 []  * outputIcc: Icc * indent: Intent
-        | ConvertImageColorSpace of inputIcc: Icc * bmpFile: BitmapColorValuesStorage * outputIcc: Icc * indent: Intent
+        | ConvertImageColorSpace of inputIcc: Icc * storage: IndexableBitmapColorValuesStorage * outputIcc: Icc * indent: Intent
 
     type private AssemblyFinder = AssemblyFinder
 

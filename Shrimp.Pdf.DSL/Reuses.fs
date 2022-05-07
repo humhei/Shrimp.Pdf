@@ -452,7 +452,7 @@ module _Reuses =
                         let xobject = page.CopyAsFormXObject(splitDocument.Writer)
                         let newPage = splitDocument.Writer.AddNewPage(PageSize(Rectangle.create 0. 0. width height))
                         let canvas = new PdfCanvas(newPage)
-                        canvas.AddXObject(xobject, -pageBox.GetX(), -pageBox.GetY())
+                        canvas.AddXObjectAt(xobject, -pageBox.GetX(), -pageBox.GetY())
                         |> ignore
                     else 
                         let page = page.CopyTo(splitDocument.Writer)
@@ -1255,7 +1255,7 @@ module _Reuses =
                     newPage.SetPageBoxToPage(page) |> ignore
                     //let clippingBoxToActualPage =  - clippingPageBox.GetX()
                         
-                    canvas.AddXObject(xobject, 0.f, 0.f)
+                    canvas.AddXObjectAt(xobject, 0.f, 0.f)
                     |> ignore
 
 
@@ -1649,13 +1649,13 @@ module _Reuses =
                     match choice with 
                     | BackgroundOrForeground.Background ->
                         pdfCanvas
-                            .AddXObject(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
-                            .AddXObject(readerXObject, 0.f, 0.f)
+                            .AddXObjectAt(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
+                            .AddXObjectAt(readerXObject, 0.f, 0.f)
 
                     | BackgroundOrForeground.Foreground -> 
                         pdfCanvas
-                            .AddXObject(readerXObject, 0.f, 0.f)
-                            .AddXObject(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
+                            .AddXObjectAt(readerXObject, 0.f, 0.f)
+                            .AddXObjectAt(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
                 ) |> ignore
 
                 backgroundInfos.Close()
@@ -1689,7 +1689,7 @@ module _Reuses =
                     ) 
 
                     pdfCanvas
-                        .AddXObject(readerXObject, 0.f, 0.f)
+                        .AddXObjectAt(readerXObject, 0.f, 0.f)
 
                 ) |> ignore
             )

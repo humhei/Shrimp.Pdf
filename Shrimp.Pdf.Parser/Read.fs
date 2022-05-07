@@ -13,6 +13,7 @@ open Shrimp.Pdf
 open iText.IO.Image
 open iText.Kernel.Pdf
 open Shrimp.Pdf.Constants.Operators
+open System.Collections.Concurrent
 
 
 [<RequireQualifiedAccess>]
@@ -174,6 +175,7 @@ module internal Listeners =
         | Skiped = 0
         | Selected = 1
 
+    let private imageColorSpaceCache = new ConcurrentDictionary<_, _>()
 
     [<AllowNullLiteral>]
     /// a type named FilteredEventListener is already defined in itext7
@@ -290,6 +292,43 @@ module internal Listeners =
                               ImageRenderInfo = imageRenderInfo
                               LazyImageData = 
                                 lazy (ImageDataFactory.Create(imageRenderInfo.GetImage().GetImageBytes()))
+
+                              LazyColorSpace = 
+                                lazy 
+                                    let fromPdfName name =
+                                        match name with 
+                                        | EqualTo PdfName.DeviceRGB -> ColorSpace.Rgb
+                                        | EqualTo PdfName.DeviceCMYK -> ColorSpace.Cmyk
+                                        | EqualTo PdfName.DeviceGray -> ColorSpace.Gray
+                                        | EqualTo PdfName.Lab -> ColorSpace.Lab
+                                        | _ -> failwithf "Cannot get colorspace from pdfName %O" (name.ToString())
+                                    
+                                    let colorSpace = imageRenderInfo.GetImage().GetPdfObject().Get(PdfName.ColorSpace)
+                                    imageColorSpaceCache.GetOrAdd(colorSpace, valueFactory = (fun colorSpace ->
+                                        match colorSpace with 
+                                        | :? PdfArray as array ->
+                                            match array.Get(0) with 
+                                            | :? PdfName as name ->
+                                                match name with 
+                                                | EqualTo PdfName.Indexed ->
+                                                    let colorSpace = 
+                                                        match array.Get(1) with 
+                                                        | :? PdfName as name -> fromPdfName name
+                                                        | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
+                                                    let indexedTable = (array.Get(3) :?> PdfStream).GetBytes()
+
+                                                    Some { ColorSpace = colorSpace; IndexTable = Some indexedTable }
+                                                | EqualTo PdfName.ICCBased -> None
+                                                    
+                                                | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
+                                            | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
+
+                                        | :? PdfName as name -> Some { ColorSpace = fromPdfName name; IndexTable = None }
+                                        | _ -> failwithf "Invalid token, current color space is %A" colorSpace 
+                                    ))
+
+                                            
+                                
                               }
                             :> IIntegratedRenderInfoIM
 
@@ -378,7 +417,7 @@ open Constants
 type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventListenerEx, additionalContentOperators) =
     inherit PdfCanvasProcessor(listener, additionalContentOperators)
 
-    member internal x.GetResources() = x.GetResources()
+    member internal x.GetCurrentResource() = x.GetResources()
 
     member this.Listener = listener
 
@@ -459,55 +498,64 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
     new (listener) = NonInitialCallbackablePdfCanvasProcessor(listener, dict [])
 
 
-type internal RenderInfoAccumulatableContentOperator (originalOperator, fCurrentResource) =
+type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXObjectOperator, fCurrentResource) =
     member this.OriginalOperator: IContentOperator = originalOperator
+
+    member this.Invoke(processor: PdfCanvasProcessor ,operator: PdfLiteral, operands, invokeOperatorRange) =
+        let processor = processor :?> NonInitialCallbackablePdfCanvasProcessor
+        let operatorName = operator.Text()
+        match operatorName with 
+        | ContainsBy [Tj; TJ] -> 
+            processor.Listener.BeginShowText()
+        | _ -> ()
+
+        if operatorName <> Do then 
+            try 
+                this.OriginalOperator.Invoke(processor, operator, operands)
+            with ex ->
+                if ex.Message = "Dictionary doesn't have supported font data." 
+                then
+                    Logger.warning (sprintf "Skip checking MM font %A" operator)
+                    let size = (operands.[1]) :?> PdfNumber
+                    let size = size.FloatValue()
+                    processor.GetGraphicsState().SetFontSize(size)
+
+                else reraise()
+
+        else 
+            let resource: PdfResources = fCurrentResource processor
+            let image = resource.GetImage(operands.[0] :?> PdfName)
+            match image with 
+            | null -> 
+                match invokeXObjectOperator with 
+                | true ->
+                    this.OriginalOperator.Invoke(processor, operator, operands)
+                | false -> ()
+
+            | _ -> 
+                this.OriginalOperator.Invoke(processor, operator, operands)
+
+        match operatorName with 
+        | ContainsBy [Tj; TJ] -> 
+            invokeOperatorRange()
+            processor.Listener.EndShoeText()
+
+        | ContainsBy [m; v; c; y; l; re] -> 
+            processor.Listener.AddPathOperatorRange({ Operator = operator; Operands = ResizeArray(operands)})
+            invokeOperatorRange()
+        | _ -> invokeOperatorRange()
 
     interface IContentOperator with 
         member this.Invoke(processor,operator,operands) =
+            this.Invoke(processor, operator, operands, ignore)
             
-            let processor = processor :?> NonInitialCallbackablePdfCanvasProcessor
-            let operatorName = operator.Text()
-            match operatorName with 
-            | ContainsBy [Tj; TJ] -> 
-                processor.Listener.BeginShowText()
-            | _ -> ()
-
-            if operatorName <> Do then 
-                try 
-                    this.OriginalOperator.Invoke(processor, operator, operands)
-                with ex ->
-                    if ex.Message = "Dictionary doesn't have supported font data." 
-                    then
-                        Logger.warning (sprintf "Skip checking MM font %A" operator)
-                        let size = (operands.[1]) :?> PdfNumber
-                        let size = size.FloatValue()
-                        processor.GetGraphicsState().SetFontSize(size)
-
-                    else reraise()
-
-            else 
-                let resource: PdfResources = fCurrentResource processor
-                let image = resource.GetImage(operands.[0] :?> PdfName)
-                match image with 
-                | null -> ()
-                | _ -> 
-                    this.OriginalOperator.Invoke(processor, operator, operands)
-
-            match operatorName with 
-            | ContainsBy [Tj; TJ] -> 
-                processor.Listener.EndShoeText()
-
-            | ContainsBy [m; v; c; y; l; re] -> 
-                processor.Listener.AddPathOperatorRange({ Operator = operator; Operands = ResizeArray(operands)})
-
-            | _ -> ()
 
 type internal ReaderPdfCanvasProcessor(listener: FilteredEventListenerEx, additionalContentOperators) =
     inherit NonInitialCallbackablePdfCanvasProcessor(listener, additionalContentOperators)
 
     override this.RegisterContentOperator(operatorString: string, operator: IContentOperator) : IContentOperator =
-        let wrapper = new RenderInfoAccumulatableContentOperator(operator, fun processor ->
-            processor.GetResources()
+        let wrapper = new RenderInfoAccumulatableContentOperator(operator, (true), fun processor ->
+            processor.GetCurrentResource()
         )
         let formOperator = base.RegisterContentOperator(operatorString, wrapper)
         

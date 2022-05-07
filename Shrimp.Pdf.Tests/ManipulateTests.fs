@@ -51,6 +51,14 @@ let manipulateTests =
         |> runTest "datas/manipulate/make combound path from blue strokes.pdf" 
         |> ignore
 
+    testCase "make clipping path from blue strokes" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.CreateClippingPath(Info.StrokeColorIs FsColor.RGB_BLUE)
+        )
+        |> runTest "datas/manipulate/make clipping path from blue strokes.pdf" 
+        |> ignore
+
+
     testCase "expand stroke width" <| fun _ -> 
         Flow.Manipulate (
             Modify.ExpandStrokeWidth(
@@ -964,6 +972,8 @@ let manipulateTests =
             |> runTest "datas/manipulate/trim to visible6.pdf" 
             |> ignore
 
+ 
+
         testCase "trim to visible test7" <| fun _ -> 
             Flow.Manipulate(
                 ModifyPage.TrimToVisible (PageSelector.All)
@@ -1026,8 +1036,8 @@ let manipulateTests =
         Flow.Manipulate(
             flow
         )
-        //|> runTest "datas/manipulate/split textLine to words.pdf" 
-        |> runTest @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\123.pdf"
+        |> runTest "datas/manipulate/split textLine to words.pdf" 
+        //|> runTest @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\123.pdf"
         |> ignore
 
     testCase "map font for horizontal line" <| fun _ -> 
@@ -1131,15 +1141,13 @@ let manipulateTests =
     testCase "test infos" <| fun _ -> 
 
         let pdfFile = 
-            @"C:\Users\Jia\Desktop\456456456456.pdf"
+            @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\manipulate\trim to visible6.pdf"
             |> PdfFile
 
-        let m = 
-            Modify.SplitTextLineToWords()
-            |> PdfRunner.Manipulate(pdfFile, @"C:\Users\Jia\Desktop\tests.pdf")
 
+        let colors = PdfRunner.ReadPathInfos(pdfFile, @"C:\Users\Jia\Desktop\tests.pdf")
 
-        let colors = PdfRunner.ReadColors(pdfFile, @"C:\Users\Jia\Desktop\tests.pdf")
+        let a = 1
 
         let flow =
             ModifyPage.Create(

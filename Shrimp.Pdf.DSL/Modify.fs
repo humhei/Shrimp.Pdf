@@ -1251,7 +1251,7 @@ type Modify =
             ]
         )
 
-    static member CreateCompoundPath(selector: PageModifingArguments<_> -> _ -> bool) =
+    static member internal ReadCompoundPath_Then_Cancel(selector) =
         Manipulate.Func(fun userState ->
             ModifyPage.Create
                 ("read compound path infos",
@@ -1277,35 +1277,55 @@ type Modify =
                         //Selector = Selector.Path(selector)
                         Selector = Selector.Path(fun args info -> selector (args.MapUserState(fun _ -> userState)) info)
                         Modifiers =[
-                            Modifier.CancelFillAndStroke()
+                            Modifier.CancelFillAndStroke() 
                         ]
                     }
                   ]
                 )
-            <+>
-            ModifyPage.Create
-                ("add compound path",
-                  PageSelector.All,
-                  Dummy,
-                  (fun args _ ->
-                    let renewablePathInfos = args.UserState.[args.PageNum-1]
-                    match renewablePathInfos with 
-                    | [] -> ()
-                    | _ ->
-                        let canvas = new PdfCanvas(args.Page)
-                        let accumulatedPathOperatorRanges =
-                            renewablePathInfos
-                            |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
-
-                        let head = renewablePathInfos.Head
-
-                        PdfCanvas.setPathRenderColorByOperation head.Operation head.FillColor (head.StrokeColor) canvas |> ignore
-
-                        for operatorRange in accumulatedPathOperatorRanges do
-                            PdfCanvas.writeOperatorRange operatorRange canvas
-                            |> ignore
-
-                        PdfCanvas.closePathByOperation head.Operation canvas |> ignore
-                  )
-                )
         )
+
+    static member private CreateCompoundPathCommon(selector: PageModifingArguments<_> -> _ -> bool, isClippingPath) =
+        Modify.ReadCompoundPath_Then_Cancel(selector)
+        <+>
+        ModifyPage.Create
+            ("add compound path",
+              PageSelector.All,
+              Dummy,
+              (fun args _ ->
+                let renewablePathInfos = args.UserState.[args.PageNum-1]
+                match renewablePathInfos with 
+                | [] -> ()
+                | _ ->
+                    let pdfCanvas = 
+                        match isClippingPath with 
+                        | false -> new PdfCanvas(args.Page)
+                        | true -> new PdfCanvas(args.Page.NewContentStreamBefore(), args.Page.GetResources(), args.Page.GetDocument())
+
+                    let accumulatedPathOperatorRanges =
+                        renewablePathInfos
+                        |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
+
+                    let head = renewablePathInfos.Head
+
+                    PdfCanvas.setPathRenderColorByOperation head.Operation head.FillColor (head.StrokeColor) pdfCanvas |> ignore
+
+                    for operatorRange in accumulatedPathOperatorRanges do
+                        PdfCanvas.writeOperatorRange operatorRange pdfCanvas
+                        |> ignore
+
+                    match isClippingPath with 
+                    | false -> PdfCanvas.closePathByOperation head.Operation pdfCanvas |> ignore
+                    | true -> 
+                        pdfCanvas.Clip().EndPath() |> ignore
+              )
+            )
+        ||>> ignore
+
+
+    static member CreateCompoundPath(selector: PageModifingArguments<_> -> _ -> bool) =
+        Modify.CreateCompoundPathCommon(selector, isClippingPath = false)
+        |> Manipulate.rename "Create Compound Path" []
+
+    static member CreateClippingPath(selector: PageModifingArguments<_> -> _ -> bool) =
+        Modify.CreateCompoundPathCommon(selector, isClippingPath = true)
+        |> Manipulate.rename "Create Clipping Path" []

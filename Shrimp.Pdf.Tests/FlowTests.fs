@@ -1,5 +1,6 @@
 ﻿module FlowTests
 open Expecto
+open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf
 open Shrimp.Pdf
 open Shrimp.Pdf.Imposing
@@ -7,7 +8,9 @@ open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Extensions
 open iText.Kernel.Colors
 open Shrimp.Pdf.DSL
+open Shrimp.FSharp.Plus
 open Shrimp.Pdf.Colors
+open Shrimp.Pdf.Image
 open Shrimp.Pdf.RegisterableFonts.YaHei
 
 let flowTests =
@@ -37,6 +40,11 @@ let flowTests =
             )
         )
         |> runTest "datas/flows/filterPages_infos2.pdf" 
+        |> ignore
+
+    testCase "overly and manipulate clippingArea test" <| fun _ ->  
+        Flows.Overly_ManipulateClippingArea(Info.StrokeColorIs FsColor.RGB_BLUE, manipulate = ModifyIM.ConvertAllObjectsToDeviceGray())
+        |> runTest "datas/flows/overly and manipulate clippingArea.pdf" 
         |> ignore
 
   ]

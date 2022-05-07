@@ -30,7 +30,6 @@ module PdfCanvas =
         let operands = operatorRange.Operands
         for i = 0 to operands.Count - 1 do
             let operand = operands.[i]
-
             if i = operands.Count - 1 then 
                 outputStream.Write(operand).WriteNewLine()
                 |> ignore
@@ -390,7 +389,7 @@ with
 
 type internal CallbackableContentOperator (originalOperator) =
     let listenterConnectedContentOperator = 
-        RenderInfoAccumulatableContentOperator(originalOperator, (fun processor ->
+        RenderInfoAccumulatableContentOperator(originalOperator, false ,(fun processor ->
             let processor = processor :?> OperatorRangeCallbackablePdfCanvasProcessor
             processor.CurrentResource()
         ))
@@ -399,9 +398,10 @@ type internal CallbackableContentOperator (originalOperator) =
 
     interface IContentOperator with 
         member this.Invoke(processor,operator,operands) =
-            (listenterConnectedContentOperator :> IContentOperator).Invoke(processor,operator,operands)
             let processor = processor :?> OperatorRangeCallbackablePdfCanvasProcessor
-            processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
+            (listenterConnectedContentOperator).Invoke(processor,operator,operands, fun () ->
+                processor.InvokeOperatorRange({ Operator = operator; Operands = operands})
+            )
 
             
 

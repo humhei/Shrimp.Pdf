@@ -5,6 +5,8 @@ open Shrimp.Pdf.DSL
 open Shrimp.FSharp.Plus
 open iText.Kernel.Pdf
 open System.IO
+open iText.Kernel.Geom
+open iText.Kernel.Pdf.Canvas
 
 [<AutoOpen>]
 module _Flows =
@@ -78,6 +80,7 @@ module _Flows =
 
 
     type Flows =
+
         static member FilterPages(pageFilter: PageFilter<_>) =    
             let flow = 
                 Flow.Manipulate(
@@ -98,4 +101,83 @@ module _Flows =
                 )
 
             flow
+
+
+        static member Overly_ManipulateClippingArea(clippingPathSelector, manipulate: Manipulate<_, _>) =
+            let flow =
+                Flow.Manipulate (
+                    Manipulate.Factory(fun flowModel doc ->
+                        let clippingPathFile = 
+                            let clippingPdfPath = Path.ChangeExtension(flowModel.File, ".clipping.pdf")
+                            File.Copy(flowModel.File, clippingPdfPath, true)
+                            let cllippingPdfFileFlow = 
+                                Modify.CreateClippingPath(fun args info -> clippingPathSelector (args.MapUserState(fun _ -> flowModel.UserState)) info)
+                                <+>
+                                ((fun _ -> flowModel.UserState) <<|| manipulate)
+
+                            PdfRunner.Manipulate(PdfFile clippingPdfPath) cllippingPdfFileFlow
+                        
+                        let cancelCompoundPath() =
+                            Modify.Create_Record
+                                ( PageSelector.All,
+                                  [
+                                    { 
+                                        SelectorAndModifiersRecord.Name = "cancel compound paths"
+                                        //Selector = Selector.Path(selector)
+                                        Selector = Selector.Path(clippingPathSelector)
+                                        Modifiers =[
+                                            Modifier.CancelFillAndStroke() 
+                                        ]
+                                    }
+                                  ]
+                                )
+
+                        cancelCompoundPath()
+                        ||>> (fun userState ->
+                            clippingPathFile
+                        )
+                    )
+                )
+                <+>
+                Flow.Reuse(
+                    Reuse.Func(fun clippingPathFile ->
+                        Reuses.AddForeground(clippingPathFile)
+                    )
+                )
+                //Flow.Reuse(
+                //    Reuse(fun flowModel doc ->
+                //        doc.Reader.GetPages()
+                //        |> List.iteri(fun i page ->
+                //            let xobject = page.CopyAsFormXObject(doc.Writer)
+                //            let writerPage = 
+                //                let pageSize = PageSize(page.GetActualBox())
+                //                doc.Writer
+                //                    .AddNewPage(pageSize)
+                //                    .SetPageBoxToPage(page)
+
+                //            let pdfCanvas = PdfCanvas(writerPage)
+
+                //            let renewablePathInfos: RenewablePathInfo list = List.item i flowModel.UserState 
+
+                //            //pdfCanvas.AddXObject(xobject) |> ignore
+
+                //            let __addClippedXObject =
+                                
+                //                let accumulatedPathOperatorRanges =
+                //                    renewablePathInfos
+                //                    |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
+
+                //                for operatorRange in accumulatedPathOperatorRanges do
+                //                    PdfCanvas.writeOperatorRange operatorRange pdfCanvas
+                //                    |> ignore
+                //                pdfCanvas.Clip().EndPath() |> ignore
+                //                pdfCanvas.AddXObject(xobject) |> ignore
+                //            ()
+                //        )
+
+                //    )
+                //)
+
+            flow
+
 

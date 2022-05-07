@@ -18,25 +18,24 @@ open iText.IO.Font
 open iText.Kernel.Font
 open Shrimp.Pdf.Image
 let imageTests = 
-    testList "ImageTests" <| [
+    ftestList "ImageTests" <| [
     
         testCase "convert rgb image to gray" <| fun _ -> 
-            let flow =
-                Modify.Create_RecordIM(
-                    PageSelector.All,
-                    selectorAndModifiersList = [
-                        { SelectorAndModifiersRecordIM.Name = "convert rgb image to gray" 
-                          Selector = Selector.ImageX(fun _ image -> true)
-                          Modifiers = [
-                            ModifierIM.ConvertImageToGray()
-                          ]}
-                    ]
-                    )
+            let flow = ModifyIM.ConvertImagesToDeviceGray()
 
             Flow.Manipulate(
                 flow
             )
             |> runTest "datas/image/convert rgb image to gray.pdf" 
+            |> ignore
+
+        testCase "convert index rgb image to gray" <| fun _ -> 
+            let flow = ModifyIM.ConvertImagesToDeviceGray()
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/convert index rgb image to gray.pdf" 
             |> ignore
 
         testCase "add image border" <| fun _ -> 
@@ -60,19 +59,12 @@ let imageTests =
 
         testCase "convert rgb image to gray inside pageBox" <| fun _ -> 
             let flow =
-                Modify.Create_RecordIM(
-                    PageSelector.All,
-                    selectorAndModifiersList = [
-                        { SelectorAndModifiersRecordIM.Name = "convert rgb image to gray inside pageBox" 
-                          Selector = Selector.ImageX(fun args image -> 
-                            let actualBox = args.Page.GetActualBox()
-                            let bound = IImageRenderInfo.getBound image
-                            bound.IsInsideOf(actualBox)
-                          )
-                          Modifiers = [
-                            ModifierIM.ConvertImageToGray()
-                          ]}
-                    ])
+                ModifyIM.ConvertImagesToDeviceGray(fun args image ->
+                    let actualBox = args.Page.GetActualBox()
+                    let bound = IImageRenderInfo.getBound image
+                    bound.IsInsideOf(actualBox)
+                )
+               
 
             Flow.Manipulate(
                 flow
@@ -81,16 +73,7 @@ let imageTests =
             |> ignore
 
         testCase "convert all objects to gray" <| fun _ -> 
-            let flow =
-                Modify.Create_RecordIM(
-                    PageSelector.All,
-                    selectorAndModifiersList = [
-                        { SelectorAndModifiersRecordIM.Name = "convert all objects to gray" 
-                          Selector = Selector.All(fun _ _ -> true)
-                          Modifiers = [ 
-                            ModifierIM.ConvertAllObjectsToDeviceGray()
-                          ]}
-                    ])
+            let flow = ModifyIM.ConvertAllObjectsToDeviceGray()
 
             Flow.Manipulate(
                 flow

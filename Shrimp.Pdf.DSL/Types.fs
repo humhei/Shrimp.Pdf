@@ -10,10 +10,10 @@ open Shrimp.Pdf
 open Fake.IO
 open Fake.IO.FileSystemOperators
 type PdfUtils =
-    static member NewTempEmptyPdf(?pageNumber: int, ?pageSize) =   
+    static member NewTempEmptyPdf(?pageNumber: int, ?pageSize, ?path) =   
         let pageNumber = defaultArg pageNumber 1
         let pageSize = defaultArg pageSize FsSize.A4
-        let path = Path.GetTempPath() </> "empty.pdf"
+        let path = defaultArg (path) (Path.GetTempPath() </> "empty.pdf")
 
         if File.exists path then
             path

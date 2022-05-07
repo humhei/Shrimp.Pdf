@@ -882,14 +882,14 @@ module iText =
                 Logger.unSupportedTextRenderMode others
                 []
 
-    [<RequireQualifiedAccess>]
-    module ImageData = 
-        let colorSpace (imageData: ImageData)=
-            match imageData.GetColorEncodingComponentsNumber() with 
-            | 1 -> ColorSpace.Gray
-            | 3 -> ColorSpace.Rgb
-            | 4 -> ColorSpace.Cmyk
-            | colorSpaceNumber -> failwithf "Cannot get colorSpace from %d" colorSpaceNumber
+    //[<RequireQualifiedAccess>]
+    //module ImageData = 
+    //    let colorSpace (imageData: ImageData)=
+    //        match imageData.GetColorEncodingComponentsNumber() with 
+    //        | 1 -> ColorSpace.Gray
+    //        | 3 -> ColorSpace.Rgb
+    //        | 4 -> ColorSpace.Cmyk
+    //        | colorSpaceNumber -> failwithf "Cannot get colorSpace from %d" colorSpaceNumber
 
 
     [<RequireQualifiedAccess>]

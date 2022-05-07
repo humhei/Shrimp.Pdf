@@ -28,12 +28,40 @@ module _ModifierIM =
           XDpi: float }
 
     let private cache = 
-        new ConcurrentDictionary<PdfImageXObject, BitmapColorValuesStorage * ImageData>()
+        new ConcurrentDictionary<PdfImageXObject, IndexableBitmapColorValuesStorage * ImageData>()
 
     let private client  = lazy GetDefaultClusterIcm2Client()
 
+    [<RequireQualifiedAccess>]
+    module private BitmapColorValues =
+        let toIndexableStorage (colorSpace: IndexableColorSpace) (colorValues: BitmapColorValues) =
+            match colorSpace.IndexTable with 
+            | None -> colorValues.ToStorage() |> IndexableBitmapColorValuesStorage.Origin
+            | Some indexTable ->
+                let indexTableGroup = 
+                    let chunkSize =
+                        match colorSpace.ColorSpace with 
+                        | ColorSpace.Rgb -> 3
+                        | ColorSpace.Cmyk -> 4
+                        | ColorSpace.Lab -> 3
+                        | ColorSpace.Gray -> 1
 
+                    indexTable
+                    |> Array.chunkBySize chunkSize
 
+                let bytes =     
+                    colorValues.RemovePlaceHolder()
+                    |> Array.collect(fun indexes ->
+                        indexes
+                        |> Array.collect(fun index ->
+                            indexTableGroup.[int index]
+                        )
+                    )
+
+                let rawFile = System.IO.Path.ChangeExtension(Path.GetTempFileName(), ".raw")
+                File.WriteAllBytes(rawFile, bytes)
+                (colorValues.Size, RawFile rawFile)
+                |> IndexableBitmapColorValuesStorage.Indexed
 
     type IntegratedImageRenderInfo with 
 
@@ -47,8 +75,9 @@ module _ModifierIM =
                 let storage = 
                     use stream = new MemoryStream(bytes)
                     use bitmap = new Bitmap(stream)
-                    let colorValues = BitmapUtils.ReadColorValues(bitmap)
-                    colorValues.ToStorage()
+                    BitmapUtils.ReadColorValues(bitmap)
+                    |> BitmapColorValues.toIndexableStorage x.IndexableColorSpace
+
 
                 storage, imageData
             )
@@ -65,7 +94,7 @@ module _ModifierIM =
         static member ConvertImageColorSpace(inputIcc: Icc option, outputIcc: Icc, intent): ModifierIM<'userState> =
             fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
                 match args.CurrentRenderInfoIM with 
-                | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->
+                | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->  
                     let storage, imageData = imageRenderInfo.SaveToTmpColorValuesStorage()
                     let size = storage.Size
                     let inputIcc = 
@@ -84,15 +113,24 @@ module _ModifierIM =
                         match inputIcc = outputIcc with 
                         | true -> ModifierPdfCanvasActions.KeepImage()
                         | false ->  
-                            match inputIcc with 
-                            | Icc.Cmyk _ 
-                            | Icc.Gray _ 
-                            | Icc.Lab _ ->  
-                                ModifierPdfCanvasActions.KeepImage()
-                                /// Some filters are not supported in itext, e.g DCT Decode filter, and so on 
-                                //failwithf "Only rgb input image is supported for converting colorspace"
+                            let convertiable =
+                                match imageRenderInfo.IndexableColorSpace.IndexTable with 
+                                | None ->
+                                    match inputIcc with 
+                                    | Icc.Cmyk _ 
+                                    | Icc.Gray _ 
+                                    | Icc.Lab _ -> 
+                                        /// Some filters are not supported in itext, e.g DCT Decode filter, and so on 
+                                        //failwithf "Only rgb input image is supported for converting colorspace"
+                                        false
+                                    | Icc.Rgb _ -> true
+                                | Some _ -> true
 
-                            | Icc.Rgb _ ->
+                            match convertiable with 
+                            | false ->  
+                                ModifierPdfCanvasActions.KeepImage()
+
+                            | true ->
                                 let components =
                                     match outputIcc.ColorSpace with 
                                     | ColorSpace.Cmyk -> 4
@@ -232,3 +270,27 @@ module _ModifierIM =
 
                 | IIntegratedRenderInfoIM.Vector renderInfo ->
                     ModifierPdfCanvasActions.Keep(renderInfo.Tag)
+
+
+    type ModifyIM =
+        static member ConvertImagesToDeviceGray(?imageSelector) =
+            Modify.Create_RecordIM(
+                PageSelector.All,
+                selectorAndModifiersList = [
+                    { SelectorAndModifiersRecordIM.Name = "convert images to gray" 
+                      Selector = Selector.ImageX(defaultArg imageSelector (fun _ _ -> true))
+                      Modifiers = [ 
+                        ModifierIM.ConvertImageToGray()
+                      ]}
+                ])
+
+        static member ConvertAllObjectsToDeviceGray(?selector) =
+            Modify.Create_RecordIM(
+                PageSelector.All,
+                selectorAndModifiersList = [
+                    { SelectorAndModifiersRecordIM.Name = "convert all objects to gray" 
+                      Selector = defaultArg selector (Selector.All (fun _ _ -> true))
+                      Modifiers = [ 
+                        ModifierIM.ConvertAllObjectsToDeviceGray()
+                      ]}
+                ])

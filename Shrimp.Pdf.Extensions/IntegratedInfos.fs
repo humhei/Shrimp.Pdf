@@ -210,16 +210,37 @@ module IntegratedInfos =
         { Bound: FsRectangle
           ColorSpace: ColorSpace }
 
+    type IndexableColorSpace =
+        { ColorSpace: ColorSpace 
+          IndexTable: option<byte []> }
+
     [<Struct>]
     type IntegratedImageRenderInfo =
         { ImageRenderInfo: ImageRenderInfo 
           ClippingPathInfos: ClippingPathInfos
-          LazyImageData: Lazy<ImageData> }
+          LazyImageData: Lazy<ImageData>
+          LazyColorSpace: Lazy<IndexableColorSpace option>}
 
     with 
         member x.ImageData = x.LazyImageData.Value
 
-        member x.ColorSpace = ImageData.colorSpace x.ImageData
+        member x.IndexableColorSpace = 
+            match x.LazyColorSpace.Value with 
+            | None -> 
+                let colorSpace = 
+                    match x.ImageData.GetColorEncodingComponentsNumber() with 
+                    | 1 -> ColorSpace.Gray
+                    | 4 -> ColorSpace.Cmyk 
+                    | 3 -> ColorSpace.Rgb 
+                    | number -> failwithf "Cannot determain color space from ComponentsNumber %d" number
+                
+                { ColorSpace = colorSpace 
+                  IndexTable = None }
+
+            | Some indexableColorSpace -> indexableColorSpace
+
+
+        member x.ColorSpace = x.IndexableColorSpace.ColorSpace
 
         member x.Dpi =
             let bound =  IImageRenderInfo.getBound x

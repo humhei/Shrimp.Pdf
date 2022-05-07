@@ -77,19 +77,48 @@ let run() =
                 ctx.Sender() <! outputValues
 
 
-            | ServerMsg.ConvertImageColorSpace (inputIcc, bmpFile, outputIcc, indent) ->
+            | ServerMsg.ConvertImageColorSpace (inputIcc, storage, outputIcc, indent) ->
                 let indent = enum<Indent> (int indent)
                 let icms2 = getOrAddIcms(inputIcc, outputIcc, indent)
                 
-                let bitmap = BitmapColorValues.OfStorage (bmpFile)
-                let writer = Path.ChangeExtension(bmpFile.Path, ".writer.raw")
+
+                let writer = Path.ChangeExtension(storage.File.Path, ".writer.raw")
 
                 let colorValueLists =
-                    match inputIcc with 
-                    | Icc.Rgb _ -> bitmap.GetAsRgbValues()
-                    | Icc.Cmyk _ -> bitmap.GetAsCMYKValues()
-                    | Icc.Gray _ -> bitmap.GetAsGrayValues()
-                    | Icc.Lab _ -> failwith "[ConvertImageColorSpace] Not implemented when input icc is Lab"
+                    match storage with 
+                    | IndexableBitmapColorValuesStorage.Origin storage ->
+                        let bitmap = BitmapColorValues.OfStorage (storage)
+
+                        match inputIcc with 
+                        | Icc.Rgb _ -> bitmap.GetAsRgbValues()
+                        | Icc.Cmyk _ -> bitmap.GetAsCMYKValues()
+                        | Icc.Gray _ -> bitmap.GetAsGrayValues()
+                        | Icc.Lab _ -> failwith "[ConvertImageColorSpace] Not implemented when input icc is Lab"
+
+                    | IndexableBitmapColorValuesStorage.Indexed (size, rawFile) ->
+                        let bytes = System.IO.File.ReadAllBytes rawFile.Path
+                        let depth = 
+                            match inputIcc with 
+                            | Icc.Rgb _ -> 3
+                            | Icc.Cmyk _ -> 4
+                            | Icc.Gray _ -> 1
+                            | Icc.Lab _ -> 3
+
+                        let multiple =
+                            match inputIcc with 
+                            | Icc.Rgb _ -> 1.
+                            | Icc.Cmyk _ -> 100.
+                            | Icc.Gray _ -> 1.
+                            | Icc.Lab _ -> failwith "Not implement"
+
+
+                        bytes
+                        |> Array.chunkBySize depth
+                        |> Array.map (fun bytes -> 
+                            bytes
+                            |> Array.map (fun m -> float m / 255. * multiple |> float32 )
+                        )
+
 
                 
                 let valuesCount = outputIcc.ColorValuesCount
@@ -127,7 +156,7 @@ let run() =
                     
                 File.WriteAllBytes(writer, newByteArray)
 
-                logger.Info (sprintf "[SHRIMP SERVER Pdf ICMS2] Convert %O %A to %O %A" inputIcc bmpFile outputIcc writer) 
+                logger.Info (sprintf "[SHRIMP SERVER Pdf ICMS2] Convert %O %A to %O %A" inputIcc storage outputIcc writer) 
                 ctx.Sender() <! RawFile writer
 
 

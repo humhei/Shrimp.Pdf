@@ -341,6 +341,7 @@ module ModifyPageOperators =
 
 
 
+
     type PdfRunner with 
         
         static member ReadInfos(pdfFile: PdfFile, selector, fInfos, ?backupPdfPath, ?name, ?pageSelector) =
