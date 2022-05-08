@@ -33,10 +33,18 @@ module _ModifierIM =
     let private client  = lazy GetDefaultClusterIcm2Client()
 
     [<RequireQualifiedAccess>]
-    module private BitmapColorValues =
+    module BitmapColorValues =
         let toIndexableStorage (colorSpace: IndexableColorSpace) (colorValues: BitmapColorValues) =
             match colorSpace.IndexTable with 
-            | None -> colorValues.ToStorage() |> IndexableBitmapColorValuesStorage.Origin
+            | None -> 
+                match colorSpace.ColorSpace with 
+                | ColorSpace.Cmyk  -> 
+                    let m = 
+                        colorValues.GetAsCMYKValues()
+                        |> Array.chunkBySize colorValues.Size.Width
+                    ()
+                | _ -> ()
+                colorValues.ToStorage() |> IndexableBitmapColorValuesStorage.Origin
             | Some indexTable ->
                 let indexTableGroup = 
                     let chunkSize =

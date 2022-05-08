@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "scripts": {
+    "postinstall": "dotnet tool restore",
+    "start": "dotnet fable watch src",
+    "build": "dotnet fable src -configuration Debug --sourceMaps"
+  },
+  "dependencies": {
+    "isomorphic-fetch": "^3.0.0"
+  },
+  "devDependencies": {
+    "webpack": "^4.46.0",
+    "webpack-cli": "^3.3.0",
+    "webpack-dev-server": "^3.11.2"
+  },
+  "version": "1.0.0"
+}

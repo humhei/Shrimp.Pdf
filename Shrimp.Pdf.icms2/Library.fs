@@ -78,7 +78,7 @@ module Core =
         member x.GetAsCMYKValues() =
             x.Values
             |> Array.map(fun value ->
-                float32 value / 255.f * 100.f
+                100.f - float32 value / 255.f * 100.f
             )
             |> Array.chunkBySize 4
 
