@@ -11,7 +11,9 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${workspaceFolder}\\src\\App.fs.js"
+            "program": "${workspaceFolder}\\build\\App.js",
+            "sourceMaps": true,
+
         }
     ]
 }

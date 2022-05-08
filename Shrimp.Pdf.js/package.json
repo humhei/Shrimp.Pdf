@@ -1,17 +1,12 @@
 {
   "private": true,
+  "type": "module",
   "scripts": {
-    "postinstall": "dotnet tool restore",
-    "start": "dotnet fable watch src",
-    "build": "dotnet fable src -configuration Debug --sourceMaps"
+    "start": "dotnet fable watch src -o build --configuration Debug --sourceMaps",
+    "test": "node build/App.js"
   },
   "dependencies": {
-    "isomorphic-fetch": "^3.0.0"
-  },
-  "devDependencies": {
-    "webpack": "^4.46.0",
-    "webpack-cli": "^3.3.0",
-    "webpack-dev-server": "^3.11.2"
-  },
-  "version": "1.0.0"
+    "isomorphic-fetch": "^3.0.0",
+    "pdf.js": "^0.1.0"
+  }
 }
