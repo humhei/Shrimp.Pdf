@@ -303,7 +303,9 @@ module internal Listeners =
                                         | EqualTo PdfName.Lab -> ColorSpace.Lab
                                         | _ -> failwithf "Cannot get colorspace from pdfName %O" (name.ToString())
                                     
-                                    let colorSpace = imageRenderInfo.GetImage().GetPdfObject().Get(PdfName.ColorSpace)
+                                    let pdfObject = imageRenderInfo.GetImage().GetPdfObject()
+                                    let colorSpace = pdfObject.Get(PdfName.ColorSpace)
+                                    let decode = pdfObject.Get(PdfName.Decode) |> Option.ofObj |> Option.map (fun m -> m :?> PdfArray)
                                     imageColorSpaceCache.GetOrAdd(colorSpace, valueFactory = (fun colorSpace ->
                                         match colorSpace with 
                                         | :? PdfArray as array ->
@@ -317,13 +319,13 @@ module internal Listeners =
                                                         | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
                                                     let indexedTable = (array.Get(3) :?> PdfStream).GetBytes()
 
-                                                    Some { ColorSpace = colorSpace; IndexTable = Some indexedTable }
+                                                    Some { ColorSpace = colorSpace; IndexTable = Some indexedTable; Decode = decode }
                                                 | EqualTo PdfName.ICCBased -> None
                                                     
                                                 | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
                                             | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
 
-                                        | :? PdfName as name -> Some { ColorSpace = fromPdfName name; IndexTable = None }
+                                        | :? PdfName as name -> Some { ColorSpace = fromPdfName name; IndexTable = None; Decode = decode  }
                                         | _ -> failwithf "Invalid token, current color space is %A" colorSpace 
                                     ))
 

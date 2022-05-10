@@ -14,6 +14,7 @@ namespace Shrimp.Pdf.icms2.Background.Win.Runner.Winform
         [STAThread]
         static void Main()
         {
+
             Shrimp.Pdf.icms2.Server.RemoteServer.run();
             System.Windows.Forms.Application.EnableVisualStyles();
             System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);

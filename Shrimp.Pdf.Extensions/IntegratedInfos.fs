@@ -212,7 +212,8 @@ module IntegratedInfos =
 
     type IndexableColorSpace =
         { ColorSpace: ColorSpace 
-          IndexTable: option<byte []> }
+          IndexTable: option<byte []>
+          Decode: PdfArray option }
 
     [<Struct>]
     type IntegratedImageRenderInfo =
@@ -235,7 +236,8 @@ module IntegratedInfos =
                     | number -> failwithf "Cannot determain color space from ComponentsNumber %d" number
                 
                 { ColorSpace = colorSpace 
-                  IndexTable = None }
+                  IndexTable = None
+                  Decode = None }
 
             | Some indexableColorSpace -> indexableColorSpace
 

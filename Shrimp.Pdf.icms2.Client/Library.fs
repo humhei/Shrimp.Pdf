@@ -138,40 +138,46 @@ module Client =
         member private x.GetConvertedColorValuesAsync(outputIcc: Icc, intent: Intent, inputIcc: Icc) = async {
             if x.IsSameColorSpaceWith(inputIcc)
             then
-                let inputValues = x.GetColorValues()
-                let msg = (ServerMsg.CalcColor (inputIcc, inputValues, outputIcc, intent))
-                return
-                    msgCache.GetOrAdd(msg, fun msg ->
-                        GetDefaultClusterIcm2Client() <? msg
-                        |> Async.RunSynchronously
-                    )
+                match inputIcc.ColorSpace = outputIcc.ColorSpace with 
+                | true -> return x.GetColorValues()
+                | false ->
+                    let inputValues = x.GetColorValues()
+                    let msg = (ServerMsg.CalcColor (inputIcc, inputValues, outputIcc, intent))
+                    return
+                        msgCache.GetOrAdd(msg, fun msg ->
+                            GetDefaultClusterIcm2Client() <? msg
+                            |> Async.RunSynchronously
+                        )
 
             else return x.GetColorValues()
         }
 
         member x.ConvertToAsync(outputIcc: Icc, ?intent: Intent, ?inputIcc: AlternativeFsColor -> Icc) = async {
             
-            if x.IsWhite()
-            then return (ColorSpace.createWhite outputIcc.ColorSpace)
-            elif x.IsBlack()
-            then return (ColorSpace.createBlack outputIcc.ColorSpace)
-            else
-                let inputIcc = (defaultArg inputIcc AlternativeFsColor.DefaultIcc) x
-                let intent = defaultArg intent defaultIntent.Value
-
-                if inputIcc = outputIcc 
-                then return x.AlterColor
+            let inputIcc = (defaultArg inputIcc AlternativeFsColor.DefaultIcc) x
+            match inputIcc.ColorSpace = outputIcc.ColorSpace with 
+            | true -> return x.AlterColor
+            | false ->
+                if x.IsWhite()
+                then return (ColorSpace.createWhite outputIcc.ColorSpace)
+                elif x.IsBlack()
+                then return (ColorSpace.createBlack outputIcc.ColorSpace)
                 else
-                    let! (outputValues : float32[])  = x.GetConvertedColorValuesAsync(outputIcc, intent, inputIcc)
+                    let intent = defaultArg intent defaultIntent.Value
 
-                    match outputIcc with 
-                    | Icc.Lab _ ->
-                        return FsValueColor.Lab( {L = outputValues.[0]; a = outputValues.[1]; b = outputValues.[2]} )
+                    if inputIcc = outputIcc 
+                    then return x.AlterColor
+                    else
+                        let! (outputValues : float32[])  = x.GetConvertedColorValuesAsync(outputIcc, intent, inputIcc)
 
-                    | Icc.Cmyk _ -> return FsValueColor.Cmyk(FsDeviceCmyk.Create(outputValues.[0], outputValues.[1], outputValues.[2], outputValues.[3]))
-                    | Icc.Gray _ -> return FsValueColor.Gray(FsGray(outputValues.[0]))
-                    | Icc.Rgb _ -> return FsValueColor.Rgb(FsDeviceRgb.Create(outputValues.[0], outputValues.[1], outputValues.[2]))
-        }
+                        match outputIcc with 
+                        | Icc.Lab _ ->
+                            return FsValueColor.Lab( {L = outputValues.[0]; a = outputValues.[1]; b = outputValues.[2]} )
+
+                        | Icc.Cmyk _ -> return FsValueColor.Cmyk(FsDeviceCmyk.Create(outputValues.[0], outputValues.[1], outputValues.[2], outputValues.[3]))
+                        | Icc.Gray _ -> return FsValueColor.Gray(FsGray(outputValues.[0]))
+                        | Icc.Rgb _ -> return FsValueColor.Rgb(FsDeviceRgb.Create(outputValues.[0], outputValues.[1], outputValues.[2]))
+            }
 
         member x.ConvertToLabAsync(?labIcc: LabIcc, ?intent: Intent, ?inputIcc: AlternativeFsColor -> Icc) = async {
             

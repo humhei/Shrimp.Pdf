@@ -43,7 +43,10 @@ module Icc =
 
 
 
+
+
 let run() =
+    
     Server.createAgent (fun ctx ->
         let logger = ctx.Log.Value
         let rec loop (model: Dictionary<Icc * Icc * Indent, Icms>) = actor {
@@ -85,6 +88,13 @@ let run() =
                 let writer = Path.ChangeExtension(storage.File.Path, ".writer.raw")
 
                 let colorValueLists =
+                    let depth = 
+                        match inputIcc with 
+                        | Icc.Rgb _ -> 3
+                        | Icc.Cmyk _ -> 4
+                        | Icc.Gray _ -> 1
+                        | Icc.Lab _ -> 3
+
                     match storage with 
                     | IndexableBitmapColorValuesStorage.Origin storage ->
                         let bitmap = BitmapColorValues.OfStorage (storage)
@@ -95,14 +105,9 @@ let run() =
                         | Icc.Gray _ -> bitmap.GetAsGrayValues()
                         | Icc.Lab _ -> failwith "[ConvertImageColorSpace] Not implemented when input icc is Lab"
 
+                    | IndexableBitmapColorValuesStorage.Express (size, rawFile)
                     | IndexableBitmapColorValuesStorage.Indexed (size, rawFile) ->
                         let bytes = System.IO.File.ReadAllBytes rawFile.Path
-                        let depth = 
-                            match inputIcc with 
-                            | Icc.Rgb _ -> 3
-                            | Icc.Cmyk _ -> 4
-                            | Icc.Gray _ -> 1
-                            | Icc.Lab _ -> 3
 
                         let multiple =
                             match inputIcc with 
@@ -129,6 +134,14 @@ let run() =
                         
                         let inputValues = colorValues
                         let outputvalues = 
+                            let isBlack(icc, inputValues) =
+                                match icc, inputValues with 
+                                | Icc.Gray _, [|0.f|]
+                                | Icc.Rgb _ ,  [|0.f; 0.f; 0.f|]
+                                | Icc.Cmyk _,  [|_; _; _; 100.f|]
+                                | Icc.Lab _ , [|0.f; 0.f; 0.f|] -> true
+                                | _ -> false
+
                             let black(icc) =
                                 match icc with 
                                 | Icc.Gray _ -> [|0.f|]
@@ -143,8 +156,9 @@ let run() =
                                 | Icc.Cmyk _ -> [|0.f; 0.f; 0.f; 0.f|]
                                 | Icc.Lab _ -> [|100.f; 0.f; 0.f|]
 
+
                             match inputValues with 
-                            | EqualTo (black(inputIcc)) -> black(outputIcc)
+                            | inputValues when isBlack (inputIcc, inputValues) -> black(outputIcc)
                             | EqualTo (white(inputIcc)) -> white(outputIcc)
                             | _ ->
                                 icms2.DoTransfrom(inputValues)

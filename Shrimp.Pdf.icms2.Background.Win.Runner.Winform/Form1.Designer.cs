@@ -34,6 +34,7 @@ namespace Shrimp.Pdf.icms2.Background.Win.Runner.Winform
             this.notifyIcon1 = new System.Windows.Forms.NotifyIcon(this.components);
             this.contextMenuStrip1 = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.Exit = new System.Windows.Forms.ToolStripMenuItem();
+            this.consoleControl1 = new ConsoleControl.ConsoleControl();
             this.contextMenuStrip1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -59,11 +60,23 @@ namespace Shrimp.Pdf.icms2.Background.Win.Runner.Winform
             this.Exit.Text = "Exit";
             this.Exit.Click += new System.EventHandler(this.Exit_Click);
             // 
+            // consoleControl1
+            // 
+            this.consoleControl1.IsInputEnabled = true;
+            this.consoleControl1.Location = new System.Drawing.Point(13, 12);
+            this.consoleControl1.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            this.consoleControl1.Name = "consoleControl1";
+            this.consoleControl1.SendKeyboardCommandsToProcess = false;
+            this.consoleControl1.ShowDiagnostics = false;
+            this.consoleControl1.Size = new System.Drawing.Size(774, 415);
+            this.consoleControl1.TabIndex = 1;
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(800, 450);
+            this.Controls.Add(this.consoleControl1);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "Form1";
             this.ShowInTaskbar = false;
@@ -76,7 +89,7 @@ namespace Shrimp.Pdf.icms2.Background.Win.Runner.Winform
 
         #endregion
 
-        private bool allowVisible;
+        private bool allowVisible = false;
         protected override void SetVisibleCore(bool value)
         {
             if (!allowVisible)
@@ -90,6 +103,7 @@ namespace Shrimp.Pdf.icms2.Background.Win.Runner.Winform
         private System.Windows.Forms.NotifyIcon notifyIcon1;
         private System.Windows.Forms.ContextMenuStrip contextMenuStrip1;
         private System.Windows.Forms.ToolStripMenuItem Exit;
+        private ConsoleControl.ConsoleControl consoleControl1;
     }
 }
 

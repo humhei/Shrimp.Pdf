@@ -3,21 +3,42 @@ module App
 open Fable.Core.JsInterop
 open Fable.Import
 open Fetch
+open PdfJS
+open Fable.Core.JsInterop
+open Fable.Core
+open Node.Api
+open Fable.Import.Express
+open Shrimp.Pdf.js.shared
+open Thoth.Json
+open Node.Fs
+open Node.OS
+open Node.Path
 
-importSideEffects "isomorphic-fetch"
 
-// we get a json from our fetch request with a url field
-// so we create this type to map the json object
-type PictureInfo = { Url : string }
 
-// This function will fetch a random dog url every reload of the page
-let getRandomDogImage url =
-    fetch url [] // use the fetch api to load our resource
-    |> Promise.bind (fun res -> res.text()) // get the resul
-    |> Promise.map (fun txt -> // bind the result to make further operation
-      printfn "Result: %s" txt
-      )
+let app = 
+  let app0 = express.Invoke()
+  app0.``use``(express.json())
 
-// start our app!
-getRandomDogImage "https://random.dog/woof.json" |> ignore
+app.post
+  ( U2.Case1 Shared.route, 
+    fun (req:express.Request) (res:express.Response) _ ->
+      
+      let a: jpegInput = req.body :?> jpegInput
+      let result = Jpeg.readColorValues a
+      let tmpFile = 
+        let dirBase = path.join(os.tmpdir(), "express_colors")
+        let randomDir = fs.mkdtempSync(dirBase)
+        path.join(randomDir, "colors.raw")
+      
+      fs.writeFileSync(tmpFile, result)
+      res.send(tmpFile) |> box)
+|> ignore
 
+// Get PORT environment variable or use default
+let port = Shared.port
+
+
+app.listen(port, unbox (fun () ->
+  printfn "Server started: http://localhost:%i/" port))
+|> ignore

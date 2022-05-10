@@ -11,6 +11,9 @@ open System.Drawing
 
 [<AutoOpen>]
 module Core =
+
+
+
     type BitmapColorValuesStorage =
         { File: RawFile 
           Stride: int 
@@ -25,15 +28,18 @@ module Core =
     type IndexableBitmapColorValuesStorage =
         | Indexed of Size * RawFile
         | Origin of BitmapColorValuesStorage
+        | Express of Size * RawFile
     with 
         member x.File = 
             match x with 
-            | IndexableBitmapColorValuesStorage.Indexed (size, file) -> file
+            | IndexableBitmapColorValuesStorage.Indexed (size, file)
+            | IndexableBitmapColorValuesStorage.Express (size, file) -> file
             | IndexableBitmapColorValuesStorage.Origin v -> v.File
 
         member x.Size =
             match x with 
-            | IndexableBitmapColorValuesStorage.Indexed (size, _) -> size
+            | IndexableBitmapColorValuesStorage.Indexed (size, _) 
+            | IndexableBitmapColorValuesStorage.Express (size, _) -> size
             | IndexableBitmapColorValuesStorage.Origin v -> v.Size
 
     type BitmapColorValues with 
@@ -238,6 +244,13 @@ module Core =
         lazy
             ConfigurationFactory.FromResource<AssemblyFinder>("Shrimp.Pdf.icms2.reference.conf")
             |> Configuration.fallBackByApplicationConf
+
+    [<RequireQualifiedAccess>]
+    module ExpressConfig =
+        let nodeExpressBuildDir = referenceConfig.Value.GetString("shrimp.pdf.icms2.nodeExpressBuildDir")
+        let nodeExpressAppFileName = referenceConfig.Value.GetString("shrimp.pdf.icms2.nodeExpressAppFileName")
+        let foreverExePath = referenceConfig.Value.GetString("shrimp.pdf.icms2.foreverExe")
+        
 
 
     let [<Literal>] private SERVER = "server"
