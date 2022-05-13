@@ -368,7 +368,7 @@ type Modifier =
                         match getOrCreateColor newColor with 
                         | Some newColor ->
                             [PdfCanvas.setFillColor(newColor)]
-                            |> ModifierPdfCanvasActions.createActions args.Tag
+                            |> ModifierPdfCanvasActions.CreateActions args.Tag
                         | None ->
                             ModifierPdfCanvasActions.CreateCloseOperator(args.Tag, fill = CloseOperator.Close)
                 else ModifierPdfCanvasActions.Keep(args.Tag)
@@ -385,7 +385,7 @@ type Modifier =
                         match getOrCreateColor newColor with 
                         | Some newColor ->
                             [PdfCanvas.setStrokeColor(newColor)]
-                            |> ModifierPdfCanvasActions.createActions args.Tag
+                            |> ModifierPdfCanvasActions.CreateActions args.Tag
 
                         | None -> 
                             ModifierPdfCanvasActions.CreateCloseOperator(args.Tag, stroke = CloseOperator.Close)
@@ -487,7 +487,7 @@ type Modifier =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
             let border = IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithStrokeWidth args.CurrentRenderInfo
 
-            ModifierPdfCanvasActions.createSuffix 
+            ModifierPdfCanvasActions.CreateSuffix 
                 args.Tag 
                 [
                     PdfCanvas.addRectangle border mapping
@@ -522,7 +522,7 @@ type Modifier =
                     let strokeWidth = textInfo.TextRenderInfo.GetGraphicsState().GetLineWidth()
                     setStroke (float strokeWidth +  width)
 
-                |> ModifierPdfCanvasActions.createActions args.Tag  
+                |> ModifierPdfCanvasActions.CreateActions args.Tag  
 
             | If IIntegratedRenderInfo.isFillVisible ->
                 let addPrefix prefixActions (modifierPdfCanvasActions: ModifierPdfCanvasActions) = 

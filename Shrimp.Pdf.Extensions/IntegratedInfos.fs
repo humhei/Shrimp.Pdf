@@ -206,26 +206,34 @@ module IntegratedInfos =
 
 
 
-    type ImageRenderInfoRecord =
-        { Bound: FsRectangle
-          ColorSpace: ColorSpace }
 
     type IndexableColorSpace =
         { ColorSpace: ColorSpace 
           IndexTable: option<byte []>
           Decode: PdfArray option }
 
+    [<RequireQualifiedAccess>]
+    type ImageColorSpaceData =
+        | ImageMask 
+        | Indexable of IndexableColorSpace
+
+    type ImageRenderInfoRecord =
+        { UnclippedBound: FsRectangle
+          ImageColorSpaceData: ImageColorSpaceData
+          VisibleBound: FsRectangle option }
+
+
     [<Struct>]
     type IntegratedImageRenderInfo =
         { ImageRenderInfo: ImageRenderInfo 
           ClippingPathInfos: ClippingPathInfos
           LazyImageData: Lazy<ImageData>
-          LazyColorSpace: Lazy<IndexableColorSpace option>}
+          LazyColorSpace: Lazy<ImageColorSpaceData option> }
 
     with 
         member x.ImageData = x.LazyImageData.Value
 
-        member x.IndexableColorSpace = 
+        member x.ImageColorSpaceData = 
             match x.LazyColorSpace.Value with 
             | None -> 
                 let colorSpace = 
@@ -238,14 +246,23 @@ module IntegratedInfos =
                 { ColorSpace = colorSpace 
                   IndexTable = None
                   Decode = None }
+                |> ImageColorSpaceData.Indexable
 
-            | Some indexableColorSpace -> indexableColorSpace
+            | Some imageColorSpaceData -> imageColorSpaceData
 
+        member x.VisibleBound() = 
+            let unclippedBound = IImageRenderInfo.getUnclippedBound x
+            match x.ClippingPathInfos with 
+            | ClippingPathInfos.IntersectedNone -> None
+            | ClippingPathInfos.IntersectedSome rect ->
+                Rectangle.tryGetIntersection unclippedBound rect
+            | ClippingPathInfos.NonExists ->
+                unclippedBound
+                |> Some
 
-        member x.ColorSpace = x.IndexableColorSpace.ColorSpace
 
         member x.Dpi =
-            let bound =  IImageRenderInfo.getBound x
+            let bound =  IImageRenderInfo.getUnclippedBound x
             let width = x.ImageData.GetWidth()
             let height = x.ImageData.GetHeight()
             let dpi_x = float width / userUnitToMM (bound.GetWidthF())     |> inchToMM |> round |> int
@@ -254,8 +271,12 @@ module IntegratedInfos =
                Y = dpi_y |}
 
         member x.RecordValue =
-            { Bound = IImageRenderInfo.getBound x |> FsRectangle.OfRectangle
-              ColorSpace = x.ColorSpace }
+            { UnclippedBound = IImageRenderInfo.getUnclippedBound x |> FsRectangle.OfRectangle
+              ImageColorSpaceData = x.ImageColorSpaceData
+              VisibleBound = 
+                x.VisibleBound() 
+                |> Option.map FsRectangle.OfRectangle 
+            }
 
         interface IAbstractRenderInfoIM with 
             member x.Value = x.ImageRenderInfo :> AbstractRenderInfo
@@ -338,3 +359,8 @@ module IntegratedInfos =
             match info with
             | Image info -> Some (info)
             | _ -> None 
+
+        let getDenseBound boundGettingOptions info = 
+            match info with 
+            | Vector vector -> IAbstractRenderInfo.getDenseBound boundGettingOptions vector  |> Some
+            | Pixel info -> info.VisibleBound() 

@@ -300,17 +300,22 @@ with
           SuffixActions = []
           Close = CloseOperatorUnion.Create(tag, ?fill = fill, ?stroke = stroke)}
 
-    static member createActions tag (pdfActions) = 
+    static member CreateActions tag (pdfActions) = 
         { Actions = pdfActions
           Close = CloseOperatorUnion.Keep(tag)
           SuffixActions = [] }
 
-    static member createSuffix_Image (suffixPdfActions) = 
+    static member CreateActions_Image (actions) = 
+        { Actions = actions
+          Close = CloseOperatorUnion.Image (ImageCloseOperator.Keep)
+          SuffixActions = [] }
+
+    static member CreateSuffix_Image (suffixPdfActions) = 
         { Actions = []
           Close = CloseOperatorUnion.Image (ImageCloseOperator.Keep)
           SuffixActions = suffixPdfActions }
 
-    static member createSuffix tag (suffixPdfActions) = 
+    static member CreateSuffix tag (suffixPdfActions) = 
         { Actions = []
           Close = CloseOperatorUnion.Keep(tag)
           SuffixActions = suffixPdfActions }
@@ -551,6 +556,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
                 | CurrentRenderInfoStatus.Selected ->
                     let currentGS = this.GetGraphicsState()
+                    currentPdfCanvas.SetCanvasGraphicsState(currentGS)
                     let modifierPdfCanvasActions =
                         match eventListener.CurrentRenderInfoToken.Value with 
                         | [token] ->
@@ -560,6 +566,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                         | _ -> 
                             let keys = eventListener.CurrentRenderInfoToken.Value
                             failwithf "Multiple modifiers %A are not supported  when image is selectable" keys
+
 
                     PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
                         (canvas, modifierPdfCanvasActions.Actions)
@@ -599,6 +606,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                               ConcatedTextInfos = eventListener.ConcatedTextInfos }    
                     )
                     |> ModifierPdfCanvasActions.ConcatOrKeep tag
+
 
                 PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
                     (canvas, modifierPdfCanvasActions.Actions)

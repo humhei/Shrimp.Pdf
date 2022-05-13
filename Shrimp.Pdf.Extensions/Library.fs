@@ -218,6 +218,12 @@ module iText =
             elif this.IsCrossOf(rect) then RelativePosition.CrossBox
             else failwith "invalid token"
 
+        member this.IsRelativeTo(relativePosition, rect: Rectangle) =
+            match relativePosition with 
+            | RelativePosition.Inbox -> this.IsInsideOf(rect)
+            | RelativePosition.CrossBox -> this.IsCrossOf(rect)
+            | RelativePosition.OutBox -> this.IsOutsideOf(rect)
+
             
 
         member rect.GetPoint(position: Position) =
@@ -894,7 +900,7 @@ module iText =
 
     [<RequireQualifiedAccess>]
     module IImageRenderInfo =   
-        let getBound (info: IImageRenderInfo) =
+        let getUnclippedBound (info: IImageRenderInfo) =
             let image = info.Value
 
             let ctm = 
@@ -902,6 +908,7 @@ module iText =
                 |> AffineTransformRecord.ofMatrix
 
             Rectangle.create ctm.TranslateX ctm.TranslateY ctm.ScaleX ctm.ScaleY
+
 
 
 
@@ -980,7 +987,29 @@ module iText =
                     IAbstractRenderInfo.hasStroke info
                     && predicate(info.Value.GetStrokeColor())
 
+    [<RequireQualifiedAccess>]
+    module internal ClippingPathInfos =
+        let (|NonExists|IntersectedNone|IntersectedSome|) (infos: ClippingPathInfos) =
+            match infos.ClippingPathInfoState, infos.XObjectClippingBoxState with 
+            | ClippingPathInfoState.Init, XObjectClippingBoxState.Init -> NonExists ()
+            | ClippingPathInfoState.Intersected clippingPathInfo, XObjectClippingBoxState.Init ->
+                match (ClippingPathInfo.getActualClippingArea clippingPathInfo) with 
+                | ClippingPathInfoResult.IntersectedSome clippingArea -> IntersectedSome clippingArea
+                | ClippingPathInfoResult.IntersectedNone -> IntersectedNone
 
+            | ClippingPathInfoState.Init, XObjectClippingBoxState.IntersectedSome rect ->
+                IntersectedSome rect
+
+            | ClippingPathInfoState.Intersected clippingPathInfo, XObjectClippingBoxState.IntersectedSome rect ->
+                let clippingArea = ClippingPathInfo.getActualClippingArea clippingPathInfo
+                match clippingArea with 
+                | ClippingPathInfoResult.IntersectedNone -> IntersectedNone
+                | ClippingPathInfoResult.IntersectedSome clippingArea ->
+                    match Rectangle.tryGetIntersection clippingArea rect with 
+                    | Some rect -> IntersectedSome rect
+                    | None -> IntersectedNone
+
+            | _, XObjectClippingBoxState.IntersectedNone -> IntersectedNone
 
     [<RequireQualifiedAccess>]
     module IIntegratedRenderInfo =
@@ -1006,29 +1035,7 @@ module iText =
         //        | None, None -> true
         //        | _ -> false
 
-        [<RequireQualifiedAccess>]
-        module private ClippingPathInfos =
-            let (|NonExists|IntersectedNone|IntersectedSome|) (infos: ClippingPathInfos) =
-                match infos.ClippingPathInfoState, infos.XObjectClippingBoxState with 
-                | ClippingPathInfoState.Init, XObjectClippingBoxState.Init -> NonExists ()
-                | ClippingPathInfoState.Intersected clippingPathInfo, XObjectClippingBoxState.Init ->
-                    match (ClippingPathInfo.getActualClippingArea clippingPathInfo) with 
-                    | ClippingPathInfoResult.IntersectedSome clippingArea -> IntersectedSome clippingArea
-                    | ClippingPathInfoResult.IntersectedNone -> IntersectedNone
 
-                | ClippingPathInfoState.Init, XObjectClippingBoxState.IntersectedSome rect ->
-                    IntersectedSome rect
-
-                | ClippingPathInfoState.Intersected clippingPathInfo, XObjectClippingBoxState.IntersectedSome rect ->
-                    let clippingArea = ClippingPathInfo.getActualClippingArea clippingPathInfo
-                    match clippingArea with 
-                    | ClippingPathInfoResult.IntersectedNone -> IntersectedNone
-                    | ClippingPathInfoResult.IntersectedSome clippingArea ->
-                        match Rectangle.tryGetIntersection clippingArea rect with 
-                        | Some rect -> IntersectedSome rect
-                        | None -> IntersectedNone
-
-                | _, XObjectClippingBoxState.IntersectedNone -> IntersectedNone
 
 
         [<RequireQualifiedAccess>]
@@ -1087,7 +1094,6 @@ module iText =
     
         let isVisible (info: IIntegratedRenderInfo) =
             IAbstractRenderInfo.isVisible FillOrStrokeOptions.FillOrStroke info.ClippingPathInfos info
-
 
 
     [<RequireQualifiedAccess>]

@@ -38,6 +38,25 @@ let imageTests =
             |> runTest "datas/image/convert index rgb image to gray.pdf" 
             |> ignore
 
+        ftestCase "convert rgb image mask to gray" <| fun _ -> 
+            let flow =
+                Modify.Create_RecordIM(
+                    PageSelector.All,
+                    selectorAndModifiersList = [
+                        { SelectorAndModifiersRecordIM.Name = "convert rgb image mask to gray" 
+                          Selector = Selector.ImageX(fun _ _ -> true)
+                          Modifiers = [
+                            ModifierIM.ConvertImageToGray()
+                          ]}
+                    ]
+                    )
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/convert rgb image mask to gray.pdf" 
+            |> ignore
+
         testCase "add image border" <| fun _ -> 
             let flow =
                 Modify.Create_RecordIM(
@@ -61,8 +80,10 @@ let imageTests =
             let flow =
                 ModifyIM.ConvertImagesToDeviceGray(fun args image ->
                     let actualBox = args.Page.GetActualBox()
-                    let bound = IImageRenderInfo.getBound image
-                    bound.IsInsideOf(actualBox)
+                    let bound = image.VisibleBound()
+                    match bound with 
+                    | Some bound -> bound.IsInsideOf(actualBox)
+                    | None -> false
                 )
                
 
@@ -71,6 +92,8 @@ let imageTests =
             )
             |> runTest "datas/image/convert rgb image to gray inside pageBox.pdf" 
             |> ignore
+
+
 
         testCase "convert all objects to gray" <| fun _ -> 
             let flow = ModifyIM.ConvertAllObjectsToDeviceGray()
@@ -178,7 +201,7 @@ let imageTests =
             |> runTest "datas\image\convert cmyk image to gray4.pdf"
             |> ignore
 
-        ftestCase "convert cmyk image to gray5" <| fun _ -> 
+        testCase "convert cmyk image to gray5" <| fun _ -> 
             let flow =
                 Modify.Create_RecordIM(
                     PageSelector.All,
@@ -216,23 +239,6 @@ let imageTests =
             |> runTest "datas\image\cmyk\cmyk2.pdf"
             |> ignore
 
-        //ftestCase "convert cmyk image to gray7" <| fun _ -> 
-        //    let flow =
-        //        Modify.Create_RecordIM(
-        //            PageSelector.All,
-        //            selectorAndModifiersList = [
-        //                { SelectorAndModifiersRecordIM.Name = "convert cmyk image to gray7" 
-        //                  Selector = Selector.ImageX(fun _ _ -> true)
-        //                  Modifiers = [
-        //                    ModifierIM.ConvertImageToGray()
-        //                  ]}
-        //            ]
-        //            )
 
-        //    Flow.Manipulate(
-        //        flow
-        //    )
-        //    |> runTest "datas\image\cmyk\cmyk.pdf"
-        //    |> ignore
-    
+
     ]

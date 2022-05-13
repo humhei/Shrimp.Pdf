@@ -157,6 +157,7 @@ type Selector<'userState> =
     | Dummy
     | AND of Selector<'userState> list
     | OR of Selector<'userState> list
+    | Not of Selector<'userState>
 with 
     static member All(predicate: PageModifingArguments<'userState> -> _ -> bool) = 
         Selector.OR[
@@ -165,8 +166,52 @@ with
             Selector.Text(fun args info -> predicate args (info:> IIntegratedRenderInfoIM) )
         ]
 
+
 [<RequireQualifiedAccess>]
 module Selector =
+    let rec redirectSelectorUserState userState (selector: Selector<_>) =
+        match selector with 
+        | Selector.Path predicate ->
+            fun (args: PageModifingArguments<_>) info ->
+                predicate (args.MapUserState(fun _ -> userState)) info
+            |> Selector.Path
+
+        | Selector.Text predicate ->
+            fun (args: PageModifingArguments<_>) info ->
+                predicate (args.MapUserState(fun _ -> userState)) info
+            |> Selector.Text
+
+        | Selector.PathOrText predicate ->
+            fun (args: PageModifingArguments<_>) info ->
+                predicate (args.MapUserState(fun _ -> userState)) info
+            |> Selector.PathOrText
+
+        | Selector.ImageX predicate ->
+            fun (args: PageModifingArguments<_>) info ->
+                predicate (args.MapUserState(fun _ -> userState)) info
+            |> Selector.ImageX
+
+        | Selector.AND selectors ->
+            selectors
+            |> List.map (redirectSelectorUserState userState)
+            |> Selector.AND
+
+        | Selector.OR selectors ->
+            selectors
+            |> List.map (redirectSelectorUserState userState)
+            |> Selector.OR
+
+        | Selector.Not selector ->
+            redirectSelectorUserState userState selector
+            |> Selector.Not
+
+        | Selector.Dummy _ -> Selector.Dummy
+        | Selector.Factory fSelector -> 
+            fun (args: PageModifingArguments<_>) ->
+                redirectSelectorUserState userState (fSelector (args.MapUserState(fun _ -> userState))) 
+
+            |> Selector.Factory
+
     let rec toRenderInfoSelector (args: PageModifingArguments<_>) selector =
         match selector with 
         | Selector.ImageX factory -> factory args |> RenderInfoSelector.Image
@@ -183,7 +228,9 @@ module Selector =
             selectors
             |> List.map (toRenderInfoSelector args)
             |> RenderInfoSelector.OR
-
+        | Selector.Not selector ->
+            toRenderInfoSelector args selector
+            |> RenderInfoSelector.Not
 
         
         

@@ -44,8 +44,10 @@ module Core =
 
     type BitmapColorValues with 
         member x.RemovePlaceHolder() =
+            
+            let formatSize = Bitmap.GetPixelFormatSize(x.PixelFormat)
             let depth = 
-                Bitmap.GetPixelFormatSize(x.PixelFormat) / 8
+                formatSize / 8
                 
             x.Values
             |> Array.chunkBySize x.Stride

@@ -77,7 +77,10 @@ module _Flows =
                 
             PageFilter(toSelector pageFilter, pageFilter)
 
-
+    [<RequireQualifiedAccess>]
+    type Overly_Clip_ManipulateArea =
+        | ClippingArea
+        | Background
 
     type Flows =
 
@@ -103,80 +106,144 @@ module _Flows =
             flow
 
 
-        static member Overly_ManipulateClippingArea(clippingPathSelector, manipulate: Manipulate<_, _>) =
+        static member Overly_Clip_Manipulate(clippingPathSelector, manipulate: Manipulate<_, _>, area: Overly_Clip_ManipulateArea, ?excludingSelector) =
             let flow =
-                Flow.Manipulate (
-                    Manipulate.Factory(fun flowModel doc ->
-                        let clippingPathFile = 
-                            let clippingPdfPath = Path.ChangeExtension(flowModel.File, ".clipping.pdf")
-                            File.Copy(flowModel.File, clippingPdfPath, true)
-                            let cllippingPdfFileFlow = 
-                                Modify.CreateClippingPath(fun args info -> clippingPathSelector (args.MapUserState(fun _ -> flowModel.UserState)) info)
-                                <+>
-                                ((fun _ -> flowModel.UserState) <<|| manipulate)
-
-                            PdfRunner.Manipulate(PdfFile clippingPdfPath) cllippingPdfFileFlow
-                        
-                        let cancelCompoundPath() =
-                            Modify.Create_Record
-                                ( PageSelector.All,
-                                  [
-                                    { 
-                                        SelectorAndModifiersRecord.Name = "cancel compound paths"
-                                        //Selector = Selector.Path(selector)
-                                        Selector = Selector.Path(clippingPathSelector)
-                                        Modifiers =[
-                                            Modifier.CancelFillAndStroke() 
-                                        ]
-                                    }
-                                  ]
-                                )
-
-                        cancelCompoundPath()
-                        ||>> (fun userState ->
-                            clippingPathFile
+                Flow.Func(fun originUserState ->
+                    let manipulate = (fun _ -> originUserState) <<|| manipulate ||>> ignore
+                    let clippingPathSelector (args: PageModifingArguments<_>) info =
+                        clippingPathSelector (args.MapUserState(fun _ -> originUserState)) info
+                    let readClippingPathSelector() = 
+                        ModifyPage.Create(
+                            "Read clippingPathSelector",
+                            PageSelector.All,
+                            Selector.Path clippingPathSelector,
+                            (fun args info -> List.ofSeq info)
                         )
+
+                    Flow.Manipulate(
+                        readClippingPathSelector()
                     )
-                )
-                <+>
-                Flow.Reuse(
-                    Reuse.Func(fun clippingPathFile ->
-                        Reuses.AddForeground(clippingPathFile)
+                    <+>
+                    Flow.Func(fun (infos: _ list list) ->
+                        let isAllPage_ExistsClippingPathInfo =
+                            infos
+                            |> List.forall(fun m -> 
+                                m.Length > 0
+                            )
+
+                        match isAllPage_ExistsClippingPathInfo with 
+                        | true -> 
+                            Flow.Manipulate (
+                                Manipulate.Factory(fun flowModel doc ->
+
+
+                                    let clippingPathFile = 
+                                        let clippingPdfPath = Path.ChangeExtension(flowModel.File, ".clipping.pdf")
+                                        File.Copy(flowModel.File, clippingPdfPath, true)
+                                        let cllippingPdfFileFlow = 
+                                            let apply_excludingSelector() =
+                                                (
+                                                    match excludingSelector with 
+                                                    | None -> Manipulate.dummy() ||>> ignore
+                                                    | Some excludingSelector ->
+                                                        let excludingSelector = Selector.redirectSelectorUserState originUserState excludingSelector
+                                                        Modify.Create(
+                                                            PageSelector.All,
+                                                            [
+                                                                { SelectorAndModifiersRecord.Selector = excludingSelector
+                                                                  Name = "Remove excluding items"
+                                                                  Modifiers = [
+                                                                    Modifier.CancelFillAndStroke()
+                                                                  ]
+                                                                }
+                                                            ]
+                                                        )
+                                                )
+
+                                            apply_excludingSelector()
+                                            <+>
+                                            match area with 
+                                            | Overly_Clip_ManipulateArea.ClippingArea ->
+                                                Modify.CreateClippingPath(clippingPathSelector)
+                                                <+>
+                                                (manipulate)
+                                            | Overly_Clip_ManipulateArea.Background ->
+                                                Modify.CreateClippingPath(clippingPathSelector)
+
+                                        PdfRunner.Manipulate(PdfFile clippingPdfPath) cllippingPdfFileFlow
+                                    
+                                    let cancelCompoundPath() =
+                                        Modify.Create_Record
+                                            ( PageSelector.All,
+                                              [
+                                                { 
+                                                    SelectorAndModifiersRecord.Name = "cancel compound paths"
+                                                    //Selector = Selector.Path(selector)
+                                                    Selector = Selector.Path(clippingPathSelector)
+                                                    Modifiers =[
+                                                        Modifier.CancelFillAndStroke() 
+                                                    ]
+                                                }
+                                              ]
+                                            )
+
+                                    cancelCompoundPath()
+                                    <+>(match area with 
+                                        | Overly_Clip_ManipulateArea.ClippingArea -> Manipulate.dummy() ||>> ignore
+                                        | Overly_Clip_ManipulateArea.Background -> 
+                                            (manipulate) 
+                                    )
+                                    ||>> (fun userState ->
+                                        clippingPathFile
+                                    )
+                                )
+                            )
+                            <+>
+                            Flow.Reuse(
+                                Reuse.Func(fun clippingPathFile ->
+                                    Reuses.AddForeground(clippingPathFile)
+                                )
+                            )
+                            //Flow.Reuse(
+                            //    Reuse(fun flowModel doc ->
+                            //        doc.Reader.GetPages()
+                            //        |> List.iteri(fun i page ->
+                            //            let xobject = page.CopyAsFormXObject(doc.Writer)
+                            //            let writerPage = 
+                            //                let pageSize = PageSize(page.GetActualBox())
+                            //                doc.Writer
+                            //                    .AddNewPage(pageSize)
+                            //                    .SetPageBoxToPage(page)
+
+                            //            let pdfCanvas = PdfCanvas(writerPage)
+
+                            //            let renewablePathInfos: RenewablePathInfo list = List.item i flowModel.UserState 
+
+                            //            //pdfCanvas.AddXObject(xobject) |> ignore
+
+                            //            let __addClippedXObject =
+                                            
+                            //                let accumulatedPathOperatorRanges =
+                            //                    renewablePathInfos
+                            //                    |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
+
+                            //                for operatorRange in accumulatedPathOperatorRanges do
+                            //                    PdfCanvas.writeOperatorRange operatorRange pdfCanvas
+                            //                    |> ignore
+                            //                pdfCanvas.Clip().EndPath() |> ignore
+                            //                pdfCanvas.AddXObject(xobject) |> ignore
+                            //            ()
+                            //        )
+
+                            //    )
+                            //)
+                        | false -> 
+                            Flow.dummy() ||>> ignore
                     )
+
                 )
-                //Flow.Reuse(
-                //    Reuse(fun flowModel doc ->
-                //        doc.Reader.GetPages()
-                //        |> List.iteri(fun i page ->
-                //            let xobject = page.CopyAsFormXObject(doc.Writer)
-                //            let writerPage = 
-                //                let pageSize = PageSize(page.GetActualBox())
-                //                doc.Writer
-                //                    .AddNewPage(pageSize)
-                //                    .SetPageBoxToPage(page)
 
-                //            let pdfCanvas = PdfCanvas(writerPage)
 
-                //            let renewablePathInfos: RenewablePathInfo list = List.item i flowModel.UserState 
-
-                //            //pdfCanvas.AddXObject(xobject) |> ignore
-
-                //            let __addClippedXObject =
-                                
-                //                let accumulatedPathOperatorRanges =
-                //                    renewablePathInfos
-                //                    |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
-
-                //                for operatorRange in accumulatedPathOperatorRanges do
-                //                    PdfCanvas.writeOperatorRange operatorRange pdfCanvas
-                //                    |> ignore
-                //                pdfCanvas.Clip().EndPath() |> ignore
-                //                pdfCanvas.AddXObject(xobject) |> ignore
-                //            ()
-                //        )
-
-                //    )
-                //)
 
             flow
 

@@ -452,7 +452,7 @@ module _Reuses =
                         let xobject = page.CopyAsFormXObject(splitDocument.Writer)
                         let newPage = splitDocument.Writer.AddNewPage(PageSize(Rectangle.create 0. 0. width height))
                         let canvas = new PdfCanvas(newPage)
-                        canvas.AddXObjectAt(xobject, -pageBox.GetX(), -pageBox.GetY())
+                        canvas.AddXObjectWithTransformationMatrix(xobject, 1.f, 0.f, 0.f, 1.f, -pageBox.GetX(), -pageBox.GetY())
                         |> ignore
                     else 
                         let page = page.CopyTo(splitDocument.Writer)

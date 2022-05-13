@@ -43,8 +43,28 @@ let flowTests =
         |> ignore
 
     testCase "overly and manipulate clippingArea test" <| fun _ ->  
-        Flows.Overly_ManipulateClippingArea(Info.StrokeColorIs FsColor.RGB_BLUE, manipulate = ModifyIM.ConvertAllObjectsToDeviceGray())
+        let excludingSelector = Selector.Path(Info.StrokeColorIs FsColor.RGB_RED)
+        Flows.Overly_Clip_ConvertAllObjectsToGray(
+             Info.StrokeColorIs FsColor.RGB_BLUE,
+             area=Overly_Clip_ManipulateArea.ClippingArea,
+             excludingSelector = excludingSelector
+        )
         |> runTest "datas/flows/overly and manipulate clippingArea.pdf" 
+        |> ignore
+
+    testCase "overly and manipulate clippingArea test2" <| fun _ ->  
+        let varnishColor =
+            FsDeviceRgb.Create(0, 204, 255)
+            |> FsValueColor.Rgb
+            |> FsColor.valueColor
+
+        //let excludingSelector = Selector.Path(Info.StrokeColorIs FsColor.RGB_BLUE)
+        Flows.Overly_Clip_ConvertAllObjectsToGray(
+             Info.StrokeColorIs varnishColor,
+             area=Overly_Clip_ManipulateArea.ClippingArea
+             //excludingSelector = excludingSelector
+        )
+        |> runTest "datas/flows/overly and manipulate clippingArea2.pdf" 
         |> ignore
 
   ]

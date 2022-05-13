@@ -892,7 +892,7 @@ module ManipulateOrReuseDSL =
             Flow.Func(fun userState ->
                 let manipulate = 
                     (factory userState) 
-            
+                
                 manipulate.Flow
             )
             |> Manipulate

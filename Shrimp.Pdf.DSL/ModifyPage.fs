@@ -417,7 +417,7 @@ module ModifyPageOperators =
             |> FsColors.distinct
             |> List.ofSeq
 
-        /// default pageSelector is PageSelector.First
+        /// default pageSelector should be PageSelector.First
         static member CheckInfos(pageSelector, pdfFile: PdfFile, selector, ?name, ?backupPdfPath) =
             let pdfFileName = System.IO.Path.GetFileNameWithoutExtension pdfFile.Path
             let flow = 

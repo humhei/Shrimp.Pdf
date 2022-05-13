@@ -262,6 +262,8 @@ module _Colors =
 
             | FsValueColor.Lab _ -> ColorSpace.Lab
 
+        member x.ToItextColor() = 
+            FsValueColor.ToItextColor x
 
         member x.IsInColorSpace(colorSpace: ColorSpace) =
             x.ColorSpace = colorSpace

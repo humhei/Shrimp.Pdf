@@ -25,7 +25,7 @@ type RenderInfoSelector =
     | Dummy
     | AND of RenderInfoSelector list
     | OR of RenderInfoSelector list
-
+    | Not of RenderInfoSelector
 
 [<RequireQualifiedAccess>]
 module RenderInfoSelector =
@@ -44,6 +44,8 @@ module RenderInfoSelector =
             | RenderInfoSelector.OR selectors ->
                 selectors
                 |> List.collect(loop)
+            | RenderInfoSelector.Not selector ->
+                loop selector
 
         loop selector
         |> List.distinct
@@ -106,7 +108,10 @@ module RenderInfoSelector =
                 fun (renderInfo: IIntegratedRenderInfo) ->
                     selectors |> List.exists (fun selector -> loop selector renderInfo)
 
-
+            | RenderInfoSelector.Not selector ->
+                fun (renderInfo: IIntegratedRenderInfo) ->
+                    loop selector renderInfo
+                    |> not
 
 
         loop selector
@@ -128,6 +133,11 @@ module RenderInfoSelector =
             | RenderInfoSelector.OR selectors ->
                 fun (renderInfo: IIntegratedRenderInfoIM) ->
                     selectors |> List.exists (fun selector -> loop selector renderInfo)
+
+            | RenderInfoSelector.Not (selector) ->
+                fun (renderInfo: IIntegratedRenderInfoIM) ->
+                    loop selector renderInfo
+                    |> not
 
             | RenderInfoSelector.Dummy _ -> fun _ -> false
             | RenderInfoSelector.Path predicate ->
@@ -305,29 +315,40 @@ module internal Listeners =
                                     
                                     let pdfObject = imageRenderInfo.GetImage().GetPdfObject()
                                     let colorSpace = pdfObject.Get(PdfName.ColorSpace)
-                                    let decode = pdfObject.Get(PdfName.Decode) |> Option.ofObj |> Option.map (fun m -> m :?> PdfArray)
-                                    imageColorSpaceCache.GetOrAdd(colorSpace, valueFactory = (fun colorSpace ->
-                                        match colorSpace with 
-                                        | :? PdfArray as array ->
-                                            match array.Get(0) with 
-                                            | :? PdfName as name ->
-                                                match name with 
-                                                | EqualTo PdfName.Indexed ->
-                                                    let colorSpace = 
-                                                        match array.Get(1) with 
-                                                        | :? PdfName as name -> fromPdfName name
-                                                        | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
-                                                    let indexedTable = (array.Get(3) :?> PdfStream).GetBytes()
+                                    match colorSpace with 
+                                    | null -> 
+                                        match  pdfObject.Get(PdfName.ImageMask) with 
+                                        | null -> failwithf "Not implemented, Cannot get colorSpace from %A" pdfObject
+                                        | _ -> Some ImageColorSpaceData.ImageMask
+                                    | colorSpace ->
+                                        let decode = pdfObject.Get(PdfName.Decode) |> Option.ofObj |> Option.map (fun m -> m :?> PdfArray)
+                                        imageColorSpaceCache.GetOrAdd(colorSpace, valueFactory = (fun colorSpace ->
+                                            match colorSpace with 
+                                            | :? PdfArray as array ->
+                                                match array.Get(0) with 
+                                                | :? PdfName as name ->
+                                                    match name with 
+                                                    | EqualTo PdfName.Indexed ->
+                                                        let colorSpace = 
+                                                            match array.Get(1) with 
+                                                            | :? PdfName as name -> fromPdfName name
+                                                            | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
+                                                        let indexedTable = (array.Get(3) :?> PdfStream).GetBytes()
 
-                                                    Some { ColorSpace = colorSpace; IndexTable = Some indexedTable; Decode = decode }
-                                                | EqualTo PdfName.ICCBased -> None
+                                                        { ColorSpace = colorSpace; IndexTable = Some indexedTable; Decode = decode }
+                                                        |> ImageColorSpaceData.Indexable
+                                                        |> Some
+                                                    | EqualTo PdfName.ICCBased -> None
                                                     
+                                                    | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
                                                 | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
-                                            | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
 
-                                        | :? PdfName as name -> Some { ColorSpace = fromPdfName name; IndexTable = None; Decode = decode  }
-                                        | _ -> failwithf "Invalid token, current color space is %A" colorSpace 
-                                    ))
+                                            | :? PdfName as name -> 
+                                                { ColorSpace = fromPdfName name; IndexTable = None; Decode = decode  }
+                                                |> ImageColorSpaceData.Indexable
+                                                |> Some
+                                            | _ -> failwithf "Invalid token, current color space is %A" colorSpace 
+                                        ))
 
                                             
                                 
