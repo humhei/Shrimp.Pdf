@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="ImageConverter.fs" />
     <Compile Include="Library.fs" />
   </ItemGroup>
 
@@ -16,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Shrimp.Pdf.icms2.Client\Shrimp.Pdf.icms2.Client.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.ImageConverter.Core\Shrimp.Pdf.ImageConverter.Core.fsproj" />
     <ProjectReference Include="..\Shrimp.Pdf.js\shared\Shrimp.Pdf.js.shared.fsproj" />
   </ItemGroup>
 

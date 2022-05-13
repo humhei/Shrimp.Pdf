@@ -452,7 +452,7 @@ module _Reuses =
                         let xobject = page.CopyAsFormXObject(splitDocument.Writer)
                         let newPage = splitDocument.Writer.AddNewPage(PageSize(Rectangle.create 0. 0. width height))
                         let canvas = new PdfCanvas(newPage)
-                        canvas.AddXObjectWithTransformationMatrix(xobject, 1.f, 0.f, 0.f, 1.f, -pageBox.GetX(), -pageBox.GetY())
+                        canvas.AddXObjectAbs(xobject, -pageBox.GetX(), -pageBox.GetY())
                         |> ignore
                     else 
                         let page = page.CopyTo(splitDocument.Writer)
@@ -1255,7 +1255,7 @@ module _Reuses =
                     newPage.SetPageBoxToPage(page) |> ignore
                     //let clippingBoxToActualPage =  - clippingPageBox.GetX()
                         
-                    canvas.AddXObjectAt(xobject, 0.f, 0.f)
+                    canvas.AddXObjectAbs(xobject, 0.f, 0.f)
                     |> ignore
 
 
@@ -1636,7 +1636,7 @@ module _Reuses =
                 PdfDocument.getPages reader
                 |> List.mapi (fun i readerPage ->
                     let backgroundPageBox, backgroundXObject = backgroundInfos.GetPageBoxAndXObject(i+1)
-
+                    let readerPageBox = readerPage.GetActualBox()
                     let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
 
                     let pageSize = 
@@ -1646,16 +1646,19 @@ module _Reuses =
                     let writerPage = doc.Writer.AddNewPage(pageSize)
                     writerPage.SetPageBoxToPage(readerPage) |> ignore
                     let pdfCanvas = new PdfCanvas(writerPage)
+                    let bk_x = readerPageBox.GetX() - backgroundPageBox.GetX() 
+                    let bk_y = readerPageBox.GetY() - backgroundPageBox.GetY() 
+
                     match choice with 
                     | BackgroundOrForeground.Background ->
                         pdfCanvas
-                            .AddXObjectAt(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
-                            .AddXObjectAt(readerXObject, 0.f, 0.f)
+                            .AddXObjectAbs(backgroundXObject, bk_x , bk_y)
+                            .AddXObjectAbs(readerXObject, 0.f, 0.f)
 
                     | BackgroundOrForeground.Foreground -> 
                         pdfCanvas
-                            .AddXObjectAt(readerXObject, 0.f, 0.f)
-                            .AddXObjectAt(backgroundXObject, -backgroundPageBox.GetX(), -backgroundPageBox.GetY())
+                            .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                            .AddXObjectAbs(backgroundXObject, bk_x, bk_y)
                 ) |> ignore
 
                 backgroundInfos.Close()
@@ -1689,7 +1692,7 @@ module _Reuses =
                     ) 
 
                     pdfCanvas
-                        .AddXObjectAt(readerXObject, 0.f, 0.f)
+                        .AddXObjectAbs(readerXObject, 0.f, 0.f)
 
                 ) |> ignore
             )

@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="reference.conf">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <Compile Include="Library.fs" />
+  </ItemGroup>
+
+  <ItemGroup />
+
+  <ItemGroup>
+    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.53" />
+  </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Update="FSharp.Core" Version="5.0.1" />
+    </ItemGroup>
+
+</Project>

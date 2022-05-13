@@ -20,6 +20,18 @@ open Shrimp.Pdf.Image
 let imageTests = 
     testList "ImageTests" <| [
     
+        ftestCase "convert pdf to jpeg" <| fun _ -> 
+            let pdfFile =
+                @"datas/image/convert image to jpeg.pdf" 
+                |> PdfFile
+
+            let jpegs = 
+                ImageConverter.ConvertPdfToJpeg(pdfFile)
+                |> Async.RunSynchronously
+
+            ()
+
+
         testCase "convert rgb image to gray" <| fun _ -> 
             let flow = ModifyIM.ConvertImagesToDeviceGray()
 
@@ -38,7 +50,7 @@ let imageTests =
             |> runTest "datas/image/convert index rgb image to gray.pdf" 
             |> ignore
 
-        ftestCase "convert rgb image mask to gray" <| fun _ -> 
+        testCase "convert rgb image mask to gray" <| fun _ -> 
             let flow =
                 Modify.Create_RecordIM(
                     PageSelector.All,

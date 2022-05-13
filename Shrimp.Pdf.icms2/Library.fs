@@ -11,9 +11,6 @@ open System.Drawing
 
 [<AutoOpen>]
 module Core =
-
-
-
     type BitmapColorValuesStorage =
         { File: RawFile 
           Stride: int 
@@ -271,11 +268,7 @@ module Core =
             Server(SHRIMP_PDF_ICMS2, SERVER, CLIENT, seedPort.Value, seedPort.Value, setParams_Loggers_Nlog, receive)
 
 
-    [<RequireQualifiedAccess>]
-    module Routed =
-        let port = 
-            lazy
-                referenceConfig.Value.GetInt("shrimp.pdf.icms2.port")
+
 
     [<RequireQualifiedAccess>]
     module Client =

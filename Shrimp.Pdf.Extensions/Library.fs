@@ -1158,6 +1158,17 @@ module iText =
 
 
     type PdfCanvas with 
+        member this.AddXObjectAbs(xobject: PdfXObject, x, y) =
+            this.AddXObjectWithTransformationMatrix(
+                xobject,
+                1.f,
+                0.f,
+                0.f,
+                1.f,
+                x,
+                y
+            )
+
         member x.AddXObject(xObject: PdfXObject, affineTransformRecord: AffineTransformRecord) =
             x.AddXObjectWithTransformationMatrix
                 ( xObject,
