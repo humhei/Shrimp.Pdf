@@ -14,7 +14,13 @@ open Shrimp.Pdf.Colors
 let reuseTests =
   testList "Reuse Tests" [
 
+    testCase "extract paths tests" <| fun _ -> 
 
+        Flow.Reuse (
+            Reuses.ExtractPaths(PageSelector.All, Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation), keepOriginPage = true)
+        )
+        |> runTest "datas/reuse/extract paths tests.pdf" 
+        |> ignore
 
     testCase "add background tests" <| fun _ -> 
 
@@ -529,7 +535,7 @@ let reuseTests =
 
     testCase "insert empty pages tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.InsertEmptyPagesToMultiple(4)
+            Reuses.InsertEmptyPagesToMultiple(5)
         )
         |> runTest "datas/reuse/insertEmptyPagesTo4X.pdf" 
         |> ignore

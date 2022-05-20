@@ -40,6 +40,7 @@ let allTests =
             FlowTests.flowTests
             icms2Tests.icmsTests
             ImageTests.imageTests
+            ParsingTests.parsingTests
         ]
 
 [<EntryPoint>]

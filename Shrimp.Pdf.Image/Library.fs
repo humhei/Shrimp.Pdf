@@ -420,7 +420,7 @@ module _ModifierIM =
                 ])
 
     type Flows with
-        static member Overly_Clip_ConvertAllObjectsToGray(clippingPathSelector, area: Overly_Clip_ManipulateArea, ?excludingSelector) =
+        static member Overly_Clip_ConvertAllObjectsToGray(clippingPathSelector, area: Overly_Clip_ManipulateArea, ?excludingSelector, ?keepCompoundPath) =
             Flows.Overly_Clip_Manipulate
                 (clippingPathSelector,
                  area = area,
@@ -435,9 +435,9 @@ module _ModifierIM =
                             |> Some
                         | None -> None
                     )
-
                 ),
-                ?excludingSelector = excludingSelector
+                ?excludingSelector = excludingSelector,
+                ?keepCompoundPath = keepCompoundPath
                 )
             //|> Flow.Rename(
             //    "Overly_Clip_ConvertAllObjectsToGray",

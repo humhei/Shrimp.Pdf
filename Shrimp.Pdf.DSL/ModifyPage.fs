@@ -12,6 +12,8 @@ open Shrimp.Pdf.Colors
 open Shrimp.FSharp.Plus
 open Shrimp.Pdf
 
+type DataTableParsingFormat =
+    { ColNum: int }
 
 type ColoredText =
     { Text: string 
@@ -118,23 +120,17 @@ type PageModifier =
 
         fun (args: PageModifingArguments<_>) infos ->
             infos
-            |> Seq.choose IIntegratedRenderInfo.asITextRenderInfo
-            |> Seq.distinctBy(fun m ->
-                let bound =
-                    IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
-
-                let customEquality (x: float) =
-                    NearbyPX x
-
-                customEquality(bound.GetXCenterF()), customEquality(bound.GetYCenterF())
-
+            |> List.ofSeq
+            |> List.choose IIntegratedRenderInfo.asITextRenderInfo
+            |> List.map(fun m -> m, IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m)
+            |> List.distinctBy_explictly<_, _>(fun (m, bound) ->
+                Rectangle.equalableValue bound
             )
-            |> selectionGrouper.GroupBy_Bottom(
-               IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth
-            )
+            |> selectionGrouper.GroupBy_Bottom(snd)
             |> Seq.choose(fun (_, infos) ->
                 let text = 
                     infos
+                    |> Seq.map fst
                     |> Seq.map (fun m -> m.TextRenderInfo.GetText())
                     |> String.concat delimiter
                 picker text
@@ -282,6 +278,7 @@ type PageModifier =
             |> ignore
 
 
+
 [<AutoOpen>]
 module ModifyPageOperators =
     type ModifyPage =
@@ -340,6 +337,48 @@ module ModifyPageOperators =
             )
 
 
+        static member ReadDataTable(pageSelector, format: DataTableParsingFormat, ?boundSelector) =
+            let readBound() =
+                match boundSelector with 
+                | None -> Manipulate.dummy() ||>> fun _ -> []
+                | Some selector ->
+                    ModifyPage.Create(
+                        "read dataTable bound",
+                        pageSelector,
+                        Selector.Path(selector),
+                        fun arg infos ->
+                            infos
+                            |> List.ofSeq
+                            |> List.map (IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth)
+                            |> AtLeastOneList.Create
+                            |> Rectangle.ofRectangles
+                    )
+
+            readBound()
+            <+>
+            ModifyPage.Create(
+                "extract dataTable inside bound",
+                pageSelector,
+                Selector.Text(fun args -> 
+                    let rect = 
+                        match boundSelector with 
+                        | None -> args.Page.GetActualBox()
+                        | Some _ -> args.UserState.[args.PageNum-1]
+                    Info.BoundIsInsideOf (AreaGettingOptions.Specfic rect) args
+                ),
+                fun arg infos ->
+                    let textInfos =
+                        infos
+                        |> List.ofSeq
+                        |> List.choose IIntegratedRenderInfo.asITextRenderInfo
+
+                    let array2D = 
+                        textInfos
+                        |> List.chunkBySize format.ColNum
+                        |> array2D
+
+                    array2D
+            )
 
 
     type PdfRunner with 
@@ -365,7 +404,7 @@ module ModifyPageOperators =
             | [] -> failwith "Invalid token"
             | flowModels ->  failwithf "Multiple flowModels %A are found" flowModels
 
-        static member ReadTextInfos(pdfFile: PdfFile,  ?backupPdfPath, ?name, ?pageSelector) =
+        static member ReadTextInfos(pdfFile: PdfFile, ?backupPdfPath, ?name, ?pageSelector) =
             PdfRunner.ReadInfos(
                 pdfFile, 
                 Selector.Text (fun _ _ -> true),
@@ -373,6 +412,7 @@ module ModifyPageOperators =
                     infos
                     |> List.ofSeq
                     |> List.choose (IIntegratedRenderInfo.asITextRenderInfo)
+                    |> List.filter(fun m -> m.IsShow_EndTextState)
                     |> List.map(fun m -> m.RecordValue)
                 ),
                 ?backupPdfPath = backupPdfPath,

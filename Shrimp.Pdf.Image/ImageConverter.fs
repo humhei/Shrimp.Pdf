@@ -1,4 +1,4 @@
-﻿namespace Shrimp.Pdf.Image
+﻿namespace Shrimp.Pdf.ImageConverter
 #nowarn "0104"
 open Shrimp.FSharp.Plus
 open System.IO

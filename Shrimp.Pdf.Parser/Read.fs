@@ -51,11 +51,12 @@ module RenderInfoSelector =
         |> List.distinct
 
 
-    let checkNonImageSelectorExists(selectors: RenderInfoSelector list) =
+    let internal checkNonImageSelectorExists(selectors: RenderInfoSelector list) =
         let ets =    
             selectors
             |> List.collect toEventTypes
             |> List.distinct
+
         let containsImage =
             ets
             |> List.tryFind(fun m -> m = EventType.RENDER_IMAGE)
@@ -197,7 +198,7 @@ module internal Listeners =
                 RenderInfoSelector.toRenderInfoIMPredication renderInfoSelector
             )
         let mutable isShowingText = false
-        let mutable concatedTextInfos = ResizeArray() 
+        let mutable concatedTextInfos: ResizeArray<IntegratedTextRenderInfo> = ResizeArray() 
         let mutable accumulatedPathOperatorRanges = ResizeArray()
 
         let mutable currentXObjectClippingBox = XObjectClippingBoxState.Init
@@ -224,6 +225,26 @@ module internal Listeners =
 
         member internal x.BeginShowText() = isShowingText <- true
         member internal x.EndShoeText() = 
+            
+            match concatedTextInfos.Count with 
+            | 0 -> ()
+            | 1 -> parsedRenderInfos.Add(concatedTextInfos.[0])
+            | _ ->
+                let lastInfo = parsedRenderInfos.[parsedRenderInfos.Count-1] :?> IntegratedTextRenderInfo
+                let lastInfo = 
+                    let previous =
+                        concatedTextInfos
+                        |> Seq.map(fun m -> 
+                            { m with EndTextState = EndTextState.No }
+                        )
+
+
+                    { lastInfo with 
+                        ConcatedTextInfos = previous
+                        EndTextState = EndTextState.Yes
+                    }
+                parsedRenderInfos.Add(lastInfo)
+
             concatedTextInfos <- new ResizeArray<_>()
             isShowingText <- false
 
@@ -292,7 +313,10 @@ module internal Listeners =
                             { ClippingPathInfos = 
                                 { XObjectClippingBoxState = currentXObjectClippingBox
                                   ClippingPathInfoState = currentClippingPathInfo }
-                              TextRenderInfo = textRenderInfo }
+                              TextRenderInfo = textRenderInfo
+                              EndTextState = EndTextState.Undified
+                              ConcatedTextInfos = []
+                              }
                             :> IIntegratedRenderInfoIM
 
                         | :? ImageRenderInfo as imageRenderInfo ->
@@ -379,8 +403,11 @@ module internal Listeners =
                                 concatedTextInfos.Add(renderInfo :?> IntegratedTextRenderInfo)
                             | _ -> ()
                         | false -> ()
+                        match renderInfo with 
+                        | IIntegratedRenderInfoIM.Text _ -> ()
+                        | _ ->
+                            parsedRenderInfos.Add(renderInfo)
 
-                        parsedRenderInfos.Add(renderInfo)
                         currentRenderInfoToken <- Some tokens
                         currentRenderInfo <- Some renderInfo
                         currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
@@ -612,6 +639,7 @@ module NonInitialClippingPathPdfDocumentContentParser =
             let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
             parser.ProcessContent(pageNum, listener).ParsedRenderInfos
             |> Seq.map(fun m -> m :?> IIntegratedRenderInfo)
+
 
     let parseIM (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: NonInitialClippingPathPdfDocumentContentParser) =
         let et = RenderInfoSelector.toEventTypes renderInfoSelector

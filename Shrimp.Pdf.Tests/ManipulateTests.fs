@@ -1141,11 +1141,11 @@ let manipulateTests =
     testCase "test infos" <| fun _ -> 
 
         let pdfFile = 
-            @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\manipulate\trim to visible6.pdf"
+            @"C:\Users\Jia\Desktop\filterPages_infos2.pdf"
             |> PdfFile
 
 
-        let colors = PdfRunner.ReadPathInfos(pdfFile, @"C:\Users\Jia\Desktop\tests.pdf")
+        let colors = PdfRunner.ReadTextInfos(pdfFile, @"C:\Users\Jia\Desktop\tests.pdf")
 
         let a = 1
 

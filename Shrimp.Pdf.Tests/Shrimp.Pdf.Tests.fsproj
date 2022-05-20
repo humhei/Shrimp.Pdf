@@ -15,6 +15,7 @@
     <None Remove="datas\compose\**" />    
     <Compile Include="FunctionTests.fs" />
     <Compile Include="Types.fs" />
+    <Compile Include="ParsingTests.fs" />
     <Compile Include="BugFixmentTests.fs" />
     <Compile Include="FileOperationTests.fs" />
     <Compile Include="RealSamplesTest.fs" />

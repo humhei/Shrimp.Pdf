@@ -7,6 +7,7 @@ open Imposing
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Colors
+open iText.Kernel.Colors
 open iText.Kernel.Pdf.Canvas.Parser
 open Shrimp.Pdf.DSL
 open iText.Kernel.Geom
@@ -19,213 +20,6 @@ open Fake.IO
 open Fake.IO.FileSystemOperators
 open Shrimp.FSharp.Plus.Math
 open iText.Layout
-
-type Flip =
-    | HFlip = 0
-    | VFlip = 1
-
-
-
-
-// number in page sequence must be bigger than 0
-[<RequireQualifiedAccess>]
-type PageNumSequenceToken =
-    | PageNum of int 
-    | PageNumWithRotation of int * Rotation
-    | PageNumWithFlip of int * Flip
-with 
-    member x.PageNumValue = 
-        match x with 
-        | PageNumSequenceToken.PageNum pageNum -> pageNum
-        | PageNumSequenceToken.PageNumWithRotation (pageNum, _) 
-        | PageNumSequenceToken.PageNumWithFlip (pageNum, _) -> pageNum
-
-    member x.Rotation =
-        match x with 
-        | PageNumSequenceToken.PageNum _ -> Rotation.None
-        | PageNumSequenceToken.PageNumWithRotation (_, rotation) -> rotation
-        | PageNumSequenceToken.PageNumWithFlip (_, _) -> Rotation.None
-
-    member x.MapPageNumber(mapping) =
-        match x with 
-        | PageNumSequenceToken.PageNum pageNum -> mapping pageNum |> PageNumSequenceToken.PageNum
-        | PageNumSequenceToken.PageNumWithRotation (pageNum, rotation) -> 
-            (mapping pageNum, rotation) |> PageNumSequenceToken.PageNumWithRotation
-        | PageNumSequenceToken.PageNumWithFlip (pageNum, flip) -> 
-            (mapping pageNum, flip) |> PageNumSequenceToken.PageNumWithFlip
-            
-
-    member x.ShuffingText =
-        match x with 
-        | PageNumSequenceToken.PageNum pageNum -> pageNum.ToString()
-        | PageNumSequenceToken.PageNumWithRotation (pageNum, rotation) -> 
-            pageNum.ToString() + 
-                match rotation with 
-                | Rotation.None -> ""
-                | Rotation.Clockwise -> ">"
-                | Rotation.Counterclockwise -> "<"
-                | Rotation.R180 -> "*"
-
-        | PageNumSequenceToken.PageNumWithFlip (pageNum, flip) -> 
-            pageNum.ToString() + 
-                match flip with 
-                | Flip.HFlip -> "$"
-                | Flip.VFlip -> "%"
-
-exception PageNumSequenceEmptyException of string
-
-// number in page sequence must be bigger than 0
-type PageNumSequence = private PageNumSequence of AtLeastOneList<PageNumSequenceToken>
-with 
-    member x.Value_Al1List = 
-        let (PageNumSequence value) = x
-        value
-
-    member x.Value = 
-        let (PageNumSequence value) = x
-        value.AsList
-
-    member x.MapPageNumber(mapping) = 
-        x.Value_Al1List
-        |> AtLeastOneList.map (fun m -> m.MapPageNumber mapping)
-        |> PageNumSequence
-
-    member x.ShuffingText = 
-        x.Value
-        |> List.mapi (fun i m -> m.ShuffingText)
-        |> String.concat " "
-
-    static member private EnsureSequenceNotEmpty(sequence: 'a list) =
-        match sequence with 
-        | [] -> raise (PageNumSequenceEmptyException "PageNumberSequence is empty")
-        | _ -> ()
-
-    static member Create (sequence: int list) =
-        PageNumSequence.EnsureSequenceNotEmpty sequence
-
-        if List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in page sequence %A must be bigger than 0" sequence
-        sequence    
-        |> List.map (PageNumSequenceToken.PageNum)
-        |> AtLeastOneList.Create
-        |> PageNumSequence
-
-    static member Create (sequence: (int * Rotation) list) =
-        PageNumSequence.EnsureSequenceNotEmpty sequence
-        let pageNumbers = List.map fst sequence
-        if List.exists (fun pageNumber -> pageNumber <= 0) pageNumbers then failwithf "number in page sequence %A must be bigger than 0" sequence
-        sequence
-        |> List.map (PageNumSequenceToken.PageNumWithRotation)
-        |> AtLeastOneList.Create
-        |> PageNumSequence
-
-    static member Create(tokens: PageNumSequenceToken list) =   
-        PageNumSequence.EnsureSequenceNotEmpty tokens
-        tokens
-        |> AtLeastOneList.Create
-        |> PageNumSequence
-
-    static member Concat(sequences: PageNumSequence al1List) =
-        sequences
-        |> AtLeastOneList.collect(fun m -> m.Value_Al1List)
-        |> PageNumSequence
-
-[<RequireQualifiedAccess>]
-type EmptablePageNumSequenceToken =
-    | EmptyPage 
-    | PageNumSequenceToken of PageNumSequenceToken
-with 
-    member x.ShuffingText =
-        match x with 
-        | EmptablePageNumSequenceToken.EmptyPage -> "x"
-        | EmptablePageNumSequenceToken.PageNumSequenceToken m -> m.ShuffingText 
-
-    static member Create(pageNum: int) =
-        EmptablePageNumSequenceToken.PageNumSequenceToken (PageNumSequenceToken.PageNum pageNum)
-
-    static member Create(pageNum: int, rotation) =
-        EmptablePageNumSequenceToken.PageNumSequenceToken (PageNumSequenceToken.PageNumWithRotation(pageNum, rotation))
-
-
-
-// number in page sequence must be bigger than 0
-type EmptablePageNumSequence = private EmptablePageNumSequence of AtLeastOneList<EmptablePageNumSequenceToken>
-with 
-    member x.Value_Al1List = 
-        let (EmptablePageNumSequence value) = x
-        value
-
-    member x.Value = 
-        let (EmptablePageNumSequence value) = x
-        value.AsList
-
-    member x.ShuffingText = 
-        x.Value
-        |> List.map (fun m -> m.ShuffingText)
-        |> String.concat " "
-
-    static member Create (sequence: int list) =
-        if List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in page sequence %A must be bigger than 0" sequence
-        sequence
-        |> List.map (PageNumSequenceToken.PageNum >> EmptablePageNumSequenceToken.PageNumSequenceToken)
-        |> AtLeastOneList.Create
-        |> EmptablePageNumSequence
-
-    static member Create (sequence: (int * Rotation) list) =
-        let pageNumbers = List.map fst sequence
-        if List.exists (fun pageNumber -> pageNumber <= 0) pageNumbers then failwithf "number in page sequence %A must be bigger than 0" sequence
-        sequence
-        |> List.map (PageNumSequenceToken.PageNumWithRotation >> EmptablePageNumSequenceToken.PageNumSequenceToken)
-        |> AtLeastOneList.Create
-        |> EmptablePageNumSequence
-
-    static member Create (sequence: EmptablePageNumSequenceToken list) =
-        sequence
-        |> AtLeastOneList.Create
-        |> EmptablePageNumSequence
-
-    static member Create (sequence: PageNumSequence) =
-        sequence.Value
-        |> List.map EmptablePageNumSequenceToken.PageNumSequenceToken
-        |> AtLeastOneList.Create
-        |> EmptablePageNumSequence
-
-    static member Concat(sequences: EmptablePageNumSequence al1List) =
-        sequences
-        |> AtLeastOneList.collect(fun m -> m.Value_Al1List)
-        |> EmptablePageNumSequence
-
-// number in page sequence must be bigger than 0
-type CopiedNumSequence = private CopiedNumSequence of AtLeastOneList<int>
-with 
-    member x.Value = 
-        let (CopiedNumSequence value) = x
-        value.AsList
-
-    member x.ShuffingText =
-        x.Value
-        |> List.mapi (fun i copyNumber ->
-            List.replicate copyNumber (i+1)
-        )
-        |> List.concat
-        |> List.map string
-        |> String.concat " "
-
-    static member Create(sequence: int list) =
-        if List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in sequence %A must be bigger than 0" sequence
-        sequence
-        |> AtLeastOneList.Create
-        |> CopiedNumSequence 
-
-
-
-type PageResizingScalingOptions =
-    | Uniform = 0
-    | Anamorphic = 1
-
-type PageResizingRotatingOptions =
-    | Keep = 0
-    | ColckwiseIfNeeded = 1
-    | CounterColckwiseIfNeeded = 2
 
 
 
@@ -302,9 +96,6 @@ module _Reuses =
     let private emptyPdf = lazy PdfUtils.NewTempEmptyPdf()
 
 
-    type private PageSequeningUnion =
-        | EmptyPage of targetPage: PdfPage option
-        | Token of PageNumSequenceToken * PdfPage
 
     let private reuse name parameters f = Reuse(f = f, flowName = FlowName.Override(name, parameters))
 
@@ -318,19 +109,95 @@ module _Reuses =
           RowIndex: int 
           PageNum: int }
 
-    type Reuses =
+    type Reuses with
+        static member ExtractPaths(pageSelector: PageSelector, pathSelector, ?keepOriginPage) =    
+            fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
+                let reader = splitDocument.Reader
+                let parser = NonInitialClippingPathPdfDocumentContentParser(reader)
+                let totalNumberOfPages = reader.GetNumberOfPages()
+                let pageNumbers = reader.GetPageNumbers(pageSelector)
+                let keepOriginPage = defaultArg keepOriginPage false
+
+                pageNumbers
+                |> List.iter(fun pageNumber ->
+                    let readerPage = reader.GetPage(pageNumber)
+
+                    let selector = 
+                        let args: PageModifingArguments<_> = 
+                            { UserState = flowModel.UserState
+                              Page = readerPage
+                              TotalNumberOfPages = totalNumberOfPages
+                              PageNum = pageNumber
+                            }
+                        
+                        Selector.Path(pathSelector) |> Selector.toRenderInfoSelector args
+
+                    let infos = 
+                        let infos =
+                            NonInitialClippingPathPdfDocumentContentParser.parse pageNumber selector parser
+
+                        let pathInfos = 
+                            infos
+                            |> List.ofSeq
+                            |> List.choose IIntegratedRenderInfo.asIPathRenderInfo
+
+                        pathInfos
+                        |> List.map(fun pathInfo -> pathInfo.Renewable())
+                        |> List.map(fun info ->
+                            let redirectColor color =
+                                match (FsColor.OfItextColor color).AsAlternativeFsColor with
+                                | Some color ->
+                                    match color with 
+                                    | AlternativeFsColor.Separation v ->
+                                        splitDocument.Writer.GetOrCreateColor(PdfCanvasColor.Separation v)
+
+                                    | AlternativeFsColor.IccBased _
+                                    | AlternativeFsColor.ValueColor _ ->
+                                        color.AlterColor.ToItextColor()
+
+                                | None -> DeviceGray.BLACK :> Color
+
+                            { info with 
+                                FillColor = redirectColor info.FillColor
+                                StrokeColor = redirectColor info.StrokeColor
+                            }
+                        )
+
+                    let writer = splitDocument.Writer
+                    match keepOriginPage with 
+                    | true -> 
+                        let writerPage = readerPage.CopyTo(writer)
+                        writer.AddPage(writerPage)
+                        |> ignore
+
+                    | false -> ()
+
+                    let writerPage = writer.AddNewPage(PageSize(readerPage.GetActualBox()))
+                    writerPage.SetPageBoxToPage(readerPage) |> ignore
+                    let writerCanvas = new PdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
+                    for info in infos do    
+                        info.ApplyCtm_WriteToCanvas(writerCanvas)
+                )
+
+            |> reuse 
+                "ExtractorPaths"
+                ["pageSelector" => pageSelector.Text
+                 "pathSelector" => pathSelector.ToString() ]
+
+
+
         static member Insert(insertingFile: string, ?insertingFilePageSelector: PageSelector, ?pageInsertingOptions: PageInsertingOptions, ?insertingPoint: SinglePageSelectorExpr) =
             let insertingFilePageSelector = defaultArg insertingFilePageSelector PageSelector.All
             let pageInsertingOptions = defaultArg pageInsertingOptions PageInsertingOptions.AfterPoint
-            let singlePageSelectorExpr = defaultArg insertingPoint (SinglePageSelectorExpr.End 1)
+            let insertingPoint = defaultArg insertingPoint (SinglePageSelectorExpr.End 1)
 
             fun flowModel (splitDocument: SplitDocument) ->
                 if Path.GetFullPath(insertingFile) = Path.GetFullPath(splitDocument.ReaderPath) 
                 then failwith "Cannot insert file to self"
 
                 let numberOfPages = splitDocument.Reader.GetNumberOfPages()
-                let pageNum =
-                    splitDocument.Reader.GetPageNumber singlePageSelectorExpr
+                let insertingPoint =
+                    splitDocument.Reader.GetPageNumber insertingPoint
 
                 let tryCopyPages (reader: PdfDocument) pageFrom pageTo =
                     if pageTo >= pageFrom
@@ -339,7 +206,7 @@ module _Reuses =
 
                 match pageInsertingOptions with
                 | PageInsertingOptions.AfterPoint ->
-                    tryCopyPages splitDocument.Reader 1 pageNum 
+                    tryCopyPages splitDocument.Reader 1 insertingPoint 
                     
 
                     let readerResource = new PdfDocument(new PdfReader(insertingFile))
@@ -351,10 +218,10 @@ module _Reuses =
                     readerResource.Close()
 
 
-                    tryCopyPages splitDocument.Reader (pageNum + 1) numberOfPages
+                    tryCopyPages splitDocument.Reader (insertingPoint + 1) numberOfPages
 
                 | PageInsertingOptions.BeforePoint ->
-                    tryCopyPages splitDocument.Reader 1 (pageNum - 1)
+                    tryCopyPages splitDocument.Reader 1 (insertingPoint - 1)
                     
 
                     let readerResource = new PdfDocument(new PdfReader(insertingFile))
@@ -367,7 +234,7 @@ module _Reuses =
                     readerResource.Close()
 
 
-                    tryCopyPages splitDocument.Reader (pageNum) numberOfPages
+                    tryCopyPages splitDocument.Reader (insertingPoint) numberOfPages
                 
 
             |> reuse 
@@ -375,338 +242,81 @@ module _Reuses =
                 ["insertingFile" => insertingFile.ToString()
                  "insertingFilePageSelector" => insertingFilePageSelector.ToString()
                  "pageInsertingOptions" => pageInsertingOptions.ToString()
-                 "singlePageSelectorExpr" => singlePageSelectorExpr.ToString()]
+                 "insertingPoint" => insertingPoint.ToString()]
 
-        static member InsertEmptyPagesToMultiple(multiple: int, ?pageInsertingOptions: PageInsertingOptions, ?insertingPoint: SinglePageSelectorExpr, ?pageSizeSelector: SinglePageSelectorExpr) =
+        static member InsertEmptyPages(fEmptyPageCount, ?pageInsertingOptions: PageInsertingOptions) =
             let pageInsertingOptions = defaultArg pageInsertingOptions PageInsertingOptions.AfterPoint
-            let singlePageSelectorExpr = defaultArg insertingPoint (SinglePageSelectorExpr.End 1)
-            let pageSizeSelector = defaultArg pageSizeSelector (SinglePageSelectorExpr.End 1)
 
             fun flowModel (splitDocument: SplitDocument) ->
-             
+                PdfDocument.getPages splitDocument.Reader
+                |> List.iteri(fun i page ->
+                    let pageNum = i + 1
+
+                    match pageInsertingOptions with 
+                    | PageInsertingOptions.BeforePoint ->
+                        let writerPage = page.CopyTo(splitDocument.Writer) 
+                        splitDocument.Writer.AddPage(writerPage) |> ignore
+                    | _ -> ()
+
+                    let emptyPageNumberCount = fEmptyPageCount pageNum
+                    [1..emptyPageNumberCount]
+                    |> List.iter(fun _ ->
+                        let writerPage: PdfPage = splitDocument.Writer.AddNewPage(PageSize(page.GetActualBox()))
+                        writerPage.SetPageBoxToPage(page)
+                        |> ignore
+                    )
+
+                    match pageInsertingOptions with 
+                    | PageInsertingOptions.AfterPoint ->
+                        let writerPage = page.CopyTo(splitDocument.Writer) 
+                        splitDocument.Writer.AddPage(writerPage) |> ignore
+
+                    | _ -> ()
+                )
+
+            |> reuse 
+                "InsertEmptyPages"
+                ["fEmptyPageCount" => fEmptyPageCount.ToString()
+                 "pageInsertingOptions" => pageInsertingOptions.ToString() ]
+
+        /// e.g pageNumber 14 -> 4X -> 16
+        ///
+        /// e.g pageNumber 14 -> 6X -> 18
+        static member InsertEmptyPagesToMultiple(multiple: int, ?pageInsertingOptions: PageInsertingOptions, ?insertingPoint: SinglePageSelectorExpr) =
+            let pageInsertingOptions = defaultArg pageInsertingOptions PageInsertingOptions.AfterPoint
+            let insertingPoint = defaultArg insertingPoint (SinglePageSelectorExpr.End 1)
+
+            Reuse.Factory(fun flowModel splitDocument ->
                 let numberOfPages = splitDocument.Reader.GetNumberOfPages()
-                let pageNum =
-                    splitDocument.Reader.GetPageNumber singlePageSelectorExpr
-
-                let tryCopyPages (reader: PdfDocument) pageFrom pageTo =
-                    if pageTo >= pageFrom
-                    then reader.CopyPagesTo(pageFrom, pageTo, splitDocument.Writer) |> ignore
-
 
                 let preparedInsertingEmptyPagesCount = 
                     numberOfPages % multiple
 
 
+
                 match preparedInsertingEmptyPagesCount with 
-                | 0 -> tryCopyPages splitDocument.Reader 1 numberOfPages
-                | i ->
-                    let emptyPageSize_Source = 
-                        let pageNum = splitDocument.Reader.GetPageNumber(pageSizeSelector)
-                        splitDocument.Reader.GetPage(pageNum)
+                | 0 -> Reuse.dummy() ||>> ignore
+                | i -> 
+                    let i = multiple - i
+                    let insertingPoint = splitDocument.Reader.GetPageNumber(insertingPoint)
+                    Reuses.InsertEmptyPages(
+                        fEmptyPageCount = (fun pageNum ->
+                            match pageNum with 
+                            | EqualTo insertingPoint -> i
+                            | _ -> 0
+                        ),
+                        pageInsertingOptions = pageInsertingOptions
+                )
+            )
 
-                    match pageInsertingOptions with
-                    | PageInsertingOptions.AfterPoint ->
-                        tryCopyPages splitDocument.Reader 1 pageNum 
-
-                        for _ = 1 to i do
-                            let writePage = splitDocument.Writer.AddNewPage()
-                            writePage.SetPageBoxToPage(emptyPageSize_Source)
-                            |> ignore
-
-                        tryCopyPages splitDocument.Reader (pageNum + 1) numberOfPages
-
-                    | PageInsertingOptions.BeforePoint ->
-                        tryCopyPages splitDocument.Reader 1 (pageNum - 1)
-
-                        for _ = 1 to i do
-                            let writePage = splitDocument.Writer.AddNewPage()
-                            writePage.SetPageBoxToPage(emptyPageSize_Source)
-                            |> ignore
-
-                        tryCopyPages splitDocument.Reader (pageNum) numberOfPages
-                
-
-            |> reuse 
+            |> Reuse.rename
                 "InsertEmptyPagesToNX"
                 ["multiple" => multiple.ToString()
                  "pageInsertingOptions" => pageInsertingOptions.ToString()
-                 "singlePageSelectorExpr" => singlePageSelectorExpr.ToString() ]
+                 "insertingPoint" => insertingPoint.ToString() ]
 
  
 
-
-        static member private MovePageBoxToOrigin(pageSelector: PageSelector) =
-
-            fun flowModel (splitDocument: SplitDocument) ->
-                let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
-
-                PdfDocument.getPages splitDocument.Reader
-                |> List.iteri (fun i page ->
-                    let pageNum = i + 1
-                    if List.contains pageNum selectedPageNumbers 
-                    then 
-                        let pageBox = page.GetActualBox()
-                        let width = pageBox.GetWidthF()
-                        let height = pageBox.GetHeightF()
-
-                        let xobject = page.CopyAsFormXObject(splitDocument.Writer)
-                        let newPage = splitDocument.Writer.AddNewPage(PageSize(Rectangle.create 0. 0. width height))
-                        let canvas = new PdfCanvas(newPage)
-                        canvas.AddXObjectAbs(xobject, -pageBox.GetX(), -pageBox.GetY())
-                        |> ignore
-                    else 
-                        let page = page.CopyTo(splitDocument.Writer)
-                        splitDocument.Writer.AddPage(page) |> ignore
-                )
-
-            |> reuse
-                "MovePageBoxToOrigin"
-                ["pageSelector" => pageSelector.ToString()]
-
-
-        /// e.g. [1; 3; 5] will pick page1, page3, page5
-        static member SequencePages (pageNumSequence: EmptablePageNumSequence) =
-            fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
-                let unionTokens = 
-                    let pages =  PdfDocument.getPages splitDocument.Reader
-                    pageNumSequence.Value
-                    |> List.mapi (fun i token ->
-                        match token with 
-                        | EmptablePageNumSequenceToken.EmptyPage -> 
-                            let targetPage =
-                                let previous = 
-                                    pageNumSequence.Value.[0..i]
-                                    |> List.rev
-                                    |> List.tryPick(fun m -> 
-                                        match m with 
-                                        | EmptablePageNumSequenceToken.PageNumSequenceToken token -> 
-                                            let pageNum = token.PageNumValue
-                                            Some pages.[pageNum-1]
-                                        | _ -> None
-                                    )
-
-                                match previous with 
-                                | Some page -> Some page
-                                | None ->
-                                    let after =
-                                        pageNumSequence.Value.[i..]
-                                        |> List.tryPick(fun m -> 
-                                            match m with 
-                                            | EmptablePageNumSequenceToken.PageNumSequenceToken token -> 
-                                                let pageNum = token.PageNumValue
-                                                Some pages.[pageNum-1]
-                                            | _ -> None
-                                        )
-                                    match after with 
-                                    | Some after -> Some after
-                                    | None -> None
-                                    
-
-
-                            (PageSequeningUnion.EmptyPage (targetPage))
-                        | EmptablePageNumSequenceToken.PageNumSequenceToken token -> 
-                            (PageSequeningUnion.Token (token, pages.[token.PageNumValue-1]))
-                    )
-
-                    //|> 
-                    //|> List.mapi (fun i page ->
-                    //    let pageNum = i + 1
-                    //    pageNumSequence.Value
-                    //    |> List.choose (fun (token) ->
-
-                    //        | EmptablePageNumSequenceToken.PageNumSequenceToken token ->
-
-                    //    )
-                    //)|> List.concat
-
-                if unionTokens.Length = 0 
-                then failwithf "Invalid sequence %A, should exists a sequence number >= 1 and <= %d" pageNumSequence (splitDocument.Reader.GetNumberOfPages())
-
-                let pdfPageCache = new Dictionary<int, PdfPage>()
-                let xObjectCache = new Dictionary<int, Xobject.PdfFormXObject>()
-
-                for unionToken in unionTokens do
-                    let rec loop (token: PageSequeningUnion) = 
-                        match token with 
-                        | PageSequeningUnion.EmptyPage targetPage -> 
-                            match targetPage with 
-                            | Some targetPage ->
-                                splitDocument.Writer.AddNewPage().SetPageBoxToPage(targetPage)
-
-                            | None -> splitDocument.Writer.AddNewPage()
-                            |> ignore
-
-                        | PageSequeningUnion.Token (token, page) ->
-
-                            match token with 
-                            | PageNumSequenceToken.PageNum _ ->
-                                let page = page.CopyTo(splitDocument.Writer)
-                                    //match pdfPageCache.TryGetValue token.PageNumValue with 
-                                    //| true, page -> page
-                                    //| false, _ ->
-                                    //    let writerPageResource = 
-                                    //    pdfPageCache.Add(token.PageNumValue, writerPageResource)
-                                    //    writerPageResource
-
-                                splitDocument.Writer.AddPage(page) |> ignore
-                
-                            | PageNumSequenceToken.PageNumWithRotation (_ , rotation) ->
-                                match rotation with 
-                                | Rotation.None ->
-                                    PageSequeningUnion.Token((PageNumSequenceToken.PageNum token.PageNumValue), page)
-                                    |> loop 
-
-                                | _ ->
-                                    let xobject =
-                                        match xObjectCache.TryGetValue token.PageNumValue with 
-                                        | true, xobject -> xobject
-                                        | false, _ ->
-                                            let xobject = page.CopyAsFormXObject(splitDocument.Writer)
-                                            xObjectCache.Add(token.PageNumValue, xobject)
-                                            xobject
-
-                                    let acutalBox = page.GetActualBox()
-
-                                    let affineTransform =
-                                        let angle = Rotation.getAngle rotation
-                                        let x = acutalBox.GetXF()
-                                        let y = acutalBox.GetYF()
-                                        let affineTransfrom_Rotate = AffineTransform.GetRotateInstance(Math.PI / -180. * angle, x, y)
-
-                                        let affineTransform_Translate = 
-                                            { ScaleX = 1. 
-                                              ScaleY = 1. 
-                                              TranslateX = -x
-                                              TranslateY = -y
-                                              ShearX = 0.
-                                              ShearY = 0. }
-                                            |> AffineTransformRecord.toAffineTransform
-
-                                        affineTransfrom_Rotate.PreConcatenate(affineTransform_Translate)
-                                        affineTransfrom_Rotate
-
-
-
-                                    let newPage = 
-                                        let newPageSize =
-                                            affineTransform.Transform(acutalBox)
-
-                                        splitDocument.Writer.AddNewPage(PageSize(newPageSize))
-
-                                    let canvas = new PdfCanvas(newPage)
-
-                                    canvas.AddXObject(xobject,AffineTransformRecord.ofAffineTransform affineTransform) |> ignore
-
-                                    [
-                                        PageBoxKind.MediaBox
-                                        PageBoxKind.CropBox
-                                        PageBoxKind.ArtBox
-                                        PageBoxKind.BleedBox
-                                        PageBoxKind.TrimBox
-                                    ] |> List.iter (fun pageBoxKind ->
-                                        let pageBox = page.GetPageBox(pageBoxKind)
-                            
-                                        let newPageBox = 
-                                            affineTransform.Transform(pageBox)
-
-                                        PdfPage.setPageBox pageBoxKind newPageBox newPage
-                                        |> ignore
-                                    )
-
-                            | PageNumSequenceToken.PageNumWithFlip (_, flip) ->
-                                let xobject =
-                                    match xObjectCache.TryGetValue token.PageNumValue with 
-                                    | true, xobject -> xobject
-                                    | false, _ ->
-                                        let xobject = page.CopyAsFormXObject(splitDocument.Writer)
-                                        xObjectCache.Add(token.PageNumValue, xobject)
-                                        xobject
-
-                                let actualBox = page.GetActualBox()
-
-                                let affineTransform =
-                                    let x = actualBox.GetXF()
-                                    let y = actualBox.GetYF()
-                                    let affineTransfrom_Rotate = 
-                                        match flip with 
-                                        | Flip.HFlip -> 
-                                            { ScaleX = -1.0
-                                              ShearX = 0.0 
-                                              ShearY = 0.0 
-                                              ScaleY = 1.0
-                                              TranslateX = 0.0
-                                              TranslateY = 0.0 }
-                                            
-                                        | Flip.VFlip ->
-                                            { ScaleX = 1.0
-                                              ShearX = 0.0 
-                                              ShearY = 0.0 
-                                              ScaleY = -1.0
-                                              TranslateX = 0.0
-                                              TranslateY = 0.0 }
-                                        |> AffineTransform.ofRecord
-
-                                    let affineTransform_Translate = 
-                                        { ScaleX = 1. 
-                                          ScaleY = 1. 
-                                          TranslateX = -x
-                                          TranslateY = -y
-                                          ShearX = 0.
-                                          ShearY = 0. }
-                                        |> AffineTransformRecord.toAffineTransform
-
-                                    affineTransfrom_Rotate.PreConcatenate(affineTransform_Translate)
-                                    affineTransfrom_Rotate
-
-
-
-                                let newPage = 
-                                    let newPageSize =
-                                        affineTransform.Transform(actualBox)
-
-                                    splitDocument.Writer.AddNewPage(PageSize(newPageSize))
-
-                                let canvas = new PdfCanvas(newPage)
-
-                                canvas.AddXObject(xobject,AffineTransformRecord.ofAffineTransform affineTransform) |> ignore
-
-                                [
-                                    PageBoxKind.MediaBox
-                                    PageBoxKind.CropBox
-                                    PageBoxKind.ArtBox
-                                    PageBoxKind.BleedBox
-                                    PageBoxKind.TrimBox
-                                ] |> List.iter (fun pageBoxKind ->
-                                    let pageBox = page.GetPageBox(pageBoxKind)
-                            
-                                    let newPageBox = 
-                                        affineTransform.Transform(pageBox)
-
-                                    PdfPage.setPageBox pageBoxKind newPageBox newPage
-                                    |> ignore
-                                )
-
-
-                    loop unionToken
-
-            |> reuse 
-                ("SequencePages" )
-                [ "pageNumSequence" => pageNumSequence.ToString() ]
-
-        static member SequencePages (pageNumSequence: PageNumSequence) =
-            Reuses.SequencePages(EmptablePageNumSequence.Create pageNumSequence)
-
-        static member SelectPages (pageSelector: PageSelector) =
-            Reuse.Factory(fun flowModel doc ->
-                let pageNumberSequence = 
-                    doc.Reader.GetPageNumbers(pageSelector)
-                    |> PageNumSequence.Create
-
-                Reuses.SequencePages(pageNumberSequence)
-            )
-            |> Reuse.rename 
-                (sprintf "SelectPages %s" (pageSelector.Text))
-                []
                 
 
 
@@ -1581,49 +1191,20 @@ module _Reuses =
                     "imposingArguments" => args.ToString()
                 ]
 
-        static member ClearDirtyInfos() =
-            Reuse.Factory(fun flowModel doc ->
-                let rotateFlow =
-                    let pageNumberSequence = 
-                        PdfDocument.getPages doc.Reader
-                        |> List.mapi(fun i page ->
-                            let pageNum = i + 1
-                            let rotation = 
-                                match page.GetFsRotation() with
-                                | Rotation.None -> Rotation.None
-                                | Rotation.Counterclockwise -> Rotation.Counterclockwise
-                                | Rotation.R180 -> Rotation.R180
-                                | Rotation.Clockwise -> Rotation.Clockwise
-                            PageNumSequenceToken.PageNumWithRotation(pageNum, rotation)
-                        )
 
-                    pageNumberSequence
-                    |> List.tryFind(fun m -> Rotation.notNon m.Rotation)
-                    |> function
-                        | Some _ ->
-                            Reuses.SequencePages(PageNumSequence.Create pageNumberSequence)
-                            |> Some
-                        | None -> None
-
-                match rotateFlow with 
-                | Some rotateFlow ->
-                    rotateFlow
-                    <+>
-                    Reuses.MovePageBoxToOrigin(PageSelector.All)
-                | None -> 
-                    Reuses.MovePageBoxToOrigin(PageSelector.All)
-            )
-            |> Reuse.rename
-                "ClearDirtyInfos"
-                []
      
+
+        
 
         static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground) =
             (fun flowModel (doc: SplitDocument) ->
+
+
                 let backgroundInfos =
+
                     let pageBoxs = BackgroundFile.getPageBoxes backgroundFile
                     let totalPageNumber = pageBoxs.Length
-                    let reader = new PdfDocument(new PdfReader(backgroundFile.Value.Path))
+                    let reader = new PdfDocument(new PdfReader(backgroundFile.ClearedPdfFile.Path))
           
                     {|  
                         Close = fun () -> reader.Close()
@@ -1707,8 +1288,8 @@ module _Reuses =
         static member AddBackground (backgroundFile: PdfFile) =
             Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background)
 
-        static member AddForeground (backgroundFile: PdfFile) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Foreground)
+        static member AddForeground (foregroundFile: PdfFile) =
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create foregroundFile, BackgroundOrForeground.Foreground)
 
 
 

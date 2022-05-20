@@ -43,6 +43,18 @@ with
 type DocumentSplitSequenceTarget =
     { PageNumSequence: ``Int>=1`` list 
       PathPart: string option }
+with 
+    static member Create(pageNumberSequence: int list, ?pathPart) =
+        { PageNumSequence = List.map ``Int>=1``.Create pageNumberSequence
+          PathPart = pathPart }
+
+type DocumentSplitPageCountTarget =
+    { PageCount: ``Int>=1``
+      PathPart: string option  }
+with 
+    static member Create(pageCount, ?pathPart) =
+        { PageCount = ``Int>=1``.Create pageCount
+          PathPart = pathPart }
 
 [<RequireQualifiedAccess>]
 module FileOperations =
@@ -112,8 +124,9 @@ module FileOperations =
                             match sequenceTarget.PathPart with 
                             | Some pathPart -> baseDir </> pathPart
                             | None -> 
-                                let dir = baseDir </> (Path.GetFileNameWithoutExtension flowModel.File) 
-                                dir </> "Part_" + (i+1).ToString() + ".pdf"
+                                let baseFileName = Path.GetFileNameWithoutExtension flowModel.File
+                                let dir = baseDir </> baseFileName
+                                dir </> baseFileName + "_Part" + (i+1).ToString() + ".pdf"
                         ) 
 
                     fileFullPaths
@@ -157,6 +170,24 @@ module FileOperations =
                 newModels
         )
         |> FileOperation
+
+    let splitDocumentByPageCounts(pageCountsTarget: DocumentSplitPageCountTarget list, isOverride) =
+        let sequenceTargets =
+            (0, pageCountsTarget)
+            ||> List.mapFold(fun i target ->
+                let pageNumberSequence = 
+                    [0 .. target.PageCount.Value-1]
+                    |> List.map(fun m -> m + 1 + i)
+                    |> List.map ``Int>=1``.Create
+                let r = 
+                    { PageNumSequence = pageNumberSequence
+                      PathPart = target.PathPart }
+
+                r, i + target.PageCount.Value
+            )
+            |> fst
+
+        splitDocumentBySequences(sequenceTargets, isOverride)
 
     let splitDocumentToMany (f: DocumentSplitArguments -> DocumentSplitArguments)  =
         let args = f DocumentSplitArguments.DefalutValue
@@ -266,10 +297,22 @@ type PdfRunner =
         runWithFlowModel flowModel flow
         |> List.map (fun m -> m.PdfFile)
 
+
     static member SplitDocumentBySequences (inputPdfFile: PdfFile, sequenceTargets, ?isOverride) =
         
         let flow =
             FileOperations.splitDocumentBySequences(sequenceTargets, defaultArg isOverride false)
+            |> Flow.FileOperation
+
+        let flowModel =  {PdfFile = inputPdfFile; UserState = () }
+
+        runWithFlowModel flowModel flow
+        |> List.map (fun m -> m.PdfFile)
+
+    static member SplitDocumentByPageCounts (inputPdfFile: PdfFile, pageCounts, ?isOverride) =
+        
+        let flow =
+            FileOperations.splitDocumentByPageCounts(pageCounts, defaultArg isOverride false)
             |> Flow.FileOperation
 
         let flowModel =  {PdfFile = inputPdfFile; UserState = () }

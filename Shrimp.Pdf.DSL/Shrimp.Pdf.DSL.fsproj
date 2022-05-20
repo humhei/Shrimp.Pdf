@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="PrefixReuses.fs" />
     <Compile Include="Imposing.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Selector.fs" />

@@ -317,7 +317,7 @@ module iText =
         let isCrossOf (paramRect) (rect: Rectangle) =
             rect.IsCrossOf(paramRect)
 
-
+            
 
         let create x y width height =
             let x = float32 x
@@ -341,6 +341,35 @@ module iText =
                 ) 
                 |> AtLeastTwoList.Create
                 |> Rectangle.ofPoints
+
+        let equalableValue (rect: Rectangle) =
+            let customEquality (x: float) =
+                NearbyPX x
+            (
+                customEquality(rect.GetXCenterF()),
+                customEquality(rect.GetYCenterF()),
+                customEquality(rect.GetWidthF()),
+                customEquality(rect.GetHeightF())
+            )
+
+        let equalTo (rect1: Rectangle) (rect2: Rectangle) =
+            equalableValue rect1 = equalableValue rect2
+
+
+        let distinct (rects: Rectangle al1List) =
+            rects
+            |> AtLeastOneList.distinctBy_explictly<_, _>(fun bound ->
+                equalableValue bound
+            )
+
+        let distinctByCenter (rects: Rectangle al1List) =
+            rects
+            |> AtLeastOneList.distinctBy_explictly<_, _>(fun bound ->
+                let customEquality (x: float) =
+                    NearbyPX x
+
+                customEquality(bound.GetXCenterF()), customEquality(bound.GetYCenterF())
+            )
 
         let removeInboxes(rects: Rectangle list) =
             let rec loop accum (rects: Rectangle list) =
@@ -758,6 +787,60 @@ module iText =
             | _ -> failwith "Invalid token"
 
     [<RequireQualifiedAccess>]
+    module TextRenderInfo =
+        let getY (info: TextRenderInfo) =
+            let descent = info.GetDescentLine()
+            descent.GetStartPoint().Get(1)
+            |> float
+
+        let getX (info: TextRenderInfo) =
+            let descent = info.GetDescentLine()
+            descent.GetStartPoint().Get(0)
+            |> float
+
+        let getHeight (info: TextRenderInfo) =
+            let ascent = info.GetAscentLine()
+            let descent = info.GetDescentLine()
+            let baseHeight = 
+                ascent.GetStartPoint().Get(1) - descent.GetStartPoint().Get(1)
+                |> float
+
+            let redirectedHeight = baseHeight
+            redirectedHeight
+
+        let getWidth (info: TextRenderInfo) =
+            let ascent = info.GetAscentLine()
+            ascent.GetEndPoint().Get(0) - ascent.GetStartPoint().Get(0)
+            |> float
+
+        let hasStroke (info: TextRenderInfo) =             
+            let textRenderMode = info.GetTextRenderMode()
+            match textRenderMode with 
+            | TextRenderingMode.STROKE
+            | TextRenderingMode.FILL_STROKE -> true  
+            | TextRenderingMode.FILL -> false
+            | _ -> 
+                Logger.unSupportedTextRenderMode textRenderMode
+                false
+
+        let getBound (boundGettingOptions: BoundGettingStrokeOptions) (info: TextRenderInfo) =
+            let width = getWidth info
+            let height = getHeight info
+            let x = getX info
+            let y = getY info
+            let boundWithoutWidth = Rectangle.create x y width height
+
+            match boundGettingOptions with 
+            | BoundGettingStrokeOptions.WithoutStrokeWidth -> boundWithoutWidth
+            | BoundGettingStrokeOptions.WithStrokeWidth ->
+                if hasStroke info then 
+                    let grahpicsState = info.GetGraphicsState()
+                    let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
+                    Rectangle.applyMargin widthMargin boundWithoutWidth
+                else boundWithoutWidth
+            | _ -> failwith "Invalid token"
+
+    [<RequireQualifiedAccess>]
     module ITextRenderInfo =
         type private TextRenderInfo with 
             member info.GetActualFontSize() =
@@ -782,34 +865,17 @@ module iText =
             info.Value.ToTransformedFontSize(actualFontSize)
 
         let getHeight (info: ITextRenderInfo) =
-            let info = info.Value
-            let ascent = info.GetAscentLine()
-            let descent = info.GetDescentLine()
-            let baseHeight = 
-                ascent.GetStartPoint().Get(1) - descent.GetStartPoint().Get(1)
-                |> float
-
-            let redirectedHeight = baseHeight
-            redirectedHeight
-
-        let getWidth (info: ITextRenderInfo) =
-            let info = info.Value
-            let ascent = info.GetAscentLine()
-            ascent.GetEndPoint().Get(0) - ascent.GetStartPoint().Get(0)
-            |> float
+            info.Value
+            |> TextRenderInfo.getHeight
 
 
         let getY (info: ITextRenderInfo) =
-            let info = info.Value
-            let descent = info.GetDescentLine()
-            descent.GetStartPoint().Get(1)
-            |> float
+            info.Value
+            |> TextRenderInfo.getY
 
         let getX (info: ITextRenderInfo) =
-            let info = info.Value
-            let descent = info.GetDescentLine()
-            descent.GetStartPoint().Get(0)
-            |> float
+            info.Value
+            |> TextRenderInfo.getX
 
         let getText (info: ITextRenderInfo) =
             info.Value.GetText()
@@ -825,43 +891,40 @@ module iText =
                 false
 
         let hasStroke (info: ITextRenderInfo) =             
-            let textRenderMode = info.Value.GetTextRenderMode()
-            match textRenderMode with 
-            | TextRenderingMode.STROKE
-            | TextRenderingMode.FILL_STROKE -> true  
-            | TextRenderingMode.FILL -> false
-            | _ -> 
-                Logger.unSupportedTextRenderMode textRenderMode
-                false
+            info.Value
+            |> TextRenderInfo.hasStroke
 
-        let getBound (boundGettingOptions: BoundGettingStrokeOptions) (info: ITextRenderInfo) =
-            let width = getWidth info
-            let height = getHeight info
-            let x = getX info
-            let y = getY info
-            let boundWithoutWidth = Rectangle.create x y width height
-
-            match boundGettingOptions with 
-            | BoundGettingStrokeOptions.WithoutStrokeWidth -> boundWithoutWidth
-            | BoundGettingStrokeOptions.WithStrokeWidth ->
-                if hasStroke info then 
-                    let grahpicsState = info.Value.GetGraphicsState()
-                    let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
-                    Rectangle.applyMargin widthMargin boundWithoutWidth
-                else boundWithoutWidth
-            | _ -> failwith "Invalid token"
         
+        let getBound (boundGettingOptions: BoundGettingStrokeOptions) (info: ITextRenderInfo) = 
+            match info.EndTextState with 
+            | EndTextState.No 
+            | EndTextState.Undified -> TextRenderInfo.getBound boundGettingOptions info.Value
+            | EndTextState.Yes ->
+                info.ConcatedTextInfos
+                |> List.ofSeq
+                |> List.map(TextRenderInfo.getBound boundGettingOptions)
+                |> AtLeastOneList.Create
+                |> Rectangle.ofRectangles
+        
+
+        let getWidth (info: ITextRenderInfo) =
+            match info.EndTextState with 
+            | EndTextState.No 
+            | EndTextState.Undified -> TextRenderInfo.getWidth info.Value
+            | EndTextState.Yes -> (getBound BoundGettingStrokeOptions.WithoutStrokeWidth info).GetWidthF()
+
+
         let getDenseBound (boundGettingOptions: BoundGettingStrokeOptions) (info: ITextRenderInfo) =
             let bound = (getBound boundGettingOptions info)
             bound.setHeight(YEffect.Middle, fun m -> m * 0.42)
 
+
         let getFontName (info: ITextRenderInfo) = info.Value.GetFontName()
+
 
         let fontNameIs (fontName: string) (info: ITextRenderInfo) =
             let fontName' = getFontName info
             FsFontName(fontName).ShortFontName = fontName'.ShortFontName
-
-            
 
 
         let getColors (info: ITextRenderInfo) =

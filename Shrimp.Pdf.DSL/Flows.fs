@@ -106,7 +106,7 @@ module _Flows =
             flow
 
 
-        static member Overly_Clip_Manipulate(clippingPathSelector, manipulate: Manipulate<_, _>, area: Overly_Clip_ManipulateArea, ?excludingSelector) =
+        static member Overly_Clip_Manipulate(clippingPathSelector, manipulate: Manipulate<_, _>, area: Overly_Clip_ManipulateArea, ?excludingSelector, ?keepCompoundPath) =
             let flow =
                 Flow.Func(fun originUserState ->
                     let manipulate = (fun _ -> originUserState) <<|| manipulate ||>> ignore
@@ -173,19 +173,23 @@ module _Flows =
                                         PdfRunner.Manipulate(PdfFile clippingPdfPath) cllippingPdfFileFlow
                                     
                                     let cancelCompoundPath() =
-                                        Modify.Create_Record
-                                            ( PageSelector.All,
-                                              [
-                                                { 
-                                                    SelectorAndModifiersRecord.Name = "cancel compound paths"
-                                                    //Selector = Selector.Path(selector)
-                                                    Selector = Selector.Path(clippingPathSelector)
-                                                    Modifiers =[
-                                                        Modifier.CancelFillAndStroke() 
-                                                    ]
-                                                }
-                                              ]
-                                            )
+                                        match defaultArg keepCompoundPath false with 
+                                        | false ->
+                                            Modify.Create_Record
+                                                ( PageSelector.All,
+                                                  [
+                                                    { 
+                                                        SelectorAndModifiersRecord.Name = "cancel compound paths"
+                                                        //Selector = Selector.Path(selector)
+                                                        Selector = Selector.Path(clippingPathSelector)
+                                                        Modifiers =[
+                                                            Modifier.CancelFillAndStroke() 
+                                                        ]
+                                                    }
+                                                  ]
+                                                )
+
+                                        | true -> Manipulate.dummy() ||>> ignore
 
                                     cancelCompoundPath()
                                     <+>(match area with 

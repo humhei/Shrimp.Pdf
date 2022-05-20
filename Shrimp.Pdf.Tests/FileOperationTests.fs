@@ -26,6 +26,13 @@ let fileOperationTests =
         PdfRunner.SplitDocumentToMany(PdfFile "datas/file operation/split document.pdf", fun args -> {args with Override = true})
         |> ignore
 
+    testCase "split document by PagesCount PdfRunner" <| fun _ ->
+        let pagesCount =
+            [2; 3; 4]
+            |> List.map(DocumentSplitPageCountTarget.Create)
+        PdfRunner.SplitDocumentByPageCounts(PdfFile "datas/file operation/split document by pageCounts.pdf", pagesCount, true)
+        |> ignore
+
     testCase "merge documents" <| fun _ -> 
         let targetFile = Path.GetFullPath("datas/file operation/merge documents/mergdDocuments.pdf")
         

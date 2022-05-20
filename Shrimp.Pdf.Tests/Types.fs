@@ -13,6 +13,13 @@ open System.Threading
 open iText.Kernel.Pdf
 open Fake.IO.FileSystemOperators
 
+let pass() = Expect.isTrue true "passed"
+let fail() = Expect.isTrue false "failed"
+
+let cuttingLineSeparation =
+    { FsSeparation.Name = "CuttingLine"
+      Color = FsValueColor.RGB_BLUE
+      Transparency = 1.0 }
 
 let runTest file flow =
     let newPath = Path.changeExtension ".tests.pdf" file

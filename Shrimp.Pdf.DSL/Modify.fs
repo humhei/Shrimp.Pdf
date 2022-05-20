@@ -1305,16 +1305,17 @@ type Modify =
                         renewablePathInfos
                         |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
 
-                    let head = renewablePathInfos.Head
-
-                    PdfCanvas.setPathRenderColorByOperation head.Operation head.FillColor (head.StrokeColor) pdfCanvas |> ignore
-
-                    for operatorRange in accumulatedPathOperatorRanges do
-                        PdfCanvas.writeOperatorRange operatorRange pdfCanvas
-                        |> ignore
-
                     match isClippingPath with 
-                    | false -> PdfCanvas.closePathByOperation head.Operation pdfCanvas |> ignore
+                    | false -> 
+                        let head = renewablePathInfos.Head
+
+                        PdfCanvas.setPathRenderColorByOperation head.Operation head.FillColor (head.StrokeColor) pdfCanvas |> ignore
+
+                        for operatorRange in accumulatedPathOperatorRanges do
+                            PdfCanvas.writeOperatorRange operatorRange pdfCanvas
+                            |> ignore
+
+                        PdfCanvas.closePathByOperation head.Operation pdfCanvas |> ignore
                     | true -> 
                         pdfCanvas.Clip().EndPath() |> ignore
               )
@@ -1329,3 +1330,4 @@ type Modify =
     static member CreateClippingPath(selector: PageModifingArguments<_> -> _ -> bool) =
         Modify.CreateCompoundPathCommon(selector, isClippingPath = true)
         |> Manipulate.rename "Create Clipping Path" []
+

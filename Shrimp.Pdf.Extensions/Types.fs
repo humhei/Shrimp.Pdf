@@ -211,9 +211,17 @@ module ExtensionTypes =
         inherit IAbstractRenderInfo
         abstract member Value: PathRenderInfo
             
+    type EndTextState =
+        | Undified = 0
+        | No = 1
+        | Yes = 2
+
+
     type ITextRenderInfo =
         inherit IAbstractRenderInfo
         abstract member Value: TextRenderInfo
+        abstract member EndTextState: EndTextState
+        abstract member ConcatedTextInfos: TextRenderInfo seq
 
     type IImageRenderInfo =
         inherit IAbstractRenderInfoIM

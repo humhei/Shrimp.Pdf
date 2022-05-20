@@ -1397,14 +1397,12 @@ module _Colors =
         static member GRAY = FsValueColor.GRAY |> PdfCanvasColor.Value
 
         static member OfITextColor(color: Color) =
-            match color with 
-            | :? Separation as separation -> 
-                FsSeparation.OfSeparation separation
-                |> PdfCanvasColor.Separation
-            | :? IccBased -> failwithf "Currently conversion of icc based color to PdfCanvasColor is not supported" 
-            | _ ->
-                FsValueColor.OfItextColor color
-                |> PdfCanvasColor.Value
+            match FsColor.OfItextColor color with 
+            | FsColor.Separation separation -> 
+                PdfCanvasColor.Separation separation
+            | FsColor.IccBased _ -> failwithf "Currently conversion of icc based color to PdfCanvasColor is not supported" 
+            | FsColor.PatternColor _ -> failwithf "Currently conversion of pattern to PdfCanvasColor is not supported" 
+            | FsColor.ValueColor color -> PdfCanvasColor.Value color
 
         member pdfCanvasColor.IsEqualTo(fsColor: FsColor) =
             match pdfCanvasColor,fsColor with 

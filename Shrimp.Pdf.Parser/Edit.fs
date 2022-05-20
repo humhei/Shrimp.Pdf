@@ -23,24 +23,6 @@ open Shrimp.Pdf.Parser.Helper
 open Constants.Operators
 
 
-[<RequireQualifiedAccess>]
-module PdfCanvas =
-    let writeOperatorRange (operatorRange: OperatorRange) (pdfCanvas: PdfCanvas) =
-        let outputStream = pdfCanvas.GetContentStream().GetOutputStream()
-        let operands = operatorRange.Operands
-        for i = 0 to operands.Count - 1 do
-            let operand = operands.[i]
-            if i = operands.Count - 1 then 
-                outputStream.Write(operand).WriteNewLine()
-                |> ignore
-            else 
-                outputStream.Write(operand).WriteSpace()
-                |> ignore
-
-        pdfCanvas
-
-
-
 type CloseOperator= 
     | Open  = 0
     | Close = 1

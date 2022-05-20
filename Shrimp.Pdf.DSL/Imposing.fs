@@ -14,18 +14,22 @@ open Shrimp.FSharp.Plus
 open Shrimp.FSharp.Plus.Math
 open Newtonsoft.Json
 open Shrimp.Pdf.Constants
+open Fake.IO
 
 
 
-
-type BackgroundFile = private BackgroundFile of PdfFile * currrentRotation: Rotation
+type BackgroundFile = private BackgroundFile of originPdf: PdfFile * clearedPdf: PdfFile * currrentRotation: Rotation
 with
-    member x.Value =
-        let (BackgroundFile (value, _)) = x
+    member private x.Value =
+        let (BackgroundFile (value, _, _)) = x
         value
 
+    member x.ClearedPdfFile =
+        let (BackgroundFile (_, v, _)) = x
+        v
+
     member internal x.CurrentRotation = 
-        let (BackgroundFile (_, value)) = x
+        let (BackgroundFile (_, _, value)) = x
         value
         
     member x.Rotate(rotation) =
@@ -34,20 +38,35 @@ with
             let angle = (Rotation.getAngle x.CurrentRotation)
             Rotation.ofAngle(angle + angle_plus)
             
-        BackgroundFile(x.Value, newRotation)
+        BackgroundFile(x.Value, x.ClearedPdfFile, newRotation)
 
 
     member x.Clockwise() = x.Rotate(Rotation.Clockwise)
 
     member x.CounterClockwise() = x.Rotate(Rotation.Counterclockwise)
 
-    static member Create(path: string) =
-        (PdfFile path, Rotation.None)
-        |> BackgroundFile
 
     static member Create(pdfFile: PdfFile) =
-        (pdfFile, Rotation.None)
+        let targetPath =
+            pdfFile.Path
+            |> Path.changeExtension "backgroundFile.cleared.pdf"
+
+        let clearedPdfFile = 
+            if File.exists targetPath then PdfFile targetPath
+            else 
+                let flow = 
+                    Reuses.ClearDirtyInfos()
+
+                runWithBackup targetPath pdfFile.Path (Flow.Reuse flow)
+                |> List.exactlyOne_DetailFailingText
+                |> fun flowModel -> flowModel.PdfFile
+
+        (pdfFile, clearedPdfFile, Rotation.None)
         |> BackgroundFile
+
+    static member Create(path: string) =
+        PdfFile path
+        |> BackgroundFile.Create
 
 [<RequireQualifiedAccess>]
 module BackgroundFile =
@@ -56,7 +75,7 @@ module BackgroundFile =
     let getPageBoxes = 
         fun (backGroundFile: BackgroundFile) ->
             backgroundFilePageBoxCache.GetOrAdd(backGroundFile, fun backGroundFile ->
-                let reader = new PdfDocument(new PdfReader(backGroundFile.Value.Path))
+                let reader = new PdfDocument(new PdfReader(backGroundFile.ClearedPdfFile.Path))
                 PdfDocument.getPages reader
                 |> List.map (fun page ->
                     let pageBox = (page.GetActualBox())
@@ -1170,7 +1189,7 @@ module Imposing =
 
             match args.Background with 
             | Background.File backgroudFile ->
-                let reader = new PdfDocument(new PdfReader(backgroudFile.Value.Path))
+                let reader = new PdfDocument(new PdfReader(backgroudFile.ClearedPdfFile.Path))
                 let xobject = reader.GetPage(1).CopyAsFormXObject(this.SplitDocument.Writer)
                 let bkRect = BackgroundFile.getPagebox backgroudFile
                 let affineTransform = 

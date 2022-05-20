@@ -16,11 +16,14 @@ open Fake.IO
 open iText.IO.Font.Constants
 open iText.IO.Font
 open iText.Kernel.Font
+open Shrimp.Pdf.ImageConverter
 open Shrimp.Pdf.Image
 let imageTests = 
     testList "ImageTests" <| [
     
-        ftestCase "convert pdf to jpeg" <| fun _ -> 
+        
+
+        testCase "convert pdf to jpeg" <| fun _ -> 
             let pdfFile =
                 @"datas/image/convert image to jpeg.pdf" 
                 |> PdfFile

@@ -8,6 +8,7 @@ open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open FParsec
 open iText.Kernel.Pdf
+open iText.Kernel.Pdf.Canvas
 open Shrimp.FSharp.Plus
 open iText.IO.Image
 open Shrimp.Pdf.Constants.Operators
@@ -19,6 +20,25 @@ type OperatorRange =
       Operands: IList<PdfObject> }
 
 [<AutoOpen>]
+module _OperatorRangeExtensions =
+    
+    [<RequireQualifiedAccess>]
+    module PdfCanvas =
+        let writeOperatorRange (operatorRange: OperatorRange) (pdfCanvas: PdfCanvas) =
+            let outputStream = pdfCanvas.GetContentStream().GetOutputStream()
+            let operands = operatorRange.Operands
+            for i = 0 to operands.Count - 1 do
+                let operand = operands.[i]
+                if i = operands.Count - 1 then 
+                    outputStream.Write(operand).WriteNewLine()
+                    |> ignore
+                else 
+                    outputStream.Write(operand).WriteSpace()
+                    |> ignore
+    
+            pdfCanvas
+
+[<AutoOpen>]
 module IntegratedInfos =
 
 
@@ -28,7 +48,10 @@ module IntegratedInfos =
           Path: Path
           Ctm: Matrix
           Operation: int
-          AccumulatedPathOperatorRanges: seq<OperatorRange> }
+          AccumulatedPathOperatorRanges: seq<OperatorRange>
+          LineWidth: float32
+          DashPattern: DashPattern
+          }
     with 
         member x.ApplyCtm_To_AccumulatedPathOperatorRanges() =
             let affineTransform = AffineTransform.ofMatrix x.Ctm
@@ -100,7 +123,21 @@ module IntegratedInfos =
                     |> List.singleton
             )
 
+        member x.ApplyCtm_WriteToCanvas(canvas: PdfCanvas) = 
+            PdfCanvas.useCanvas canvas (fun canvas ->
+                let operatorRanges = x.ApplyCtm_To_AccumulatedPathOperatorRanges()
+                canvas
+                |> PdfCanvas.setFillColor x.FillColor
+                |> PdfCanvas.setStrokeColor x.StrokeColor
+                |> PdfCanvas.setLineWidth (float x.LineWidth)
+                |> PdfCanvas.setDashpattern x.DashPattern
+                |> ignore
 
+                for operatorRange in operatorRanges do
+                    PdfCanvas.writeOperatorRange operatorRange canvas |> ignore
+                PdfCanvas.closePathByOperation x.Operation canvas |> ignore
+                canvas
+            )
 
     type PathInfoRecord =
         { FillColor: iText.Kernel.Colors.Color 
@@ -117,6 +154,7 @@ module IntegratedInfos =
     with 
         member x.Renewable() =
             let info = x.PathRenderInfo
+            let gs = info.GetGraphicsState()
             {
                 Ctm = info.GetCtm()
                 FillColor = info.GetFillColor()
@@ -124,6 +162,8 @@ module IntegratedInfos =
                 Operation = info.GetOperation()
                 Path = info.GetPath()
                 AccumulatedPathOperatorRanges = x.AccumulatedPathOperatorRanges
+                LineWidth = info.GetLineWidth()
+                DashPattern = CanvasGraphicsState.getDashPattern gs
             }
 
         member integratedInfo.RecordValue =
@@ -162,19 +202,36 @@ module IntegratedInfos =
           StrokeColor: iText.Kernel.Colors.Color 
           FontName: FsFontName
           Bound: FsRectangle
-          DenseBound: FsRectangle }
+          DenseBound: FsRectangle
+          EndTextState: EndTextState }
             
             
 
     [<Struct>]
     type IntegratedTextRenderInfo =
         { TextRenderInfo: TextRenderInfo 
-          ClippingPathInfos: ClippingPathInfos }
+          ClippingPathInfos: ClippingPathInfos
+          EndTextState: EndTextState
+          ConcatedTextInfos: IntegratedTextRenderInfo seq }
 
     with 
+        
+        member x.IsShow_EndTextState = 
+            match x.EndTextState with 
+            | EndTextState.Undified 
+            | EndTextState.Yes -> true
+            | EndTextState.No -> false
+
         member integratedInfo.RecordValue =
             let renderInfo = integratedInfo.TextRenderInfo
-            { Text = renderInfo.GetText()
+            { Text = 
+                match integratedInfo.EndTextState with 
+                | EndTextState.Yes -> 
+                    integratedInfo.ConcatedTextInfos
+                    |> Seq.map(fun m -> m.TextRenderInfo.GetText())
+                    |> String.concat ""
+                | EndTextState.No
+                | EndTextState.Undified -> renderInfo.GetText()
               FontSize = ITextRenderInfo.getActualFontSize integratedInfo
               FontName = ITextRenderInfo.getFontName integratedInfo
               FillColor = renderInfo.GetFillColor()
@@ -185,6 +242,8 @@ module IntegratedInfos =
               DenseBound =
                 let bound = ITextRenderInfo.getDenseBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo
                 bound.FsRectangle()
+              EndTextState = integratedInfo.EndTextState
+
             }
 
         interface IAbstractRenderInfoIM with 
@@ -192,6 +251,13 @@ module IntegratedInfos =
 
         interface ITextRenderInfo with 
             member x.Value = x.TextRenderInfo
+
+            member x.EndTextState = x.EndTextState
+
+            member x.ConcatedTextInfos =
+                x.ConcatedTextInfos
+                |> Seq.map(fun m -> m.TextRenderInfo)
+
 
         interface IAbstractRenderInfo with 
             member x.Value = x.TextRenderInfo :> AbstractRenderInfo
