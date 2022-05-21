@@ -1138,10 +1138,10 @@ let manipulateTests =
             ]
         )
 
-    testCase "test infos" <| fun _ -> 
+    ftestCase "test infos" <| fun _ -> 
 
         let pdfFile = 
-            @"C:\Users\Jia\Desktop\filterPages_infos2.pdf"
+            @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\KICKS\.flow\#2022-05-21#(宏途, 宏途第85单)\VerifyDocuments\宏途 宏途第85单\价格贴.verifyDocuments\价格贴\HAVEN_GREEN_BLUE.pdf"
             |> PdfFile
 
 

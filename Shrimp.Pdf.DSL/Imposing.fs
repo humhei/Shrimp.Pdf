@@ -192,11 +192,11 @@ module Imposing =
 
     type NumericFillingMode =
         { ColNums: int list 
-          RowNum: int }
+          RowNums: int list }
 
 
     type ColumnAutomaticFillingMode =
-        { RowNum: int }
+        { RowNums: int list }
 
     type RowAutomaticFillingMode =
         { ColNums: int list }
@@ -325,7 +325,7 @@ module Imposing =
     type _ImposingArguments =
         {
             ColNums: int list
-            RowNum: int
+            RowNums: int list
             Cropmark: Cropmark option
             HSpaceExes: Spaces
             VSpaceExes: Spaces
@@ -422,7 +422,7 @@ module Imposing =
         static member DefaultValue =
             {
                 ColNums = [0]
-                RowNum = 0
+                RowNums = [0]
                 Cropmark = None
                 HSpaceExes =  Spaces.Zero
                 VSpaceExes = Spaces.Zero
@@ -434,6 +434,49 @@ module Imposing =
                 CellRotation = CellRotation.None
                 DesiredPageOrientation = DesiredPageOrientation.Automatic
             }
+
+        static member CommonUsed_NUp(?desiredSize, ?hSpaces, ?vSpaces, ?background, ?colNum, ?rowNum) =
+            let colNum = defaultArg colNum 0
+
+            let rowNum = defaultArg rowNum 0
+
+            {
+                ColNums = [colNum]
+                RowNums = [rowNum]
+                Cropmark = Some Cropmark.defaultValue
+                HSpaceExes =  defaultArg hSpaces Spaces.Zero
+                VSpaceExes = defaultArg vSpaces Spaces.Zero
+                UseBleed = true
+                Background = 
+                    match background with 
+                    | Some background -> background
+                    | None ->
+                        match colNum, rowNum with 
+                        | 0, _
+                        | _, 0 -> FsSize.A4
+                        | _ -> FsSize.MAXIMUN
+                    |> Background.Size 
+
+
+                Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 6.))
+                DesiredSizeOp = desiredSize
+                IsRepeated = false
+                CellRotation = CellRotation.None
+                DesiredPageOrientation = DesiredPageOrientation.Automatic
+            }
+
+        static member CommonUsed_Repeated(?desiredSize, ?hSpaces, ?vSpaces, ?background, ?colNum, ?rowNum) =
+            let args = 
+                _ImposingArguments.CommonUsed_NUp(
+                    ?desiredSize = desiredSize,
+                    ?hSpaces = hSpaces,
+                    ?vSpaces = vSpaces,
+                    ?background = background,
+                    ?colNum = colNum,
+                    ?rowNum = rowNum)
+
+            { args with IsRepeated =  true}
+
 
     type ImposingArguments = private ImposingArguments of fillingMode: FillingMode * value: _ImposingArguments
     with 
@@ -495,8 +538,15 @@ module Imposing =
             if not isValidSheet_PlaceTable then failwithf "Invalid Sheet_PlaceTable %A" args.Sheet_PlaceTable
 
             let fillingMode =
-                match List.distinct args.ColNums, args.RowNum with
-                | [0], 0 ->
+                let (|Zero|Valid|) (numbers: int list) =
+                    match numbers with 
+                    | [] 
+                    | [0] -> Zero
+                    | numbers when List.forall (fun m -> m > 0) numbers -> Valid
+                    | _ -> failwithf "Col(Row) Numbers %A" numbers
+
+                match List.distinct args.ColNums, args.RowNums with
+                | Zero, Zero ->
                     FillingMode.Automatic
 
                 | uniqueValues, 0 when List.forall (fun m -> m > 0) uniqueValues ->

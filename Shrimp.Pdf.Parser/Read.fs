@@ -230,7 +230,6 @@ module internal Listeners =
             | 0 -> ()
             | 1 -> parsedRenderInfos.Add(concatedTextInfos.[0])
             | _ ->
-                let lastInfo = parsedRenderInfos.[parsedRenderInfos.Count-1] :?> IntegratedTextRenderInfo
                 let lastInfo = 
                     let previous =
                         concatedTextInfos
@@ -239,7 +238,7 @@ module internal Listeners =
                         )
 
 
-                    { lastInfo with 
+                    { concatedTextInfos.[concatedTextInfos.Count-1] with 
                         ConcatedTextInfos = previous
                         EndTextState = EndTextState.Yes
                     }
@@ -400,9 +399,13 @@ module internal Listeners =
                         | true ->
                             match renderInfo.TagIM with 
                             | IntegratedRenderInfoTagIM.Text -> 
-                                concatedTextInfos.Add(renderInfo :?> IntegratedTextRenderInfo)
+                                let renderInfo = renderInfo :?> IntegratedTextRenderInfo
+                                match renderInfo.TextRenderInfo.GetText().Trim() with 
+                                | "" -> ()
+                                | _ -> concatedTextInfos.Add(renderInfo)
                             | _ -> ()
                         | false -> ()
+
                         match renderInfo with 
                         | IIntegratedRenderInfoIM.Text _ -> ()
                         | _ ->

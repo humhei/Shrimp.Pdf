@@ -142,6 +142,21 @@ type PageModifier =
             PdfPage.setPageBox pageBoxKind rect args.Page
             |> ignore
 
+    static member SetPageBoxTo(pageBoxKind: PageBoxKind, size: FsSize, ?xEffect, ?yEffect) : PageModifier<_, _> =
+        fun (args: PageModifingArguments<_>) infos ->
+            let pageBox = 
+                match pageBoxKind with 
+                | PageBoxKind.AllBox -> args.Page.GetActualBox()
+                | _ -> PdfPage.getPageBox pageBoxKind args.Page
+
+            let newRect =
+                pageBox
+                    .setWidth(defaultArg xEffect XEffect.Middle, (fun _ -> size.Width))
+                    .setHeight(defaultArg yEffect YEffect.Middle, (fun _ -> size.Height))
+
+            PdfPage.setPageBox pageBoxKind newRect args.Page
+            |> ignore
+
     static member SetPageBoxes(pageBoxKindes: PageBoxKind list, rect: Rectangle) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             for pageBoxKind in pageBoxKindes do
@@ -375,7 +390,11 @@ module ModifyPageOperators =
                     let array2D = 
                         textInfos
                         |> List.chunkBySize format.ColNum
-                        |> array2D
+
+                    let __ensureNoRemainer =
+                        match textInfos.Length % format.ColNum with 
+                        | 0 -> ()
+                        | _ -> failwithf "textInfos length %d is not exact division to format ColNum %d" textInfos.Length format.ColNum
 
                     array2D
             )

@@ -34,14 +34,28 @@ let parsingTests =
         | "EXPEDITEUR:" -> pass()
         | _ -> fail()
 
-    ftestCase "extract dataTable in B255" <| fun _ -> 
+    testCase "extract dataTable in B255" <| fun _ -> 
 
         let flow =
             ModifyPage.ReadDataTable(
-                { ColNum = 2 }, boundSelector = Info.StrokeColorIs FsColor.RGB_BLUE
+                PageSelector.First, { ColNum = 2 }, boundSelector = Info.StrokeColorIs FsColor.RGB_BLUE
             )
 
         Flow.Manipulate flow
         |> runTest "datas/parsing/extract dataTable in B255.pdf" 
         |> ignore
-    ]
+
+    testCase "extract dataTable in B255_2" <| fun _ -> 
+        let path = Path.getFullName "datas/parsing/extract dataTable in B255_2.pdf" 
+        let backUp = Path.changeExtension ".tests.pdf" path
+
+        let flow =
+            ModifyPage.ReadDataTable(
+                PageSelector.First, { ColNum = 2 }, boundSelector = Info.StrokeColorIs FsColor.RGB_BLUE
+            )
+            |> Flow.Manipulate
+
+        let texts = PdfRunner.OneFileFlow_UserState(PdfFile path, backUp) flow
+
+        pass()
+  ]

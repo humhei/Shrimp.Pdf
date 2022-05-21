@@ -252,25 +252,25 @@ module _Reuses =
                 |> List.iteri(fun i page ->
                     let pageNum = i + 1
 
+                    let addEmptyPages() =
+                        let emptyPageNumberCount = fEmptyPageCount pageNum
+                        [1..emptyPageNumberCount]
+                        |> List.iter(fun _ ->
+                            let writerPage: PdfPage = splitDocument.Writer.AddNewPage(PageSize(page.GetActualBox()))
+                            writerPage.SetPageBoxToPage(page)
+                            |> ignore
+                        )
+
                     match pageInsertingOptions with 
                     | PageInsertingOptions.BeforePoint ->
+                        addEmptyPages()
                         let writerPage = page.CopyTo(splitDocument.Writer) 
                         splitDocument.Writer.AddPage(writerPage) |> ignore
-                    | _ -> ()
 
-                    let emptyPageNumberCount = fEmptyPageCount pageNum
-                    [1..emptyPageNumberCount]
-                    |> List.iter(fun _ ->
-                        let writerPage: PdfPage = splitDocument.Writer.AddNewPage(PageSize(page.GetActualBox()))
-                        writerPage.SetPageBoxToPage(page)
-                        |> ignore
-                    )
-
-                    match pageInsertingOptions with 
                     | PageInsertingOptions.AfterPoint ->
                         let writerPage = page.CopyTo(splitDocument.Writer) 
                         splitDocument.Writer.AddPage(writerPage) |> ignore
-
+                        addEmptyPages()
                     | _ -> ()
                 )
 

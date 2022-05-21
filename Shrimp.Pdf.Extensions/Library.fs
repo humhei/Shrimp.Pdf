@@ -172,6 +172,8 @@ module iText =
                 let y = yCenter - this.GetWidth() / 2.f
                 Rectangle(x, y, this.GetHeight(), this.GetWidth())
 
+
+
         member this.ToStaightLines() =
             let x = this.GetXF()
             let y = this.GetYF()

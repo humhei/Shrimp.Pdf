@@ -121,11 +121,16 @@ module FileOperations =
                     let fileFullPaths =
                         sequenceTargets
                         |> List.mapi(fun i sequenceTarget ->
+                            let baseFileName = Path.GetFileNameWithoutExtension flowModel.File
+                            let dir = baseDir </> baseFileName
                             match sequenceTarget.PathPart with 
-                            | Some pathPart -> baseDir </> pathPart
+                            | Some pathPart -> 
+                                match pathPart.ToLower().EndsWith ".pdf" with 
+                                | true -> dir </> pathPart
+                                | false ->
+                                    dir </> baseFileName + "_" + pathPart + (i+1).ToString() + ".pdf"
+
                             | None -> 
-                                let baseFileName = Path.GetFileNameWithoutExtension flowModel.File
-                                let dir = baseDir </> baseFileName
                                 dir </> baseFileName + "_Part" + (i+1).ToString() + ".pdf"
                         ) 
 
@@ -224,7 +229,11 @@ module FileOperations =
                     |> List.chunkBySize(args.ChunkSize)
                     |> List.mapi(fun i pages ->
                         let number = i + 1
-                        let fileName = sprintf "%s_%s%d.pdf" fileNameWithoutExtension args.PartText number
+                        let fileName = 
+                            match args.PartText.ToLower().EndsWith ".pdf" with 
+                            | true -> args.PartText
+                            | false ->
+                                sprintf "%s_%s%d.pdf" fileNameWithoutExtension args.PartText number
                         let fileFullPath = Path.Combine(outputDirectory, fileName)
                         match File.exists fileFullPath, args.Override with 
                         | true, false -> failwithf "File %s already exists" fileFullPath

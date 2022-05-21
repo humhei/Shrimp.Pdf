@@ -535,9 +535,16 @@ let reuseTests =
 
     testCase "insert empty pages tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.InsertEmptyPagesToMultiple(5)
+            Reuses.InsertEmptyPagesToMultiple(4)
         )
         |> runTest "datas/reuse/insertEmptyPagesTo4X.pdf" 
+        |> ignore
+
+    testCase "insert empty pages tests 2X" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.InsertEmptyPagesToMultiple(2)
+        )
+        |> runTest "datas/reuse/insertEmptyPagesTo2X.pdf" 
         |> ignore
 
     testCase "change page orientation tests" <| fun _ -> 
