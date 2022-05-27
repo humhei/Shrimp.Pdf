@@ -208,46 +208,11 @@ module _Flows =
                                     Reuses.AddForeground(clippingPathFile)
                                 )
                             )
-                            //Flow.Reuse(
-                            //    Reuse(fun flowModel doc ->
-                            //        doc.Reader.GetPages()
-                            //        |> List.iteri(fun i page ->
-                            //            let xobject = page.CopyAsFormXObject(doc.Writer)
-                            //            let writerPage = 
-                            //                let pageSize = PageSize(page.GetActualBox())
-                            //                doc.Writer
-                            //                    .AddNewPage(pageSize)
-                            //                    .SetPageBoxToPage(page)
-
-                            //            let pdfCanvas = PdfCanvas(writerPage)
-
-                            //            let renewablePathInfos: RenewablePathInfo list = List.item i flowModel.UserState 
-
-                            //            //pdfCanvas.AddXObject(xobject) |> ignore
-
-                            //            let __addClippedXObject =
-                                            
-                            //                let accumulatedPathOperatorRanges =
-                            //                    renewablePathInfos
-                            //                    |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
-
-                            //                for operatorRange in accumulatedPathOperatorRanges do
-                            //                    PdfCanvas.writeOperatorRange operatorRange pdfCanvas
-                            //                    |> ignore
-                            //                pdfCanvas.Clip().EndPath() |> ignore
-                            //                pdfCanvas.AddXObject(xobject) |> ignore
-                            //            ()
-                            //        )
-
-                            //    )
-                            //)
                         | false -> 
                             Flow.dummy() ||>> ignore
                     )
 
                 )
-
-
 
             flow
 

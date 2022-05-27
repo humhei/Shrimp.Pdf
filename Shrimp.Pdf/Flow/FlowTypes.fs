@@ -109,7 +109,10 @@ type FlowName private (flowNameKind: FlowNameKind, ?parentFlowName) =
 
     static member Disable: FlowName = FlowName(FlowNameKind.Disable)
 
-    override x.ToString() = flowNameKind.NameAndParameters.ToString()
+    override x.ToString() =     
+        match flowNameKind.NameAndParameters with 
+        | None -> "<null>"
+        | Some v -> v.ToString()
 
 [<RequireQualifiedAccess>]
 module internal FlowName =

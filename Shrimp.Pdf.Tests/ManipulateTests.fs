@@ -44,6 +44,38 @@ module PageInfos =
 
 let manipulateTests =
   testList "Manipulates Tests" [
+
+    ftestCase "resize path as copy" <| fun _ -> 
+        let resizingStyle = 
+            ResizingStyle
+                { Width = mm 43.
+                  Height = mm 73. }
+
+        Flow.Manipulate (
+            Modify.ChangeStyle(
+                selector = (
+                    Info.BoundSizeIs(fun size -> size.GetWidthF() >= mm 30.)
+                ),
+                targetStyle = VectorStyle(resizingStyle = resizingStyle, asCopy = true)
+            )
+        )
+        |> runTest "datas/manipulate/resize path as copy.pdf" 
+        |> ignore
+
+    testCase "release compound path" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.ReleaseCompoundPath(Info.StrokeColorIs FsColor.RGB_BLUE)
+        )
+        |> runTest "datas/manipulate/release compound path.pdf" 
+        |> ignore
+
+    testCase "release compound path2" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.ReleaseCompoundPath(Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation))
+        )
+        |> runTest "datas/manipulate/release compound path2.pdf" 
+        |> ignore
+
     testCase "make combound path from blue strokes" <| fun _ -> 
         Flow.Manipulate (
             Modify.CreateCompoundPath(Info.StrokeColorIs FsColor.RGB_BLUE)
@@ -56,6 +88,13 @@ let manipulateTests =
             Modify.CreateClippingPath(Info.StrokeColorIs FsColor.RGB_BLUE)
         )
         |> runTest "datas/manipulate/make clipping path from blue strokes.pdf" 
+        |> ignore
+
+    testCase "make clipping path from blue strokes and keep" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.CreateCompoundPath(Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation))
+        )
+        |> runTest "datas/manipulate/make clipping path from blue strokes and keep.pdf" 
         |> ignore
 
 
@@ -132,6 +171,32 @@ let manipulateTests =
                       Selector = 
                         PathOrText(Info.ColorIsOneOf (FillOrStrokeOptions.FillOrStroke, colors))
                       Modifiers = [Modifier.CancelFillAndStroke()]
+                    }
+                ]
+            ) 
+        )
+        |> runTest "datas/manipulate/remove specfic separation colors.pdf" 
+        |> ignore
+
+    testCase "open fill" <| fun _ -> 
+
+        let colors = 
+            [
+                { Name = "CuttingLine_BLUE" 
+                  Color = FsValueColor.RGB_BLUE
+                  Transparency = 1. }
+
+                FsSeparation.Create("PageNumber", DeviceRgb(200, 0, 56))
+            ]
+            |> List.map FsColor.Separation
+
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "open fill color"
+                      Selector = PathOrText(Info.StrokeColorIsOneOf (colors))
+                      Modifiers = [Modifier.OpenFill(PdfCanvasColor.WHITE)]
                     }
                 ]
             ) 
@@ -1049,7 +1114,7 @@ let manipulateTests =
                 doc.Value.CacheDocumentFonts()
                 Modify.MapFontAndSize(
                     FontAndSizeQuery(textPattern = Text.TextMatchingPattern.EqualTo (StringIC "30")) =>
-                    NewFontAndSize(FsPdfFontFactory.CreateDocumentFont(FontNames.``Tahoma-Bold``), fontSize = 12., alignment = XEffect.Middle)
+                    NewFontAndSize(FsPdfFontFactory.CreateDocumentFont(FontNames.``Tahoma-Bold``), fontSize = 12., alignment = XEffort.Middle)
                 )
             )
 
@@ -1138,7 +1203,7 @@ let manipulateTests =
             ]
         )
 
-    ftestCase "test infos" <| fun _ -> 
+    testCase "test infos" <| fun _ -> 
 
         let pdfFile = 
             @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\KICKS\.flow\#2022-05-21#(宏途, 宏途第85单)\VerifyDocuments\宏途 宏途第85单\价格贴.verifyDocuments\价格贴\HAVEN_GREEN_BLUE.pdf"

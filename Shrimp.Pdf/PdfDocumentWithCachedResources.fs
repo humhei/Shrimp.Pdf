@@ -239,6 +239,19 @@ and PdfDocumentWithCachedResources =
                 let resourceColor = ResourceColor.Registration
                 pdfDocument.GetOrCreateColor(resourceColor) 
 
+    member x.Renew_OtherDocument_Color(otherDocumentColor: Color) =
+        match (FsColor.OfItextColor otherDocumentColor).AsAlternativeFsColor with
+        | Some color ->
+            match color with 
+            | AlternativeFsColor.Separation v ->
+                x.GetOrCreateColor(PdfCanvasColor.Separation v)
+
+            | AlternativeFsColor.IccBased _
+            | AlternativeFsColor.ValueColor _ ->
+                color.AlterColor.ToItextColor()
+
+        | None -> DeviceGray.BLACK :> Color
+
     member x.GetOrCreateExtGState(extGState: FsExtGState) = 
         x.cache.GetOrCreateExtGState(extGState)
         

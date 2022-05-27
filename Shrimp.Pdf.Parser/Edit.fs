@@ -196,12 +196,12 @@ with
           Text = text}
         |> CloseOperatorUnion.Text
 
-    static member Create(tag, ?fill, ?stroke) =
+    static member Create(tag, ?fill, ?stroke, ?text) =
         match tag with 
         | IntegratedRenderInfoTag.Path -> 
             CloseOperatorUnion.CreatePath(?fill = fill, ?stroke = stroke)
         | IntegratedRenderInfoTag.Text ->
-            CloseOperatorUnion.CreateText(?fill = fill, ?stroke = stroke)
+            CloseOperatorUnion.CreateText(?fill = fill, ?stroke = stroke, ?text = text)
 
 [<RequireQualifiedAccess>]
 module private CloseOperatorUnion =
@@ -262,6 +262,10 @@ type ModifierPdfCanvasActions =
       SuffixActions: list<PdfCanvas -> PdfCanvas>
       Close: CloseOperatorUnion }
 with 
+
+    member x.AddActions(actions) =
+        { x with Actions = x.Actions @ actions}
+
     static member Keep(tag: IntegratedRenderInfoTag) =  
         { Actions = [] 
           Close = CloseOperatorUnion.Keep(tag)
@@ -277,10 +281,10 @@ with
           Close = CloseOperatorUnion.Image (ImageCloseOperator.New (originCtm, image))
           SuffixActions = [] }
 
-    static member CreateCloseOperator(tag, ?fill, ?stroke) =
+    static member CreateCloseOperator(tag, ?fill, ?stroke, ?text) =
         { Actions = []
           SuffixActions = []
-          Close = CloseOperatorUnion.Create(tag, ?fill = fill, ?stroke = stroke)}
+          Close = CloseOperatorUnion.Create(tag, ?fill = fill, ?stroke = stroke, ?text = text)}
 
     static member CreateActions tag (pdfActions) = 
         { Actions = pdfActions

@@ -42,6 +42,16 @@ module RemoteServer =
         }
 
     let internal convertPdfFileToJpegs(pdfFile: PdfFile, dpi: float32, target: FsFullPath) =
+        let pdfFile =
+            let fileName = Path.GetFileName pdfFile.Path
+            let tmpDir = Path.GetTempPath() </> System.IO.Path.GetRandomFileName()
+            Directory.ensure tmpDir
+
+            let tmpFile = tmpDir </> fileName
+
+            File.Copy(pdfFile.Path, tmpFile, true)
+            PdfFile tmpFile
+
         Directory.ensure target.Path
         task {
             let! document = PdfDocument.Load(pdfFile.Path, null)
@@ -55,10 +65,12 @@ module RemoteServer =
                 let! page = document.GetPage(0)
                 
                 let! targetFile = savePdfPageToTarget dpi target page
+                do! document.DisposeAsync()
+                
                 return [targetFile]
 
             | i ->
-                return 
+                let r =
                     [0..totalPageNumber-1]
                     |> List.map(fun pageNum ->
                         let task = task {
@@ -71,6 +83,8 @@ module RemoteServer =
                         }
                         task.Result
                     )
+                do! document.DisposeAsync()
+                return r
                 
 
         }

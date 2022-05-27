@@ -192,11 +192,11 @@ module Imposing =
 
     type NumericFillingMode =
         { ColNums: int list 
-          RowNums: int list }
+          RowNum: int }
 
 
     type ColumnAutomaticFillingMode =
-        { RowNums: int list }
+        { RowNum: int }
 
     type RowAutomaticFillingMode =
         { ColNums: int list }
@@ -325,7 +325,7 @@ module Imposing =
     type _ImposingArguments =
         {
             ColNums: int list
-            RowNums: int list
+            RowNum: int
             Cropmark: Cropmark option
             HSpaceExes: Spaces
             VSpaceExes: Spaces
@@ -422,7 +422,7 @@ module Imposing =
         static member DefaultValue =
             {
                 ColNums = [0]
-                RowNums = [0]
+                RowNum = 0
                 Cropmark = None
                 HSpaceExes =  Spaces.Zero
                 VSpaceExes = Spaces.Zero
@@ -442,7 +442,7 @@ module Imposing =
 
             {
                 ColNums = [colNum]
-                RowNums = [rowNum]
+                RowNum = rowNum
                 Cropmark = Some Cropmark.defaultValue
                 HSpaceExes =  defaultArg hSpaces Spaces.Zero
                 VSpaceExes = defaultArg vSpaces Spaces.Zero
@@ -545,20 +545,18 @@ module Imposing =
                     | numbers when List.forall (fun m -> m > 0) numbers -> Valid
                     | _ -> failwithf "Col(Row) Numbers %A" numbers
 
-                match List.distinct args.ColNums, args.RowNums with
-                | Zero, Zero ->
+                match List.distinct args.ColNums, args.RowNum with
+                | Zero, 0 ->
                     FillingMode.Automatic
 
-                | uniqueValues, 0 when List.forall (fun m -> m > 0) uniqueValues ->
+                | Valid, 0 ->
                     FillingMode.RowAutomatic { ColNums =  args.ColNums }
 
-                | [0], rowNum when rowNum > 0 ->
+                | Zero, BiggerThan 0 ->
                     FillingMode.ColumnAutomatic { RowNum =  args.RowNum }
 
-                | uniqueValues, rowNum when List.forall (fun m -> m > 0) uniqueValues && rowNum > 0 ->
-                    FillingMode.Numeric { ColNums = args.ColNums; RowNum = rowNum }
-
-                | [], _ -> failwith "colNums cannot be empty"
+                | Valid, BiggerThan 0 ->
+                    FillingMode.Numeric { ColNums = args.ColNums; RowNum = args.RowNum }
 
                 | _ -> failwith "Invalid token"
 

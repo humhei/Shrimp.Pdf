@@ -144,22 +144,9 @@ module _Reuses =
                         pathInfos
                         |> List.map(fun pathInfo -> pathInfo.Renewable())
                         |> List.map(fun info ->
-                            let redirectColor color =
-                                match (FsColor.OfItextColor color).AsAlternativeFsColor with
-                                | Some color ->
-                                    match color with 
-                                    | AlternativeFsColor.Separation v ->
-                                        splitDocument.Writer.GetOrCreateColor(PdfCanvasColor.Separation v)
-
-                                    | AlternativeFsColor.IccBased _
-                                    | AlternativeFsColor.ValueColor _ ->
-                                        color.AlterColor.ToItextColor()
-
-                                | None -> DeviceGray.BLACK :> Color
-
                             { info with 
-                                FillColor = redirectColor info.FillColor
-                                StrokeColor = redirectColor info.StrokeColor
+                                FillColor = splitDocument.Writer.Renew_OtherDocument_Color info.FillColor
+                                StrokeColor = splitDocument.Writer.Renew_OtherDocument_Color info.StrokeColor
                             }
                         )
 

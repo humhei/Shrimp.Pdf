@@ -104,7 +104,6 @@ module ExtensionTypes =
 
     [<RequireQualifiedAccess>]
     module Subpath =
-
         let toRawPoints (subpath: Subpath) =
             subpath.GetPiecewiseLinearApproximation()
 
@@ -657,15 +656,23 @@ module ExtensionTypes =
           End: Point }
 
 
-    type YEffect =
+    type YEffort =
         | Top = 0
         | Bottom  = 1
         | Middle  = 2
 
-    type XEffect =
+    type XEffort =
         | Left = 0
         | Right = 1
         | Middle  = 2
+
+    type Effort =
+        { XEffort: XEffort 
+          YEffort: YEffort }
+    with 
+        static member Center = 
+            { XEffort = XEffort.Middle 
+              YEffort = YEffort.Middle }
 
     [<RequireQualifiedAccess>]
     type Position =

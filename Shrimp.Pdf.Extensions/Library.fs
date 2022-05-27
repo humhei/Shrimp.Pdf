@@ -135,27 +135,27 @@ module iText =
             let height = rect.GetHeightF() + top + bottom
             Rectangle(float32 x, float32 y, float32 width, float32 height)
 
-        member this.setHeight(effect: YEffect, fHeight: float -> float) =
+        member this.setHeight(effect: YEffort, fHeight: float -> float) =
             let height = this.GetHeightF()
             let newHeight = fHeight height
 
             let y =
                 match effect with 
-                | YEffect.Top -> this.GetTopF() - newHeight
-                | YEffect.Bottom -> this.GetYF()
-                | YEffect.Middle -> this.GetYCenterF() - newHeight / 2.
+                | YEffort.Top -> this.GetTopF() - newHeight
+                | YEffort.Bottom -> this.GetYF()
+                | YEffort.Middle -> this.GetYCenterF() - newHeight / 2.
 
             Rectangle(this.GetX(), float32 y, this.GetWidth(), float32 newHeight)
                     
-        member this.setWidth(effect: XEffect, fWidth: float -> float) =
+        member this.setWidth(effect: XEffort, fWidth: float -> float) =
             let width = this.GetWidthF()
             let newWidth = fWidth width
 
             let x =
                 match effect with 
-                | XEffect.Left -> this.GetXF()
-                | XEffect.Right -> this.GetRightF() - newWidth
-                | XEffect.Middle -> this.GetXCenterF() - newWidth / 2.
+                | XEffort.Left -> this.GetXF()
+                | XEffort.Right -> this.GetRightF() - newWidth
+                | XEffort.Middle -> this.GetXCenterF() - newWidth / 2.
 
             Rectangle(float32 x, this.GetY(), float32 newWidth, this.GetHeight())
                     
@@ -459,7 +459,7 @@ module iText =
         let setWidth (effect) (width: float) (rect: Rectangle) =
             rect.setWidth(effect, fun _ -> width)
 
-        let scale (xEffect: XEffect) yEffect scaleX scaleY (rect: Rectangle) =
+        let scale (xEffect: XEffort) yEffect scaleX scaleY (rect: Rectangle) =
             let width = rect.GetWidthF() * scaleX
             let height = rect.GetHeightF() * scaleY
 
@@ -679,6 +679,11 @@ module iText =
             { DashArray = dashArray 
               Phase = phase }
 
+        let getExtGState (gs: CanvasGraphicsState): FsExtGState =
+            { OPM = gs.GetOverprintMode() |> enum
+              IsStrokeOverprint = gs.GetStrokeOverprint()
+              IsFillOverprint = gs.GetFillOverprint()
+             }
 
 
     type AbstractRenderInfo with 
@@ -788,6 +793,13 @@ module iText =
 
             | _ -> failwith "Invalid token"
 
+        let getLineWidth (info: IPathRenderInfo) = 
+            info.Value.GetLineWidth()
+
+        let getExtGState (info: IPathRenderInfo) = 
+            info.Value.GetGraphicsState()
+            |> CanvasGraphicsState.getExtGState
+
     [<RequireQualifiedAccess>]
     module TextRenderInfo =
         let getY (info: TextRenderInfo) =
@@ -841,6 +853,8 @@ module iText =
                     Rectangle.applyMargin widthMargin boundWithoutWidth
                 else boundWithoutWidth
             | _ -> failwith "Invalid token"
+
+
 
     [<RequireQualifiedAccess>]
     module ITextRenderInfo =
@@ -918,7 +932,7 @@ module iText =
 
         let getDenseBound (boundGettingOptions: BoundGettingStrokeOptions) (info: ITextRenderInfo) =
             let bound = (getBound boundGettingOptions info)
-            bound.setHeight(YEffect.Middle, fun m -> m * 0.42)
+            bound.setHeight(YEffort.Middle, fun m -> m * 0.42)
 
 
         let getFontName (info: ITextRenderInfo) = info.Value.GetFontName()
@@ -953,6 +967,10 @@ module iText =
                 Logger.unSupportedTextRenderMode others
                 []
 
+        let getExtGState (info: ITextRenderInfo) : FsExtGState =    
+            let gs: CanvasGraphicsState = info.Value.GetGraphicsState()
+            CanvasGraphicsState.getExtGState gs
+
     //[<RequireQualifiedAccess>]
     //module ImageData = 
     //    let colorSpace (imageData: ImageData)=
@@ -986,6 +1004,8 @@ module iText =
             | :? IPathRenderInfo as prInfo -> fPathRenderInfo prInfo 
             | :? IImageRenderInfo -> failwith "Invaid token"
             | _ -> failwith "Invaid token"
+
+        let getExtGState info = cata (ITextRenderInfo.getExtGState) (IPathRenderInfo.getExtGState) info
 
         let getBound boundGettingOptions info = cata (ITextRenderInfo.getBound boundGettingOptions) (IPathRenderInfo.getBound boundGettingOptions) info
         

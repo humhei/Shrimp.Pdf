@@ -151,8 +151,8 @@ type PageModifier =
 
             let newRect =
                 pageBox
-                    .setWidth(defaultArg xEffect XEffect.Middle, (fun _ -> size.Width))
-                    .setHeight(defaultArg yEffect YEffect.Middle, (fun _ -> size.Height))
+                    .setWidth(defaultArg xEffect XEffort.Middle, (fun _ -> size.Width))
+                    .setHeight(defaultArg yEffect YEffort.Middle, (fun _ -> size.Height))
 
             PdfPage.setPageBox pageBoxKind newRect args.Page
             |> ignore

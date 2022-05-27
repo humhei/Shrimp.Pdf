@@ -160,7 +160,7 @@ module FileOperations =
                         writer.Close()
 
                         { PdfFile = PdfFile fileFullPath 
-                          UserState = flowModel.UserState }
+                          UserState = i, flowModel.UserState }
                     )
 
                 let newFiles = 

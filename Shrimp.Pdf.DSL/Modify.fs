@@ -231,15 +231,295 @@ with
                     
                 | false -> None
             )
+
+[<RequireQualifiedAccess>]
+type CloseStyle = 
+    | Close
+    | Open of PdfCanvasColor
+    | Keep 
+    | KeepOperationAndChangeColor of PdfCanvasColor
+
+type ColorStyle [<JsonConstructor>] private (v) =
+    inherit POCOBaseV<NullablePdfCanvasColor option * CloseOperator option * bool option>(v) 
+
+        member x.NullablePdfCanvasColor   = x.VV.Item3_1()
+
+        member x.CloseOperator            = x.VV.Item3_2()
+
+        member x.Overprint                = x.VV.Item3_3()
+
+        new(?color, ?closeOperator, ?overprint) =
+            DefaultArgs.CheckAllInputsAreNotEmpty(color, closeOperator, overprint)
+            new ColorStyle((color, closeOperator, overprint))
+
+    static member DefaultValue = ColorStyle()
+
         
+    
+
+type StrokeStyle [<JsonConstructor>] private  (v) =
+    inherit POCOBaseV<ColorStyle option * ``ufloat>0`` option * int option>(v)
+
+    member x.ColorStyle = x.VV.Item3_1()
+
+    member x.Width = x.VV.Item3_2() 
+
+    member x.LineJoinStyle = x.VV.Item3_3()
+
+    member x.CloseOperator =
+        match x.ColorStyle with 
+        | None -> None
+        | Some colorStyle -> colorStyle.CloseOperator
+        |> Option.defaultValue CloseOperator.Keep
+
+
+    member x.NullablePdfCanvasColor =
+        match x.ColorStyle with
+        | Some colorStyle -> colorStyle.NullablePdfCanvasColor
+        | None -> None
+
+    member x.Overprint =
+        match x.ColorStyle with
+        | Some colorStyle -> colorStyle.Overprint
+        | None -> None
+
+    member x.AsModifier(args: _SelectionModifierFixmentArguments<_>) =
+        let pdfCanvasActions = 
+            [
+                match x.NullablePdfCanvasColor with 
+                | None -> ()
+                | Some canvasColor -> PdfCanvas.SetStrokeColor(canvasColor)
+
+                match x.Width with 
+                | None -> ()
+                | Some width -> PdfCanvas.setLineWidth width.Value
+
+                match x.LineJoinStyle with 
+                | None -> ()
+                | Some lineJoinStyle -> PdfCanvas.setLineJoinStyle lineJoinStyle
+
+                match x.Overprint with 
+                | None -> ()
+                | Some isStrokeOverprint -> 
+                    let originExtGState = IAbstractRenderInfo.getExtGState args.CurrentRenderInfo
+                    let newExtGState = 
+                        {
+                            originExtGState with IsStrokeOverprint = isStrokeOverprint
+                        }
+                    PdfCanvas.setExtGState newExtGState
+            ]
+        
+        { Actions = pdfCanvasActions
+          SuffixActions = []
+          Close = CloseOperatorUnion.Create(args.Tag, stroke = x.CloseOperator) }
+
+
+    new (?targetColorStyle: ColorStyle, ?width: ``ufloat>0``, ?lineJoinStyle) =
+        DefaultArgs.CheckAllInputsAreNotEmpty(targetColorStyle, width, lineJoinStyle)
+        new StrokeStyle((targetColorStyle, width, lineJoinStyle))
+
+type FillStyle [<JsonConstructor>] (v) =
+    inherit POCOBaseV<ColorStyle option>(v)
+
+    member x.ColorStyle = x.VV.Value
+
+    member x.NullablePdfCanvasColor =
+        match x.ColorStyle with
+        | Some colorStyle -> colorStyle.NullablePdfCanvasColor
+        | None -> None
+
+    member x.Overprint =
+        match x.ColorStyle with
+        | Some colorStyle -> colorStyle.Overprint
+        | None -> None
+
+    member x.CloseOperator =
+        match x.ColorStyle with 
+        | None -> None
+        | Some colorStyle -> colorStyle.CloseOperator
+        |> Option.defaultValue CloseOperator.Keep
+
+
+    member x.AsModifier(args: _SelectionModifierFixmentArguments<_>) =
+        let pdfCanvasActions = 
+            [
+                match x.NullablePdfCanvasColor with 
+                | None -> ()
+                | Some canvasColor -> PdfCanvas.SetFillColor(canvasColor)
+
+                match x.Overprint with 
+                | None -> ()
+                | Some isStrokeOverprint -> 
+                
+                    let originExtGState = IAbstractRenderInfo.getExtGState args.CurrentRenderInfo
+                    let newExtGState = 
+                        {
+                            originExtGState with IsStrokeOverprint = isStrokeOverprint
+                        }
+                    PdfCanvas.setExtGState newExtGState
+            ]
+ 
+        { Actions = pdfCanvasActions
+          SuffixActions = []
+          Close = CloseOperatorUnion.Create(args.Tag, fill = x.CloseOperator) }
+
+
+type ResizingStyle [<JsonConstructor>] (v) =
+    inherit POCOBaseV<FsSize>(v)
+
+    member x.Size = x.VV.Value
+
+    member x.AsPdfActions(args: _SelectionModifierFixmentArguments<_>) =
+        let originSize = 
+            IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth args.CurrentRenderInfo
+            |> FsSize.ofRectangle
+
+        let scaleX = x.Size.Width / originSize.Width
+
+        let scaleY = x.Size.Height / originSize.Height
+
+        let width_difference = x.Size.Width - originSize.Width
+
+        let height_difference = x.Size.Height - originSize.Height
+
+        let originCtm = 
+            args.CurrentRenderInfo.Value.GetGraphicsState().GetCtm()
+            |> AffineTransformRecord.ofMatrix
+
+
+
+        let transform = 
+            { AffineTransformRecord.DefaultValue with 
+                ScaleX = scaleX 
+                ScaleY = scaleY
+                TranslateX = -width_difference / 2. / originCtm.ScaleX
+                TranslateY = -height_difference / 2. / originCtm.ScaleY
+                
+            }
+        [
+            PdfCanvas.concatMatrixByTransform transform
+        ]
+
+
+
+type VectorStyle [<JsonConstructor>] private (v) =
+    inherit POCOBaseV<FillStyle option * StrokeStyle option * ResizingStyle option * bool>(v)
+
+    member x.FillStyle = x.VV.Item4_1()
+
+    member x.StrokeStyle = x.VV.Item4_2()
+    
+    member x.ResizingStyle = x.VV.Item4_3() 
+
+    member x.AsCopy = x.VV.Item4_4() 
+
+    member x.FillOverprint = 
+        match x.FillStyle with 
+        | Some style -> style.Overprint
+        | None -> None
+
+    member x.StrokeOverprint = 
+        match x.StrokeStyle with 
+        | Some style -> style.Overprint
+        | None -> None
+
+    member x.AsModifier(args: _SelectionModifierFixmentArguments<_>) =
+        let modiferActions = 
+            let modifierActions = 
+                match x.FillStyle, x.StrokeStyle with 
+                | Some fillStyle, Some strokeStyle ->   
+                    let concated = 
+                        [
+                            fillStyle.AsModifier(args)
+                            strokeStyle.AsModifier(args)
+                        ]
+                        |> ModifierPdfCanvasActions.ConcatOrKeep(args.Tag)
+
+                    match x.FillOverprint, x.StrokeOverprint with 
+                    | None, None 
+                    | Some _, None
+                    | None, Some _ -> concated
+                    | Some fillOverprint, Some strokeOverprint ->
+                        let originExtGState = IAbstractRenderInfo.getExtGState args.CurrentRenderInfo
+                        let newExtGState = 
+                            {
+                                originExtGState with 
+                                    IsStrokeOverprint = strokeOverprint
+                                    IsFillOverprint = fillOverprint
+                            }
+                        { concated with 
+                            Actions =
+                                concated.Actions
+                                @ 
+                                [
+                                    PdfCanvas.setExtGState newExtGState
+                                ]
+                        }
+
+                | Some style, None -> style.AsModifier(args)
+                | None, Some style -> style.AsModifier(args)
+                | None, None -> ModifierPdfCanvasActions.Keep(args.Tag)
+        
+            modifierActions.AddActions[
+                match x.ResizingStyle with 
+                | Some resizeStyle ->
+                    yield! resizeStyle.AsPdfActions(args)
+                | None -> ()
+            ]
+
+        match x.AsCopy with 
+        | false -> modiferActions
+        | true ->
+            match args.CurrentRenderInfo with 
+            | IIntegratedRenderInfo.Text _ -> failwithf "Cloning text object feature currently is not supported"
+            | IIntegratedRenderInfo.Path pathInfo ->
+                { Actions = 
+                    [
+                        PdfCanvas.closePathByOperation (pathInfo.PathRenderInfo.GetOperation())
+                        yield! 
+                            pathInfo.AccumulatedPathOperatorRanges
+                            |> Seq.map(fun operatorRange -> 
+                                let r = PdfCanvas.writeOperatorRange operatorRange
+                                r
+                            )
+                        yield! modiferActions.Actions
+                    ] 
+                  Close = modiferActions.Close
+                  SuffixActions = modiferActions.SuffixActions
+                }
+
+
+    new (?fill, ?stroke, ?resizingStyle, ?asCopy) =
+        DefaultArgs.CheckAllInputsAreNotEmpty(fill, stroke, resizingStyle, asCopy)
+    
+        new VectorStyle((fill, stroke, resizingStyle, defaultArg asCopy false))
+
+
+
+
+
+[<RequireQualifiedAccess>]
+type private CompoundCreatingOptions =
+    | CompoundPath
+    | ClippingPathAndCancel
+    | ClippingPathAndKeep
+with 
+    member x.IsClippingPath =
+        match x with 
+        | CompoundCreatingOptions.CompoundPath _ -> false
+        | CompoundCreatingOptions.ClippingPathAndCancel
+        | CompoundCreatingOptions.ClippingPathAndKeep -> true
 
 
 
 type Modifier =
-
-    static member SetFontAndSize(font, size: float, ?alignment: XEffect) : Modifier<'userState> =
+    static member ChangeStyle(fStyle: _ -> VectorStyle) = 
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
-            let alignment = defaultArg alignment XEffect.Left
+            (fStyle args.CurrentRenderInfo).AsModifier(args)
+
+    static member SetFontAndSize(font, size: float, ?alignment: XEffort) : Modifier<'userState> =
+        fun (args: _SelectionModifierFixmentArguments<'userState>) ->
+            let alignment = defaultArg alignment XEffort.Left
             match args.Tag with 
             | IntegratedRenderInfoTag.Path ->
                 ModifierPdfCanvasActions.Keep(args.Tag)
@@ -262,14 +542,14 @@ type Modifier =
                 { Actions =
                     [
                         match alignment with 
-                        | XEffect.Left -> ()
-                        | XEffect.Middle ->
+                        | XEffort.Left -> ()
+                        | XEffort.Middle ->
                             let offset = -(difference() / 2.) * transformedFontSize / size
                             let transform = originTransform()
                             transform.Translate(offset, 0.)
                             PdfCanvas.setTextMatrixByTransform(AffineTransformRecord.ofAffineTransform transform)
 
-                        | XEffect.Right ->
+                        | XEffort.Right ->
                             let offset = difference()
                             let transform = 
                                 { AffineTransformRecord.DefaultValue with 
@@ -308,20 +588,31 @@ type Modifier =
          
          
 
-    static member OpenFill() : Modifier<'userState> =
+    static member OpenFill(?fillColor) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
-            ModifierPdfCanvasActions.CreateCloseOperator(
-                tag = args.Tag,
-                fill = CloseOperator.Open
-            )
-         
+            { Actions = 
+                [
+                    match fillColor with 
+                    | Some (fillColor: PdfCanvasColor) -> 
+                        PdfCanvas.SetFillColor (NullablePdfCanvasColor.OfPdfCanvasColor fillColor)
+                    | None -> ()
+                ]
+              SuffixActions = []
+              Close = CloseOperatorUnion.Create(args.Tag, fill = CloseOperator.Open)}
 
-    static member OpenStroke() : Modifier<'userState> =
+
+    static member OpenStroke(?strokeColor) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
-            ModifierPdfCanvasActions.CreateCloseOperator(
-                tag = args.Tag,
-                stroke = CloseOperator.Open
-            )
+            { Actions = 
+                [
+                    match strokeColor with 
+                    | Some (fillColor: PdfCanvasColor) -> 
+                        PdfCanvas.SetFillColor (NullablePdfCanvasColor.OfPdfCanvasColor fillColor)
+                    | None -> ()
+                ]
+              SuffixActions = []
+              Close = CloseOperatorUnion.Create(args.Tag, stroke = CloseOperator.Open)}
+          
         
 
     static member CancelStroke() : Modifier<'userState> =
@@ -492,7 +783,11 @@ type Modifier =
                 [
                     PdfCanvas.addRectangle border mapping
                 ]
-                
+              
+    static member ChangeStrokeStyle(targetStyle: StrokeStyle) =
+        fun (args: _SelectionModifierFixmentArguments<'userState>) ->
+            targetStyle.AsModifier(args)
+          
 
     static member ExpandStrokeWidth(targetColor: PdfCanvasColor, width: ``ufloat>0``, ?lineJoinStyle, ?overprint) =
         let width = width.Value
@@ -547,6 +842,50 @@ type Modifier =
             overprint = true,
             lineJoinStyle = LineJoinStyle.ROUND
         )
+
+    static member ReleaseCompoundPath() =
+        fun (args: _SelectionModifierFixmentArguments<'userState>) ->
+            match args.CurrentRenderInfo with 
+            | IIntegratedRenderInfo.Text _ -> ModifierPdfCanvasActions.Keep(args.Tag)
+            | IIntegratedRenderInfo.Path pathInfo ->
+                
+                let subPaths = pathInfo.PathRenderInfo.GetPath().GetSubpaths()
+                match subPaths.Count with 
+                | 0  
+                | 1 -> ModifierPdfCanvasActions.Keep(args.Tag)
+                | _ -> 
+                    let close = pathInfo.PathRenderInfo.GetOperation()
+                    let suffixActions =
+                        let splittedOperatorRanges = 
+                            pathInfo.AccumulatedPathOperatorRanges
+                            |> List.ofSeq
+                            |> List.splitIfChangedWith ChangedItemIntoPosition.Previous (fun _ item ->
+                                match item.Operator.ToString() with 
+                                | EQ h -> false
+                                | _ -> true
+                            )
+
+                        splittedOperatorRanges
+                        |> List.collect(fun operatorRanges ->
+                            let drawActions = 
+                                operatorRanges.AsList
+                                |> List.map(PdfCanvas.writeOperatorRange)
+
+                            drawActions @ [PdfCanvas.closePathByOperation close]
+                        )
+                        
+
+                    { Actions = []
+                      SuffixActions = suffixActions
+                      Close = 
+                        CloseOperatorUnion.CreatePath(
+                            fill = CloseOperator.Close,
+                            stroke = CloseOperator.Close
+                        )
+                    }
+
+          
+
 
 
 type SelectorAndModifiersRecordIM<'userState> =
@@ -875,7 +1214,7 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
 
 
 type NewFontAndSize [<JsonConstructor>] (?font: FsPdfFontFactory, ?fontSize: float, ?alignment) = 
-    inherit POCOBase<FsPdfFontFactory option * float option * XEffect option>(font, fontSize, alignment)
+    inherit POCOBase<FsPdfFontFactory option * float option * XEffort option>(font, fontSize, alignment)
     let __checkArgsValid =
         match font, fontSize with 
         | None, None -> failwith "Cannot Create NewFontAndSize, both font and fontSize are empty"
@@ -1025,8 +1364,7 @@ type Modify =
                                 | Some info_boundIs_args -> Info.BoundIs(info_boundIs_args) <&&> colorInfo
 
                             match selectorTag with 
-                            | SelectorTag.PathOrText -> 
-                                PathOrText info
+                            | SelectorTag.PathOrText -> PathOrText info
                             | SelectorTag.Path -> Selector.Path info
                             | SelectorTag.Text -> Text info
                         ),
@@ -1251,7 +1589,54 @@ type Modify =
             ]
         )
 
-    static member internal ReadCompoundPath_Then_Cancel(selector) =
+
+    static member ChangeStrokeStyle(selector, targetStyle) =
+        Modify.Create_RecordEx(
+            PageSelector.All,
+            selectorAndModifiersList = [
+                { SelectorAndModifiersRecordEx.Name = "change stroke style"
+                  Selector = PathOrText(selector)
+                  Modifiers = [
+                    Modifier.ChangeStrokeStyle(targetStyle)
+                  ]
+
+                  Parameters = [
+                    "selector" =>    selector.ToString()
+                    "targetStyle" => targetStyle.ToString()
+                  ]
+                  PageInfosValidation = PageInfosValidation.ignore
+                  }
+            ]
+        )
+        
+    static member ChangeStyleF(selector, fTargetStyle) =
+        Modify.Create_RecordEx(
+            PageSelector.All,
+            selectorAndModifiersList = [
+                { SelectorAndModifiersRecordEx.Name = "changeStyleF"
+                  Selector = PathOrText(selector)
+                  PageInfosValidation = PageInfosValidation.ignore
+                  Modifiers = [
+                    Modifier.ChangeStyle(fTargetStyle)
+                  ]
+                  Parameters = [
+                    "selector" =>    selector.ToString()
+                    "targetStyle" => fTargetStyle.ToString()
+                  ]
+                  }
+            ]
+        )
+
+    static member ChangeStyle(selector, targetStyle) =
+        Modify.ChangeStyleF(selector, fun _ -> targetStyle)
+        |> Manipulate.rename
+            "ChangeStyle"
+            [
+                "selector" =>    selector.ToString()
+                "targetStyle" => targetStyle.ToString()
+              ]
+
+    static member internal ReadCompoundPath_Then_TryCancel(selector, cancel: bool) =
         Manipulate.Func(fun userState ->
             ModifyPage.Create
                 ("read compound path infos",
@@ -1269,23 +1654,36 @@ type Modify =
                   )
                 )
             <.+>
-            Modify.Create_Record
-                ( PageSelector.All,
-                  [
-                    { 
-                        SelectorAndModifiersRecord.Name = "cancel compound paths"
-                        //Selector = Selector.Path(selector)
-                        Selector = Selector.Path(fun args info -> selector (args.MapUserState(fun _ -> userState)) info)
-                        Modifiers =[
-                            Modifier.CancelFillAndStroke() 
-                        ]
-                    }
-                  ]
-                )
+            (
+                match cancel with 
+                | true ->
+                    Modify.Create_Record
+                        ( PageSelector.All,
+                          [
+                            { 
+                                SelectorAndModifiersRecord.Name = "cancel compound paths"
+                                //Selector = Selector.Path(selector)
+                                Selector = Selector.Path(fun args info -> selector (args.MapUserState(fun _ -> userState)) info)
+                                Modifiers =[
+                                    Modifier.CancelFillAndStroke() 
+                                ]
+                            }
+                          ]
+                        )
+                | false -> Manipulate.dummy() ||>> ignore
+            )
+
         )
 
-    static member private CreateCompoundPathCommon(selector: PageModifingArguments<_> -> _ -> bool, isClippingPath) =
-        Modify.ReadCompoundPath_Then_Cancel(selector)
+    static member private CreateCompoundPathCommon(selector: PageModifingArguments<_> -> _ -> bool, options: CompoundCreatingOptions) =
+        (
+            match options with 
+            | CompoundCreatingOptions.CompoundPath
+            | CompoundCreatingOptions.ClippingPathAndCancel ->
+                Modify.ReadCompoundPath_Then_TryCancel(selector, cancel = true)
+            | CompoundCreatingOptions.ClippingPathAndKeep ->
+                Modify.ReadCompoundPath_Then_TryCancel(selector, cancel = false)
+        )
         <+>
         ModifyPage.Create
             ("add compound path",
@@ -1296,6 +1694,7 @@ type Modify =
                 match renewablePathInfos with 
                 | [] -> ()
                 | _ ->
+                    let isClippingPath = options.IsClippingPath
                     let pdfCanvas = 
                         match isClippingPath with 
                         | false -> new PdfCanvas(args.Page)
@@ -1305,16 +1704,23 @@ type Modify =
                         renewablePathInfos
                         |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
 
+                    let head = renewablePathInfos.Head
+
+
+                    for operatorRange in accumulatedPathOperatorRanges do
+                        PdfCanvas.writeOperatorRange operatorRange pdfCanvas
+                        |> ignore
+
                     match isClippingPath with 
                     | false -> 
-                        let head = renewablePathInfos.Head
+                        let doc = (args.Page.GetDocument() :?> PdfDocumentWithCachedResources)
+                        let fillColor = 
+                            doc.Renew_OtherDocument_Color(head.FillColor)
 
-                        PdfCanvas.setPathRenderColorByOperation head.Operation head.FillColor (head.StrokeColor) pdfCanvas |> ignore
+                        let strokeColor = 
+                            doc.Renew_OtherDocument_Color(head.StrokeColor)
 
-                        for operatorRange in accumulatedPathOperatorRanges do
-                            PdfCanvas.writeOperatorRange operatorRange pdfCanvas
-                            |> ignore
-
+                        PdfCanvas.setPathRenderColorByOperation head.Operation fillColor strokeColor pdfCanvas |> ignore
                         PdfCanvas.closePathByOperation head.Operation pdfCanvas |> ignore
                     | true -> 
                         pdfCanvas.Clip().EndPath() |> ignore
@@ -1324,10 +1730,32 @@ type Modify =
 
 
     static member CreateCompoundPath(selector: PageModifingArguments<_> -> _ -> bool) =
-        Modify.CreateCompoundPathCommon(selector, isClippingPath = false)
+        Modify.CreateCompoundPathCommon(selector, options = CompoundCreatingOptions.CompoundPath)
         |> Manipulate.rename "Create Compound Path" []
 
-    static member CreateClippingPath(selector: PageModifingArguments<_> -> _ -> bool) =
-        Modify.CreateCompoundPathCommon(selector, isClippingPath = true)
+    static member ReleaseCompoundPath(selector: PageModifingArguments<_> -> _ -> bool) =
+        Modify.Create_Record
+            (
+              PageSelector.All,
+              [
+                { SelectorAndModifiersRecord.Name = "release compound path"
+                  Selector = Selector.Path selector
+                  Modifiers = 
+                    [
+                        Modifier.ReleaseCompoundPath()
+                    ]
+                }
+              ]
+            )
+
+
+
+    static member CreateClippingPath(selector: PageModifingArguments<_> -> _ -> bool, ?keepCompoundPath) =
+        let options =
+            match defaultArg keepCompoundPath false with
+            | false -> CompoundCreatingOptions.ClippingPathAndCancel
+            | true -> CompoundCreatingOptions.ClippingPathAndKeep
+
+        Modify.CreateCompoundPathCommon(selector, options)
         |> Manipulate.rename "Create Clipping Path" []
 

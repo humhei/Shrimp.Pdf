@@ -1,4 +1,5 @@
-﻿namespace Shrimp.Pdf.Parser
+﻿
+namespace Shrimp.Pdf.Parser
 
 open iText.Kernel.Geom
 
@@ -593,7 +594,7 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
             invokeOperatorRange()
             processor.Listener.EndShoeText()
 
-        | ContainsBy [m; v; c; y; l; re] -> 
+        | ContainsBy [m; v; c; y; l; h; re] -> 
             processor.Listener.AddPathOperatorRange({ Operator = operator; Operands = ResizeArray(operands)})
             invokeOperatorRange()
         | _ -> invokeOperatorRange()
