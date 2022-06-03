@@ -45,7 +45,7 @@ module PageInfos =
 let manipulateTests =
   testList "Manipulates Tests" [
 
-    ftestCase "resize path as copy" <| fun _ -> 
+    testCase "resize path as copy" <| fun _ -> 
         let resizingStyle = 
             ResizingStyle
                 { Width = mm 43.
@@ -335,6 +335,42 @@ let manipulateTests =
             )
         )
         |> runTest "datas/manipulate/change gold to black.pdf" 
+        |> ignore
+
+    testCase "change rgb gray to gray" <| fun _ ->
+
+
+
+        let rgb_gray =
+            FsDeviceRgb.Create(220, 220, 220)
+
+        let toGray (rgbColor: FsDeviceRgb)= 
+            if rgbColor.R = rgbColor.B 
+                && rgbColor.R = rgbColor.G
+            then 
+                rgbColor.R
+                |> FsGray
+                |> FsValueColor.Gray
+                |> FsValueColor.ToItextColor
+                |> Some
+            else None
+
+        let rgb_gray_fsColor =
+            rgb_gray
+            |> FsValueColor.Rgb
+            |> FsColor.ValueColor
+
+
+        Flow.Manipulate(
+            Modify.ReplaceColors(
+                picker = (fun color' ->
+                    match color' with 
+                    | FsColor.EqualTo rgb_gray_fsColor -> toGray rgb_gray
+                    | _ -> None
+                )
+            )
+        )
+        |> runTest "datas/manipulate/change rgb gray to gray.pdf" 
         |> ignore
 
     testCase "xobject_change stroke color b255 to m100" <| fun _ -> 
@@ -906,6 +942,39 @@ let manipulateTests =
             )
         )
         |> runTest "datas/manipulate/add page-scaling text.pdf" 
+        |> ignore
+
+    testCase "calc text line width" <| fun _ -> 
+        Flow.Manipulate(
+            ModifyPage.Create(
+                "calc text line width",
+                PageSelector.All,
+                Dummy,
+                (fun args infos ->
+                    let fsFont = FsPdfFontFactory.Registerable (yaHei FontWeight.Regular)
+                    let font = 
+                        (args.Page.GetDocument() :?> PdfDocumentWithCachedResources)
+                            .GetOrCreatePdfFont(fsFont)
+
+                    let area = Rectangle.create 0. 0. 414. 68.
+
+                    let text = "PANTONE 7407 C"
+
+                    let fontSize = PdfFont.fontSizeOfArea (area) text font
+
+                    let canvas =  new Canvas(args.Page, args.Page.GetActualBox())
+                    let args =
+                        { CanvasAddTextArguments.DefaultValue with 
+                            CanvasFontSize = CanvasFontSize.Numeric 48.83
+                            PdfFontFactory = fsFont
+                                
+                        }
+                    let width = canvas.CalcTextWidth(text, args)
+                    ()
+                )
+            )
+        )
+        |> runTest "datas/manipulate/calc text line width.pdf" 
         |> ignore
 
     testCase "rotate page and add text to top left" <| fun _ -> 

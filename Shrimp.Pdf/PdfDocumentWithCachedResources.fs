@@ -156,6 +156,18 @@ type private PdfDocumentCache private
                 .SetOverprintMode(int extGState.OPM)
                 .SetFillOverPrintFlag(extGState.IsFillOverprint)
                 .SetStrokeOverPrintFlag(extGState.IsStrokeOverprint)
+                |> ignore
+
+            match extGState.BlendModes with 
+            | [] -> pdfExtGState
+            | _ ->
+                let blendingModes =
+                    extGState.BlendModes
+                    |> List.map(fun m -> m :> PdfObject)
+                let blendingModes = ResizeArray blendingModes :> System.Collections.Generic.IList<_>
+                let pdfArray = PdfArray(blendingModes)
+                pdfExtGState.SetBlendMode(pdfArray)
+
         )
 
     new (pdfDocument: unit -> PdfDocumentWithCachedResources) =

@@ -677,7 +677,7 @@ module _Reuses =
 
 
 
-        static member TilePages (tileTable: TileTable, ?direction: Direction) =
+        static member TilePages (tileTable: TileTableIndexer, ?direction: Direction) =
             let direction = defaultArg direction Direction.Horizontal
             let colNum = tileTable.ColNum
             let rowNum = tileTable.RowNum
@@ -690,8 +690,8 @@ module _Reuses =
                 for i = 1 to reader.GetNumberOfPages() do
                     let readerPage = reader.GetPage(i)
                     let actualBox = readerPage.GetActualBox()
-                    let tileIndexer = TileIndexer.create tileTable (direction) (i - 1)
-                    let tileBox = Rectangle.getTile tileIndexer actualBox
+                    let tileIndexer = TileCellIndexer.Create((i - 1), direction)
+                    let tileBox = Rectangle.getTile tileIndexer tileTable actualBox
 
                     let writerPage = readerPage.CopyTo(writer)
                     writer.AddPage(writerPage) |> ignore

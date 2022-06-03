@@ -457,7 +457,7 @@ module ModifyPageOperators =
         static member ReadColors(pdfFile: PdfFile, ?backupPdfPath, ?name, ?pageSelector) =
             PdfRunner.ReadInfos(
                 pdfFile, 
-                Selector.Path (fun _ _ -> true),
+                Selector.PathOrText (fun _ _ -> true),
                 fInfos = (fun infos ->
                     infos
                     |> List.ofSeq

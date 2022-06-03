@@ -13,14 +13,18 @@ open iText.Kernel.Colors
 open iText.Kernel.Pdf.Function
 open iText.Kernel.Pdf.Colorspace
 open Resources
+open FParsec
+open FParsec.CharParsers
+
 open System.Collections.Concurrent
 open Shrimp.FSharp.Plus
+open Shrimp.FSharp.Plus.Text
 open Shrimp.Pdf.icms2
 open Shrimp.FSharp.Plus
 
 [<AutoOpen>]
 module _Colors =
-
+    type BlendMode = iText.Kernel.Pdf.Extgstate.PdfExtGState
 
     type DeviceRgb with 
         static member OfHex(hex: int) =
@@ -85,6 +89,9 @@ module _Colors =
                G = x.G * 255.f
                B = x.B * 255.f }
 
+        member x.Values =
+            [ x.R; x.G; x.B ]
+
         static member RED = { R = 1.0f; G = 0.0f; B = 0.0f }
         static member GREEN = { R = 0.0f; G = 1.0f; B = 0.0f }
         static member BLUE = { R = 0.0f; G = 0.0f; B = 1.0f }
@@ -99,22 +106,8 @@ module _Colors =
               G = mapping x.G 
               B = mapping x.B }
 
-        member x.LoggingText = 
-            let colorName = 
-                match x with 
-                | EqualTo FsDeviceRgb.RED -> "RED"
-                | EqualTo FsDeviceRgb.GREEN -> "GREEN"
-                | EqualTo FsDeviceRgb.BLUE -> "BLUE"
-                | EqualTo FsDeviceRgb.MAGENTA -> "MAGENTA"
-                | EqualTo FsDeviceRgb.YELLOW -> "YELLOW"
-                | EqualTo FsDeviceRgb.BLACK -> "BLACK"
-                | EqualTo FsDeviceRgb.WHITE -> "WHITE"
-                | EqualTo FsDeviceRgb.GRAY -> "GRAY"
-                | _ ->
-                    let range255 = x.Range255
-                    sprintf "%.2f %.2f %.2f" (range255.R) range255.G range255.B
 
-            "RGB " + colorName
+
 
         static member Create(r, g, b) =
             let ensureValueValid v =
@@ -133,12 +126,50 @@ module _Colors =
 
         static member Create(r, g, b) =
             FsDeviceRgb.Create(float32 r / 255.f, float32 g / 255.f, float32 b / 255.f)
+        
+        static member private RegularColorMapping =
+            [ FsDeviceRgb.RED => "RED"           
+              FsDeviceRgb.GREEN => "GREEN"        
+              FsDeviceRgb.BLUE => "BLUE"         
+              FsDeviceRgb.MAGENTA => "MAGENTA"   
+              FsDeviceRgb.YELLOW => "YELLOW"     
+              FsDeviceRgb.BLACK => "BLACK"       
+              FsDeviceRgb.WHITE => "WHITE"       
+              FsDeviceRgb.GRAY => "GRAY" ]
+
+        member x.LoggingText_Raw = 
+            let range255 = x.Range255
+            sprintf "RGB %.0f %.0f %.0f" (range255.R) range255.G range255.B
+
+        member x.LoggingText = 
+            let colorName = 
+                FsDeviceRgb.RegularColorMapping
+                |> List.tryPick(fun (color, name) ->
+                    match color = x with 
+                    | true -> Some name
+                    | false -> None
+                )
+
+            match colorName with 
+            | Some colorName -> "RGB " + colorName
+            | None -> x.LoggingText_Raw
+                
+
+        static member OfLoggingText_Raw(text: string) = 
+            let parser = 
+                pstringCI "RGB " >>. (sepBy1 pfloat spaces) .>> eof
+
+            match run parser text with 
+            | Success (r, _, _) -> FsDeviceRgb.Create(int r.[0], int r.[1], int r.[2])
+            | Failure (error, _, _) -> failwith error
 
         static member FromKnownColor(knownColor: KnownColor) =
             let color = Color.FromName(knownColor.ToString())
             { R = float color.R / 255. |> float32 
               G = float color.G / 255. |> float32 
               B = float color.B / 255. |> float32 }
+
+
     type FsLab =
         { 
           /// 0 -> 100.
@@ -153,9 +184,28 @@ module _Colors =
 
         static member BLACK = { L = 0.f; a = 0.f; b = 0.f }
 
-        member x.LoggingText = 
+        member x.Values =
+            [ x.L; x.a; x.b ]
+
+        member x.LoggingText_Raw = 
             sprintf "LAB %.1f %.1f %.1f" (x.L) x.a x.b
 
+        member x.LoggingText = 
+            match x with 
+            | EqualTo FsLab.WHITE -> "LAB White"
+            | EqualTo FsLab.BLACK -> "LAB Black"
+            | _ -> x.LoggingText_Raw
+
+        static member OfLoggingText_Raw(text) = 
+            let parser = 
+                pstringCI "LAB " >>. (sepBy1 pfloat spaces) .>> eof
+
+            match run parser text with 
+            | Success (r, _, _) -> 
+                { L = r.[0] |> float32 
+                  a = r.[1] |> float32 
+                  b = r.[2] |> float32 }
+            | Failure (error, _, _) -> failwith error
 
         static member Create(l, a, b) =
             { L = l 
@@ -203,6 +253,8 @@ module _Colors =
         member x.Range100 =
             { C = x.C * 100.f; M = x.M * 100.f; Y = x.Y * 100.f; K = x.K *100.f}
 
+        member x.Values =
+            [ x.C; x.M; x.Y; x.K ]
 
         static member Create(c, m, y, k) =
             { C = c; M = m; Y = y; K = k}
@@ -217,32 +269,74 @@ module _Colors =
         static member RED =  { C = 0.0f; M = 1.0f; Y = 1.0f; K = 0.0f }
         static member GREEN =  { C = 1.0f; M = 0.0f; Y = 1.0f; K = 0.0f }
 
+        member x.LoggingText_Raw =
+            let colorName = sprintf "%.2f %.2f %.2f %.2f" (x.C) x.M x.Y x.K
+            "CMYK " + colorName
+            
+        static member RegularColorMapping =
+            [
+                FsDeviceCmyk.CYAN => "CYAN"
+                FsDeviceCmyk.RED => "RED"
+                FsDeviceCmyk.GREEN => "GREEN"
+                FsDeviceCmyk.MAGENTA => "MAGENTA"
+                FsDeviceCmyk.YELLOW => "YELLOW"
+                FsDeviceCmyk.BLACK => "BLACK"
+                FsDeviceCmyk.WHITE => "WHITE"
+                FsDeviceCmyk.GRAY   => "GRAY"
+            ]
+
         member x.LoggingText = 
             let colorName = 
-                match x with 
-                | EqualTo FsDeviceCmyk.CYAN -> "CYAN"
-                | EqualTo FsDeviceCmyk.RED -> "RED"
-                | EqualTo FsDeviceCmyk.GREEN -> "GREEN"
-                | EqualTo FsDeviceCmyk.MAGENTA -> "MAGENTA"
-                | EqualTo FsDeviceCmyk.YELLOW -> "YELLOW"
-                | EqualTo FsDeviceCmyk.BLACK -> "BLACK"
-                | EqualTo FsDeviceCmyk.WHITE -> "WHITE"
-                | EqualTo FsDeviceCmyk.GRAY -> "GRAY"
-                | _ ->
-                    sprintf "%.2f %.2f %.2f %.2f" (x.C) x.M x.Y x.K
+                FsDeviceCmyk.RegularColorMapping
+                |> List.tryPick(fun (color, name) ->
+                    match color = x with 
+                    | true -> Some name
+                    | false -> None
+                )
 
-            "CMYK " + colorName
+            match colorName with 
+            | Some colorName -> "CMYK " + colorName
+            | None -> x.LoggingText_Raw
+
+            
+
+        static member OfLoggingText_Raw(text) = 
+            let parser = 
+                pstringCI "CMYK " >>. (sepBy1 pfloat spaces) .>> eof
+
+            match run parser text with 
+            | Success (r, _, _) ->
+                let r = List.map float32 r
+                FsDeviceCmyk.Create(r.[0], r.[1], r.[2], r.[3])
+            
+            | Failure (error, _, _) -> failwith error
+
 
     /// valueRange: Black 0 -> White 1
     type FsGray = FsGray of float32
     with 
-        member x.LoggingText = 
-            let (FsGray v) = x
-            sprintf "K %.2f" v
 
         static member BLACK = FsGray 0.0f
         static member WHITE = FsGray 1.0f
         static member GRAY = FsGray 0.5f
+        
+        member x.LoggingText_Raw = 
+            let (FsGray v) = x
+            sprintf "K %.2f" v
+
+        member x.LoggingText =
+            match x with 
+            | EqualTo FsGray.BLACK -> "K Black"
+            | EqualTo FsGray.WHITE -> "K White"
+            | _ -> x.LoggingText_Raw
+
+        static member OfLoggingText_Raw(text) = 
+            let parser = 
+                pstringCI "K " >>. pfloat .>> eof
+
+            match run parser text with 
+            | Success (r, _, _) -> FsGray (float32 r)
+            | Failure (error, _, _) -> failwith error
 
     [<RequireQualifiedAccess>]
     type FsValueColor =
@@ -276,6 +370,16 @@ module _Colors =
             FsDeviceRgb.Create(r, g, b)
             |> FsValueColor.Rgb
 
+        member x.LoggingText_Raw = 
+            match x with
+            | FsValueColor.Rgb rgbColor -> rgbColor.LoggingText_Raw
+
+            | FsValueColor.Cmyk cmykColor -> cmykColor.LoggingText_Raw
+
+            | FsValueColor.Gray grayColor -> grayColor.LoggingText_Raw
+
+            | FsValueColor.Lab (labColor) -> labColor.LoggingText_Raw
+
         member x.LoggingText = 
             match x with
             | FsValueColor.Rgb rgbColor -> rgbColor.LoggingText
@@ -285,6 +389,28 @@ module _Colors =
             | FsValueColor.Gray grayColor -> grayColor.LoggingText
 
             | FsValueColor.Lab (labColor) -> labColor.LoggingText
+
+
+
+        static member OfLoggingText_Raw(text: string) =
+            match text with 
+            | String.StartsWithIC "CMYK " -> 
+                FsDeviceCmyk.OfLoggingText_Raw text
+                |> FsValueColor.Cmyk
+
+            | String.StartsWithIC "RGB" ->
+                FsDeviceRgb.OfLoggingText_Raw text
+                |> FsValueColor.Rgb
+
+            | String.StartsWithIC "K " ->
+                FsGray.OfLoggingText_Raw text
+                |> FsValueColor.Gray    
+
+            | String.StartsWithIC "LAB " ->
+                FsLab.OfLoggingText_Raw text
+                |> FsValueColor.Lab
+
+            | _ -> failwithf "Cannot parsing %s to FsValueColor" text
 
         member x.MapColorValue(mapping) =
             match x with

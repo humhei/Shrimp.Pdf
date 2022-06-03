@@ -20,16 +20,32 @@ module PdfDocumentWithCachedResources =
           StrokeColor: NullablePdfCanvasColor
           FillColor: NullablePdfCanvasColor
           IsStrokeOverprint: bool
-          IsFillOverprint: bool }
+          IsFillOverprint: bool
+          BlendModes: PdfName list }
     with 
         static member DefaultValue =
             { LineWidth = mm 0.1 
               StrokeColor = NullablePdfCanvasColor.BLACK
               FillColor = NullablePdfCanvasColor.N
               IsFillOverprint = false
-              IsStrokeOverprint = false }
+              IsStrokeOverprint = false
+              BlendModes = [] }
             
         member x.FsExtGState: FsExtGState option = 
+            let tryAddBlendMode(v: FsExtGState option) =
+                match x.BlendModes, v with 
+                | [], v -> v
+                | _ :: _, v ->
+                    match v with 
+                    | Some v -> 
+                        { v with 
+                            BlendModes = x.BlendModes }
+                        |> Some
+
+                    | None ->
+                        { FsExtGState.DefaultValue with BlendModes = x.BlendModes }
+                        |> Some
+
             match x.StrokeColor, x.FillColor with 
             | NullablePdfCanvasColor.Non, NullablePdfCanvasColor.Non -> None
 
@@ -40,8 +56,8 @@ module PdfDocumentWithCachedResources =
                 Some (FsExtGState.FillOverprint)
 
             | NullablePdfCanvasColor.PdfCanvasColor _, NullablePdfCanvasColor.PdfCanvasColor _ -> 
-                Some (FsExtGState.FillOverprint)
-
+                Some (FsExtGState.FillStrokeOverprint)
+            |> tryAddBlendMode
 
     type PdfCanvasAddLineArguments =
         { LineWidth: float 

@@ -35,6 +35,8 @@ type _SelectionModifierAddNewArguments<'userState> =
       PageModifingArguments: PageModifingArguments<'userState> }
 
 with 
+    member x.Tag = x.CurrentRenderInfo.Tag
+
     member x.PageNum = x.PageModifingArguments.PageNum
 
     member x.UserState = x.PageModifingArguments.UserState
@@ -46,6 +48,8 @@ type _SelectionModifierFixmentArgumentsIM<'userState> =
       PageModifingArguments: PageModifingArguments<'userState>
       ConcatedTextInfos: seq<IntegratedTextRenderInfo> }
 with 
+    member x.Tag = x.CurrentRenderInfoIM.TagIM
+
     member x.PageNum = x.PageModifingArguments.PageNum
 
     member x.UserState = x.PageModifingArguments.UserState
@@ -211,6 +215,11 @@ with
     member x.Add(newColorMapping) =
         let (ColorMappings colorMapping) = x
         colorMapping.Add [newColorMapping]
+        |> ColorMappings
+
+    static member Concat(colorMappingLists: ColorMappings al1List) =
+        colorMappingLists
+        |> AtLeastOneList.collect(fun (ColorMappings colorMappings) -> colorMappings)
         |> ColorMappings
 
     static member WhiteTo(newColor) =
@@ -793,13 +802,16 @@ type Modifier =
         let width = width.Value
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
             let info =  args.CurrentRenderInfo
-
+            let originExtGSState = args.CurrentRenderInfo.Value.GetGraphicsState() |> CanvasGraphicsState.getExtGState
+            let newExtGSState =
+                { originExtGSState with 
+                    IsStrokeOverprint = true }
             let setStroke(width) =
                 [
                     PdfCanvas.setLineWidth width
                     PdfCanvas.SetStrokeColor (NullablePdfCanvasColor.OfPdfCanvasColor targetColor)
                     match defaultArg overprint false with 
-                    | true -> PdfCanvas.setExtGState FsExtGState.StrokeOverprint
+                    | true -> PdfCanvas.setExtGState newExtGSState
                     | false -> ()
                     match lineJoinStyle with 
                     | None -> ()

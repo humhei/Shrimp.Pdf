@@ -21,7 +21,6 @@ open Shrimp.Pdf.Image
 let imageTests = 
     testList "ImageTests" <| [
     
-        
 
         testCase "convert pdf to jpeg" <| fun _ -> 
             let pdfFile =
@@ -34,6 +33,14 @@ let imageTests =
 
             ()
 
+        ftestCase "change blending mode" <| fun _ -> 
+            let flow = ModifyIM.ChangeImageBlendMode(BlendMode.BM_MULTIPLY)
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/change blending mode.pdf" 
+            |> ignore
 
         testCase "convert rgb image to gray" <| fun _ -> 
             let flow = ModifyIM.ConvertImagesToDeviceGray()
@@ -52,6 +59,8 @@ let imageTests =
             )
             |> runTest "datas/image/convert index rgb image to gray.pdf" 
             |> ignore
+
+
 
         testCase "convert rgb image mask to gray" <| fun _ -> 
             let flow =

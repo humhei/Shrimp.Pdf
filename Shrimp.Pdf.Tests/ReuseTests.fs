@@ -412,13 +412,13 @@ let reuseTests =
         |> ignore
 
     testCase "tile pages by colNum and rowNum tests" <| fun _ -> 
-        Flow.Reuse (Reuses.TilePages (TileTable.Create (colNum = 3, rowNum = 2), Direction.Vertical))
+        Flow.Reuse (Reuses.TilePages (TileTableIndexer.Create (colNum = 3, rowNum = 2), Direction.Vertical))
         |> runTest "datas/reuse/tile pages by colNum and rowNum.pdf" 
         |> ignore
 
     testCase "tile pages by colNum and rowNum tests2" <| fun _ -> 
         let tileTable = 
-            TileTable.Create (
+            TileTableIndexer.Create (
                 colNum = 6,
                 rowNum = 4,
                 HSpacing = [mm 1.; mm 2.],

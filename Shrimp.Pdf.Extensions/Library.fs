@@ -477,15 +477,16 @@ module iText =
             rect.setHeight(effect, fun _ -> height)
 
 
-        let getTile (tileIndexer: TileIndexer) (rect: Rectangle) =
+        let getTile (tileCellIndexer: TileCellIndexer) (tileTableIndexer: TileTableIndexer) (rect: Rectangle) =
+            let tileIndexer = tileTableIndexer
             let colNum= tileIndexer.ColNum
             let rowNum = tileIndexer.RowNum
-            let index = tileIndexer.Index % (colNum * rowNum)
-            let direction = tileIndexer.Direction
+            let index = tileCellIndexer.Index % (colNum * rowNum)
+            let direction = tileCellIndexer.Direction
 
             
             let getHSpacingAccum colIndex = 
-                let baseHSpacing = tileIndexer.TileTable.HSpacing
+                let baseHSpacing = tileIndexer.HSpacing
                 baseHSpacing
                 |> List.replicate ((colIndex / baseHSpacing.Length) + 2)
                 |> List.concat
@@ -493,7 +494,7 @@ module iText =
                 |> List.sum
 
             let getVSpacingAccum rowIndex = 
-                let baseHSpacing = tileIndexer.TileTable.VSpacing
+                let baseHSpacing = tileIndexer.VSpacing
                 baseHSpacing
                 |> List.replicate ((rowIndex / baseHSpacing.Length) + 2)
                 |> List.concat
@@ -505,8 +506,6 @@ module iText =
             let height = (rect.GetHeightF() - getVSpacingAccum (rowNum - 1)) / float rowNum
 
             let (x, y) = 
-
-
                 match direction with 
                 | Direction.Horizontal ->
                     let x = 
@@ -683,6 +682,15 @@ module iText =
             { OPM = gs.GetOverprintMode() |> enum
               IsStrokeOverprint = gs.GetStrokeOverprint()
               IsFillOverprint = gs.GetFillOverprint()
+              BlendModes = 
+                match gs.GetBlendMode() with 
+                | :? PdfName as pdfName -> [pdfName]
+                | :? PdfArray as array ->
+                    [ for i in array do 
+                        yield (i :?> PdfName)
+                    ]
+                | _ -> failwithf "Cannot read blend mode from %A" (gs.GetBlendMode().GetType())
+
              }
 
 

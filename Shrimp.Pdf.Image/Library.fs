@@ -1,4 +1,7 @@
 ﻿namespace Shrimp.Pdf.Image
+
+open iText.Kernel.Pdf
+
 #nowarn "0104"
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.Extensions
@@ -23,6 +26,7 @@ open Shrimp.Pdf.js.shared
 
 [<AutoOpen>]
 module _ModifierIM =
+
 
     type BmpFileRecord =
         { BmpFile: BmpFile 
@@ -281,7 +285,7 @@ module _ModifierIM =
                     | ImageColorSpaceData.ImageMask ->
                         let black = FsValueColor.BLACK.ToItextColor()
                         ModifierPdfCanvasActions.CreateActions_Image(
-                            [PdfCanvas.setFillColor (black)]
+                            [ PdfCanvas.setFillColor (black) ]
                         )
                 
 
@@ -396,7 +400,32 @@ module _ModifierIM =
                     ModifierPdfCanvasActions.Keep(renderInfo.Tag)
 
 
+    type ModifierAll =
+        static member ChangeBlendMode(blendMode: PdfName) =
+            fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
+                let originExtGState = args.CurrentRenderInfoIM.Value.GetGraphicsState() |> CanvasGraphicsState.getExtGState 
+                let extGState = 
+                    { originExtGState with 
+                        BlendModes = [blendMode] }
+                
+                ModifierPdfCanvasActions.CreateActions_All args.Tag  [
+                    PdfCanvas.setExtGState(extGState)
+                ]
+
+
+
     type ModifyIM =
+        static member ChangeImageBlendMode(blendMode, ?imageSelector) =
+            Modify.Create_RecordIM(
+                PageSelector.All,
+                selectorAndModifiersList = [
+                    { SelectorAndModifiersRecordIM.Name = "change image blend mode" 
+                      Selector = Selector.ImageX(defaultArg imageSelector (fun _ _ -> true))
+                      Modifiers = [ 
+                        ModifierAll.ChangeBlendMode(blendMode)
+                      ]}
+                ])
+
         static member ConvertImagesToDeviceGray(?imageSelector) =
             Modify.Create_RecordIM(
                 PageSelector.All,

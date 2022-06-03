@@ -184,6 +184,13 @@ with
         | IntegratedRenderInfoTag.Path -> CloseOperatorUnion.Path(PathCloseOperator.Keep)
         | IntegratedRenderInfoTag.Text -> CloseOperatorUnion.Text(TextCloseOperator.Keep)
 
+    static member KeepAll(tag) =
+        match tag with 
+        | IntegratedRenderInfoTagIM.Path -> CloseOperatorUnion.Path(PathCloseOperator.Keep)
+        | IntegratedRenderInfoTagIM.Text -> CloseOperatorUnion.Text(TextCloseOperator.Keep)
+        | IntegratedRenderInfoTagIM.Image -> CloseOperatorUnion.Image(ImageCloseOperator.Keep)
+
+
     static member CreatePath(?fill, ?stroke) =
         { Fill = defaultArg fill CloseOperator.Keep 
           Stroke = defaultArg stroke CloseOperator.Keep  }
@@ -271,6 +278,11 @@ with
           Close = CloseOperatorUnion.Keep(tag)
           SuffixActions = [] }
 
+    static member KeepAll(tag: IntegratedRenderInfoTagIM) =  
+        { Actions = [] 
+          Close = CloseOperatorUnion.KeepAll(tag)
+          SuffixActions = [] }
+
     static member KeepImage() =  
         { Actions = [] 
           Close = CloseOperatorUnion.Image (ImageCloseOperator.Keep)
@@ -294,6 +306,11 @@ with
     static member CreateActions_Image (actions) = 
         { Actions = actions
           Close = CloseOperatorUnion.Image (ImageCloseOperator.Keep)
+          SuffixActions = [] }
+
+    static member CreateActions_All tag (actions) = 
+        { Actions = actions
+          Close = CloseOperatorUnion.KeepAll (tag)
           SuffixActions = [] }
 
     static member CreateSuffix_Image (suffixPdfActions) = 

@@ -132,12 +132,14 @@ module ExtensionTypes =
             OPM: FsOPM
             IsStrokeOverprint: bool
             IsFillOverprint: bool
+            BlendModes: PdfName list
         }
     with 
         static member DefaultValue =
             { OPM = FsOPM.Illustractor 
               IsStrokeOverprint = false
-              IsFillOverprint = false }
+              IsFillOverprint = false
+              BlendModes = [] }
 
         static member StrokeOverprint =
             { FsExtGState.DefaultValue with 
@@ -405,62 +407,86 @@ module ExtensionTypes =
       
 
 
-    type TileTable = 
-        private TileTable of colNum: int * rowNum: int * hSpacing: float list * vSpacing: float list
+    type TileTableIndexer = 
+        private TileTableIndexer of colNum: int * rowNum: int * hSpacing: float list * vSpacing: float list
     with 
         member x.ColNum =
-            let (TileTable (colNum, rowNum, hSpacing, vSpacing)) = x
+            let (TileTableIndexer (colNum, rowNum, hSpacing, vSpacing)) = x
             colNum
 
         member x.RowNum = 
-            let (TileTable (colNum, rowNum, hSpacing, vSpacing)) = x
+            let (TileTableIndexer (colNum, rowNum, hSpacing, vSpacing)) = x
             rowNum
 
         member x.HSpacing = 
-            let (TileTable (colNum, rowNum, hSpacing, vSpacing)) = x
+            let (TileTableIndexer (colNum, rowNum, hSpacing, vSpacing)) = x
             hSpacing
 
         member x.VSpacing = 
-            let (TileTable (colNum, rowNum, hSpacing, vSpacing)) = x
+            let (TileTableIndexer (colNum, rowNum, hSpacing, vSpacing)) = x
             vSpacing
 
         static member Create(colNum, rowNum, ?HSpacing, ?VSpacing) =
-            if not (colNum > 0 && rowNum > 0) then failwithf "colNum %d and rowNum %d should bigger than 0" colNum rowNum 
+            if (colNum > 0 && rowNum > 0) then ()
+            else failwithf "colNum %d and rowNum %d should bigger than 0" colNum rowNum 
 
-            TileTable(colNum, rowNum, defaultArg HSpacing [0.], defaultArg VSpacing [0.])
+            TileTableIndexer(colNum, rowNum, defaultArg HSpacing [0.], defaultArg VSpacing [0.])
 
-
-
-    /// zero-based index
-    type TileIndexer = private TileIndexer of TileTable * Direction * index: int
+    type TileCellIndexer = private TileCellIndexer of Direction * index: int
     with 
-        member x.ColNum =
-            let (TileIndexer (tileTable, direction, index)) = x
-            tileTable.ColNum
-
-        member x.RowNum = 
-            let (TileIndexer (tileTable, direction, index)) = x
-            tileTable.RowNum
 
         member x.Index = 
-            let (TileIndexer (tileTable, direction, index)) = x
+            let (TileCellIndexer (direction, index)) = x
             index
 
         member x.Direction = 
-            let (TileIndexer (tileTable, direction, index)) = x
+            let (TileCellIndexer (direction, index)) = x
             direction
 
-        member x.TileTable =
-            let (TileIndexer (tileTable, direction, index)) = x
-            tileTable
-
-
-    [<RequireQualifiedAccess>]
-    module TileIndexer = 
-        /// zero-based index
-        let create (tileTable: TileTable) direction index =
+        static member Create(index, ?direction) =
             if index < 0 then failwithf "pieceIndex %d should >= 0" index
-            TileIndexer(tileTable, direction, index)
+            TileCellIndexer(defaultArg direction Direction.Horizontal, index)
+
+    type TileTable<'T> =
+        private
+            { 
+              [<JsonProperty>]
+              TileTableIndexer: TileTableIndexer
+              [<JsonProperty>]
+              Values: 'T [,] }
+
+    with 
+        member x.ColNum = x.TileTableIndexer.ColNum
+
+        member x.RowNum = x.TileTableIndexer.RowNum
+
+        member x.Item(index: TileCellIndexer) =
+            match index.Direction with
+            | Direction.Horizontal ->
+                let index = index.Index
+                let colIndex = index % x.ColNum
+                let rowIndex = index / x.ColNum 
+                x.Values.[rowIndex, colIndex]
+
+            | Direction.Vertical ->
+                let index = index.Index
+                let rowIndex = index % x.RowNum
+                let colIndex = (index / x.RowNum) 
+                x.Values.[rowIndex, colIndex]
+
+
+        member x.Item(index: int) =
+            let index = TileCellIndexer.Create(index)
+            x.Item(index)
+
+        static member Create(tileTable: TileTableIndexer, values: _ [,]) =
+            let cellsCount = tileTable.ColNum * (tileTable.RowNum)
+            match values.Length with 
+            | EqualTo cellsCount -> 
+                { TileTableIndexer = tileTable
+                  Values = values }
+                
+            | length -> failwithf "Cannot create tileTable collection from (tileTable: %A, values length: %d)" (tileTable) length
 
 
 

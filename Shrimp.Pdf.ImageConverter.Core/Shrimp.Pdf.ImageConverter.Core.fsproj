@@ -14,7 +14,7 @@
   <ItemGroup />
 
   <ItemGroup>
-    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.53" />
+    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.54"/>
   </ItemGroup>
 
     <ItemGroup>
