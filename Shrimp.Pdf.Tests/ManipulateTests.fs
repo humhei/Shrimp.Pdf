@@ -1219,12 +1219,10 @@ let manipulateTests =
                                     )
                                 )
                             ]
-                          }
+                        }
                     ]
                 )
             )
-
-
 
         Flow.Manipulate(
             flow

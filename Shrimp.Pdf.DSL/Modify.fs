@@ -619,12 +619,11 @@ type Modifier =
                 (args.Page.GetDocument() :?> PdfDocumentWithCachedResources)
                     .GetOrCreateXObject(backgroundFile.ClearedPdfFile)
 
-            let pageBox = args.Page.GetActualBox()
-
             let pdfActions = 
                 let currentTransform = 
                     args.CurrentRenderInfo.Value.GetGraphicsState().GetCtm() 
                     |> AffineTransform.ofMatrix
+
                 let newTransform = 
                     let inversed = 
                         currentTransform |> AffineTransform.inverse
