@@ -11,10 +11,10 @@
     <Compile Include="Library.fs" />
   </ItemGroup>
 
-  <ItemGroup />
-
   <ItemGroup>
-    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.54"/>
+    <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.54" />
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
+      <PackageReference Include="FParsec" Version="1.1.1" />
   </ItemGroup>
 
     <ItemGroup>

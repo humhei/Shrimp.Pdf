@@ -401,7 +401,7 @@ module _ModifierIM =
 
 
     type ModifierAll =
-        static member ChangeBlendMode(blendMode: PdfName) =
+        static member ChangeBlendMode(blendMode) =
             fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
                 let originExtGState = args.CurrentRenderInfoIM.Value.GetGraphicsState() |> CanvasGraphicsState.getExtGState 
                 let extGState = 

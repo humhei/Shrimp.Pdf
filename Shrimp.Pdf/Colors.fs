@@ -24,7 +24,9 @@ open Shrimp.FSharp.Plus
 
 [<AutoOpen>]
 module _Colors =
-    type BlendMode = iText.Kernel.Pdf.Extgstate.PdfExtGState
+
+
+
 
     type DeviceRgb with 
         static member OfHex(hex: int) =
@@ -78,6 +80,35 @@ module _Colors =
             config.Value.GetFloatList("shrimp.pdf.colors.labWhitePoint")
             |> Array.ofSeq
 
+    /// valueRange: Black 0 -> White 1
+    type FsGray = FsGray of float32
+    with 
+        member x.Value =
+            let (FsGray v) = x
+            v
+
+        static member BLACK = FsGray 0.0f
+        static member WHITE = FsGray 1.0f
+        static member GRAY = FsGray 0.5f
+        
+        member x.LoggingText_Raw = 
+            let (FsGray v) = x
+            sprintf "K %.2f" v
+
+        member x.LoggingText =
+            match x with 
+            | EqualTo FsGray.BLACK -> "K Black"
+            | EqualTo FsGray.WHITE -> "K White"
+            | _ -> x.LoggingText_Raw
+
+        static member OfLoggingText_Raw(text) = 
+            let parser = 
+                pstringCI "K " >>. pfloat .>> eof
+
+            match run parser text with 
+            | Success (r, _, _) -> FsGray (float32 r)
+            | Failure (error, _, _) -> failwith error
+
     /// valueRange: 0 -> 1
     type FsDeviceRgb =
         { R: float32 
@@ -91,6 +122,10 @@ module _Colors =
 
         member x.Values =
             [ x.R; x.G; x.B ]
+
+        member x.Gray_Math =
+            x.R * 0.2126f + x.G * 0.7152f + x.B * 0.0722f
+            |> FsGray
 
         static member RED = { R = 1.0f; G = 0.0f; B = 0.0f }
         static member GREEN = { R = 0.0f; G = 1.0f; B = 0.0f }
@@ -312,31 +347,7 @@ module _Colors =
             | Failure (error, _, _) -> failwith error
 
 
-    /// valueRange: Black 0 -> White 1
-    type FsGray = FsGray of float32
-    with 
 
-        static member BLACK = FsGray 0.0f
-        static member WHITE = FsGray 1.0f
-        static member GRAY = FsGray 0.5f
-        
-        member x.LoggingText_Raw = 
-            let (FsGray v) = x
-            sprintf "K %.2f" v
-
-        member x.LoggingText =
-            match x with 
-            | EqualTo FsGray.BLACK -> "K Black"
-            | EqualTo FsGray.WHITE -> "K White"
-            | _ -> x.LoggingText_Raw
-
-        static member OfLoggingText_Raw(text) = 
-            let parser = 
-                pstringCI "K " >>. pfloat .>> eof
-
-            match run parser text with 
-            | Success (r, _, _) -> FsGray (float32 r)
-            | Failure (error, _, _) -> failwith error
 
     [<RequireQualifiedAccess>]
     type FsValueColor =

@@ -13,7 +13,9 @@
   <ItemGroup>
     <PackageReference Include="DtronixPdf" Version="1.0.1.1" />
     <PackageReference Include="Fake.IO.FileSystem" Version="5.18.0" />
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
     <PackageReference Include="TaskBuilder.fs" Version="2.1.0" />
+      <PackageReference Include="FParsec" Version="1.1.1" />
   </ItemGroup>
 
   <ItemGroup>

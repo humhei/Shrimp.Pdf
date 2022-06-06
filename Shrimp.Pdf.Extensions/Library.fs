@@ -147,6 +147,8 @@ module iText =
 
             Rectangle(this.GetX(), float32 y, this.GetWidth(), float32 newHeight)
                     
+
+
         member this.setWidth(effect: XEffort, fWidth: float -> float) =
             let width = this.GetWidthF()
             let newWidth = fWidth width
@@ -684,10 +686,10 @@ module iText =
               IsFillOverprint = gs.GetFillOverprint()
               BlendModes = 
                 match gs.GetBlendMode() with 
-                | :? PdfName as pdfName -> [pdfName]
+                | :? PdfName as pdfName -> [BlendMode.ofPdfName pdfName]
                 | :? PdfArray as array ->
                     [ for i in array do 
-                        yield (i :?> PdfName)
+                        yield (i :?> PdfName |> BlendMode.ofPdfName)
                     ]
                 | _ -> failwithf "Cannot read blend mode from %A" (gs.GetBlendMode().GetType())
 
@@ -1017,6 +1019,10 @@ module iText =
 
         let getBound boundGettingOptions info = cata (ITextRenderInfo.getBound boundGettingOptions) (IPathRenderInfo.getBound boundGettingOptions) info
         
+        let getStrokeColor (info: IAbstractRenderInfo) = info.Value.GetStrokeColor() 
+
+        let getFillColor (info: IAbstractRenderInfo) = info.Value.GetFillColor()
+
         let getDenseBound boundGettingOptions info = cata (ITextRenderInfo.getDenseBound boundGettingOptions) (IPathRenderInfo.getBound boundGettingOptions) info
         
         let getColors (info: IAbstractRenderInfo) = cata ITextRenderInfo.getColors IPathRenderInfo.getColors info

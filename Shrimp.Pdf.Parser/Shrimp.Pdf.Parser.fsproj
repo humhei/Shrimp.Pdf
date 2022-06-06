@@ -11,14 +11,17 @@
     <Compile Include="Edit.fs" />
   </ItemGroup>
 
+
+
   <ItemGroup>
     <ProjectReference Include="..\Shrimp.Pdf.Extensions\Shrimp.Pdf.Extensions.fsproj" />
     <ProjectReference Include="..\Shrimp.Pdf.Parser.Helper\Shrimp.Pdf.Parser.Helper.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="5.0.1" />
-    <PackageReference Update="System.ValueTuple" Version="4.5.0" />
+      <PackageReference Include="FParsec" Version="1.1.1" />
+      <PackageReference Update="FSharp.Core" Version="5.0.1" />
+      <PackageReference Update="System.ValueTuple" Version="4.5.0" />
   </ItemGroup>
 
 </Project>

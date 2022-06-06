@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net462</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,6 +30,8 @@
 
   <ItemGroup>
     <PackageReference Include="Expecto" Version="8.11.0" />
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
+      <PackageReference Include="FParsec" Version="1.1.1" />
   </ItemGroup>
 
   <ItemGroup>

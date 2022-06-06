@@ -45,7 +45,7 @@ module PageInfos =
 let manipulateTests =
   testList "Manipulates Tests" [
 
-    testCase "resize path as copy" <| fun _ -> 
+    testCase "resize path as copy" <| fun _ ->     
         let resizingStyle = 
             ResizingStyle
                 { Width = mm 43.
@@ -61,6 +61,9 @@ let manipulateTests =
         )
         |> runTest "datas/manipulate/resize path as copy.pdf" 
         |> ignore
+
+
+       
 
     testCase "release compound path" <| fun _ -> 
         Flow.Manipulate (
@@ -1193,60 +1196,41 @@ let manipulateTests =
         )
         |> runTest "datas/manipulate/map font for horizontal line.pdf" 
         |> ignore
-        
-        //let m0 =
-        //    PdfFontFactory.GetRegisteredFamilies()
-        //    |> List.ofSeq
-        
-
-        //let b0 = 
-        //    PdfFontFactory.GetRegisteredFonts()
-        //    |> List.ofSeq
-
-        //let fonts = 
-        //    [
-        //        @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf\Resources\Fonts\Arial\arial.ttf"
-        //        @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf\Resources\Fonts\Arial\arialbi.ttf"
-        //        @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf\Resources\Fonts\Arial\arialbd.ttf"
-        //        @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf\Resources\Fonts\Arial\arial.ttf"
-        //        @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf\Resources\Fonts\Arial\ariali.ttf"
-        //        @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf\Resources\Fonts\Arial\ariblk.ttf"
-        //        @"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\ARIALN.ttf"
-        //        @"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\ARIALNB.ttf"
-        //        @"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\ARIALNBI.ttf"
-        //        @"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\ARIALNI.ttf"
-
-        //    ]
-
-        //for font in fonts do 
-        //    PdfFontFactory.Register font
-
-        //PdfFontFactory.Register(@"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\arialbd.ttf")
-        //PdfFontFactory.Register(@"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\arialbd.ttf")
-        //PdfFontFactory.Register(@"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\arialbd.ttf")
-
-        //let m1 =
-        //    PdfFontFactory.GetRegisteredFamilies()
-        //    |> List.ofSeq
-        
-        //let b1 = 
-        //    PdfFontFactory.GetRegisteredFonts()
-        //    |> List.ofSeq
-
-        ////PdfFontFactory.Register(@"D:\Users\Jia\Documents\MyData\Config\字体库\字体库\字体库\serif&san\无衬线体\过渡体\Arial\Arial.ttf")
-
-        //let m2 =
-        //    PdfFontFactory.GetRegisteredFamilies()
-        //    |> List.ofSeq
-
-        //let b2 = 
-        //    PdfFontFactory.GetRegisteredFonts()
-        //    |> List.ofSeq
-        //    |> List.sort
-        //()
-
     
+    testCase "add background for selected text" <| fun _ ->  
+        let flow =
+            Modify.SplitTextLineToWords()
+            <+>
+            Manipulate.Factory(fun flowModel doc ->
+                doc.Value.CacheDocumentFonts(PageSelector.All)
+                Modify.Create_Record(
+                    PageSelector.All,
+                    [
+                        { SelectorAndModifiersRecord.Name = "Add background for selection"
+                          Selector = 
+                            Text(TextInfo.TextContainsIC "30")
+                          Modifiers = 
+                            [ 
+                                Modifier.AddBackground (PdfFile @"datas/manipulate/star.pdf", PasteObjectSize.BySelection Margin.MM6) 
+                                Modifier.ChangeTextStyle(
+                                    TextStyle(
+                                        VectorStyle.ColorIs(PdfCanvasColor.WHITE),
+                                        NewFontAndSize(FsPdfFontFactory.CreateDocumentFont(FontNames.``Tahoma-Bold``), alignment = XEffort.Middle)
+                                    )
+                                )
+                            ]
+                          }
+                    ]
+                )
+            )
 
+
+
+        Flow.Manipulate(
+            flow
+        )
+        |> runTest "datas/manipulate/add background for selected text.pdf" 
+        |> ignore
 
     let tryColoredSizeText() =
         Modify.Create(

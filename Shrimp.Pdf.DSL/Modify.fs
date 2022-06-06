@@ -267,13 +267,15 @@ type ColorStyle [<JsonConstructor>] private (v) =
     
 
 type StrokeStyle [<JsonConstructor>] private  (v) =
-    inherit POCOBaseV<ColorStyle option * ``ufloat>0`` option * int option>(v)
+    inherit POCOBaseV<ColorStyle option * ``ufloat>0`` option * int option * DashPattern option>(v)
 
-    member x.ColorStyle = x.VV.Item3_1()
+    member x.ColorStyle = x.VV.Item4_1()
 
-    member x.Width = x.VV.Item3_2() 
+    member x.Width = x.VV.Item4_2() 
 
-    member x.LineJoinStyle = x.VV.Item3_3()
+    member x.LineJoinStyle = x.VV.Item4_3()
+
+    member x.DashPattern = x.VV.Item4_4()
 
     member x.CloseOperator =
         match x.ColorStyle with 
@@ -291,6 +293,7 @@ type StrokeStyle [<JsonConstructor>] private  (v) =
         match x.ColorStyle with
         | Some colorStyle -> colorStyle.Overprint
         | None -> None
+
 
     member x.AsModifier(args: _SelectionModifierFixmentArguments<_>) =
         let pdfCanvasActions = 
@@ -316,6 +319,12 @@ type StrokeStyle [<JsonConstructor>] private  (v) =
                             originExtGState with IsStrokeOverprint = isStrokeOverprint
                         }
                     PdfCanvas.setExtGState newExtGState
+
+                match x.DashPattern with 
+                | None -> ()
+                | Some dashPattern ->
+                    PdfCanvas.setDashpattern dashPattern
+
             ]
         
         { Actions = pdfCanvasActions
@@ -323,11 +332,24 @@ type StrokeStyle [<JsonConstructor>] private  (v) =
           Close = CloseOperatorUnion.Create(args.Tag, stroke = x.CloseOperator) }
 
 
-    new (?targetColorStyle: ColorStyle, ?width: ``ufloat>0``, ?lineJoinStyle) =
-        DefaultArgs.CheckAllInputsAreNotEmpty(targetColorStyle, width, lineJoinStyle)
-        new StrokeStyle((targetColorStyle, width, lineJoinStyle))
+    new (?targetColorStyle: ColorStyle, ?width: ``ufloat>0``, ?lineJoinStyle, ?dashPattern) =
+        DefaultArgs.CheckAllInputsAreNotEmpty(targetColorStyle, width, lineJoinStyle, dashPattern)
+        new StrokeStyle((targetColorStyle, width, lineJoinStyle, dashPattern))
 
-type FillStyle [<JsonConstructor>] (v) =
+    new (args: PdfCanvasAddLineArguments) =
+        new StrokeStyle(
+            ColorStyle(NullablePdfCanvasColor.OfPdfCanvasColor args.StrokeColor),
+            width = (``ufloat>0`` args.LineWidth),
+            dashPattern = args.DashPattern
+        )
+
+    static member ColorIs(color) =
+        StrokeStyle(
+            ColorStyle(NullablePdfCanvasColor.OfPdfCanvasColor color)
+        )
+
+
+type FillStyle [<JsonConstructor>] (?v) =
     inherit POCOBaseV<ColorStyle option>(v)
 
     member x.ColorStyle = x.VV.Value
@@ -372,6 +394,12 @@ type FillStyle [<JsonConstructor>] (v) =
           SuffixActions = []
           Close = CloseOperatorUnion.Create(args.Tag, fill = x.CloseOperator) }
 
+    static member ColorIs(color) =
+        FillStyle(
+            ColorStyle(NullablePdfCanvasColor.OfPdfCanvasColor color)
+        )
+
+
 
 type ResizingStyle [<JsonConstructor>] (v) =
     inherit POCOBaseV<FsSize>(v)
@@ -409,7 +437,9 @@ type ResizingStyle [<JsonConstructor>] (v) =
             PdfCanvas.concatMatrixByTransform transform
         ]
 
-
+type BackgroundOrForegroundFile =
+    { File: BackgroundFile
+      BackgroundOrForeground: BackgroundOrForeground }
 
 type VectorStyle [<JsonConstructor>] private (v) =
     inherit POCOBaseV<FillStyle option * StrokeStyle option * ResizingStyle option * bool>(v)
@@ -498,13 +528,25 @@ type VectorStyle [<JsonConstructor>] private (v) =
                 }
 
 
+
     new (?fill, ?stroke, ?resizingStyle, ?asCopy) =
         DefaultArgs.CheckAllInputsAreNotEmpty(fill, stroke, resizingStyle, asCopy)
     
         new VectorStyle((fill, stroke, resizingStyle, defaultArg asCopy false))
 
+    static member ColorIs(?fillColor, ?strokeColor) =
+        DefaultArgs.CheckAllInputsAreNotEmpty(fillColor, strokeColor)
+        let fill =
+            match fillColor with 
+            | Some fillColor -> Some (FillStyle.ColorIs(fillColor))
+            | None -> None
 
+        let stroke =
+            match strokeColor with 
+            | Some strokeColor -> Some (StrokeStyle.ColorIs(strokeColor))
+            | None -> None
 
+        VectorStyle(?fill = fill, ?stroke = stroke)
 
 
 [<RequireQualifiedAccess>]
@@ -520,11 +562,126 @@ with
         | CompoundCreatingOptions.ClippingPathAndKeep -> true
 
 
+type NewFontAndSize [<JsonConstructor>] (?font: FsPdfFontFactory, ?fontSize: float, ?alignment) = 
+    inherit POCOBase<FsPdfFontFactory option * float option * XEffort option>(font, fontSize, alignment)
+    let __checkArgsValid =
+        match font, fontSize with 
+        | None, None -> failwith "Cannot Create NewFontAndSize, both font and fontSize are empty"
+        | _ -> ()
+
+    [<JsonProperty>]
+    member x.Font = font
+
+    [<JsonProperty>]
+    member x.FontSize = fontSize
+
+    [<JsonProperty>]
+    member x.Alignment = alignment
+
+    member x.LoggingText =
+        let font =
+            match font with 
+            | Some font -> font.LoggingText |> Some 
+            | None -> None
+
+        let fontSize = 
+            match fontSize with 
+            | Some fontSize -> fontSize.ToString() |> Some 
+            | None -> None
+
+        let alignment = 
+            match alignment with 
+            | Some alignment -> alignment.ToString() |> Some 
+            | None -> None
+
+        [ font 
+          fontSize
+          alignment ]
+        |> List.choose id
+        |> String.concat " "
+
+
+
+[<RequireQualifiedAccess>]
+type PasteObjectSize =
+    | SameToBackgroundSize
+    | BySelection of Margin
 
 type Modifier =
     static member ChangeStyle(fStyle: _ -> VectorStyle) = 
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
             (fStyle args.CurrentRenderInfo).AsModifier(args)
+
+    static member AddBackgroundOrForeground(backgroundFile: BackgroundOrForegroundFile, pasteObjectSize: PasteObjectSize) = 
+        fun (args: _SelectionModifierFixmentArguments<'userState>) ->
+            let xobject =
+                let backgroundFile = backgroundFile.File
+                (args.Page.GetDocument() :?> PdfDocumentWithCachedResources)
+                    .GetOrCreateXObject(backgroundFile.ClearedPdfFile)
+
+            let pageBox = args.Page.GetActualBox()
+
+            let pdfActions = 
+                let currentTransform = 
+                    args.CurrentRenderInfo.Value.GetGraphicsState().GetCtm() 
+                    |> AffineTransform.ofMatrix
+                let newTransform = 
+                    let inversed = 
+                        currentTransform |> AffineTransform.inverse
+
+                    let bound =     
+                        IAbstractRenderInfo.getBound
+                            BoundGettingStrokeOptions.WithoutStrokeWidth
+                            args.CurrentRenderInfo
+
+                    let backgroundSize = backgroundFile.File |> BackgroundFile.getSize
+
+                    let pasteObjectSize =
+                        match pasteObjectSize with 
+                        | PasteObjectSize.SameToBackgroundSize -> backgroundSize
+                        | PasteObjectSize.BySelection margin ->
+                            bound
+                            |> FsSize.ofRectangle
+                            |> FsSize.applyMargin margin
+
+                    let translate =
+                        { AffineTransformRecord.DefaultValue with 
+                            TranslateX = bound.GetXF() - ((pasteObjectSize.Width - bound.GetWidthF()) / 2.0)
+                            TranslateY = bound.GetYF() - ((pasteObjectSize.Height - bound.GetHeightF()) / 2.0)
+                        }
+
+                    let scale =
+                        { AffineTransformRecord.DefaultValue with 
+                            ScaleX = pasteObjectSize.Width   / backgroundSize.Width
+                            ScaleY = pasteObjectSize.Height  / backgroundSize.Height
+                        }
+
+                    inversed.Concatenate(AffineTransformRecord.toAffineTransform translate)
+                    inversed.Concatenate(AffineTransformRecord.toAffineTransform scale)
+                    AffineTransformRecord.ofAffineTransform inversed
+
+                [ PdfCanvas.saveState
+                  PdfCanvas.addXObject xobject newTransform
+                  PdfCanvas.restoreState ]
+
+            match backgroundFile.BackgroundOrForeground with 
+            | BackgroundOrForeground.Background ->
+                ModifierPdfCanvasActions.CreateActions
+                    (args.Tag)
+                    pdfActions
+
+            | BackgroundOrForeground.Foreground ->
+                ModifierPdfCanvasActions.CreateSuffix
+                    (args.Tag)
+                    pdfActions
+
+
+    static member AddBackground(backgroundFile: PdfFile, pasteObjectSize: PasteObjectSize) =
+        Modifier.AddBackgroundOrForeground(
+            { File = BackgroundFile.Create backgroundFile 
+              BackgroundOrForeground = BackgroundOrForeground.Background },
+            pasteObjectSize
+        )
 
     static member SetFontAndSize(font, size: float, ?alignment: XEffort) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
@@ -586,6 +743,29 @@ type Modifier =
             let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
             let font = doc.GetOrCreatePdfFont(font)
             Modifier.SetFontAndSize(font, size, ?alignment = alignment) args
+
+    static member NewFontAndSize(fontAndSize: NewFontAndSize) =
+        fun (args: _SelectionModifierFixmentArguments<'userState>) ->
+            let font =
+                let font = fontAndSize.Font 
+                match font with 
+                | Some font -> 
+                    let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
+                    doc.GetOrCreatePdfFont(font)
+
+                | None ->
+                    let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
+                    info.TextRenderInfo.GetFont()
+
+            let size =
+                let fontSize = fontAndSize.FontSize
+                match fontSize with 
+                | Some fontSize -> fontSize
+                | None ->
+                    let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
+                    ITextRenderInfo.getActualFontSize info
+
+            Modifier.SetFontAndSize(font, size, ?alignment = fontAndSize.Alignment) args
 
     static member CancelFillAndStroke() : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->
@@ -898,7 +1078,7 @@ type Modifier =
 
           
 
-
+    
 
 type SelectorAndModifiersRecordIM<'userState> =
     { Name: string 
@@ -1225,65 +1405,39 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
         )
 
 
-type NewFontAndSize [<JsonConstructor>] (?font: FsPdfFontFactory, ?fontSize: float, ?alignment) = 
-    inherit POCOBase<FsPdfFontFactory option * float option * XEffort option>(font, fontSize, alignment)
-    let __checkArgsValid =
-        match font, fontSize with 
-        | None, None -> failwith "Cannot Create NewFontAndSize, both font and fontSize are empty"
-        | _ -> ()
-
-    [<JsonProperty>]
-    member x.Font = font
-
-    [<JsonProperty>]
-    member x.FontSize = fontSize
-
-    [<JsonProperty>]
-    member x.Alignment = alignment
-
-    member x.LoggingText =
-        let font =
-            match font with 
-            | Some font -> font.LoggingText |> Some 
-            | None -> None
-
-        let fontSize = 
-            match fontSize with 
-            | Some fontSize -> fontSize.ToString() |> Some 
-            | None -> None
-
-        let alignment = 
-            match alignment with 
-            | Some alignment -> alignment.ToString() |> Some 
-            | None -> None
-
-        [ font 
-          fontSize
-          alignment ]
-        |> List.choose id
-        |> String.concat " "
-
+type NewFontAndSize with 
     member x.AsModifier(): Modifier<_> =
+        Modifier.NewFontAndSize(x)
+
+    
+type TextStyle [<JsonConstructor>] private (v) =
+    inherit POCOBaseV<VectorStyle option * NewFontAndSize option>(v)
+
+    member x.VectorStyle = x.VV.Item2_1()
+
+    member x.NewFontAndSize = x.VV.Item2_2()
+
+    member x.AsModifier() =
         fun args ->
-            let font =
-                match font with 
-                | Some font -> 
-                    let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
-                    doc.GetOrCreatePdfFont(font)
+            [
+                match x.VectorStyle with 
+                | Some style -> (style.AsModifier args)
+                | None ->       ()
 
-                | None ->
-                    let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
-                    info.TextRenderInfo.GetFont()
+                match x.NewFontAndSize with 
+                | Some newFontAndSize -> (newFontAndSize.AsModifier() args)
+                | None -> ()
+            ]
+            |> ModifierPdfCanvasActions.ConcatOrKeep args.Tag 
 
-            let size =
-                match fontSize with 
-                | Some fontSize -> fontSize
-                | None ->
-                    let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
-                    ITextRenderInfo.getActualFontSize info
 
-            Modifier.SetFontAndSize(font, size, ?alignment = alignment) args
+    new (?vectorStyle, ?newFontAndSize) =
+        DefaultArgs.CheckAllInputsAreNotEmpty(vectorStyle, newFontAndSize)
+        new TextStyle((vectorStyle, newFontAndSize))
 
+type Modifier with 
+    static member ChangeTextStyle(textStyle: TextStyle) =
+        textStyle.AsModifier()
 
 type Modify_ReplaceColors_Options = 
     { FillOrStrokeOptions: FillOrStrokeOptions 

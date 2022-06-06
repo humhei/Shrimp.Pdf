@@ -108,6 +108,7 @@
   <ItemGroup>
     <PackageReference Update="FSharp.Core" Version="5.0.1" />
     <PackageReference Update="System.ValueTuple" Version="4.5.0" />
+      <PackageReference Include="FParsec" Version="1.1.1" />
   </ItemGroup>
 
 

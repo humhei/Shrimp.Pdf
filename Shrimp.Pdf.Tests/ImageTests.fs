@@ -33,8 +33,8 @@ let imageTests =
 
             ()
 
-        ftestCase "change blending mode" <| fun _ -> 
-            let flow = ModifyIM.ChangeImageBlendMode(BlendMode.BM_MULTIPLY)
+        testCase "change blending mode" <| fun _ -> 
+            let flow = ModifyIM.ChangeImageBlendMode(BlendMode.Multiply)
 
             Flow.Manipulate(
                 flow

@@ -21,7 +21,7 @@ module PdfDocumentWithCachedResources =
           FillColor: NullablePdfCanvasColor
           IsStrokeOverprint: bool
           IsFillOverprint: bool
-          BlendModes: PdfName list }
+          BlendModes: BlendMode list }
     with 
         static member DefaultValue =
             { LineWidth = mm 0.1 
@@ -72,7 +72,11 @@ module PdfDocumentWithCachedResources =
         static member DashLine(?value) =
             { LineWidth = mm 0.1 
               StrokeColor = PdfCanvasColor.BLACK
-              DashPattern = DashPattern.Create(defaultArg value (mm 2.0)) }
+              DashPattern = 
+                match value with 
+                | None -> DashPattern.MM2
+                | Some value -> DashPattern.Create(value) }
+
 
 
     type CanvasAddTextArguments = 
@@ -225,6 +229,13 @@ module PdfDocumentWithCachedResources =
         let setExtGState (extGState: FsExtGState) (canvas: PdfCanvas) =
             let extGState = canvas.GetOrCreateExtGState(extGState)
             canvas.SetExtGState(extGState)
+
+        
+        let saveState (canvas: PdfCanvas) =
+            canvas.SaveState()
+
+        let restoreState (canvas: PdfCanvas) =
+            canvas.SaveState()
 
         let addRectangle (rect: Rectangle) (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
             let args = mapping PdfCanvasAddRectangleArguments.DefaultValue

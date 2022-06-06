@@ -14,6 +14,33 @@ open Shrimp.FSharp.Plus
 [<AutoOpen>]
 module ExtensionTypes =
     
+    type BlendMode =
+        | Normal = 0
+        | Multiply = 1
+        | Screen = 2
+        | Overlay = 3
+        | Darken = 4
+        | Lighten = 5
+        | ColorDodge = 6
+        | ColorBurn = 7
+        | HardLight = 8
+        | SoftLight = 9
+        | Difference = 10
+        | Exclusion = 11
+        | Hue = 12
+        | Saturation = 13
+        | Color = 14
+        | Luminosity = 15
+        
+    [<RequireQualifiedAccess>]
+    module BlendMode =
+        let toPdfName (blendMode: BlendMode) =
+            PdfName(blendMode.ToString())
+
+        let ofPdfName (pdfName: PdfName) =
+            pdfName.ToString().TrimStart('/')
+            |> stringToEnum<BlendMode>
+
     type ColorSpace =
         | Gray = 0
         | Rgb = 1
@@ -132,7 +159,7 @@ module ExtensionTypes =
             OPM: FsOPM
             IsStrokeOverprint: bool
             IsFillOverprint: bool
-            BlendModes: PdfName list
+            BlendModes: BlendMode list
         }
     with 
         static member DefaultValue =
@@ -156,6 +183,8 @@ module ExtensionTypes =
                 IsFillOverprint = true 
                 IsStrokeOverprint = true
             }
+
+            
 
     type FsPoint =
         { X: float 
@@ -302,6 +331,7 @@ module ExtensionTypes =
         inherit IAbstractRenderInfoIM
         abstract member TagIM: IntegratedRenderInfoTagIM
         abstract member ClippingPathInfos: ClippingPathInfos
+
 
     type IIntegratedRenderInfo =
         inherit IIntegratedRenderInfoIM
@@ -599,6 +629,7 @@ module ExtensionTypes =
             )
 
 
+
         let ofMatrix (matrix: Matrix) =
             let values =
                 [| matrix.Get(Matrix.I11)
@@ -638,6 +669,8 @@ module ExtensionTypes =
         member x.IsEmpty = x = DashPattern.Empty
 
         static member Empty = {DashArray = [||]; Phase = 0.}
+
+        static member MM2 = DashPattern.Create(mm 2.)
 
     type PageBoxKind =
         | ArtBox = 0

@@ -11,6 +11,8 @@ open System.IO
 
 [<AutoOpen>]
 module Manipulates =
+    
+
     type PdfRunner with 
         static member Manipulate(pdfFile, ?backupPdfPath) = 
             fun manipulate ->
@@ -196,6 +198,54 @@ module Manipulates =
                     fun (pageNumber, rowNumber) ->
                         fLine (pageNumber, RowOrColumnNumber.RowNumber rowNumber)
                 )
+
+
+        static member ReadDataTable(pageSelector, format: DataTableParsingFormat, ?boundSelector) =
+            let readBound() =
+                match boundSelector with 
+                | None -> Manipulate.dummy() ||>> fun _ -> []
+                | Some selector ->
+                    ModifyPage.Create(
+                        "read dataTable bound",
+                        pageSelector,
+                        Selector.Path(selector),
+                        fun arg infos ->
+                            infos
+                            |> List.ofSeq
+                            |> List.map (IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth)
+                            |> AtLeastOneList.Create
+                            |> Rectangle.ofRectangles
+                    )
+
+            readBound()
+            <+>
+            ModifyPage.Create(
+                "extract dataTable inside bound",
+                pageSelector,
+                Selector.Text(fun args -> 
+                    let rect = 
+                        match boundSelector with 
+                        | None -> args.Page.GetActualBox()
+                        | Some _ -> args.UserState.[args.PageNum-1]
+                    Info.BoundIsInsideOf (AreaGettingOptions.Specfic rect) args
+                ),
+                fun arg infos ->
+                    let textInfos =
+                        infos
+                        |> List.ofSeq
+                        |> List.choose IIntegratedRenderInfo.asITextRenderInfo
+
+                    let array2D = 
+                        textInfos
+                        |> List.chunkBySize format.ColNum
+
+                    let __ensureNoRemainer =
+                        match textInfos.Length % format.ColNum with 
+                        | 0 -> ()
+                        | _ -> failwithf "textInfos length %d is not exact division to format ColNum %d" textInfos.Length format.ColNum
+
+                    array2D
+            )
 
 
 

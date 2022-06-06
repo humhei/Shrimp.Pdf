@@ -101,9 +101,7 @@ module FsSize =
         rotate Rotation.Clockwise size
 
     let ofPageSize (pageSize: PageSize) =
-        let width = pageSize.GetWidthF()
-        let height = pageSize.GetHeightF()
-        create width height
+        ofRectangle pageSize
 
     let toPageSize (size: FsSize) =
         new PageSize(float32 size.Width,float32 size.Height)
@@ -186,14 +184,11 @@ module FsPageSize =
             FsPageSize (FsSize.portrait size, pageOrientation)
         | _ -> failwith "Invalid token"
 
-type ReaderDocument (reader: string) =
-    let reader = new PdfDocument(new PdfReader(reader))
 
-    member x.Reader = reader
 
 
 type SplitDocument internal (reader: string, writer: string) =
-    let mutable readerDocument: Lazy<PdfDocument> option = None
+    let mutable readerDocument: Lazy<ReaderDocument> option = None
 
     let mutable writerDocument: Lazy<PdfDocumentWithCachedResources> option = None
 
@@ -208,7 +203,7 @@ type SplitDocument internal (reader: string, writer: string) =
         | Some reader -> reader
         | None -> failwith "document is not open yet please open it first"
 
-    member x.Reader = x.LazyReader.Value
+    member x.Reader = x.LazyReader.Value.Reader
         
     member private x.LazyWriter = 
         match writerDocument with 
@@ -225,15 +220,15 @@ type SplitDocument internal (reader: string, writer: string) =
             | Some readerDocument1 ->
                 match readerDocument1 with 
                 | Lazy.ValueCreated readerDocument1 ->
-                    if readerDocument1.IsClosed() 
+                    if readerDocument1.Reader.IsClosed() 
                     then
-                        readerDocument <- Some (lazy new PdfDocument(new PdfReader(reader)))
+                        readerDocument <- Some (lazy new ReaderDocument(reader))
                     else 
                         failwith "Old document is not closed yet"
 
-                | Lazy.NotCreated -> readerDocument <- Some (lazy new PdfDocument(new PdfReader(reader)))
+                | Lazy.NotCreated -> readerDocument <- Some (lazy new ReaderDocument(reader))
 
-            | None -> readerDocument <- Some (lazy new PdfDocument(new PdfReader(reader)))
+            | None -> readerDocument <- Some (lazy new ReaderDocument(reader))
 
             match writerDocument with 
             | Some writerDocument1 ->
@@ -254,16 +249,16 @@ type SplitDocument internal (reader: string, writer: string) =
     member internal x.CloseAndDraft() =
         match x.LazyReader, x.LazyWriter with 
         | Lazy.ValueCreated readerDocument, Lazy.ValueCreated writerDocument ->
-            readerDocument.Close()
-            writerDocument.Close()
+            readerDocument.Reader.Close()
+            writerDocument.CloseAndClearCache()
             File.Delete(reader)
             File.Move(writer, reader)
 
         | Lazy.ValueCreated readerDocument, Lazy.NotCreated ->
-            readerDocument.Close()
+            readerDocument.Reader.Close()
 
         | Lazy.NotCreated, Lazy.ValueCreated writerDocument ->
-            writerDocument.Close()
+            writerDocument.CloseAndClearCache()
             File.Delete(reader)
             File.Move(writer, reader)
 
@@ -276,7 +271,7 @@ type SplitDocument internal (reader: string, writer: string) =
         | true ->   
             
             match x.LazyReader with 
-            | Lazy.ValueCreated readerDocument -> readerDocument.Close()
+            | Lazy.ValueCreated readerDocument -> readerDocument.Reader.Close()
             | Lazy.NotCreated _ -> ()
 
             match x.LazyWriter with 
@@ -286,7 +281,7 @@ type SplitDocument internal (reader: string, writer: string) =
                 | 0 -> writerDocument.AddNewPage() |> ignore
                 | _ -> ()
 
-                writerDocument.Close()
+                writerDocument.CloseAndClearCache()
                 File.Delete(writer)
 
             | Lazy.NotCreated _ -> ()

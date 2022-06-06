@@ -384,7 +384,7 @@ module Client =
                 PageInfosValidation = options.PageInfosValidation }
 
 
-    type Modfy_ConvertColorsToDeviceGray_Options =
+    type Modify_ConvertColorsToDeviceGray_Options =
         { MaxDeviation: float32 
           OutputIcc: GrayIcc 
           LabIcc: LabIcc 
@@ -429,8 +429,8 @@ module Client =
             )
 
 
-        static member ConvertColorsToDeviceGray(?options: Modfy_ConvertColorsToDeviceGray_Options, ?nameAndParameters: NameAndParameters) =
-            let options = defaultArg options Modfy_ConvertColorsToDeviceGray_Options.DefaultValue
+        static member ConvertColorsToDeviceGray(?options: Modify_ConvertColorsToDeviceGray_Options, ?nameAndParameters: NameAndParameters) =
+            let options = defaultArg options Modify_ConvertColorsToDeviceGray_Options.DefaultValue
 
             let nameAndParameters = 
                 { Name = "ConvertColorToDeviceGray"

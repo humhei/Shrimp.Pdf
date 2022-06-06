@@ -88,7 +88,7 @@ with
 [<AutoOpen>]
 module _Reuses =
 
-    type private BackgroundOrForeground =
+    type BackgroundOrForeground =
         | Background = 0
         | Foreground = 1
 
@@ -1239,13 +1239,20 @@ module _Reuses =
                     "layer" => choice.ToString()
                 ]
 
-        static member AddBackground(pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) =
+        static member AddBackground(pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin) =
             (fun flowModel (doc: SplitDocument) ->
                 let reader = doc.Reader
                 PdfDocument.getPages reader
                 |> List.mapi (fun i readerPage ->
 
-                    let readerPageBox = readerPage.GetPageBox(pageBoxKind)
+                    let readerPageBox = 
+                        match margin with 
+                        | Some margin ->
+                            readerPage.GetPageBox(pageBoxKind)
+                            |> Rectangle.applyMargin margin
+                        | None -> 
+                            readerPage.GetPageBox(pageBoxKind)
+
                     let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
 
                     let pageSize = 
@@ -1269,6 +1276,7 @@ module _Reuses =
                 [
                     "pageBoxKind" => pageBoxKind.ToString()
                     "rectOptions" => (rectOptions PdfCanvasAddRectangleArguments.DefaultValue).ToString()
+                    "margin"      => (defaultArg margin Margin.Zero).LoggingText
                 ]
 
 

@@ -39,6 +39,7 @@ open Newtonsoft.Json
 
 
 open Shrimp.Pdf.FontNames.Query
+open iText.Kernel.Pdf.Xobject
 
 [<RequireQualifiedAccess>]
 type FsPdfFontFactory =
@@ -67,21 +68,39 @@ type ResourceColor =
     | CustomSeparation of FsSeparation
     | Lab of FsLab
 
+type ReaderDocument (reader: string) =
+    let reader = new PdfDocument(new PdfReader(reader))
+
+    member x.Reader = reader
 
 type private PdfDocumentCache private 
     (pdfDocument: unit -> PdfDocumentWithCachedResources,
      fontsCache: ConcurrentDictionary<FsPdfFontFactory, PdfFont>,
      colorsCache: ConcurrentDictionary<ResourceColor, Color>,
+     xobjectCache: ConcurrentDictionary<PdfFile, ReaderDocument * PdfFormXObject>,
      extGStateCache: ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>) =
     let mutable labColorSpace = None
 
-    member internal x.Clear() = 
+    member private x.Clear_BeforeSpawn() = 
         fontsCache.Clear()
         colorsCache.Clear()
         extGStateCache.Clear()
+        for (readerDoc, _) in xobjectCache.Values do 
+            readerDoc.Reader.Close()
+        xobjectCache.Clear()
+
+    member internal x.Clear() =
+        x.Clear_BeforeSpawn()
+        extGStateCache.Clear()
 
     member internal x.Spawn(pdfDocument: unit -> PdfDocumentWithCachedResources) =
-        PdfDocumentCache(pdfDocument, new ConcurrentDictionary<_, _>(), new ConcurrentDictionary<_, _>() (*colorsCache*),extGStateCache)
+        x.Clear_BeforeSpawn()
+        PdfDocumentCache(
+            pdfDocument, 
+            new ConcurrentDictionary<_, _>(), 
+            new ConcurrentDictionary<_, _>(), 
+            new ConcurrentDictionary<_, _>(), 
+            extGStateCache)
 
     member internal x.CacheDocumentFonts(fonts) =
         for (font: PdfFont) in fonts do
@@ -117,6 +136,13 @@ type private PdfDocumentCache private
 
             | ResourceColor.Lab labColor -> labToItextColor labColor
         )
+
+    member internal x.GetOrCreateXObject(pdfFile: PdfFile) =
+        xobjectCache.GetOrAdd((pdfFile), fun (pdfFile) ->
+            let doc = ReaderDocument(pdfFile.Path)
+            doc, doc.Reader.GetPage(1).CopyAsFormXObject(pdfDocument())
+        )
+        |> snd
 
     member internal x.GetOrCreateFont(fontFactory: FsPdfFontFactory) =
         fontsCache.GetOrAdd((fontFactory), fun (fontFactory) ->
@@ -163,11 +189,10 @@ type private PdfDocumentCache private
             | _ ->
                 let blendingModes =
                     extGState.BlendModes
-                    |> List.map(fun m -> m :> PdfObject)
+                    |> List.map(fun m -> (BlendMode.toPdfName m) :> PdfObject )
                 let blendingModes = ResizeArray blendingModes :> System.Collections.Generic.IList<_>
                 let pdfArray = PdfArray(blendingModes)
                 pdfExtGState.SetBlendMode(pdfArray)
-
         )
 
     new (pdfDocument: unit -> PdfDocumentWithCachedResources) =
@@ -175,6 +200,7 @@ type private PdfDocumentCache private
             (pdfDocument,
              new ConcurrentDictionary<FsPdfFontFactory, PdfFont>(),
              new ConcurrentDictionary<ResourceColor, Color>(),
+             new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>())
 
 and PdfDocumentWithCachedResources =
@@ -186,7 +212,7 @@ and PdfDocumentWithCachedResources =
     member x.GetOrCreatePdfFont(fontFactory: FsPdfFontFactory) =
         x.cache.GetOrCreateFont(fontFactory)
 
-    //member private x.ClearCache() = x.cache.Clear()
+    member private x.ClearCache() = x.cache.Clear()
 
     /// defaultPageSelector is First
     member x.CacheDocumentFonts(?pageSelector: PageSelector) =
@@ -218,6 +244,10 @@ and PdfDocumentWithCachedResources =
 
     member x.GetOrCreateColor(resourceColor: ResourceColor) =
         x.cache.GetOrCreateColor(resourceColor)
+
+    member x.GetOrCreateXObject(pdfFile: PdfFile) =
+        x.cache.GetOrCreateXObject(pdfFile)
+
 
     member internal x.GetDocumentFontsInternal() = base.GetDocumentFonts()
 
@@ -267,9 +297,9 @@ and PdfDocumentWithCachedResources =
     member x.GetOrCreateExtGState(extGState: FsExtGState) = 
         x.cache.GetOrCreateExtGState(extGState)
         
-    //member x.CloseAndClearCache() = 
-    //    x.ClearCache()
-    //    x.Close()
+    member x.CloseAndClearCache() = 
+        x.ClearCache()
+        x.Close()
 
     new (writer: string) as this = 
         { inherit PdfDocument(new PdfWriter(writer)); cache = new PdfDocumentCache((fun _ -> this)) }
@@ -321,7 +351,7 @@ type IntegratedDocument internal (reader: string, writer: string) =
     member internal x.CloseAndDraft() =
         match x.LazyValue with 
         | Lazy.ValueCreated value ->
-            value.Close()
+            value.CloseAndClearCache()
             File.Delete(reader)
             File.Move(writer, reader)
 
@@ -333,7 +363,7 @@ type IntegratedDocument internal (reader: string, writer: string) =
         match isOpened with 
         | true ->
             match x.LazyValue with 
-            | Lazy.ValueCreated value -> value.Close()
+            | Lazy.ValueCreated value -> value.CloseAndClearCache()
             | Lazy.NotCreated _ -> ()
 
             isOpened <- false
