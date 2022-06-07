@@ -1,5 +1,7 @@
 ﻿module ReuseTests
 open Expecto
+open iText.Kernel.Geom
+open iText.Kernel.Pdf.Canvas.Parser.Data
 open Shrimp.Pdf
 open Shrimp.Pdf
 open Shrimp.Pdf.Imposing
@@ -9,7 +11,11 @@ open iText.Kernel.Colors
 open Shrimp.Pdf.DSL
 open Shrimp.FSharp.Plus
 open iText.Kernel.Pdf
+open iText.Kernel.Font
 open Shrimp.Pdf.Colors
+open iText.Kernel.Pdf.Canvas
+
+
 
 let reuseTests =
   testList "Reuse Tests" [
@@ -20,6 +26,56 @@ let reuseTests =
             Reuses.ExtractPaths(PageSelector.All, Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation), keepOriginPage = true)
         )
         |> runTest "datas/reuse/extract paths tests.pdf" 
+        |> ignore
+
+    testCase "extract vectors tests" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.Extract(
+                PageSelector.All,
+                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+            )
+        )
+        |> runTest "datas/reuse/extract vectors.pdf" 
+        |> ignore
+
+    testCase "extract vectors tests2" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.Extract(
+                PageSelector.All,
+                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+            )
+        )
+        |> runTest "datas/reuse/extract vectors2.pdf" 
+        |> ignore
+
+    testCase "extract vectors tests3" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.Extract(
+                PageSelector.All,
+                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+            )
+        )
+        |> runTest "datas/reuse/extract vectors3.pdf" 
+        |> ignore
+
+    testCase "extract vectors tests4" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.Extract(
+                PageSelector.All,
+                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+            )
+        )
+        |> runTest "datas/reuse/extract vectors4.pdf" 
+        |> ignore
+
+    ftestCase "extract vectors tests5" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.Extract(
+                PageSelector.All,
+                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+            )
+        )
+        |> runTest "datas/reuse/extract vectors5.pdf" 
         |> ignore
 
     testCase "add background tests" <| fun _ -> 
@@ -409,6 +465,34 @@ let reuseTests =
     testCase "duplicate pages by copied num sequence tests3" <| fun _ -> 
         Flow.Reuse (Reuses.DuplicatePages (PageSelector.All, CopiedNumSequence.Create [15;15;15;15]))
         |> runTest "datas/reuse/duplicate pages by copied num sequence.pdf" 
+        |> ignore
+
+
+    testCase "tile pages and NUP for big data" <| fun _ -> 
+        let colNum = 5 
+        let rowNum = 8
+        Flow.Reuse (
+            Reuses.TilePages (TileTableIndexer.Create (colNum = colNum, rowNum = rowNum), Direction.Horizontal)
+            <+>
+            Reuses.Impose(fun args ->
+                { args with 
+                    ColNums = [colNum]
+                    RowNum = rowNum
+                    Background = Background.Size FsSize.MAXIMUN
+                }
+            )
+            <+>
+            Reuses.TilePages (TileTableIndexer.Create (colNum = colNum, rowNum = rowNum), Direction.Horizontal)
+            <+>
+            Reuses.Impose(fun args ->
+                { args with 
+                    ColNums = [colNum]
+                    RowNum = rowNum
+                    Background = Background.Size FsSize.MAXIMUN
+                }
+            )
+        )
+        |> runTest "datas/reuse/tile pages and NUP for big data.pdf" 
         |> ignore
 
     testCase "tile pages by colNum and rowNum tests" <| fun _ -> 

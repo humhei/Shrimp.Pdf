@@ -12,6 +12,7 @@
     <Compile Include="FileOperations.fs" />
       <Compile Include="Flow.fs" />
       <Compile Include="ModifyPage.fs" />
+      <Compile Include="Renewable.fs" />
       <Compile Include="Reuses.fs" />
     <Compile Include="Modify.fs" />
     <Compile Include="InfosSelector.fs" />

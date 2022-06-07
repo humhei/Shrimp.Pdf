@@ -225,25 +225,60 @@ module internal Listeners =
         member internal x.AddPathOperatorRange(operatorRange) = accumulatedPathOperatorRanges.Add(operatorRange)
 
         member internal x.BeginShowText() = isShowingText <- true
-        member internal x.EndShoeText() = 
-            
-            match concatedTextInfos.Count with 
-            | 0 -> ()
-            | 1 -> parsedRenderInfos.Add(concatedTextInfos.[0])
-            | _ ->
-                let lastInfo = 
-                    let previous =
-                        concatedTextInfos
-                        |> Seq.map(fun m -> 
-                            { m with EndTextState = EndTextState.No }
-                        )
+        member internal x.EndShoeText(operatorRange: OperatorRange) = 
+            let textInfo = 
+                match concatedTextInfos.Count with 
+                | 0 -> None
+                | 1 -> Some concatedTextInfos.[0]
+                | _ ->
+                    let lastInfo = 
+                        let previous =
+                            concatedTextInfos
+                            |> Seq.map(fun m -> 
+                                { m with EndTextState = EndTextState.No }
+                            )
 
 
-                    { concatedTextInfos.[concatedTextInfos.Count-1] with 
-                        ConcatedTextInfos = previous
-                        EndTextState = EndTextState.Yes
-                    }
-                parsedRenderInfos.Add(lastInfo)
+                        { concatedTextInfos.[concatedTextInfos.Count-1] with 
+                            ConcatedTextInfos = previous
+                            EndTextState = EndTextState.Yes
+                        }
+                    Some lastInfo
+
+            let releaseGraphicsState() =
+                for info in concatedTextInfos do 
+                    info.TextRenderInfo.ReleaseGraphicsState()
+
+            match textInfo with 
+            | Some textInfo -> 
+                let textInfo = { textInfo with OperatorRange = Some operatorRange }
+                let textInfo = (textInfo :> IIntegratedRenderInfoIM)
+                let predicate _ filter =
+                    filter (textInfo)
+
+                let filtered = Map.filter predicate prediateMapping
+                match filtered.IsEmpty with 
+                | false ->
+                    let tokens =
+                        filtered
+                        |> Map.toList
+                        |> List.map fst
+
+                    parsedRenderInfos.Add(textInfo)
+
+                    currentRenderInfoToken <- Some tokens
+                    currentRenderInfo <- Some textInfo
+                    currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
+
+                | true -> 
+                    releaseGraphicsState()
+                    currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
+                    currentRenderInfo <- None
+
+            | None -> 
+                releaseGraphicsState()
+                currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
+                currentRenderInfo <- None
 
             concatedTextInfos <- new ResizeArray<_>()
             isShowingText <- false
@@ -316,6 +351,7 @@ module internal Listeners =
                               TextRenderInfo = textRenderInfo
                               EndTextState = EndTextState.Undified
                               ConcatedTextInfos = []
+                              OperatorRange = None
                               }
                             :> IIntegratedRenderInfoIM
 
@@ -382,43 +418,42 @@ module internal Listeners =
                         |_ -> failwith "Not implemented"
 
 
-                    let predicate _ filter =
-                        filter renderInfo
 
-                    let filtered = Map.filter predicate prediateMapping
 
-                    match filtered.IsEmpty with 
-                    | false ->
-                        let tokens =
-                            filtered
-                            |> Map.toList
-                            |> List.map fst
 
-                        renderInfo.Value.PreserveGraphicsState()
+                    match isShowingText, renderInfo.TagIM with 
+                    | true, IntegratedRenderInfoTagIM.Text ->
+                        let renderInfo = renderInfo :?> IntegratedTextRenderInfo
+                        match renderInfo.TextRenderInfo.GetText().Trim() with 
+                        | "" -> ()
+                        | _ -> 
+                            renderInfo.TextRenderInfo.PreserveGraphicsState()
+                            concatedTextInfos.Add(renderInfo)
 
-                        match isShowingText with 
-                        | true ->
-                            match renderInfo.TagIM with 
-                            | IntegratedRenderInfoTagIM.Text -> 
-                                let renderInfo = renderInfo :?> IntegratedTextRenderInfo
-                                match renderInfo.TextRenderInfo.GetText().Trim() with 
-                                | "" -> ()
-                                | _ -> concatedTextInfos.Add(renderInfo)
-                            | _ -> ()
-                        | false -> ()
+                    | false, IntegratedRenderInfoTagIM.Text -> ()
+                    | true, _ -> failwith "Invalid token"
+                    | false, _ -> 
+                        let predicate _ filter =
+                            filter renderInfo
+                        let filtered = Map.filter predicate prediateMapping
+                        match filtered.IsEmpty with 
+                        | false ->
+                            let tokens =
+                                filtered
+                                |> Map.toList
+                                |> List.map fst
 
-                        match renderInfo with 
-                        | IIntegratedRenderInfoIM.Text _ -> ()
-                        | _ ->
+                            renderInfo.Value.PreserveGraphicsState()
+
                             parsedRenderInfos.Add(renderInfo)
 
-                        currentRenderInfoToken <- Some tokens
-                        currentRenderInfo <- Some renderInfo
-                        currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
+                            currentRenderInfoToken <- Some tokens
+                            currentRenderInfo <- Some renderInfo
+                            currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
 
-                    | true -> 
-                        currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
-                        currentRenderInfo <- None
+                        | true -> 
+                            currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
+                            currentRenderInfo <- None
 
             member this.GetSupportedEvents() = supportedEventTypes
 
@@ -591,8 +626,8 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
 
         match operatorName with 
         | ContainsBy [Tj; TJ] -> 
+            processor.Listener.EndShoeText({Operator = operator; Operands = ResizeArray operands})
             invokeOperatorRange()
-            processor.Listener.EndShoeText()
 
         | ContainsBy [m; v; c; y; l; h; re] -> 
             processor.Listener.AddPathOperatorRange({ Operator = operator; Operands = ResizeArray(operands)})

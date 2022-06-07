@@ -61,8 +61,6 @@ let manipulateTests =
         )
         |> runTest "datas/manipulate/resize path as copy.pdf" 
         |> ignore
-
-
        
 
     testCase "release compound path" <| fun _ -> 
@@ -181,7 +179,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/remove specfic separation colors.pdf" 
         |> ignore
 
-    testCase "open fill" <| fun _ -> 
+    testCase "open fill color" <| fun _ -> 
 
         let colors = 
             [
@@ -204,7 +202,7 @@ let manipulateTests =
                 ]
             ) 
         )
-        |> runTest "datas/manipulate/remove specfic separation colors.pdf" 
+        |> runTest "datas/manipulate/open fill color.pdf" 
         |> ignore
 
     testCase "change separation color of pdfFunction0 PageNumber to m100" <| fun _ -> 
@@ -493,6 +491,29 @@ let manipulateTests =
             )
         )
         |> runTest "datas/manipulate/add bound to text2.pdf" 
+        |> ignore
+
+    testCase "add bound to text5" <| fun _ -> 
+        Flow.Reuse(
+            Reuses.ClearDirtyInfos()
+        )
+        <+>
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "add bound to text5"
+                      Selector = Text(fun _ _ -> true) 
+                      Modifiers = [
+                        Modifier.AddRectangleToBound(fun args -> 
+                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor(PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
+                        )
+                      ]
+                    }
+                ]
+            )
+        )
+        |> runTest "datas/manipulate/add bound to text5.pdf" 
         |> ignore
 
     testCase "add bound to bound1" <| fun _ -> 

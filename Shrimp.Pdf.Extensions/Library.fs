@@ -869,13 +869,22 @@ module iText =
     [<RequireQualifiedAccess>]
     module ITextRenderInfo =
         type private TextRenderInfo with 
+            member info.ScaleY() =      
+                let matrix = 
+                    info.GetGraphicsState().GetCtm()
+                    |> AffineTransformRecord.ofMatrix
+
+                let textMatrix = 
+                    info.GetTextMatrix()
+                    |> AffineTransformRecord.ofMatrix
+
+                matrix.ScaleY * textMatrix.ScaleY
+
             member info.GetActualFontSize() =
-                let matrix = info.GetTextMatrix()
-                info.GetFontSize() * matrix.Get(0) |> float
+                float (info.GetFontSize()) * info.ScaleY() |> float
 
             member info.ToTransformedFontSize(actualFontSize: float) =
-                let matrix = info.GetTextMatrix()
-                actualFontSize / float(matrix.Get(0)) 
+                actualFontSize / (info.ScaleY()) 
 
             member info.GetFontName() =
                 info.GetFont().GetFontProgram().GetFontNames()

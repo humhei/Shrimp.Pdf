@@ -485,6 +485,11 @@ type Info =
         Info.BoundIs(RelativePosition.Inbox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
+    static member BoundIs_InsideOrCross_Of (areaGettingOptions, ?boundGettingOptions) =
+        !!! (Info.BoundIs(RelativePosition.OutBox, areaGettingOptions = areaGettingOptions, ?boundGettingStrokeOptions = boundGettingOptions))
+        |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+
     static member PointOfBoundIsInsideOf (pointPosition: Position, areaGettingOptions, ?boundGettingStrokeOptions) =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
             let boundGettingOptions = defaultArg boundGettingStrokeOptions BoundGettingStrokeOptions.WithoutStrokeWidth

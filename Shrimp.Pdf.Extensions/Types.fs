@@ -74,8 +74,8 @@ module ExtensionTypes =
     
         member x.LoggingText = shortFontName
     
-        static member Create (fontName: FontNames) =
-            let fontName = fontName.GetFontName()
+        static member Create (fontNames: FontNames) =
+            let fontName = fontNames.GetFontName()
             FsFontName(fontName)
     
     

@@ -210,6 +210,9 @@ module PdfDocumentWithCachedResources =
             let transform = AffineTransform.ofMatrix matrix
             canvas.SetTextMatrix(transform)
 
+        let setTextLeading (leading: float32) (canvas: PdfCanvas) =
+            canvas.SetLeading(leading)
+
         let setTextMatrixByTransform (transform: AffineTransformRecord) (canvas: PdfCanvas) =
             canvas.SetTextMatrix(AffineTransformRecord.toAffineTransform transform)
 

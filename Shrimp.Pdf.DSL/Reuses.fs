@@ -7,6 +7,8 @@ open Imposing
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Colors
+open iText.Kernel.Font
+open iText.Kernel.Pdf.Canvas.Parser.Data
 open iText.Kernel.Colors
 open iText.Kernel.Pdf.Canvas.Parser
 open Shrimp.Pdf.DSL
@@ -109,14 +111,15 @@ module _Reuses =
           RowIndex: int 
           PageNum: int }
 
+
     type Reuses with
-        static member ExtractPaths(pageSelector: PageSelector, pathSelector, ?keepOriginPage) =    
+        static member Extract(pageSelector: PageSelector, selector, ?keepOriginPage) =    
+            let keepOriginPage = defaultArg keepOriginPage false
             fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
                 let reader = splitDocument.Reader
                 let parser = NonInitialClippingPathPdfDocumentContentParser(reader)
                 let totalNumberOfPages = reader.GetNumberOfPages()
                 let pageNumbers = reader.GetPageNumbers(pageSelector)
-                let keepOriginPage = defaultArg keepOriginPage false
 
                 pageNumbers
                 |> List.iter(fun pageNumber ->
@@ -130,24 +133,23 @@ module _Reuses =
                               PageNum = pageNumber
                             }
                         
-                        Selector.Path(pathSelector) |> Selector.toRenderInfoSelector args
+                        Selector.toRenderInfoSelector args selector
 
                     let infos = 
                         let infos =
                             NonInitialClippingPathPdfDocumentContentParser.parse pageNumber selector parser
 
-                        let pathInfos = 
-                            infos
-                            |> List.ofSeq
-                            |> List.choose IIntegratedRenderInfo.asIPathRenderInfo
-
-                        pathInfos
-                        |> List.map(fun pathInfo -> pathInfo.Renewable())
+                        infos
+                        |> List.ofSeq
                         |> List.map(fun info ->
-                            { info with 
-                                FillColor = splitDocument.Writer.Renew_OtherDocument_Color info.FillColor
-                                StrokeColor = splitDocument.Writer.Renew_OtherDocument_Color info.StrokeColor
-                            }
+                            match info with 
+                            | IIntegratedRenderInfo.Path pathInfo -> 
+                                pathInfo.Renewable()
+                                |> RenewableInfo.Path
+
+                            | IIntegratedRenderInfo.Text textInfo -> 
+                                textInfo.Renewable()
+                                |> RenewableInfo.Text
                         )
 
                     let writer = splitDocument.Writer
@@ -162,16 +164,28 @@ module _Reuses =
                     let writerPage = writer.AddNewPage(PageSize(readerPage.GetActualBox()))
                     writerPage.SetPageBoxToPage(readerPage) |> ignore
                     let writerCanvas = new PdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
-                    for info in infos do    
-                        info.ApplyCtm_WriteToCanvas(writerCanvas)
+                    PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
+                        writerCanvas
+                            .WriteLiteral("0 G\n")
+                            .WriteLiteral("0 g\n")
+                            |> ignore
+
+                        for info in infos do    
+                            info.CopyToDocument(writer).ApplyCtm_WriteToCanvas(writerCanvas)
+
+                        writerCanvas
+                    ) |> ignore
+
                 )
 
             |> reuse 
                 "ExtractorPaths"
                 ["pageSelector" => pageSelector.Text
-                 "pathSelector" => pathSelector.ToString() ]
+                 "selector" => selector.ToString()
+                 "keepOriginPage" => keepOriginPage.ToString() ]
 
-
+        static member ExtractPaths(pageSelector, pathSelector, ?keepOriginPage) =
+            Reuses.Extract(pageSelector, Selector.Path pathSelector, ?keepOriginPage = keepOriginPage)
 
         static member Insert(insertingFile: string, ?insertingFilePageSelector: PageSelector, ?pageInsertingOptions: PageInsertingOptions, ?insertingPoint: SinglePageSelectorExpr) =
             let insertingFilePageSelector = defaultArg insertingFilePageSelector PageSelector.All
@@ -967,7 +981,7 @@ module _Reuses =
 
                 PdfDocument.getPages doc.Reader
                 |> List.iteri(fun i page ->
-                    let newPage = writer.AddNewPage(PageSize(page.GetPageSize()))
+                    let newPage = writer.AddNewPage(PageSize(page.GetActualBox()))
 
                     newPage.SetPageBoxToPage(page) |> ignore
 
@@ -1208,7 +1222,7 @@ module _Reuses =
                     let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
 
                     let pageSize = 
-                        readerPage.GetPageSize()
+                        readerPage.GetActualBox()
                         |> PageSize
 
                     let writerPage = doc.Writer.AddNewPage(pageSize)
@@ -1256,7 +1270,7 @@ module _Reuses =
                     let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
 
                     let pageSize = 
-                        readerPage.GetPageSize()
+                        readerPage.GetActualBox()
                         |> PageSize
 
                     let writerPage = doc.Writer.AddNewPage(pageSize)

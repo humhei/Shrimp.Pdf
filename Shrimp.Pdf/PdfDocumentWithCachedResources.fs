@@ -9,6 +9,7 @@ open Shrimp.Pdf
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Colors
 open iText.IO.Font.Constants
+open iText.Kernel.Pdf.Colorspace
 open Shrimp.FSharp.Plus
 open iText.IO.Font
 open iText.IO.Font.Otf
@@ -73,34 +74,44 @@ type ReaderDocument (reader: string) =
 
     member x.Reader = reader
 
+
+
 type private PdfDocumentCache private 
     (pdfDocument: unit -> PdfDocumentWithCachedResources,
      fontsCache: ConcurrentDictionary<FsPdfFontFactory, PdfFont>,
+     fontsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfFont>,
+     patternColorsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfPattern.Tiling>,
      colorsCache: ConcurrentDictionary<ResourceColor, Color>,
      xobjectCache: ConcurrentDictionary<PdfFile, ReaderDocument * PdfFormXObject>,
      extGStateCache: ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>) =
     let mutable labColorSpace = None
+    let hashNumberOfPdfIndirectReference(pdfIndirectReference: PdfIndirectReference) =
+        pdfIndirectReference.GetObjNumber(), pdfIndirectReference.GetGenNumber()
 
-    member private x.Clear_BeforeSpawn() = 
+    member internal x.Clear() = 
         fontsCache.Clear()
         colorsCache.Clear()
         extGStateCache.Clear()
         for (readerDoc, _) in xobjectCache.Values do 
             readerDoc.Reader.Close()
+        fontsCache_hashable_fromOtherDocument.Clear()
         xobjectCache.Clear()
-
-    member internal x.Clear() =
-        x.Clear_BeforeSpawn()
         extGStateCache.Clear()
 
+    //member internal x.Clear() =
+    //    x.Clear_BeforeSpawn()
+    //    extGStateCache.Clear()
+
     member internal x.Spawn(pdfDocument: unit -> PdfDocumentWithCachedResources) =
-        x.Clear_BeforeSpawn()
+        x.Clear()
         PdfDocumentCache(
             pdfDocument, 
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(), 
-            extGStateCache)
+            new ConcurrentDictionary<_, _>(), 
+            new ConcurrentDictionary<_, _>(), 
+            new ConcurrentDictionary<_, _>())
 
     member internal x.CacheDocumentFonts(fonts) =
         for (font: PdfFont) in fonts do
@@ -108,6 +119,36 @@ type private PdfDocumentCache private
             fontsCache.GetOrAdd(FsPdfFontFactory.DocumentFont(FsFontName.Create(fontNames)), fun _ ->
                 font
             ) |> ignore
+
+    member internal x.GetOrCreateFont_FromOtherDocument(font: PdfFont) =
+            let fontNames = font.GetFontProgram().GetFontNames()
+            match fontNames.GetFontName() with 
+            | null -> 
+                let number = hashNumberOfPdfIndirectReference <| font.GetPdfObject().GetIndirectReference() 
+                fontsCache_hashable_fromOtherDocument.GetOrAdd(
+                    number,
+                    (fun number ->
+                        let pdfObject = font.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false) :?> PdfDictionary
+                        PdfFontFactory.CreateFont(pdfObject)
+                    )
+                )
+            | _ ->
+                fontsCache.GetOrAdd(FsPdfFontFactory.DocumentFont(FsFontName.Create(fontNames)), fun _ ->
+                    let pdfObject = font.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false) :?> PdfDictionary
+                    PdfFontFactory.CreateFont(pdfObject)
+                ) 
+
+    member internal x.GetOrCreatePatternColor_FromOtherDocument(pattern: PdfPattern) =
+            let number = hashNumberOfPdfIndirectReference <| pattern.GetPdfObject().GetIndirectReference()
+            patternColorsCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
+                match pattern with 
+                | :? PdfPattern.Tiling as tiling ->
+                    let pdfObject = pattern.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false) :?> PdfStream
+                    
+                    PdfPattern.Tiling (pdfObject)
+            
+            )
+            
 
     member internal x.GetOrCreateColor(resourceColor: ResourceColor) =
         colorsCache.GetOrAdd((resourceColor), fun (color) ->
@@ -198,10 +239,12 @@ type private PdfDocumentCache private
     new (pdfDocument: unit -> PdfDocumentWithCachedResources) =
         PdfDocumentCache
             (pdfDocument,
-             new ConcurrentDictionary<FsPdfFontFactory, PdfFont>(),
-             new ConcurrentDictionary<ResourceColor, Color>(),
              new ConcurrentDictionary<_, _>(),
-             new ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>())
+             new ConcurrentDictionary<_, _>(),
+             new ConcurrentDictionary<_, _>(),
+             new ConcurrentDictionary<_, _>(),
+             new ConcurrentDictionary<_, _>(),
+             new ConcurrentDictionary<_, _>())
 
 and PdfDocumentWithCachedResources =
     inherit PdfDocument
@@ -249,7 +292,7 @@ and PdfDocumentWithCachedResources =
         x.cache.GetOrCreateXObject(pdfFile)
 
 
-    member internal x.GetDocumentFontsInternal() = base.GetDocumentFonts()
+    //member internal x.GetDocumentFontsInternal() = base.GetDocumentFonts()
 
     member pdfDocument.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =
         match pdfCanvasColor with 
@@ -282,17 +325,24 @@ and PdfDocumentWithCachedResources =
                 pdfDocument.GetOrCreateColor(resourceColor) 
 
     member x.Renew_OtherDocument_Color(otherDocumentColor: Color) =
-        match (FsColor.OfItextColor otherDocumentColor).AsAlternativeFsColor with
-        | Some color ->
-            match color with 
-            | AlternativeFsColor.Separation v ->
-                x.GetOrCreateColor(PdfCanvasColor.Separation v)
+        match (FsColor.OfItextColor otherDocumentColor) with
+        | FsColor.Separation v ->
+            x.GetOrCreateColor(PdfCanvasColor.Separation v)
 
-            | AlternativeFsColor.IccBased _
-            | AlternativeFsColor.ValueColor _ ->
-                color.AlterColor.ToItextColor()
+        | FsColor.IccBased iccBasedColor -> iccBasedColor.Color.ToItextColor()
+        | FsColor.ValueColor color -> color.ToItextColor()
 
-        | None -> DeviceGray.BLACK :> Color
+        | FsColor.PatternColor patternColor ->
+            match patternColor.GetColorSpace() with 
+            | :? PdfSpecialCs.UncoloredTilingPattern as colorSpace ->
+                match colorSpace.GetPdfObject() with 
+                | :? PdfArray ->
+                    let pattern = patternColor.GetPattern()
+                    let tilling = x.cache.GetOrCreatePatternColor_FromOtherDocument(pattern) 
+                    new PatternColor(tilling, colorSpace, patternColor.GetColorValue()) :> Color
+
+    member x.Renew_OtherDocument_Font(pdfFont: PdfFont) =
+        x.cache.GetOrCreateFont_FromOtherDocument(pdfFont)
 
     member x.GetOrCreateExtGState(extGState: FsExtGState) = 
         x.cache.GetOrCreateExtGState(extGState)
