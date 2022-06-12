@@ -542,6 +542,10 @@ module _Reuses =
                                     let canvas = new PdfCanvas(newPage)
                                     canvas.AddXObject(xobject, affineTransform)
                                     |> ignore
+                                else 
+                                    let newPage = page.CopyTo(splitDocument.Writer)
+                                    splitDocument.Writer.AddPage(newPage)
+                                    |> ignore
 
                                 size
                             )
@@ -975,6 +979,131 @@ module _Reuses =
         static member Impose(fArgs) =
             Reuses.Impose(fArgs, None)
 
+        static member Impose_ForceOnePage(fArgs) =
+
+            Reuse.Factory(
+                fun flowModel document ->
+
+                    let originTotalPageNumber = document.Reader.GetNumberOfPages()
+
+                    let checkArgsValid (args: ImposingArguments)=
+
+                        let maxiumnCellsCount =
+                            match args.FillingMode with 
+                            | FillingMode.Automatic _ 
+                            | FillingMode.ColumnAutomatic _ -> failwithf "Impose_ForceOnePage: unsupported fillMode %A" args.FillingMode
+                            | FillingMode.RowAutomatic colNums ->
+                                //v.ColNums
+                                //|> List.sum
+                                originTotalPageNumber
+
+                                //failwithf "Impose_ForceOnePage: unsupported fillMode %A" args.FillingMode
+
+                            | FillingMode.Numeric v -> 
+                                v.ColNums
+                                |> List.replicate v.RowNum
+                                |> List.concat
+                                |> List.take v.RowNum
+                                |> List.sum
+
+                        let args: _ImposingArguments = args.Value
+
+                        let backgroundSize = 
+                            match args.Background with 
+                            | Background.File _ -> failwithf "Impose_ForceOnePage: unsupported background %A" args.Background
+                            | Background.Size size -> size
+
+                        let margin = 
+                            match args.Sheet_PlaceTable with 
+                            | Sheet_PlaceTable.At _ -> failwithf "Impose_ForceOnePage: unsupported sheet_placeTable %A" args.Sheet_PlaceTable
+                            | Sheet_PlaceTable.Trim_CenterTable margin -> margin
+
+                        maxiumnCellsCount, backgroundSize, margin
+
+
+                    let args = ImposingArguments.Create fArgs
+                    let maxiumnCellsCount, originBackgroundSize,  margin = checkArgsValid args
+                    
+
+                    let sheets = 
+                        let args = (ImposingArguments.Create fArgs)
+                        let document = ImposingDocument(document, args, allowRedirectCellSize = true)
+                            
+                        document.Build()
+                        document.GetSheets()
+
+
+                    let (|Spawned|NoSpawned|) (sheets: ImposingSheet list) = 
+                        match args.Value.IsRepeated with 
+                        | true ->
+                            match sheets.Head.GetCellsCount() = maxiumnCellsCount with 
+                            | true -> NoSpawned ()
+                            | false -> Spawned ()
+
+                        | false ->
+                            let divied = 
+                                float originTotalPageNumber / float maxiumnCellsCount
+                                |> ceil
+                                |> int
+
+                            match sheets.Length = divied with 
+                            | true -> NoSpawned
+                            | false -> Spawned()
+
+
+                    match sheets with 
+                    | NoSpawned -> Reuses.Impose(fArgs)
+                    | Spawned ->
+                        let sheetForScale scale = 
+                            let document2 =
+                                let args = (ImposingArguments.Create (fun args ->  
+                                    { fArgs args with 
+                                        Background = 
+                                            FsSize.MAXIMUN
+                                            |> FsSize.mapValue(fun m -> m * 100.)
+                                            |> Background.Size
+                                        CellSizeScaling = scale
+                                    } 
+                                ))
+
+                                ImposingDocument(document, args)
+
+                            document2.Build()
+
+                            document2.GetSheets()
+                            |> List.exactlyOne_DetailFailingText
+
+
+                        let nextScale scale =
+                            let sheet = sheetForScale scale
+                            let sheetSize = sheet.SheetSize
+
+                            let sheetSize = sheetSize.AlignDirection originBackgroundSize
+                            let newScale =
+                                min 
+                                    (originBackgroundSize.Width  / sheetSize.Width  )
+                                    (originBackgroundSize.Height / sheetSize.Height )
+
+                            newScale * scale
+
+                        let rec loop scale =
+                            let newScale = nextScale scale
+                            match scale - newScale with 
+                            | SmallerThan 0.02 -> newScale - 0.02
+                            | _ -> loop newScale
+
+                        let scale = loop 1.
+                            
+                        Reuses.Impose(fun args ->
+                            { fArgs args with 
+                                CellSizeScaling = scale
+                            }
+                        )
+
+
+            )
+
+
         static member CreatePageTemplate() =
             fun flowModel (doc: SplitDocument) ->
                 let writer = doc.Writer
@@ -1126,33 +1255,66 @@ module _Reuses =
         //        )
 
         /// default useBleed: false
-        static member OneColumn(?margin, ?useBleed, ?spaces) =
-            Reuses.Impose(fun args -> 
+        static member OneColumn(?margin, ?useBleed, ?spaces, ?isForce) =
+            let margin = defaultArg margin Margin.Zero
+            let spaces = defaultArg spaces Spaces.Zero
+            let useBleed = defaultArg useBleed false
+            let isForce = defaultArg isForce false
+            let impose =
+                match isForce with 
+                | true -> Reuses.Impose_ForceOnePage
+                | false -> Reuses.Impose
+
+            impose(fun args -> 
                 {args with 
-                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (defaultArg margin Margin.Zero)
+                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (margin)
                     HSpaceExes = Spaces.Zero
-                    VSpaceExes = defaultArg spaces Spaces.Zero
+                    VSpaceExes = spaces
                     ColNums = [1]
                     RowNum = 0
                     IsRepeated = false
-                    UseBleed = defaultArg useBleed false
+                    UseBleed = useBleed
                     Background = Background.Size FsSize.MAXIMUN})
             ||>> (fun m -> m.GetSheets() |> List.exactlyOne_DetailFailingText)
-
+            |> 
+                Reuse.rename 
+                    "OneColumn"
+                    [
+                        "margin" => margin.LoggingText
+                        "useBleed" => useBleed.ToString()
+                        "spaces" => spaces.ToString()
+                        "isForce" => isForce.ToString()
+                    ]
         /// default useBleed: false
-        static member OneRow(?margin, ?useBleed, ?spaces) =
-            Reuses.Impose(fun args -> 
+        static member OneRow(?margin, ?useBleed, ?spaces, ?isForce) =
+            let margin = defaultArg margin Margin.Zero
+            let spaces = defaultArg spaces Spaces.Zero
+            let useBleed = defaultArg useBleed false
+            let isForce = defaultArg isForce false
+            let impose =
+                match isForce with 
+                | true -> Reuses.Impose_ForceOnePage
+                | false -> Reuses.Impose
+            impose(fun args -> 
                 {args with 
-                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (defaultArg margin Margin.Zero)
-                    HSpaceExes = defaultArg spaces Spaces.Zero
+                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (margin)
+                    HSpaceExes = spaces
                     VSpaceExes = Spaces.Zero
                     ColNums = [0]
                     RowNum = 1
                     IsRepeated = false
-                    UseBleed = defaultArg useBleed false
+                    UseBleed = useBleed
                     Background = Background.Size FsSize.MAXIMUN})
             ||>> (fun m -> m.GetSheets() |> List.exactlyOne_DetailFailingText)
-
+            |> 
+                Reuse.rename 
+                    "OneRow"
+                    [
+                        "margin" => margin.LoggingText
+                        "useBleed" => useBleed.ToString()
+                        "spaces" => spaces.ToString()
+                        "isForce" => isForce.ToString()
+                    ]
         
         /// 合并两页
         static member MergeTwoPages(useBleed: bool, ?margin: Margin, ?hspaces, ?vspaces, ?cellSize, ?direction: Direction) =
@@ -1334,18 +1496,18 @@ module _Reuses =
 
 
         /// default useBleed: false
-        static member OneColumn(?backupPdfPath, ?margin, ?useBleed, ?spaces) =
+        static member OneColumn(?backupPdfPath, ?margin, ?useBleed, ?spaces, ?isForce) =
             fun pdfFile ->
                 let reuse =
-                    Reuses.OneColumn(?margin = margin, ?useBleed = useBleed, ?spaces = spaces)
+                    Reuses.OneColumn(?margin = margin, ?useBleed = useBleed, ?spaces = spaces, ?isForce = isForce)
 
                 PdfRunner.Reuse(pdfFile,?backupPdfPath = backupPdfPath) reuse
     
         /// default useBleed: false
-        static member OneRow(?backupPdfPath, ?margin, ?useBleed, ?spaces) =
+        static member OneRow(?backupPdfPath, ?margin, ?useBleed, ?spaces, ?isForce) =
             fun pdfFile ->
                 let reuse =
-                    Reuses.OneRow(?margin = margin, ?useBleed = useBleed, ?spaces = spaces)
+                    Reuses.OneRow(?margin = margin, ?useBleed = useBleed, ?spaces = spaces, ?isForce = isForce)
 
                 PdfRunner.Reuse(pdfFile,?backupPdfPath = backupPdfPath) reuse
 

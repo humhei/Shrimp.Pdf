@@ -170,6 +170,9 @@ module internal rec ManipulateOrReuse =
 
         static member internal Invoke(flowModel: FlowModel<'userState>) (flow) : FlowModel<'newUserState> =
             let rec loop (flowModel: FlowModel<'userState>) flow =
+                let flowName() =
+                    flowModel.OperatedFlowNames
+                    |> List.tryFind(fun m -> not m.IsEmpty)
                 match flow with 
                 | Flow.ManipulateOrReuse manipulateOrReuse -> 
                     match manipulateOrReuse.OperateDocument with 
@@ -181,7 +184,7 @@ module internal rec ManipulateOrReuse =
                         with ex ->
                             let ex =
                                 AccumulatedException(
-                                    sprintf "OperateDocument: false\nError when invoke flow %A to pdfFile %s" (flowModel.FlowName, flow) flowModel.File,
+                                    sprintf "OperateDocument: false\nError when invoke flow %A to pdfFile %s" (flowName(), flow) flowModel.File,
                                     ex
                                 )
                             raise ex
@@ -198,13 +201,13 @@ module internal rec ManipulateOrReuse =
                             //    flowModel.Document.CloseAndDraft()
                             //with _ -> ()
                             
-                            let ex = 
+                            let ex2 = 
                                 AccumulatedException(
-                                    sprintf "OperateDocument: true\nError when invoke flow %A to pdfFile %s" (flowModel.FlowName, flow) flowModel.File,
+                                    sprintf "OperateDocument: true\nError when invoke flow %A to pdfFile %s" (flowName(), flow) flowModel.File,
                                     ex
                                 )
-                                
-                            raise ex
+
+                            raise ex2
 
 
                 | Flow.TupledFlow flow -> flow.Invoke flowModel
@@ -226,12 +229,12 @@ module internal rec ManipulateOrReuse =
 
 
 
-                    let flowModel =
+                    let flowModel2 =
                         { flowModel with FlowName = Some flowName0; OperatedFlowNames = flowName0 :: flowModel.OperatedFlowNames }
 
-                    Logger.TryInfoWithFlowModel(index, flowModel, fun _ ->
-                        let newFlowModel = loop flowModel flow
-                        flowModel
+                    Logger.TryInfoWithFlowModel(index, flowModel2, fun _ ->
+                        let newFlowModel = loop flowModel2 flow
+                        flowModel2
                             .ToInternalFlowModel()
                             .TryBackupFile(index)
 

@@ -1,6 +1,5 @@
 ﻿namespace Shrimp.Pdf
-
-
+open Shrimp.FSharp.Plus
 #nowarn "0104"
 open iText.Kernel.Pdf
 open Shrimp.Pdf.Colors
@@ -10,11 +9,11 @@ open Shrimp.Pdf.Extensions
 open System.Linq
 open System
 open System.Collections.Concurrent
-open Shrimp.FSharp.Plus
-open Shrimp.FSharp.Plus.Math
+
 open Newtonsoft.Json
 open Shrimp.Pdf.Constants
 open Fake.IO
+open System.IO
 
 
 
@@ -47,19 +46,60 @@ with
 
 
     static member Create(pdfFile: PdfFile) =
-        let targetPath =
-            pdfFile.Path
-            |> Path.changeExtension "backgroundFile.cleared.pdf"
 
-        let clearedPdfFile = 
-            if File.exists targetPath then PdfFile targetPath
-            else 
-                let flow = 
-                    Reuses.ClearDirtyInfos()
+        let getOrAddFile(pdfFile: PdfFile) =
+            let txtFile = (Path.changeExtension ".backgroundFile.cleared.datetime.txt" pdfFile.Path)
 
-                runWithBackup targetPath pdfFile.Path (Flow.Reuse flow)
-                |> List.exactlyOne_DetailFailingText
-                |> fun flowModel -> flowModel.PdfFile
+            let writeTimeFromDist =
+                match FsFileInfo.tryCreate txtFile  with 
+                | Some txtFile -> 
+                    let dateTime = File.ReadAllText(txtFile.Path)
+                    let lines = dateTime.Split([|"\r\n"; "\n"|], StringSplitOptions.RemoveEmptyEntries)
+
+                    {|
+                        Origin = System.Int64.Parse lines.[0]
+                        New = System.Int64.Parse lines.[1]
+                    |}
+                    |> Some
+                | None -> None
+            
+
+            let targetPath =
+                pdfFile.Path
+                |> Path.changeExtension "backgroundFile.cleared.pdf"
+
+            let isDateTimeEqual =
+                match writeTimeFromDist with 
+                | None -> false
+                | Some time ->
+                    match FsFileInfo.tryCreate targetPath with 
+                    | None -> false
+                    | Some newFile ->
+                        (time.Origin = pdfFile.FileInfo.LastWriteTime) 
+                        && (time.New = newFile.LastWriteTime) 
+
+            match isDateTimeEqual with 
+            | true -> PdfFile targetPath
+            | false ->
+                let newPdfFile: PdfFile = 
+                    let flow = 
+                        Reuses.ClearDirtyInfos()
+
+                    runWithBackup targetPath pdfFile.Path (Flow.Reuse flow)
+                    |> List.exactlyOne_DetailFailingText
+                    |> fun flowModel -> flowModel.PdfFile
+
+                let lines = 
+                    [pdfFile.FileInfo.LastWriteTime
+                     newPdfFile.FileInfo.LastWriteTime]
+                    |> List.map(string)
+
+                File.WriteAllLines(txtFile, lines)
+                newPdfFile
+
+
+
+        let clearedPdfFile = getOrAddFile pdfFile
 
         (pdfFile, clearedPdfFile, Rotation.None)
         |> BackgroundFile
@@ -183,11 +223,33 @@ module Imposing =
             | Background.Size v -> FsSize.rotate rotation v |> Background.Size
             | Background.File v -> v.Rotate(rotation) |> Background.File
 
+
+
     [<RequireQualifiedAccess>]
     module Background =
         let getSize = function
             | Background.Size pageSize -> pageSize
             | Background.File backgroundFile -> BackgroundFile.getSize backgroundFile
+
+        let redirectCellSize (cellSize: FsSize, margin: Margin) (background)=
+
+            let backgroundSize_shrink_by_margin = 
+                (getSize background).AlignDirection cellSize
+                |> FsSize.applyMargin (-margin)
+
+            match backgroundSize_shrink_by_margin.Width, backgroundSize_shrink_by_margin.Height with 
+            | BiggerOrEqual cellSize.Width, BiggerOrEqual cellSize.Height ->
+                cellSize
+
+            | _ ->
+                let scale =
+                    min
+                        (backgroundSize_shrink_by_margin.Width / cellSize.Width)
+                        (backgroundSize_shrink_by_margin.Height / cellSize.Height)
+
+                cellSize
+                |> FsSize.mapValue(fun m -> m * scale)
+
 
 
     type NumericFillingMode =
@@ -298,6 +360,12 @@ module Imposing =
 
         member x.Value = v
 
+        member x.Take(count: int) =
+            x.Value
+            |> List.replicate count
+            |> List.concat
+            |> List.take count
+
         new (value: float) =
             Spaces 
                 [
@@ -334,6 +402,7 @@ module Imposing =
             DesiredPageOrientation: DesiredPageOrientation
             Sheet_PlaceTable: Sheet_PlaceTable
             DesiredSizeOp: FsSize option
+            CellSizeScaling: float
             CellRotation: CellRotation
             IsRepeated: bool
         }
@@ -431,6 +500,7 @@ module Imposing =
                 Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(0.))
                 DesiredSizeOp = None
                 IsRepeated = false
+                CellSizeScaling = 1.0
                 CellRotation = CellRotation.None
                 DesiredPageOrientation = DesiredPageOrientation.Automatic
             }
@@ -457,7 +527,7 @@ module Imposing =
                         | _ -> FsSize.MAXIMUN
                     |> Background.Size 
 
-
+                CellSizeScaling = 1.0
                 Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 6.))
                 DesiredSizeOp = desiredSize
                 IsRepeated = false
@@ -997,19 +1067,14 @@ module Imposing =
             ||> Seq.fold (ImposingCell.AddToPdfCanvas pageMargin cellContentAreas_ExtendByCropmarkDistance)
 
 
-        member internal this.Push(readerPage: PdfPage) =
+        member internal this.Push(readerPage: PdfPage, cellSize) =
             let pageSize = sheet.PageSize
             let args = this.ImposingArguments.Value
             let fillingMode = this.ImposingArguments.FillingMode
 
             let newCell =
                 { Page = readerPage 
-                  Size = match args.DesiredSizeOp with 
-                          | Some size -> size 
-                          | None -> 
-                                if args.UseBleed then FsSize.ofRectangle(readerPage.GetTrimBox())
-                                else FsSize.ofRectangle(readerPage.GetActualBox()) 
-                          
+                  Size = cellSize
                   X = x
                   Y = sheet.Y
                   Index = cells.Count
@@ -1106,7 +1171,7 @@ module Imposing =
 
         member internal x.Y = y
 
-        member internal x.Push(readerPage: PdfPage) =
+        member internal x.Push(readerPage: PdfPage, cellSize) =
 
             let args = x.ImposingArguments.Value
             let fillingMode = x.ImposingArguments.FillingMode
@@ -1121,14 +1186,14 @@ module Imposing =
 
                 let newRow = new ImposingRow(x, rows.Count)
                 rows.Add(newRow)
-                x.Push(readerPage)
+                x.Push(readerPage, cellSize)
 
 
             if rows.Count = 0 
             then addNewRow_UpdateState_PushAgain()
             else 
                 let row = rows.Last()
-                if row.Push(readerPage)
+                if row.Push(readerPage, cellSize)
                 then 
                     let removeLastRow_UpdateState() =
                         rows.RemoveAt(rows.Count - 1)
@@ -1287,13 +1352,31 @@ module Imposing =
 
 
         member x.TableWidth = 
-            let args = x.ImposingArguments.Value
             if rows.Count = 0 then 0.
             else 
                 rows
                 |> Seq.map (fun row -> row.Width)
                 |> Seq.max
 
+        member x.TableWidthWithoutSpaces =
+            if rows.Count = 0 then 0.
+            else 
+                rows
+                |> Seq.map (fun row -> 
+                    row.Cells
+                    |> Seq.sumBy(fun m -> m.Size.Width)
+                )
+                |> Seq.max
+
+        member x.TableHeightWithoutSpaces =
+            if rows.Count = 0 then 0.
+            else 
+                rows
+                |> Seq.map (fun row -> 
+                    row.Cells
+                    |> Seq.sumBy(fun m -> m.Size.Height)
+                )
+                |> Seq.max
 
         member x.Width = 
             let args = x.ImposingArguments.Value
@@ -1320,6 +1403,14 @@ module Imposing =
             | Sheet_PlaceTable.At _ ->
                 pageSize.Height
 
+        member x.SheetSize =
+            { Width = x.Width
+              Height = x.Height }
+            
+
+        member x.TableSize =    
+            { Width = x.TableWidth
+              Height = x.TableHeight}
             
 
         member internal x.Rows: ResizeArray<ImposingRow> = rows
@@ -1335,10 +1426,11 @@ module Imposing =
         member private x.CellsCount = x.GetCellsCount()
 
     /// Build() -> Draw()
-    and ImposingDocument (splitDocument: SplitDocument, imposingArguments: ImposingArguments) =  
+    and ImposingDocument (splitDocument: SplitDocument, imposingArguments: ImposingArguments, ?allowRedirectCellSize) =  
         let sheets = new ResizeArray<ImposingSheet>()
         let mutable isDrawed = false
 
+        let allowRedirectCellSize = defaultArg allowRedirectCellSize false
 
         let mutable imposingArguments = imposingArguments
 
@@ -1381,7 +1473,7 @@ module Imposing =
 
             let rec produceSheet pageSize readerPages (sheet: ImposingSheet) =
                 match readerPages with 
-                | (readerPage : PdfPage) :: t ->
+                | (readerPage : PdfPage * FsSize) :: t ->
                     
                     if sheet.Push(readerPage) 
                     then 
@@ -1403,7 +1495,7 @@ module Imposing =
                 | [] -> sheet, []
 
 
-            let rec produceSheets pageSize desiredPageOriention (readerPages: PdfPage list) (sheets: ImposingSheet list) =
+            let rec produceSheets pageSize desiredPageOriention (readerPages: (PdfPage * FsSize) list) (sheets: ImposingSheet list) =
                 if readerPages.Length = 0 then sheets
                 else
                     match desiredPageOriention with 
@@ -1436,12 +1528,24 @@ module Imposing =
                 let cellSizes = 
                     readerPages
                     |> List.map (fun readerPage ->
-                        match args.DesiredSizeOp with 
-                        | Some size -> size 
-                        | None -> 
-                              if args.UseBleed then FsSize.ofRectangle(readerPage.GetTrimBox())
-                              else FsSize.ofRectangle(readerPage.GetActualBox()) 
+                        let size =
+                            match args.DesiredSizeOp with 
+                            | Some size -> size 
+                            | None -> 
+                                  if args.UseBleed then FsSize.ofRectangle(readerPage.GetTrimBox())
+                                  else FsSize.ofRectangle(readerPage.GetActualBox()) 
+
+                        match allowRedirectCellSize with 
+                        | false -> size
+                        | true -> 
+                            let margin =
+                                match args.Sheet_PlaceTable with 
+                                | Sheet_PlaceTable.Trim_CenterTable margin -> margin
+                                | Sheet_PlaceTable.At v -> Margin.Zero
+
+                            Background.redirectCellSize (size, margin) args.Background
                     )
+                    |> List.map(fun m -> m.MapValue(fun m -> m * args.CellSizeScaling))
 
                 let desiredPageOriention, pageSize =
                     let margin =
@@ -1522,7 +1626,7 @@ module Imposing =
                                 
 
 
-                produceSheets pageSize desiredPageOriention readerPages []
+                produceSheets pageSize desiredPageOriention (List.zip readerPages cellSizes) []
 
             sheets.AddRange(List.rev producedSheets)
 

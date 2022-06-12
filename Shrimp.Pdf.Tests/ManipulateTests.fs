@@ -144,7 +144,7 @@ let manipulateTests =
                     SelectorAndModifiers(
                         "change separation color of pdfFunction2 PageNumber to m100",
                         Text(Info.ColorIsOneOf (FillOrStrokeOptions.Fill, [PdfCanvasColor.Registration ;pageNumberSeparationColor])),
-                        [Modifier.SetFillColor(DeviceCmyk.MAGENTA)]
+                        [ Modifier.SetFillColor(DeviceCmyk.MAGENTA) ]
                     )
                 ]
             ) 

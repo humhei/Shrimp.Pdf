@@ -68,7 +68,7 @@ let reuseTests =
         |> runTest "datas/reuse/extract vectors4.pdf" 
         |> ignore
 
-    ftestCase "extract vectors tests5" <| fun _ -> 
+    testCase "extract vectors tests5" <| fun _ -> 
         Flow.Reuse (
             Reuses.Extract(
                 PageSelector.All,
@@ -154,7 +154,27 @@ let reuseTests =
         ()
 
 
-    testCase "imposing N-UP tests" <| fun _ -> 
+    testCase "imposing force onePage" <| fun _ -> 
+
+        Flow.Reuse (
+            Reuses.Impose_ForceOnePage
+                (fun args ->
+                    { args with 
+                        ColNums = [2]
+                        RowNum = 4
+                        Cropmark = Some Cropmark.defaultValue
+                        Background = Background.Size FsSize.A4
+                        IsRepeated = false
+                        HSpaceExes = Spaces [Space.MiddleDashLine(mm 3., mm 1.5); Space.MiddleDashLine(mm 9., mm 3.)]
+                        VSpaceExes = Spaces [mm 3.; mm 20.]
+                        Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 30.))
+                    }
+                ) ||>> fun imposingDocument -> imposingDocument.GetSheets()
+        )
+        |> runTest "datas/reuse/imposing force onePage.pdf" 
+        |> ignore
+
+    ftestCase "imposing N-UP tests" <| fun _ -> 
 
         Flow.Reuse (
             Reuse.dummy()
@@ -166,10 +186,10 @@ let reuseTests =
                         ColNums = [4]
                         RowNum = 4
                         Cropmark = Some Cropmark.defaultValue
-                        Background = Background.Size FsSize.A0
+                        Background = Background.Size (FsSize.MAXIMUN.MapValue(fun m -> m * 1.5))
                         HSpaceExes = Spaces [Space.MiddleDashLine(mm 3., mm 1.5); Space.MiddleDashLine(mm 9., mm 3.)]
                         VSpaceExes = Spaces [mm 3.; mm 20.]
-                        Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 30., mm 40., mm 50., mm 60.))
+                        Sheet_PlaceTable = Sheet_PlaceTable.At (Position.Center(0., 0.))
                         UseBleed = true
                     }
                 ) ||>> fun imposingDocument -> imposingDocument.GetSheets()
@@ -583,7 +603,15 @@ let reuseTests =
 
     testCase "resize pageSize to 7x4cm tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.Resize(PageSelector.All, PageBoxKind.ActualBox, {Width = mm 70.; Height = mm 40.})
+            Reuses.Resize(
+                pageSelector = PageSelector.First,
+                pageResizingRotatingOptions = PageResizingRotatingOptions.Keep,
+                pageResizingScalingOptions = PageResizingScalingOptions.Uniform,
+                fSize =
+                    (fun pageNumber -> { Width = mm 70.; Height = mm 40. }
+                    )
+                        
+            )
         )
         |> runTest "datas/reuse/resize pageSize to 7x4cm.pdf" 
         |> ignore

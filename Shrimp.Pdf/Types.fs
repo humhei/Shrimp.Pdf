@@ -32,6 +32,15 @@ with
         { Width = mapping x.Width
           Height = mapping x.Height }
 
+    member x.ScaleInto(targetSize: FsSize) =
+        let scaleX = targetSize.Width / x.Width
+        let scaleY = targetSize.Height / x.Height
+        let scale = min scaleX scaleY
+        x.MapValue(fun m -> m * scale)
+
+
+
+[<CustomEquality; NoComparison>]
 type RoundedSize = private RoundedSize of FsSize
 with 
     member x.Value =
@@ -47,6 +56,14 @@ with
     static member Create(size: FsSize) =
         size.Round()
         |> RoundedSize
+
+
+    override x.GetHashCode() = x.Value.GetHashCode()
+
+    override x.Equals(y) =
+        match y with 
+        | :? RoundedSize as y -> x.Width @= y.Width && x.Height @= y.Height
+        | _ -> false
 
 
 [<RequireQualifiedAccess>]
@@ -81,6 +98,9 @@ module FsSize =
             { Width = min size.Width size.Height
               Height = max size.Width size.Height }
 
+    let mapValue (fValue) (size: FsSize) =
+        { Width = fValue size.Width
+          Height = fValue size.Height }
 
     let rotate (rotation: Rotation) size = 
         match rotation with 

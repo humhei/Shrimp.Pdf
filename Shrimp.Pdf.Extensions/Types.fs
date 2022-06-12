@@ -398,6 +398,14 @@ module ExtensionTypes =
 
         static member MM6 = Margin.Create(mm 6.)
 
+        static member (~-)(margin: Margin) =
+            let f (v: float) = -v
+            { Left = f margin.Left
+              Top = f margin.Top
+              Bottom = f margin.Bottom
+              Right = f margin.Right
+            }
+
         member x.LoggingText = 
             let distincted =
                 [x.Left; x.Top; x.Right; x.Bottom]

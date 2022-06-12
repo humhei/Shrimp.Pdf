@@ -109,6 +109,8 @@ type FlowName private (flowNameKind: FlowNameKind, ?parentFlowName) =
 
     static member Disable: FlowName = FlowName(FlowNameKind.Disable)
 
+    member x.IsEmpty = flowNameKind.Name.IsNone
+
     override x.ToString() =     
         match flowNameKind.NameAndParameters with 
         | None -> "<null>"
