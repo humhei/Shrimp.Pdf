@@ -21,8 +21,12 @@ let cuttingLineSeparation =
       Color = FsValueColor.RGB_BLUE
       Transparency = 1.0 }
 
+let createTestPath file = 
+    Path.changeExtension ".tests.pdf" file
+    
+
 let runTest file flow =
-    let newPath = Path.changeExtension ".tests.pdf" file
+    let newPath = createTestPath file
     File.Copy(file, newPath, true)
 
     run newPath flow

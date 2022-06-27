@@ -7,6 +7,9 @@
   <ItemGroup>
     <Compile Include="ImageConverter.fs" />
     <Compile Include="Library.fs" />
+    <Compile Include="Extract.fs" />
+    <Compile Include="Tile.fs" />
+    <Compile Include="ModifyForEach.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -4,7 +4,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{8308060A-561D-4218-99D0-BBA6FACCE56F}</ProjectGuid>
+    <ProjectGuid>{277B2F30-71A6-4168-AC55-659E1553B913}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <RootNamespace>Shrimp.Pdf.icms2.Background.Win.Runner.Winform</RootNamespace>
     <AssemblyName>Shrimp.Pdf.icms2.Background.Win.Runner.Winform</AssemblyName>

@@ -177,15 +177,24 @@ module private Modifiers =
 
 open Constants.Operators
 
+
+
 [<StructuredFormatDisplay("{LoggingText}")>]
 type ColorMapping =
     { OriginColors: AlternativeFsColor al1List 
-      NewColor: NullablePdfCanvasColor }
+      NewColor: NullablePdfCanvasColor
+      Tolerance: ValueEqualOptionsTolerance }
         
 with 
-    static member WhiteTo(newColor) =
+    static member WhiteTo(newColor, ?tolerance) =
         { OriginColors = AtLeastOneList.Create AlternativeFsColor.Whites
-          NewColor =  NullablePdfCanvasColor.OfPdfCanvasColor newColor }
+          NewColor =  NullablePdfCanvasColor.OfPdfCanvasColor newColor
+          Tolerance = defaultArg tolerance ValueEqualOptionsTolerance.DefaultValue }
+
+    static member Create(originColors, newColor, ?tolerance) =
+        { OriginColors = originColors
+          NewColor = newColor
+          Tolerance = defaultArg tolerance ValueEqualOptionsTolerance.DefaultValue }
 
     member x.LoggingText =
         let colors = x.OriginColors
@@ -235,7 +244,7 @@ with
             colorMappings.AsList
             |> List.tryPick(fun colorMapping ->
                 let colors = List.map FsColor.OfAlternativeFsColor colorMapping.OriginColors.AsList
-                match FsColors.contains fsColor colors with 
+                match FsColors.containsWith (ValueEqualOptions.RoundedValue colorMapping.Tolerance) fsColor colors with 
                 | true -> Some colorMapping.NewColor
                     
                 | false -> None
@@ -1760,7 +1769,7 @@ type Modify =
             PageSelector.All,
             selectorAndModifiersList = [
                 { SelectorAndModifiersRecordEx.Name = "change stroke style"
-                  Selector = PathOrText(selector)
+                  Selector = selector
                   Modifiers = [
                     Modifier.ChangeStrokeStyle(targetStyle)
                   ]
@@ -1779,7 +1788,7 @@ type Modify =
             PageSelector.All,
             selectorAndModifiersList = [
                 { SelectorAndModifiersRecordEx.Name = "changeStyleF"
-                  Selector = PathOrText(selector)
+                  Selector = selector
                   PageInfosValidation = PageInfosValidation.ignore
                   Modifiers = [
                     Modifier.ChangeStyle(fTargetStyle)
@@ -1800,6 +1809,36 @@ type Modify =
                 "selector" =>    selector.ToString()
                 "targetStyle" => targetStyle.ToString()
               ]
+
+
+    static member OpenFill(selector, ?fillColor) =
+        Modify.ChangeStyle(
+            selector,
+            VectorStyle(
+                fill = 
+                    FillStyle(
+                        ColorStyle(
+                            color = NullablePdfCanvasColor.OfPdfCanvasColor(defaultArg fillColor PdfCanvasColor.BLACK),
+                            closeOperator = CloseOperator.Open
+                )
+            ))
+        )
+
+    static member CancelFillAndStroke(selector) =
+        Modify.Create_Record(
+            PageSelector.All,
+            [
+                { SelectorAndModifiersRecord.Name = "CancelFillAndStroke"
+                  Selector = selector
+                  Modifiers = 
+                    [
+                        Modifier.CancelFillAndStroke()
+                    ]
+                  }
+            ]
+        )
+        |> Manipulate.rename "Create Compound Path" []
+
 
     static member internal ReadCompoundPath_Then_TryCancel(selector, cancel: bool) =
         Manipulate.Func(fun userState ->
@@ -1880,15 +1919,16 @@ type Modify =
                     | false -> 
                         let doc = (args.Page.GetDocument() :?> PdfDocumentWithCachedResources)
                         let fillColor = 
-                            doc.Renew_OtherDocument_Color(head.FillColor)
+                            doc.Renew_OtherDocument_Color(args.Page, head.FillColor)
 
                         let strokeColor = 
-                            doc.Renew_OtherDocument_Color(head.StrokeColor)
+                            doc.Renew_OtherDocument_Color(args.Page, head.StrokeColor)
 
                         PdfCanvas.setPathRenderColorByOperation head.Operation fillColor strokeColor pdfCanvas |> ignore
-                        PdfCanvas.closePathByOperation head.Operation pdfCanvas |> ignore
+                        pdfCanvas.EoFill() |> ignore
+                        //PdfCanvas.closePathByOperation head.Operation pdfCanvas |> ignore
                     | true -> 
-                        pdfCanvas.Clip().EndPath() |> ignore
+                        pdfCanvas.EoClip().EndPath() |> ignore
               )
             )
         ||>> ignore
@@ -1897,6 +1937,8 @@ type Modify =
     static member CreateCompoundPath(selector: PageModifingArguments<_> -> _ -> bool) =
         Modify.CreateCompoundPathCommon(selector, options = CompoundCreatingOptions.CompoundPath)
         |> Manipulate.rename "Create Compound Path" []
+
+
 
     static member ReleaseCompoundPath(selector: PageModifingArguments<_> -> _ -> bool) =
         Modify.Create_Record
@@ -1920,6 +1962,8 @@ type Modify =
             match defaultArg keepCompoundPath false with
             | false -> CompoundCreatingOptions.ClippingPathAndCancel
             | true -> CompoundCreatingOptions.ClippingPathAndKeep
+
+
 
         Modify.CreateCompoundPathCommon(selector, options)
         |> Manipulate.rename "Create Clipping Path" []

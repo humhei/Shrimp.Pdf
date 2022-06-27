@@ -131,7 +131,7 @@ type PageModifier =
                 let text = 
                     infos
                     |> Seq.map fst
-                    |> Seq.map (fun m -> m.TextRenderInfo.GetText())
+                    |> Seq.map (ITextRenderInfo.getText)
                     |> String.concat delimiter
                 picker text
             )

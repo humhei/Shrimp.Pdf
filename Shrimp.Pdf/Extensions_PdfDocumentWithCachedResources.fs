@@ -50,13 +50,21 @@ module PdfDocumentWithCachedResources =
             | NullablePdfCanvasColor.Non, NullablePdfCanvasColor.Non -> None
 
             | NullablePdfCanvasColor.Non, NullablePdfCanvasColor.PdfCanvasColor _ -> 
-                Some (FsExtGState.FillOverprint)
+                match x.IsFillOverprint with 
+                | true -> Some (FsExtGState.FillOverprint)
+                | false -> None
 
             | NullablePdfCanvasColor.PdfCanvasColor _, NullablePdfCanvasColor.Non -> 
-                Some (FsExtGState.FillOverprint)
+                match x.IsStrokeOverprint with 
+                | true -> Some (FsExtGState.StrokeOverprint)
+                | false -> None
 
-            | NullablePdfCanvasColor.PdfCanvasColor _, NullablePdfCanvasColor.PdfCanvasColor _ -> 
-                Some (FsExtGState.FillStrokeOverprint)
+            | NullablePdfCanvasColor.PdfCanvasColor _, NullablePdfCanvasColor.PdfCanvasColor _ ->   
+                match x.IsStrokeOverprint, x.IsFillOverprint with 
+                | true, true -> Some (FsExtGState.FillStrokeOverprint)
+                | true, false -> Some (FsExtGState.StrokeOverprint)
+                | false, true -> Some (FsExtGState.FillOverprint)
+                | false, false -> None
             |> tryAddBlendMode
 
     type PdfCanvasAddLineArguments =

@@ -80,13 +80,6 @@ type RegularImposingSheet = RegularImposingSheet<unit>
 
 
 
-
-type PageTilingResultCount = PageTilingResultCount of int
-with 
-    member x.Value = 
-        let (PageTilingResultCount count) = x
-        count
-
 [<AutoOpen>]
 module _Reuses =
 
@@ -113,79 +106,6 @@ module _Reuses =
 
 
     type Reuses with
-        static member Extract(pageSelector: PageSelector, selector, ?keepOriginPage) =    
-            let keepOriginPage = defaultArg keepOriginPage false
-            fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
-                let reader = splitDocument.Reader
-                let parser = NonInitialClippingPathPdfDocumentContentParser(reader)
-                let totalNumberOfPages = reader.GetNumberOfPages()
-                let pageNumbers = reader.GetPageNumbers(pageSelector)
-
-                pageNumbers
-                |> List.iter(fun pageNumber ->
-                    let readerPage = reader.GetPage(pageNumber)
-
-                    let selector = 
-                        let args: PageModifingArguments<_> = 
-                            { UserState = flowModel.UserState
-                              Page = readerPage
-                              TotalNumberOfPages = totalNumberOfPages
-                              PageNum = pageNumber
-                            }
-                        
-                        Selector.toRenderInfoSelector args selector
-
-                    let infos = 
-                        let infos =
-                            NonInitialClippingPathPdfDocumentContentParser.parse pageNumber selector parser
-
-                        infos
-                        |> List.ofSeq
-                        |> List.map(fun info ->
-                            match info with 
-                            | IIntegratedRenderInfo.Path pathInfo -> 
-                                pathInfo.Renewable()
-                                |> RenewableInfo.Path
-
-                            | IIntegratedRenderInfo.Text textInfo -> 
-                                textInfo.Renewable()
-                                |> RenewableInfo.Text
-                        )
-
-                    let writer = splitDocument.Writer
-                    match keepOriginPage with 
-                    | true -> 
-                        let writerPage = readerPage.CopyTo(writer)
-                        writer.AddPage(writerPage)
-                        |> ignore
-
-                    | false -> ()
-
-                    let writerPage = writer.AddNewPage(PageSize(readerPage.GetActualBox()))
-                    writerPage.SetPageBoxToPage(readerPage) |> ignore
-                    let writerCanvas = new PdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
-                    PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
-                        writerCanvas
-                            .WriteLiteral("0 G\n")
-                            .WriteLiteral("0 g\n")
-                            |> ignore
-
-                        for info in infos do    
-                            info.CopyToDocument(writer).ApplyCtm_WriteToCanvas(writerCanvas)
-
-                        writerCanvas
-                    ) |> ignore
-
-                )
-
-            |> reuse 
-                "ExtractorPaths"
-                ["pageSelector" => pageSelector.Text
-                 "selector" => selector.ToString()
-                 "keepOriginPage" => keepOriginPage.ToString() ]
-
-        static member ExtractPaths(pageSelector, pathSelector, ?keepOriginPage) =
-            Reuses.Extract(pageSelector, Selector.Path pathSelector, ?keepOriginPage = keepOriginPage)
 
         static member Insert(insertingFile: string, ?insertingFilePageSelector: PageSelector, ?pageInsertingOptions: PageInsertingOptions, ?insertingPoint: SinglePageSelectorExpr) =
             let insertingFilePageSelector = defaultArg insertingFilePageSelector PageSelector.All
@@ -695,103 +615,8 @@ module _Reuses =
 
 
 
-        static member TilePages (tileTable: TileTableIndexer, ?direction: Direction) =
-            let direction = defaultArg direction Direction.Horizontal
-            let colNum = tileTable.ColNum
-            let rowNum = tileTable.RowNum
-            (Reuses.DuplicatePages (PageSelector.All, colNum * rowNum))
-            <+>
-            Reuse(fun _ splitDocument ->
-                let reader = splitDocument.Reader
-                let writer = splitDocument.Writer
-
-                for i = 1 to reader.GetNumberOfPages() do
-                    let readerPage = reader.GetPage(i)
-                    let actualBox = readerPage.GetActualBox()
-                    let tileIndexer = TileCellIndexer.Create((i - 1), direction)
-                    let tileBox = Rectangle.getTile tileIndexer tileTable actualBox
-
-                    let writerPage = readerPage.CopyTo(writer)
-                    writer.AddPage(writerPage) |> ignore
-
-                    PdfPage.setPageBox PageBoxKind.AllBox tileBox writerPage
-                    |> ignore
-
-                PageTilingResultCount (colNum * rowNum)
-                |> List.replicate (reader.GetNumberOfPages())
-                |> AtLeastOneList.Create
-
-            ) 
-            |> Reuse.rename 
-                "TilePages"
-                ["tileTable" => tileTable.ToString()]
-            
-
-        static member TilePages (selector: Selector<'userState>, ?sorter: SelectionSorter) =
-            let sorter = defaultArg sorter (SelectionSorter.DefaultValue)
-
-            fun (flowModel: FlowModel<'userState>) (splitDocument: SplitDocument) ->
-
-                let reader = splitDocument.Reader
-                let parser = new NonInitialClippingPathPdfDocumentContentParser(reader)
-                [
-                    for i = 1 to reader.GetNumberOfPages() do
-                        let readerPage = reader.GetPage(i)
-                        let args =
-                            { Page = readerPage
-                              UserState = flowModel.UserState 
-                              TotalNumberOfPages = splitDocument.Reader.GetNumberOfPages() 
-                              PageNum = i }
-                    
-                        let selector = (Selector.toRenderInfoSelector args selector)
-
-                        let bounds = 
-                            let rects = 
-                                NonInitialClippingPathPdfDocumentContentParser.parse i selector parser
-                                |> List.ofSeq
-                                |> List.map (fun info -> 
-                                    IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth info
-                                )
-                                |> Rectangle.removeInboxes
-
-                            sorter.Sort (rects)
 
 
-                        for bound in bounds do
-                            let writer = splitDocument.Writer
-                            let writerPageResource = readerPage.CopyTo(writer)
-                            PdfPage.setPageBox PageBoxKind.AllBox bound writerPageResource |> ignore
-                            writer.AddPage(writerPageResource)
-                            |> ignore
-
-                        yield PageTilingResultCount bounds.Length 
-
-                ]
-                |> AtLeastOneList.Create
-
-            |> reuse 
-                "TilePages"
-                ["selector" => selector.ToString()]
-
-        static member PickFromPageTilingResult(pageTilingResults: AtLeastOneList<PageTilingResultCount>, picker: PageNumSequence) =
-            let pageNumSequence = 
-                ([], pageTilingResults.AsList)
-                ||> List.scan(fun accum m -> 
-                    let maxValue = 
-                        match List.tryLast accum with 
-                        | Some last -> last 
-                        | None -> 0
-
-                    [(maxValue + 1) .. (m.Value + maxValue)]
-                ) 
-                |> List.tail
-                |> List.collect (fun m ->
-                    picker.Value
-                    |> List.choose (fun n -> List.tryItem (n.PageNumValue - 1) m)
-                )
-                |> EmptablePageNumSequence.Create
-
-            Reuses.SequencePages(pageNumSequence)
 
 
         static member ChangePageOrientation(pageSelector: PageSelector, orientation: PageOrientation) =

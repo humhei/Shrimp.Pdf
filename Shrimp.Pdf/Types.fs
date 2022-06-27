@@ -319,8 +319,7 @@ module _Types_Ex =
     type TextInfoRecord with
         member x.Is(fontName: string, fontSize: float, ?fillColor: FsColor) =
             
-            let ifFontNameTheSame = 
-                StringIC fontName = StringIC x.FontName.ShortFontName
+            let ifFontNameTheSame = x.FontName.SameFontNameTo(fontName)
     
             ifFontNameTheSame
             && fontSize @= x.FontSize

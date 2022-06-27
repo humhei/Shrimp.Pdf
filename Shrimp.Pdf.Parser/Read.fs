@@ -4,6 +4,8 @@ namespace Shrimp.Pdf.Parser
 open iText.Kernel.Geom
 
 #nowarn "0104"
+open iText.Kernel.Colors
+open iText.Kernel.Pdf.Colorspace
 open iText.Kernel.Pdf.Canvas.Parser
 open iText.Kernel.Pdf.Canvas.Parser.Listener
 open System.Collections.Generic
@@ -52,7 +54,7 @@ module RenderInfoSelector =
         |> List.distinct
 
 
-    let internal checkNonImageSelectorExists(selectors: RenderInfoSelector list) =
+    let checkNonImageSelectorExists(selectors: RenderInfoSelector list) =
         let ets =    
             selectors
             |> List.collect toEventTypes
@@ -193,6 +195,13 @@ module internal Listeners =
     /// a type named FilteredEventListener is already defined in itext7
     /// renderInfoSelectorMapping bitwise relation: OR 
     type FilteredEventListenerEx(renderInfoSelectorMapping: Map<SelectorModiferToken, RenderInfoSelector>) =
+        let et = 
+            renderInfoSelectorMapping
+            |> Map.toList
+            |> List.map snd
+            |> List.collect RenderInfoSelector.toEventTypes
+
+
         let prediateMapping = 
             renderInfoSelectorMapping
             |> Map.map (fun token renderInfoSelector -> 
@@ -202,13 +211,17 @@ module internal Listeners =
         let mutable concatedTextInfos: ResizeArray<IntegratedTextRenderInfo> = ResizeArray() 
         let mutable accumulatedPathOperatorRanges = ResizeArray()
 
-        let mutable currentXObjectClippingBox = XObjectClippingBoxState.Init
 
         let mutable currentRenderInfo: IIntegratedRenderInfoIM option = None
         let mutable currentRenderInfoToken = None
         let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Skiped
-        let mutable currentClippingPathInfo = ClippingPathInfoState.Init
 
+
+        let mutable currentXObjectClippingBox = XObjectClippingBoxState.Init
+        let mutable currentClippingPathInfo = ClippingPathInfoState.Init
+        let currentClippingPathInfoElementsStack = Stack<ResizeArray<IntersectedClippingPathInfoElement>>()
+        do currentClippingPathInfoElementsStack.Push(ResizeArray())
+        let mutable currentRenderingClippingPathInfo_Integrated: IntegratedPathRenderInfo option = None
         let parsedRenderInfos = List<IIntegratedRenderInfoIM>()
 
         let supportedEventTypes =
@@ -221,6 +234,9 @@ module internal Listeners =
               
             List supportedEvents :> ICollection<_>
 
+        member internal x.EventTypes = et
+
+        member internal x.CurrentRenderingClippingPathInfo_Integrated = currentRenderingClippingPathInfo_Integrated
 
         member internal x.AddPathOperatorRange(operatorRange) = accumulatedPathOperatorRanges.Add(operatorRange)
 
@@ -251,6 +267,7 @@ module internal Listeners =
 
             match textInfo with 
             | Some textInfo -> 
+
                 let textInfo = { textInfo with OperatorRange = Some operatorRange }
                 let textInfo = (textInfo :> IIntegratedRenderInfoIM)
                 let predicate _ filter =
@@ -292,6 +309,14 @@ module internal Listeners =
         member this.CurrentRenderInfoToken = currentRenderInfoToken
 
         member this.ParsedRenderInfos = parsedRenderInfos :> seq<IIntegratedRenderInfoIM>
+        member internal this.SaveGS() = currentClippingPathInfoElementsStack.Push(ResizeArray()) |> ignore
+        
+        member internal this.RestoreGS() = currentClippingPathInfoElementsStack.Pop() |> ignore
+
+        member private this.GetCurrentClippingPathInfoElements() = 
+            currentClippingPathInfoElementsStack.Peek()
+
+        member internal this.InitClippingPathInfo() = currentClippingPathInfo <- ClippingPathInfoState.Init
 
         member internal this.GetXObjectClippingBox() = currentXObjectClippingBox
 
@@ -327,8 +352,16 @@ module internal Listeners =
                 match tp with 
                 | EventType.CLIP_PATH_CHANGED -> 
                     let clippingPathInfo' = data :?> ClippingPathInfo
-                    currentClippingPathInfo <- ClippingPathInfoState.Intersected clippingPathInfo'
+                    currentClippingPathInfo <- 
+                        { ClippingPathInfo = clippingPathInfo'
+                          Elements = 
+                            currentClippingPathInfoElementsStack.ToArray()
+                          }
+                        |> ClippingPathInfoState.Intersected 
+
+                        
                     clippingPathInfo'.PreserveGraphicsState()
+
                 | _ ->
                     let renderInfo = 
                         match data with 
@@ -339,10 +372,37 @@ module internal Listeners =
                                       ClippingPathInfoState = currentClippingPathInfo }
                                   PathRenderInfo = pathRenderInfo
                                   AccumulatedPathOperatorRanges = accumulatedPathOperatorRanges }
-                                :> IIntegratedRenderInfoIM
 
+
+                            match pathRenderInfo.IsPathModifiesClippingPath() with 
+                            | true -> 
+                                let operatorRanges = this.GetCurrentClippingPathInfoElements()
+
+                                operatorRanges.Add(
+                                    { OperatorRanges = accumulatedPathOperatorRanges
+                                      Ctm = pathRenderInfo.GetGraphicsState().GetCtm() }
+                                )
+
+                                info.PathRenderInfo.PreserveGraphicsState()
+                                currentRenderingClippingPathInfo_Integrated <- Some info
+
+                            | false -> 
+                                match pathRenderInfo with 
+                                | :? PdfShadingPathRenderInfo -> ()
+                                | _ ->
+                                    match currentRenderingClippingPathInfo_Integrated with 
+                                    | Some info -> info.PathRenderInfo.ReleaseGraphicsState()
+                                    | None -> ()
+
+                                currentRenderingClippingPathInfo_Integrated <- None
+                                //let bound = 
+                                    //IPathRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth info
+                                    //|> FsRectangle.OfRectangle
+                                ()
                             accumulatedPathOperatorRanges <- ResizeArray<_>()
-                            info
+                            info :> IIntegratedRenderInfoIM
+
+
 
                         | :? TextRenderInfo as textRenderInfo ->
                             { ClippingPathInfos = 
@@ -418,12 +478,10 @@ module internal Listeners =
                         |_ -> failwith "Not implemented"
 
 
-
-
-
                     match isShowingText, renderInfo.TagIM with 
                     | true, IntegratedRenderInfoTagIM.Text ->
                         let renderInfo = renderInfo :?> IntegratedTextRenderInfo
+
                         match renderInfo.TextRenderInfo.GetText().Trim() with 
                         | "" -> ()
                         | _ -> 
@@ -506,7 +564,46 @@ open Constants
 type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventListenerEx, additionalContentOperators) =
     inherit PdfCanvasProcessor(listener, additionalContentOperators)
 
+
+
     member internal x.GetCurrentResource() = x.GetResources()
+
+    member internal x.PaintShading_InClippingArea(pdfName: PdfName) =
+        match listener.EventTypes with 
+        | List.Contains EventType.RENDER_PATH & List.Contains EventType.CLIP_PATH_CHANGED ->
+            let shading = x.GetCurrentResource().GetShading(pdfName)
+            let currentRenderInfo = listener.CurrentRenderingClippingPathInfo_Integrated
+            match currentRenderInfo with 
+            | Some _ -> ()
+            | None -> failwith "current RenderingClippingPathInfo should be exists before Paint Shading"
+
+            match currentRenderInfo.Value with 
+            | IIntegratedRenderInfoIM.Path renderInfo -> 
+                let canvasTag = 
+                    match renderInfo.IsClippingPath with 
+                    | true -> renderInfo.PathRenderInfo.GetCanvasTagHierarchy()
+                    | false -> failwith "currentRenderInfo should be clipping path here"
+
+                let color = new PdfShadingColor(shading)
+
+                let gsState = renderInfo.PathRenderInfo.GetGraphicsState()
+                gsState.SetFillColor(color)
+
+                let newPathRenderInfo =
+                    PdfShadingPathRenderInfo(color, Stack canvasTag, gsState, renderInfo.PathRenderInfo.GetPath())
+                
+                for operatorRange in renderInfo.AccumulatedPathOperatorRanges do 
+                    listener.AddPathOperatorRange operatorRange
+            
+                x.EventOccurred(newPathRenderInfo, EventType.RENDER_PATH)
+
+
+            | IIntegratedRenderInfoIM.Text renderInfo -> 
+                //renderInfo.TextRenderInfo.GetCanvasTagHierarchy()
+                failwith "Not implemented"
+            | IIntegratedRenderInfoIM.Image _ -> failwith "currentRenderInfo should not be Image here"
+
+        | _ -> ()
 
     member this.Listener = listener
 
@@ -525,6 +622,7 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
 
         let gs = this.GetGraphicsState()
         this.EventOccurred(new ClippingPathInfo(gs, gs.GetClippingPath(), gs.GetCtm()), EventType.CLIP_PATH_CHANGED);
+        listener.InitClippingPathInfo()
 
     override this.ProcessContent(contentBytes, resources) =
         base.ProcessContent(contentBytes, resources)
@@ -582,7 +680,8 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
     override this.ProcessPageContent(page) =
         this.InitClippingPath(page);
 
-        this.ProcessContent(page.GetContentBytes(), page.GetResources());
+        this.ProcessContent(page.GetContentBytes(), page.GetResources())
+
 
     new (listener) = NonInitialCallbackablePdfCanvasProcessor(listener, dict [])
 
@@ -594,7 +693,9 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
         let processor = processor :?> NonInitialCallbackablePdfCanvasProcessor
         let operatorName = operator.Text()
         match operatorName with 
-        | ContainsBy [Tj; TJ] -> 
+        | EQ q -> processor.Listener.SaveGS()
+        | EQ Q -> processor.Listener.RestoreGS()
+        | ContainsBy [Tj; TJ; "'"; "''"] -> 
             processor.Listener.BeginShowText()
         | _ -> ()
 
@@ -625,14 +726,15 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
                 this.OriginalOperator.Invoke(processor, operator, operands)
 
         match operatorName with 
-        | ContainsBy [Tj; TJ] -> 
+        | EQ sh -> processor.PaintShading_InClippingArea(operands.[0] :?> PdfName)
+        | ContainsBy [Tj; TJ; "'"; "''"] -> 
             processor.Listener.EndShoeText({Operator = operator; Operands = ResizeArray operands})
-            invokeOperatorRange()
 
         | ContainsBy [m; v; c; y; l; h; re] -> 
             processor.Listener.AddPathOperatorRange({ Operator = operator; Operands = ResizeArray(operands)})
-            invokeOperatorRange()
-        | _ -> invokeOperatorRange()
+        | _ -> ()
+
+        invokeOperatorRange()
 
     interface IContentOperator with 
         member this.Invoke(processor,operator,operands) =
@@ -659,7 +761,7 @@ type NonInitialClippingPathPdfDocumentContentParser(pdfDocument) =
         
         let listener = (renderListener :> IEventListener) :?> FilteredEventListenerEx
         let processor = new ReaderPdfCanvasProcessor(listener, additionalContentOperators)
-        processor.ProcessPageContent(pdfDocument.GetPage(pageNumber));
+        processor.ProcessPageContent(pdfDocument.GetPage(pageNumber))
         renderListener
 
 
@@ -673,12 +775,15 @@ module NonInitialClippingPathPdfDocumentContentParser =
         match et with 
         | [] -> [] :> seq<IIntegratedRenderInfo>
         | _ ->
-            RenderInfoSelector.checkNonImageSelectorExists [renderInfoSelector]
-            let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled"}, renderInfoSelector]
-            let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
-            parser.ProcessContent(pageNum, listener).ParsedRenderInfos
-            |> Seq.map(fun m -> m :?> IIntegratedRenderInfo)
+            let infos = 
+                RenderInfoSelector.checkNonImageSelectorExists [renderInfoSelector]
+                let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled"}, renderInfoSelector]
+                let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
+                parser.ProcessContent(pageNum, listener).ParsedRenderInfos
+                |> Seq.map(fun m -> m :?> IIntegratedRenderInfo)
 
+
+            infos
 
     let parseIM (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: NonInitialClippingPathPdfDocumentContentParser) =
         let et = RenderInfoSelector.toEventTypes renderInfoSelector

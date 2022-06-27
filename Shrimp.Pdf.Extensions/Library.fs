@@ -23,6 +23,13 @@ open iText.IO.Image
 module iText = 
 
     [<RequireQualifiedAccess>]
+    module PdfDictionary =
+        let (|TryGet|_|) (pdfName: PdfName) (dict: PdfDictionary) =
+            match dict.ContainsKey pdfName with 
+            | true -> Some (dict.Get(pdfName))
+            | false -> None
+
+    [<RequireQualifiedAccess>]
     module GlyphLine =
         let getAllGlyphs (glyphLine: GlyphLine) =
             [ for i = 0 to glyphLine.Size() - 1 do 
@@ -207,6 +214,10 @@ module iText =
             && this.GetTop() < rect.GetTop()
             && this.GetLeft() > rect.GetLeft()
             && this.GetRight() < rect.GetRight()
+
+        member this.Is_InsideOrCross_Of(rect: Rectangle) =
+            this.IsOutsideOf(rect)
+            |> not
 
         member this.IsCenterPointInsideOf(paramRect: Rectangle) =
             this.GetCenter().IsInsideOf(paramRect)
@@ -790,9 +801,9 @@ module iText =
                     failwithf "unSupported path render operation %d" others
             else []
 
-        let getBound (boundGettingOptions: BoundGettingStrokeOptions) (info: IPathRenderInfo) = 
+        let getBound (boundGettingStrokeOptions: BoundGettingStrokeOptions) (info: IPathRenderInfo) = 
             let boundWithoutWidth = info |> toActualPoints |> AtLeastTwoList.Create |> Rectangle.ofPoints
-            match boundGettingOptions with 
+            match boundGettingStrokeOptions with 
             | BoundGettingStrokeOptions.WithoutStrokeWidth -> boundWithoutWidth
             | BoundGettingStrokeOptions.WithStrokeWidth ->
                 if hasStroke info then
@@ -847,14 +858,14 @@ module iText =
                 Logger.unSupportedTextRenderMode textRenderMode
                 false
 
-        let getBound (boundGettingOptions: BoundGettingStrokeOptions) (info: TextRenderInfo) =
+        let getBound (boundGettingStrokeOptions: BoundGettingStrokeOptions) (info: TextRenderInfo) =
             let width = getWidth info
             let height = getHeight info
             let x = getX info
             let y = getY info
             let boundWithoutWidth = Rectangle.create x y width height
 
-            match boundGettingOptions with 
+            match boundGettingStrokeOptions with 
             | BoundGettingStrokeOptions.WithoutStrokeWidth -> boundWithoutWidth
             | BoundGettingStrokeOptions.WithStrokeWidth ->
                 if hasStroke info then 
@@ -887,8 +898,14 @@ module iText =
                 actualFontSize / (info.ScaleY()) 
 
             member info.GetFontName() =
-                info.GetFont().GetFontProgram().GetFontNames()
-                |> FsFontName.Create
+                let fontNames = info.GetFont().GetFontProgram().GetFontNames()
+                let fontName = 
+                    fontNames
+                    |> FsFontName.TryCreate
+
+                match fontName with 
+                | None -> DocumentFontName.Invalid
+                | Some fontName -> DocumentFontName.Valid fontName
 
 
         /// GetFontSize() * ctm.m00
@@ -912,8 +929,6 @@ module iText =
             info.Value
             |> TextRenderInfo.getX
 
-        let getText (info: ITextRenderInfo) =
-            info.Value.GetText()
 
         let hasFill (info: ITextRenderInfo) =             
             let textRenderMode = info.Value.GetTextRenderMode()
@@ -930,14 +945,14 @@ module iText =
             |> TextRenderInfo.hasStroke
 
         
-        let getBound (boundGettingOptions: BoundGettingStrokeOptions) (info: ITextRenderInfo) = 
+        let getBound (boundGettingStrokeOptions: BoundGettingStrokeOptions) (info: ITextRenderInfo) = 
             match info.EndTextState with 
             | EndTextState.No 
-            | EndTextState.Undified -> TextRenderInfo.getBound boundGettingOptions info.Value
+            | EndTextState.Undified -> TextRenderInfo.getBound boundGettingStrokeOptions info.Value
             | EndTextState.Yes ->
                 info.ConcatedTextInfos
                 |> List.ofSeq
-                |> List.map(TextRenderInfo.getBound boundGettingOptions)
+                |> List.map(TextRenderInfo.getBound boundGettingStrokeOptions)
                 |> AtLeastOneList.Create
                 |> Rectangle.ofRectangles
         
@@ -949,8 +964,8 @@ module iText =
             | EndTextState.Yes -> (getBound BoundGettingStrokeOptions.WithoutStrokeWidth info).GetWidthF()
 
 
-        let getDenseBound (boundGettingOptions: BoundGettingStrokeOptions) (info: ITextRenderInfo) =
-            let bound = (getBound boundGettingOptions info)
+        let getDenseBound (boundGettingStrokeOptions: BoundGettingStrokeOptions) (info: ITextRenderInfo) =
+            let bound = (getBound boundGettingStrokeOptions info)
             bound.setHeight(YEffort.Middle, fun m -> m * 0.42)
 
 
@@ -958,8 +973,8 @@ module iText =
 
 
         let fontNameIs (fontName: string) (info: ITextRenderInfo) =
-            let fontName' = getFontName info
-            FsFontName(fontName).ShortFontName = fontName'.ShortFontName
+            let fontName2 = getFontName info
+            fontName2.SameFontNameTo(fontName)
 
 
         let getColors (info: ITextRenderInfo) =
@@ -1026,13 +1041,13 @@ module iText =
 
         let getExtGState info = cata (ITextRenderInfo.getExtGState) (IPathRenderInfo.getExtGState) info
 
-        let getBound boundGettingOptions info = cata (ITextRenderInfo.getBound boundGettingOptions) (IPathRenderInfo.getBound boundGettingOptions) info
+        let getBound boundGettingStrokeOptions info = cata (ITextRenderInfo.getBound boundGettingStrokeOptions) (IPathRenderInfo.getBound boundGettingStrokeOptions) info
         
         let getStrokeColor (info: IAbstractRenderInfo) = info.Value.GetStrokeColor() 
 
         let getFillColor (info: IAbstractRenderInfo) = info.Value.GetFillColor()
 
-        let getDenseBound boundGettingOptions info = cata (ITextRenderInfo.getDenseBound boundGettingOptions) (IPathRenderInfo.getBound boundGettingOptions) info
+        let getDenseBound boundGettingStrokeOptions info = cata (ITextRenderInfo.getDenseBound boundGettingStrokeOptions) (IPathRenderInfo.getBound boundGettingStrokeOptions) info
         
         let getColors (info: IAbstractRenderInfo) = cata ITextRenderInfo.getColors IPathRenderInfo.getColors info
 
@@ -1050,8 +1065,8 @@ module iText =
 
         let hasStrokeOrFill (info: IAbstractRenderInfo) = hasFill info || hasStroke info
 
-        let boundIsInsideOf  boundGettingOptions rect (info: IAbstractRenderInfo) =
-            (getBound boundGettingOptions info).IsInsideOf(rect)
+        let boundIsInsideOf  boundGettingStrokeOptions rect (info: IAbstractRenderInfo) =
+            (getBound boundGettingStrokeOptions info).IsInsideOf(rect)
 
         let getDashPattern (info: IAbstractRenderInfo) = 
             let info = info.Value
@@ -1100,16 +1115,16 @@ module iText =
         let (|NonExists|IntersectedNone|IntersectedSome|) (infos: ClippingPathInfos) =
             match infos.ClippingPathInfoState, infos.XObjectClippingBoxState with 
             | ClippingPathInfoState.Init, XObjectClippingBoxState.Init -> NonExists ()
-            | ClippingPathInfoState.Intersected clippingPathInfo, XObjectClippingBoxState.Init ->
-                match (ClippingPathInfo.getActualClippingArea clippingPathInfo) with 
+            | ClippingPathInfoState.Intersected (clippingPathInfo), XObjectClippingBoxState.Init ->
+                match (ClippingPathInfo.getActualClippingArea clippingPathInfo.ClippingPathInfo) with 
                 | ClippingPathInfoResult.IntersectedSome clippingArea -> IntersectedSome clippingArea
                 | ClippingPathInfoResult.IntersectedNone -> IntersectedNone
 
             | ClippingPathInfoState.Init, XObjectClippingBoxState.IntersectedSome rect ->
                 IntersectedSome rect
 
-            | ClippingPathInfoState.Intersected clippingPathInfo, XObjectClippingBoxState.IntersectedSome rect ->
-                let clippingArea = ClippingPathInfo.getActualClippingArea clippingPathInfo
+            | ClippingPathInfoState.Intersected (clippingPathInfo), XObjectClippingBoxState.IntersectedSome rect ->
+                let clippingArea = ClippingPathInfo.getActualClippingArea clippingPathInfo.ClippingPathInfo
                 match clippingArea with 
                 | ClippingPathInfoResult.IntersectedNone -> IntersectedNone
                 | ClippingPathInfoResult.IntersectedSome clippingArea ->
@@ -1154,7 +1169,7 @@ module iText =
                 | Some of Rectangle
                 | SameToInfoBound
 
-            let private getVisibleBound boundGettingOptions (fillOrStrokeOptions: FillOrStrokeOptions) (clippingPathInfos: ClippingPathInfos) (info: IAbstractRenderInfo) =
+            let private getVisibleBound boundGettingStrokeOptions (fillOrStrokeOptions: FillOrStrokeOptions) (clippingPathInfos: ClippingPathInfos) (info: IAbstractRenderInfo) =
                 let b = 
                     match fillOrStrokeOptions with 
                     | FillOrStrokeOptions.Fill -> IAbstractRenderInfo.hasFill info
@@ -1171,7 +1186,7 @@ module iText =
                     match clippingPathInfos with 
                     | ClippingPathInfos.IntersectedNone -> VisibleBoundResult.None
                     | ClippingPathInfos.IntersectedSome clippingBound -> 
-                        let bound = IAbstractRenderInfo.getBound boundGettingOptions info
+                        let bound = IAbstractRenderInfo.getBound boundGettingStrokeOptions info
                         match Rectangle.tryGetIntersection bound clippingBound with 
                         | Some rect -> VisibleBoundResult.Some rect
                         | None -> VisibleBoundResult.None
@@ -1184,8 +1199,8 @@ module iText =
                 | VisibleBoundResult.Some _ -> true
                 | VisibleBoundResult.SameToInfoBound -> true
 
-            let tryGetVisibleBound boundGettingOptions (clippingPathInfos: ClippingPathInfos) (info: IAbstractRenderInfo) =
-                match getVisibleBound boundGettingOptions FillOrStrokeOptions.FillOrStroke clippingPathInfos info with 
+            let tryGetVisibleBound boundGettingStrokeOptions (clippingPathInfos: ClippingPathInfos) (info: IAbstractRenderInfo) =
+                match getVisibleBound boundGettingStrokeOptions FillOrStrokeOptions.FillOrStroke clippingPathInfos info with 
                 | VisibleBoundResult.None -> None
                 | VisibleBoundResult.Some rect -> Some rect
                 | VisibleBoundResult.SameToInfoBound -> None
@@ -1197,8 +1212,8 @@ module iText =
         let isFillVisible (info: IIntegratedRenderInfo) = 
             IAbstractRenderInfo.isVisible FillOrStrokeOptions.Fill info.ClippingPathInfos info
     
-        let tryGetVisibleBound boundGettingOptions (info: IIntegratedRenderInfo) =
-            IAbstractRenderInfo.tryGetVisibleBound boundGettingOptions info.ClippingPathInfos info
+        let tryGetVisibleBound boundGettingStrokeOptions (info: IIntegratedRenderInfo) =
+            IAbstractRenderInfo.tryGetVisibleBound boundGettingStrokeOptions info.ClippingPathInfos info
     
         let isVisible (info: IIntegratedRenderInfo) =
             IAbstractRenderInfo.isVisible FillOrStrokeOptions.FillOrStroke info.ClippingPathInfos info
@@ -1287,7 +1302,7 @@ module iText =
                   float32 affineTransformRecord.m02,
                   float32 affineTransformRecord.m12 )
 
-        member x.AddImage(image, affineTransformRecord: AffineTransformRecord) =
+        member x.AddImage(image: ImageData, affineTransformRecord: AffineTransformRecord) =
             x.AddImageWithTransformationMatrix
                 ( image,
                   float32 affineTransformRecord.m00,
@@ -1296,6 +1311,8 @@ module iText =
                   float32 affineTransformRecord.m11,
                   float32 affineTransformRecord.m02,
                   float32 affineTransformRecord.m12 )
+
+
 
         member x.AddXObject(xObject: PdfXObject, affineTransform: AffineTransform) =
             x.AddXObject
@@ -1375,7 +1392,7 @@ module iText =
         let rectangle (rect: Rectangle) (canvas: PdfCanvas) =
             canvas.Rectangle(rect)
 
-        let addXObject (xobject: PdfFormXObject) (affineTransformRecord: AffineTransformRecord) (canvas: PdfCanvas) =
+        let addXObject (xobject: PdfXObject) (affineTransformRecord: AffineTransformRecord) (canvas: PdfCanvas) =
             canvas.AddXObject (xobject, affineTransformRecord)
 
         let beginText (canvas: PdfCanvas) =

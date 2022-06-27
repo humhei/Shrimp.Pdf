@@ -11,7 +11,6 @@ open iText.Kernel.Pdf.Xobject
 open Shrimp.Pdf.Parser
 open System.Drawing
 open Shrimp.FSharp.Plus
-open System.Drawing
 open Shrimp.Pdf.Colors
 open Akkling
 open Shrimp.Pdf.icms2
@@ -33,6 +32,8 @@ module _ModifierIM =
           Size: Size 
           XDpi: float }
 
+
+
     type ImageInfo =
         static member VisibleBoundIs(relativePosition, areaGettingOptions) =
             fun pageModifingArgs (image: IntegratedImageRenderInfo) ->
@@ -44,16 +45,50 @@ module _ModifierIM =
 
 
     type InfoIM = 
-        static member DenseBoundIs(relativePosition, areaGettingOptions, ?boundGettingOptions) =
+        static member DenseBoundIs(relativePosition, areaGettingOptions, ?boundGettingStrokeOptions) =
             fun pageModifingArgs (info: IIntegratedRenderInfoIM) ->
                 match info with 
                 | IIntegratedRenderInfoIM.Vector vector ->
-                    Info.DenseBoundIs(relativePosition, areaGettingOptions, ?boundGettingOptions = boundGettingOptions) pageModifingArgs vector
+                    Info.DenseBoundIs(relativePosition, areaGettingOptions, ?boundGettingStrokeOptions = boundGettingStrokeOptions) pageModifingArgs vector
 
                 | IIntegratedRenderInfoIM.Pixel image ->
                     ImageInfo.VisibleBoundIs(relativePosition, areaGettingOptions) pageModifingArgs image
 
-                    
+
+        static member BoundIs(relativePosition, areaGettingOptions, ?boundGettingStrokeOptions) =
+            fun pageModifingArgs (info: IIntegratedRenderInfoIM) ->
+                match info with 
+                | IIntegratedRenderInfoIM.Vector vector ->
+                    Info.BoundIs(relativePosition, areaGettingOptions, ?boundGettingStrokeOptions = boundGettingStrokeOptions) pageModifingArgs vector
+
+                | IIntegratedRenderInfoIM.Pixel image ->
+                    ImageInfo.VisibleBoundIs(relativePosition, areaGettingOptions) pageModifingArgs image
+
+        static member IsVisible() =
+            fun pageModifingArgs (info: IIntegratedRenderInfoIM) ->
+                match info with 
+                | IIntegratedRenderInfoIM.Vector vector ->
+                    Info.IsVisible() pageModifingArgs vector
+
+                | IIntegratedRenderInfoIM.Pixel image ->
+                    let bound = image.VisibleBound()
+                    match bound with 
+                    | Some bound -> true
+                    | None -> false
+
+
+        static member BoundIs_InsideOrCross_Of(areaGettingOptions, ?boundGettingStrokeOptions) =
+            fun pageModifingArgs (info: IIntegratedRenderInfoIM) ->
+                match info with 
+                | IIntegratedRenderInfoIM.Vector vector ->
+                    Info.BoundIs_InsideOrCross_Of
+                        (areaGettingOptions, ?boundGettingStrokeOptions = boundGettingStrokeOptions)
+                        pageModifingArgs vector
+                | IIntegratedRenderInfoIM.Pixel image ->
+                    let bound = image.VisibleBound()
+                    match bound with 
+                    | None -> false
+                    | Some bound -> bound.Is_InsideOrCross_Of(pageModifingArgs.Page.GetArea(areaGettingOptions))
 
 
     let private client  = lazy GetDefaultClusterIcm2Client()
@@ -314,19 +349,24 @@ module _ModifierIM =
                  match args.CurrentRenderInfoIM with 
                  | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->
                     let bound = 
-                        IImageRenderInfo.getUnclippedBound imageRenderInfo
+                        imageRenderInfo.VisibleBound()
 
-                    let ctm = 
-                        AffineTransform.ofMatrix (imageRenderInfo.ImageRenderInfo.GetImageCtm())
-                        |> AffineTransform.inverse
+                    match bound with 
+                    | None -> 
+                        ModifierPdfCanvasActions.KeepImage()
 
-                    let transformedBound =  ctm.Transform(bound)
+                    | Some bound ->
+                        let ctm = 
+                            AffineTransform.ofMatrix (imageRenderInfo.ImageRenderInfo.GetImageCtm())
+                            |> AffineTransform.inverse
 
-                    ModifierPdfCanvasActions.CreateSuffix_Image(
-                        [ PdfCanvas.concatMatrixByTransform (AffineTransformRecord.ofAffineTransform ctm)
-                          PdfCanvas.addRectangle transformedBound (defaultArg fArgs id)
-                        ]
-                    )
+
+                        ModifierPdfCanvasActions.CreateSuffix_Image(
+                            [ 
+                              PdfCanvas.concatMatrixByTransform (AffineTransformRecord.ofAffineTransform ctm)
+                              PdfCanvas.addRectangle bound (defaultArg fArgs id)
+                            ]
+                        )
 
                  | IIntegratedRenderInfoIM.Vector renderInfo ->
                      ModifierPdfCanvasActions.Keep(renderInfo.Tag)

@@ -179,6 +179,18 @@ with
                     let targetPath = 
                         directory </> sprintf "%d_%s.pdf" index fileName
 
+                    //let path = 
+                    //    @"D:\Users\Jia\Documents\MyData\Docs\2017\仙峰\THEFASHIONSUPPLY\素材\袋子贴标拼好版\.extract\袋子贴标2022-6-16.withTemplate.tiled.HasContents\X002R8GFTT_Emma Shoes Slip On Perfor...da Sneaker(Black_White, 5)_New.pdf"
+
+                    //let dest = @"D:\Users\Jia\Documents\MyData\Docs\2017\仙峰\THEFASHIONSUPPLY\素材\袋子贴标拼好版\.extract\袋子贴标2022-6-16.withTemplate.tiled.HasContents\.shrimp.pdf\X002R8GFTT_Emma Shoes Slip On Perfor...da Sneaker(Black_White, 5)_New\0_RemoveColorsRGB 247 147 30 RGB BLUE PdfExtractorTempTextColor.pdf"
+                    //if File.exists path 
+                    //then    
+                    
+                    //    let dir = Path.getDirectory dest
+                    //    let dirInfo = DirectoryInfo(dir)
+                    //    for i in [1..100] do
+                    //        File.Copy(path, dest, true)
+
                     File.Copy(flowModel.File, targetPath, true)
 
                 | None -> ()

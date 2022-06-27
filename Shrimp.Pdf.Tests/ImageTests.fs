@@ -21,6 +21,25 @@ open Shrimp.Pdf.Image
 let imageTests = 
     testList "ImageTests" <| [
     
+        testCase "extract object tests" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/image/extract objects.pdf" 
+            |> ignore
+
+        testCase "extract object tests2" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.TrimBox))
+                )
+            )
+            |> runTest "datas/image/extract objects2.pdf" 
+            |> ignore
 
         testCase "convert pdf to jpeg" <| fun _ -> 
             let pdfFile =

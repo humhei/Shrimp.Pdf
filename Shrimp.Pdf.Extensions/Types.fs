@@ -2,18 +2,45 @@
 
 open Newtonsoft.Json
 open iText.IO.Font
+open System.Collections.Generic
 
 #nowarn "0104"
 open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas.Parser.Data
-open FParsec
 open iText.Kernel.Pdf
 open Shrimp.FSharp.Plus
 
 
+
 [<AutoOpen>]
 module ExtensionTypes =
-    
+    [<AutoOpen>]
+    module _Colors =
+        open iText.Kernel.Colors
+        open iText.Kernel.Pdf.Colorspace
+        
+        type PdfShadingColor(shading: PdfShading, colorSpace) =
+            inherit Color(colorSpace, [||])
+
+            member x.ColorSpace = colorSpace
+
+            member x.Shading = shading
+
+            new (shading: PdfShading) =
+                let colorSpace =
+                    PdfSpecialCs.NChannel(shading.GetColorSpace() :?> PdfArray)
+
+                new PdfShadingColor(shading, colorSpace)
+
+        type PdfShadingPathRenderInfo(color: PdfShadingColor, canvasTagHierarchy, gs, path) =
+            inherit PathRenderInfo(canvasTagHierarchy, gs, path, PathRenderInfo.FILL)
+
+
+    [<Struct>]
+    type OperatorRange =
+        { Operator: PdfLiteral 
+          Operands: IList<PdfObject> }
+
     type BlendMode =
         | Normal = 0
         | Multiply = 1
@@ -74,11 +101,27 @@ module ExtensionTypes =
     
         member x.LoggingText = shortFontName
     
-        static member Create (fontNames: FontNames) =
+        static member TryCreate (fontNames: FontNames) =
             let fontName = fontNames.GetFontName()
-            FsFontName(fontName)
+            match fontName with 
+            | null -> None
+            | fontName ->
+                FsFontName(fontName)
+                |> Some
     
-    
+
+    [<RequireQualifiedAccess>]
+    type DocumentFontName = 
+        | Valid of FsFontName
+        | Invalid
+    with    
+        member x.SameFontNameTo(fontName: string) =
+            match x with 
+            | DocumentFontName.Invalid -> false
+            | DocumentFontName.Valid x ->
+                FsFontName(fontName).ShortFontName = x.ShortFontName
+
+
 
     [<StructuredFormatDisplay("{LoggingText}")>]
     type FsRectangle =
@@ -273,11 +316,26 @@ module ExtensionTypes =
             | IntegratedRenderInfoTagIM.Text -> IntegratedRenderInfoTag.Text |> Some
             | IntegratedRenderInfoTagIM.Image -> None
 
+    [<RequireQualifiedAccess>]
+    type SerializableXObjectClippingBoxState =
+        | Init 
+        | IntersectedSome of FsRectangle
+        | IntersectedNone 
+
     [<RequireQualifiedAccess; Struct>]
     type XObjectClippingBoxState =
         | Init 
         | IntersectedSome of Rectangle
         | IntersectedNone 
+    with 
+        member x.Serializable =
+            match x with 
+            | XObjectClippingBoxState.Init -> SerializableXObjectClippingBoxState.Init
+            | XObjectClippingBoxState.IntersectedNone -> SerializableXObjectClippingBoxState.IntersectedNone
+            | XObjectClippingBoxState.IntersectedSome v -> 
+                SerializableXObjectClippingBoxState.IntersectedSome  (FsRectangle.OfRectangle v)
+
+            
 
     
     [<Struct; RequireQualifiedAccess>]
@@ -304,20 +362,23 @@ module ExtensionTypes =
             | _ -> Rectangle.ofPoints (AtLeastTwoList.Create points) |> ClippingPathInfoResult.IntersectedSome
 
 
+    type IntersectedClippingPathInfoElement =
+        { OperatorRanges: ResizeArray<OperatorRange> 
+          Ctm: Matrix }
 
+    type IntersectedClippingPathInfo =
+        { ClippingPathInfo: ClippingPathInfo 
+          Elements: array<ResizeArray<IntersectedClippingPathInfoElement>>  }
     
     [<RequireQualifiedAccess; Struct>]
     type ClippingPathInfoState =
         | Init 
-        | Intersected of ClippingPathInfo
+        | Intersected of IntersectedClippingPathInfo
     with 
         member x.ActualClippingPathArea =
             match x with 
             | ClippingPathInfoState.Init _ -> None
-            | ClippingPathInfoState.Intersected v -> Some (ClippingPathInfo.getActualClippingArea v)
-
-
-
+            | ClippingPathInfoState.Intersected (v) -> Some (ClippingPathInfo.getActualClippingArea v.ClippingPathInfo)
 
 
 
@@ -397,6 +458,10 @@ module ExtensionTypes =
         static member Zero = Margin.Create(0.)
 
         static member MM6 = Margin.Create(mm 6.)
+        static member MM3 = Margin.Create(mm 3.)
+
+        static member ``MM1.5`` = Margin.Create(mm 1.5)
+
 
         static member (~-)(margin: Margin) =
             let f (v: float) = -v

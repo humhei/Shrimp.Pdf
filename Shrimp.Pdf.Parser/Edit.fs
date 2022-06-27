@@ -592,32 +592,46 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                 |> ignore
 
             | CurrentRenderInfoStatus.Selected ->
-                let currentGS = this.GetGraphicsState()
-                currentPdfCanvas.SetCanvasGraphicsState(currentGS)
+                let isShading = 
+                    match eventListener.CurrentRenderInfo with 
+                    | IIntegratedRenderInfoIM.Path (pathRenderInfo) -> pathRenderInfo.IsShading
+                    | _ ->false
 
-                let tag =
-                    match operatorName with 
-                    | Path -> IntegratedRenderInfoTag.Path
-                    | Text -> IntegratedRenderInfoTag.Text
-                    | _ -> failwith "Invalid token"
+                match isShading with 
+                | true -> 
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
 
-                let modifierPdfCanvasActions =
-                    eventListener.CurrentRenderInfoToken.Value
-                    |> List.map(fun token -> 
-                        let fix = snd selectorModifierMapping.[token]
-                        fix { CurrentRenderInfo = eventListener.CurrentRenderInfo
-                              ConcatedTextInfos = eventListener.ConcatedTextInfos }    
+                | false ->
+                    let currentGS = this.GetGraphicsState()
+                    currentPdfCanvas.SetCanvasGraphicsState(currentGS)
+
+                    let tag =
+                        match operatorName with 
+                        | Path -> IntegratedRenderInfoTag.Path
+                        | Text -> IntegratedRenderInfoTag.Text
+                        | _ -> failwith "Invalid token"
+
+                    let modifierPdfCanvasActions =
+                        eventListener.CurrentRenderInfoToken.Value
+                        |> List.map(fun token -> 
+                            let fix = snd selectorModifierMapping.[token]
+                            fix { CurrentRenderInfo = eventListener.CurrentRenderInfo
+                                  ConcatedTextInfos = eventListener.ConcatedTextInfos }    
+                        )
+                        |> ModifierPdfCanvasActions.ConcatOrKeep tag
+
+
+                    PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
+                        (canvas, modifierPdfCanvasActions.Actions)
+                        ||> List.fold(fun canvas action ->
+                            action canvas 
+                        )
+                        |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
                     )
-                    |> ModifierPdfCanvasActions.ConcatOrKeep tag
 
 
-                PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
-                    (canvas, modifierPdfCanvasActions.Actions)
-                    ||> List.fold(fun canvas action ->
-                        action canvas 
-                    )
-                    |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
-                )
+
             | _ -> failwith "Invalid token"
 
         | _ ->

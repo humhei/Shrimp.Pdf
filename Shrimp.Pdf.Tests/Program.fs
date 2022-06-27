@@ -12,6 +12,7 @@ open Shrimp.Pdf.Image
 open Shrimp.FSharp.Plus
 open System.Drawing
 open Shrimp.Pdf.IntegratedInfos
+open System.Collections.Generic
 open System.IO
 open iText.IO.Image
 
@@ -56,6 +57,7 @@ let main argv =
     //BitmapUtils.ReadColorValues(new Bitmap(bmp))
     //|> BitmapColorValues.toIndexableStorage ({ColorSpace = ColorSpace.Cmyk; IndexTable = None})
     //|> ignore
+
     runTests testConfig allTests
     Console.Read()
     0

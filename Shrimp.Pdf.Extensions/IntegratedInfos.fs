@@ -15,10 +15,6 @@ open iText.IO.Image
 open Shrimp.Pdf.Constants.Operators
 
 
-[<Struct>]
-type OperatorRange =
-    { Operator: PdfLiteral 
-      Operands: IList<PdfObject> }
 
 [<AutoOpen>]
 module _OperatorRangeExtensions =
@@ -55,6 +51,13 @@ module IntegratedInfos =
           ClippingPathInfos: ClippingPathInfos
           AccumulatedPathOperatorRanges: seq<OperatorRange> }
     with 
+        member x.IsShading = 
+            match x.PathRenderInfo with 
+            | :? PdfShadingPathRenderInfo -> true
+            | _ -> false
+
+        member x.IsClippingPath = x.PathRenderInfo.IsPathModifiesClippingPath()
+
         member integratedInfo.RecordValue =
             let renderInfo = integratedInfo.PathRenderInfo
             { FillColor = renderInfo.GetFillColor()
@@ -89,7 +92,7 @@ module IntegratedInfos =
           FontSize: float 
           FillColor: iText.Kernel.Colors.Color 
           StrokeColor: iText.Kernel.Colors.Color 
-          FontName: FsFontName
+          FontName: DocumentFontName
           Bound: FsRectangle
           DenseBound: FsRectangle
           EndTextState: EndTextState }
@@ -220,6 +223,9 @@ module IntegratedInfos =
                 |> Some
 
 
+        member x.UnclippedBound() =
+            IImageRenderInfo.getUnclippedBound x
+
         member x.Dpi =
             let bound =  IImageRenderInfo.getUnclippedBound x
             let width = x.ImageData.GetWidth()
@@ -319,7 +325,34 @@ module IntegratedInfos =
             | Image info -> Some (info)
             | _ -> None 
 
-        let getDenseBound boundGettingOptions info = 
+        let getDenseBound boundGettingStrokeOptions info = 
             match info with 
-            | Vector vector -> IAbstractRenderInfo.getDenseBound boundGettingOptions vector  |> Some
-            | Pixel info -> info.VisibleBound() 
+            | Vector vector -> IAbstractRenderInfo.getDenseBound boundGettingStrokeOptions vector  |> Some
+            | Pixel info -> info.VisibleBound()
+
+        let getBound boundGettingStrokeOptions info = 
+            match info with 
+            | Vector vector -> IAbstractRenderInfo.getBound boundGettingStrokeOptions vector |> Some
+            | Pixel info -> info.VisibleBound()
+
+
+        let isVisible (info: IIntegratedRenderInfoIM) =
+            match info with 
+            | Vector vector -> IIntegratedRenderInfo.isVisible vector
+            | Pixel image -> 
+                match image.VisibleBound() with 
+                | Some bound -> true
+                | None -> false
+
+
+namespace Shrimp.Pdf.Extensions
+
+[<AutoOpen>]
+module _IntegratedInfosExtensions =
+    open Shrimp.Pdf
+
+
+    [<RequireQualifiedAccess>]
+    module ITextRenderInfo =
+        let getText (info: ITextRenderInfo) =
+            (info :?> IntegratedTextRenderInfo).Text()

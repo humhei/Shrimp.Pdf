@@ -26,8 +26,6 @@ open Shrimp.FSharp.Plus
 module _Colors =
 
 
-
-
     type DeviceRgb with 
         static member OfHex(hex: int) =
             let color = System.Drawing.Color.FromArgb(hex)
@@ -57,18 +55,44 @@ module _Colors =
         member x.Value = v
 
 
+    type ValueEqualOptionsTolerance = 
+        { Rgb: ToleranceColorValue 
+          Cmyk: ToleranceColorValue
+          Lab: ToleranceColorValue
+          Gray: ToleranceColorValue}
+    with    
+
+        
+
+        member x.Item(colorSpace: ColorSpace) =
+            match colorSpace with 
+            | ColorSpace.Gray -> x.Gray
+            | ColorSpace.Lab -> x.Lab
+            | ColorSpace.Cmyk -> x.Cmyk
+            | ColorSpace.Rgb -> x.Rgb
+
+
+        static member DefaultValue =
+            { Rgb  =  ToleranceColorValue 0.0025 
+              Cmyk = ToleranceColorValue 0.01
+              Lab  = ToleranceColorValue 0.01
+              Gray = ToleranceColorValue 0.0025 }
+
+        static member Rough =
+            { Rgb  =  ToleranceColorValue 0.01
+              Cmyk = ToleranceColorValue  1.0
+              Lab  = ToleranceColorValue  1.0
+              Gray = ToleranceColorValue  0.01 }
+            
+
     [<RequireQualifiedAccess>]
     type ValueEqualOptions =
         | Exactly
-        | RoundedValue of (ColorSpace -> ToleranceColorValue)
+        | RoundedValue of ValueEqualOptionsTolerance
 
     with 
         static member DefaultRoundedValue = 
-            ValueEqualOptions.RoundedValue(fun colorSpace ->
-                match colorSpace with 
-                | ColorSpace.Rgb -> ToleranceColorValue 0.0025
-                | _ -> ToleranceColorValue 0.001
-            )
+            ValueEqualOptions.RoundedValue(ValueEqualOptionsTolerance.DefaultValue)
 
 
 
@@ -91,6 +115,9 @@ module _Colors =
         static member WHITE = FsGray 1.0f
         static member GRAY = FsGray 0.5f
         
+        member x.ToItextColor() =
+            DeviceGray(x.Value)
+
         member x.LoggingText_Raw = 
             let (FsGray v) = x
             sprintf "K %.2f" v
@@ -204,6 +231,12 @@ module _Colors =
               G = float color.G / 255. |> float32 
               B = float color.B / 255. |> float32 }
 
+    [<RequireQualifiedAccess>]
+    module FsDeviceRgb = 
+        let (|Gray|Rgb|) (rgb: FsDeviceRgb) =
+            match List.distinct (rgb.MapValue(fun m -> Math.Round(float m, 2) |> float32).Values) with 
+            | [v] -> Gray 
+            | _ -> Rgb
 
     type FsLab =
         { 
@@ -516,11 +549,11 @@ module _Colors =
                 | ValueEqualOptions.RoundedValue fTolearance ->
                     let colorValue1 =
                         color1.GetColorValue()
-                        |> List.map (fun v -> NearbyColorValue(float v, fTolearance(colorSpace)) )
+                        |> List.map (fun v -> NearbyColorValue(float v, fTolearance.[colorSpace]) )
 
                     let colorValue2 =
                         color2.GetColorValue()
-                        |> List.map (fun v -> NearbyColorValue(float v, fTolearance(colorSpace)) )
+                        |> List.map (fun v -> NearbyColorValue(float v, fTolearance.[colorSpace]) )
                     colorValue1 = colorValue2
             | _ :: _ -> false
             | [] -> failwith "Invalid token"
@@ -1158,13 +1191,15 @@ module _Colors =
         | IccBased of FsIccBased
         | ValueColor of FsValueColor
         | PatternColor of PatternColor
+        | ShadingColor of PdfShadingColor
     with 
         member x.AsAlternativeFsColor =
             match x with 
             | FsColor.ValueColor v -> v  |> AlternativeFsColor.ValueColor  |> Some
             | FsColor.IccBased v ->   v  |> AlternativeFsColor.IccBased    |> Some
             | FsColor.Separation v -> v  |> AlternativeFsColor.Separation  |> Some
-            | FsColor.PatternColor _ -> None
+            | FsColor.PatternColor _ 
+            | FsColor.ShadingColor _ -> None
 
         static member OfAlternativeFsColor color =
             match color with 
@@ -1185,7 +1220,8 @@ module _Colors =
                     | FsColor.ValueColor v -> Some v
                     | FsColor.IccBased _
                     | FsColor.Separation _  
-                    | FsColor.PatternColor _ -> None
+                    | FsColor.PatternColor _
+                    | FsColor.ShadingColor _ -> None
 
             match value with 
             | Some value -> value.IsInColorSpace(colorSpace)
@@ -1199,17 +1235,36 @@ module _Colors =
             | FsColor.IccBased v -> v.LoggingText
             | FsColor.ValueColor v -> v.LoggingText
             | FsColor.PatternColor _ -> "PatternColor"
+            | FsColor.ShadingColor _ -> "ShadingColor"
 
         override x.ToString() = x.GetType().Name + " " + x.LoggingText
 
         member x.IsEqualTo(y, ?valueEqualOptions) =
             let valueEqualOptions = defaultArg valueEqualOptions ValueEqualOptions.DefaultRoundedValue
-            match x, y with 
-            | FsColor.IccBased x, FsColor.IccBased y -> x.IsEqualTo(y, valueEqualOptions)
-            | FsColor.Separation x, FsColor.Separation y -> x.IsEqualTo(y, valueEqualOptions)
-            | FsColor.ValueColor x, FsColor.ValueColor y -> x.IsEqualTo(y, valueEqualOptions)
-            | FsColor.PatternColor x, FsColor.PatternColor y -> x.Equals(y)
-            | _, _ -> false
+            let FALSE = false
+            match x with 
+            | FsColor.IccBased x -> 
+                match y with 
+                | FsColor.IccBased y -> x.IsEqualTo(y, valueEqualOptions)
+                | _ -> FALSE
+            | FsColor.Separation x -> 
+                match y with 
+                | FsColor.Separation y -> x.IsEqualTo(y, valueEqualOptions)
+                | _ -> FALSE
+
+            | FsColor.ValueColor x -> 
+                match y with 
+                | FsColor.ValueColor y -> x.IsEqualTo(y, valueEqualOptions)
+                | _ -> FALSE
+            | FsColor.PatternColor x -> 
+                match y with 
+                | FsColor.PatternColor y -> x.Equals(y)
+                | _ -> FALSE
+
+            | FsColor.ShadingColor x ->     
+                match y with 
+                | FsColor.ShadingColor y -> x.Equals(y)
+                | _ -> FALSE
 
         static member RGB_BLACK = FsValueColor.RGB_BLACK  |> FsColor.ValueColor
         static member RGB_WHITE = FsValueColor.RGB_WHITE  |> FsColor.ValueColor
@@ -1279,6 +1334,9 @@ module _Colors =
                     FsIccBased.OfICCBased iccBased
                     |> FsColor.IccBased
                 | :? PatternColor as patternColor -> FsColor.PatternColor patternColor
+                | :? PdfShadingColor as shadingColor -> 
+                    FsColor.ShadingColor shadingColor
+
                 | _ -> 
                     FsValueColor.OfItextColor color
                     |> FsColor.ValueColor
@@ -1332,6 +1390,10 @@ module _Colors =
 
         let contains (color: FsColor) colors =
             colors |> List.exists (fun color' -> color.IsEqualTo(color'))
+
+        let containsWith valueEqualOptions (color: FsColor) colors =
+            colors |> List.exists (fun color' -> color.IsEqualTo(color', valueEqualOptions = valueEqualOptions))
+
 
         let containsItext (color: Color) colors =
             let color = FsColor.OfItextColor color
@@ -1523,6 +1585,7 @@ module _Colors =
                 |> PdfCanvasColor.Separation
             | FsColor.IccBased _ -> failwithf "Currently conversion of icc based color to PdfCanvasColor is not supported" 
             | FsColor.PatternColor _ -> failwithf "Currently conversion of pattern color to PdfCanvasColor is not supported" 
+            | FsColor.ShadingColor _ -> failwithf "Currently conversion of shading color to PdfCanvasColor is not supported" 
             | FsColor.ValueColor valueColor ->
                 valueColor
                 |> PdfCanvasColor.Value
@@ -1539,6 +1602,7 @@ module _Colors =
                 PdfCanvasColor.Separation separation
             | FsColor.IccBased _ -> failwithf "Currently conversion of icc based color to PdfCanvasColor is not supported" 
             | FsColor.PatternColor _ -> failwithf "Currently conversion of pattern to PdfCanvasColor is not supported" 
+            | FsColor.ShadingColor _ -> failwithf "Currently conversion of shading color to PdfCanvasColor is not supported" 
             | FsColor.ValueColor color -> PdfCanvasColor.Value color
 
         member pdfCanvasColor.IsEqualTo(fsColor: FsColor) =
@@ -1560,7 +1624,7 @@ module _Colors =
                     | FsColor.Separation separation2 ->
                         separation1.IsEqualTo(
                             separation2,
-                            ValueEqualOptions.RoundedValue (fun _ -> ToleranceColorValue 1.)
+                            ValueEqualOptions.RoundedValue ValueEqualOptionsTolerance.Rough
                         )
                     | _ -> false
 

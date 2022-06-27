@@ -6,6 +6,7 @@ open System.Collections.Concurrent
 open iText.Kernel.Pdf
 open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf
+open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Colors
 open iText.IO.Font.Constants
@@ -41,6 +42,7 @@ open Newtonsoft.Json
 
 open Shrimp.Pdf.FontNames.Query
 open iText.Kernel.Pdf.Xobject
+open iText.Kernel.Pdf.Canvas.Parser.Data
 
 [<RequireQualifiedAccess>]
 type FsPdfFontFactory =
@@ -80,7 +82,9 @@ type private PdfDocumentCache private
     (pdfDocument: unit -> PdfDocumentWithCachedResources,
      fontsCache: ConcurrentDictionary<FsPdfFontFactory, PdfFont>,
      fontsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfFont>,
-     patternColorsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfPattern.Tiling>,
+     patternColorsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PatternColor>,
+     shadingCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfShading>,
+     imageCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfImageXObject>,
      colorsCache: ConcurrentDictionary<ResourceColor, Color>,
      xobjectCache: ConcurrentDictionary<PdfFile, ReaderDocument * PdfFormXObject>,
      extGStateCache: ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>) =
@@ -95,6 +99,9 @@ type private PdfDocumentCache private
         for (readerDoc, _) in xobjectCache.Values do 
             readerDoc.Reader.Close()
         fontsCache_hashable_fromOtherDocument.Clear()
+        patternColorsCache_hashable_fromOtherDocument.Clear()
+        shadingCache_hashable_fromOtherDocument.Clear()
+        imageCache_hashable_fromOtherDocument.Clear()
         xobjectCache.Clear()
         extGStateCache.Clear()
 
@@ -111,43 +118,102 @@ type private PdfDocumentCache private
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(), 
+            new ConcurrentDictionary<_, _>(), 
+            new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>())
 
     member internal x.CacheDocumentFonts(fonts) =
         for (font: PdfFont) in fonts do
             let fontNames = font.GetFontProgram().GetFontNames()
-            fontsCache.GetOrAdd(FsPdfFontFactory.DocumentFont(FsFontName.Create(fontNames)), fun _ ->
-                font
-            ) |> ignore
+
+            match FsFontName.TryCreate fontNames with 
+            | Some fontNames ->
+                fontsCache.GetOrAdd(FsPdfFontFactory.DocumentFont(fontNames), fun _ ->
+                    font
+                ) |> ignore
+
+            | None -> ()
 
     member internal x.GetOrCreateFont_FromOtherDocument(font: PdfFont) =
-            let fontNames = font.GetFontProgram().GetFontNames()
-            match fontNames.GetFontName() with 
-            | null -> 
-                let number = hashNumberOfPdfIndirectReference <| font.GetPdfObject().GetIndirectReference() 
-                fontsCache_hashable_fromOtherDocument.GetOrAdd(
-                    number,
-                    (fun number ->
-                        let pdfObject = font.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false) :?> PdfDictionary
-                        PdfFontFactory.CreateFont(pdfObject)
-                    )
-                )
-            | _ ->
-                fontsCache.GetOrAdd(FsPdfFontFactory.DocumentFont(FsFontName.Create(fontNames)), fun _ ->
+            //let fontNames = font.GetFontProgram().GetFontNames()
+
+            //match (FsFontName.TryCreate(fontNames)) with 
+            //| Some fontNames ->
+            //    fontsCache.GetOrAdd(FsPdfFontFactory.DocumentFont(fontNames), fun _ ->
+            //        let pdfObject = font.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false) :?> PdfDictionary
+            //        PdfFontFactory.CreateFont(pdfObject)
+            //    ) 
+            //| None -> 
+            let number = hashNumberOfPdfIndirectReference <| font.GetPdfObject().GetIndirectReference() 
+            fontsCache_hashable_fromOtherDocument.GetOrAdd(
+                number,
+                (fun number ->
                     let pdfObject = font.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false) :?> PdfDictionary
                     PdfFontFactory.CreateFont(pdfObject)
-                ) 
-
-    member internal x.GetOrCreatePatternColor_FromOtherDocument(pattern: PdfPattern) =
-            let number = hashNumberOfPdfIndirectReference <| pattern.GetPdfObject().GetIndirectReference()
-            patternColorsCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
-                match pattern with 
-                | :? PdfPattern.Tiling as tiling ->
-                    let pdfObject = pattern.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false) :?> PdfStream
-                    
-                    PdfPattern.Tiling (pdfObject)
-            
+                )
             )
+
+    member internal x.GetOrCreateSharding_FromOtherDocument(sharding: PdfShading) =
+        
+        let number = hashNumberOfPdfIndirectReference <| sharding.GetPdfObject().GetIndirectReference()
+        shadingCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
+            let pdfObject = sharding.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false)
+            PdfShading.MakeShading(pdfObject :?> PdfDictionary)
+        )
+
+    member internal x.GetOrCreateImage_FromOtherDocument(image: ImageRenderInfo) =
+        let image = image.GetImage()
+        let number = hashNumberOfPdfIndirectReference <| image.GetPdfObject().GetIndirectReference()
+        imageCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
+            image.CopyTo(pdfDocument())
+        )
+
+    member internal x.GetOrCreatePatternColor_FromOtherDocument(otherDocumentPage: PdfPage, patternColor: PatternColor) =
+            match patternColor.GetColorSpace() with 
+            | :? PdfSpecialCs.UncoloredTilingPattern as colorSpace ->
+                match colorSpace.GetPdfObject() with 
+                | :? PdfArray ->
+                    let pattern = patternColor.GetPattern()
+                    let number = hashNumberOfPdfIndirectReference <| pattern.GetPdfObject().GetIndirectReference()
+                    
+                    patternColorsCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
+                        match pattern with 
+                        | :? PdfPattern.Tiling as tiling ->
+                            let pdfObject = pattern.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false) :?> PdfStream
+                        
+                            let tiling = PdfPattern.Tiling (pdfObject)
+                            new PatternColor(tiling, colorSpace, patternColor.GetColorValue()) 
+                    )
+
+
+            | :? PdfSpecialCs.Pattern as colorSpace ->
+                match colorSpace.GetPdfObject() with 
+                | :? PdfName as pdfName ->  
+                    let resource = otherDocumentPage.GetResources()
+                    let pattern = 
+                        let pdfObject = resource.GetPdfObject()
+                        pdfObject.GetAsDictionary(pdfName)
+
+                    let pair = pattern.EntrySet() |> Seq.exactlyOne
+                    
+                    let number = hashNumberOfPdfIndirectReference <| pair.Value.GetIndirectReference()
+
+                    patternColorsCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
+                        match pair.Value.CopyTo(pdfDocument(), allowDuplicating = false) with 
+                        | :? PdfStream as pdfObject ->
+                        
+                            let tiling = PdfPattern.Tiling(pdfObject)
+                            new PatternColor(tiling) 
+
+                        | :? PdfDictionary as pdfObject ->
+                            let shading = PdfPattern.Shading(pdfObject)
+                            new PatternColor(shading) 
+                    )
+
+
+
+
+            
             
 
     member internal x.GetOrCreateColor(resourceColor: ResourceColor) =
@@ -244,6 +310,8 @@ type private PdfDocumentCache private
              new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
+             new ConcurrentDictionary<_, _>(),
+             new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>())
 
 and PdfDocumentWithCachedResources =
@@ -324,7 +392,15 @@ and PdfDocumentWithCachedResources =
                 let resourceColor = ResourceColor.Registration
                 pdfDocument.GetOrCreateColor(resourceColor) 
 
-    member x.Renew_OtherDocument_Color(otherDocumentColor: Color) =
+    member x.Renew_OtherDocument_PdfShading(writerResource: PdfResources, otherDocumentColor: Color) =
+        match otherDocumentColor with 
+        | :? PdfShadingColor as color ->
+            let shading = x.cache.GetOrCreateSharding_FromOtherDocument(color.Shading)
+            writerResource.AddShading(shading)
+            |> Some
+        | _ -> None
+
+    member x.Renew_OtherDocument_Color(otherDocumentPage: PdfPage, otherDocumentColor: Color) =
         match (FsColor.OfItextColor otherDocumentColor) with
         | FsColor.Separation v ->
             x.GetOrCreateColor(PdfCanvasColor.Separation v)
@@ -333,13 +409,13 @@ and PdfDocumentWithCachedResources =
         | FsColor.ValueColor color -> color.ToItextColor()
 
         | FsColor.PatternColor patternColor ->
-            match patternColor.GetColorSpace() with 
-            | :? PdfSpecialCs.UncoloredTilingPattern as colorSpace ->
-                match colorSpace.GetPdfObject() with 
-                | :? PdfArray ->
-                    let pattern = patternColor.GetPattern()
-                    let tilling = x.cache.GetOrCreatePatternColor_FromOtherDocument(pattern) 
-                    new PatternColor(tilling, colorSpace, patternColor.GetColorValue()) :> Color
+            x.cache.GetOrCreatePatternColor_FromOtherDocument(otherDocumentPage, patternColor) :> Color
+
+        | FsColor.ShadingColor shadingColor -> otherDocumentColor
+            
+    member x.Renew_OtherDocument_Image(otherDocumentImage: ImageRenderInfo) =
+        x.cache.GetOrCreateImage_FromOtherDocument(otherDocumentImage)
+
 
     member x.Renew_OtherDocument_Font(pdfFont: PdfFont) =
         x.cache.GetOrCreateFont_FromOtherDocument(pdfFont)

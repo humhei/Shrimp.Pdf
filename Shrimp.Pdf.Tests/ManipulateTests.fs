@@ -45,6 +45,11 @@ module PageInfos =
 let manipulateTests =
   testList "Manipulates Tests" [
 
+    testCase "read shading colors" <| fun _ ->  
+        let path = "datas/manipulate/read shading colors.pdf" 
+        PdfRunner.ReadColors(PdfFile path, createTestPath path)
+        |> ignore
+
     testCase "resize path as copy" <| fun _ ->     
         let resizingStyle = 
             ResizingStyle
@@ -54,7 +59,7 @@ let manipulateTests =
         Flow.Manipulate (
             Modify.ChangeStyle(
                 selector = (
-                    Info.BoundSizeIs(fun size -> size.GetWidthF() >= mm 30.)
+                    Selector.Path(Info.BoundSizeIs(fun size -> size.GetWidthF() >= mm 30.))
                 ),
                 targetStyle = VectorStyle(resizingStyle = resizingStyle, asCopy = true)
             )
@@ -80,6 +85,8 @@ let manipulateTests =
     testCase "make combound path from blue strokes" <| fun _ -> 
         Flow.Manipulate (
             Modify.CreateCompoundPath(Info.StrokeColorIs FsColor.RGB_BLUE)
+            <+>
+            Modify.OpenFill(Selector.Path(fun _ _ -> true))
         )
         |> runTest "datas/manipulate/make combound path from blue strokes.pdf" 
         |> ignore
@@ -93,9 +100,19 @@ let manipulateTests =
 
     testCase "make clipping path from blue strokes and keep" <| fun _ -> 
         Flow.Manipulate (
-            Modify.CreateCompoundPath(Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation))
+            Modify.CreateClippingPath(Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation), keepCompoundPath = true)
         )
         |> runTest "datas/manipulate/make clipping path from blue strokes and keep.pdf" 
+        |> ignore
+
+
+    testCase "make clipping path from blue strokes and keep2" <| fun _ -> 
+        let cuttingLine = FsColor.Separation cuttingLineSeparation
+
+        Flow.Manipulate (
+            Modify.CreateClippingPath(Info.StrokeColorIs cuttingLine, keepCompoundPath = false)
+        )
+        |> runTest "datas/manipulate/make clipping path from blue strokes and keep2.pdf" 
         |> ignore
 
 
@@ -130,6 +147,23 @@ let manipulateTests =
             )
 
         ()
+
+    
+    testCase "modify tests" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    SelectorAndModifiers(
+                        "modify tests",
+                        Dummy,
+                        []
+                    )
+                ]
+            ) 
+        )
+        |> runTest "datas/manipulate/modify.pdf" 
+        |> ignore
 
     testCase "change separation color of pdfFunction2 PageNumber to m100" <| fun _ -> 
         
@@ -538,6 +572,7 @@ let manipulateTests =
         )
         |> runTest "datas/manipulate/add bound to bound1.pdf" 
         |> ignore
+
 
     testCase "add line to position" <| fun _ -> 
         Flow.Manipulate (
