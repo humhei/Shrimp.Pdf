@@ -9,7 +9,7 @@
     <Compile Include="Library.fs" />
     <Compile Include="Extract.fs" />
     <Compile Include="Tile.fs" />
-    <Compile Include="ModifyForEach.fs" />
+    <Compile Include="TransformForEach.fs" />
   </ItemGroup>
 
   <ItemGroup>

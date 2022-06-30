@@ -20,184 +20,209 @@ open iText.Kernel.Pdf.Canvas
 
 let reuseTests =
   testList "Reuse Tests" [
-
-    testCase "extract and scale" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-            )
-        )
-        |> runTest "datas/reuse/extract and scale.pdf" 
-        |> ignore
-
-    testCase "extract paths tests" <| fun _ -> 
-
-        Flow.Reuse (
-            Reuses.ExtractPaths(PageSelector.All, Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation), keepOriginPage = true)
-        )
-        |> runTest "datas/reuse/extract paths tests.pdf" 
-        |> ignore
-
-    testCase "extract vectors tests" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors.pdf" 
-        |> ignore
-
-    testCase "extract vectors tests2" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors2.pdf" 
-        |> ignore
-
-    testCase "extract vectors tests3" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors3.pdf" 
-        |> ignore
-
-    testCase "extract vectors tests4" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors4.pdf" 
-        |> ignore
-
-    testCase "extract vectors tests5" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors5.pdf" 
-        |> ignore
-
-    testCase "extract vectors tests6" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors6.pdf" 
-        |> ignore
-
-    testCase "extract vectors tests7" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors7.pdf" 
-        |> ignore
-
-
-    testCase "extract vectors tests8" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors8.pdf" 
-        |> ignore
-
-    testCase "extract vectors tests9" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors9.pdf" 
-        |> ignore
-
-    testCase "extract vectors tests10" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors10.pdf" 
-        |> ignore
-
-    testCase "extract vectors tests11" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors11.pdf" 
-        |> ignore
-
-    testCase "extract vectors tests12" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.TrimBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors12.pdf" 
-        |> ignore
-
-    testCase "extract vectors tests13" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.TrimBox))
-            )
-        )
-        |> runTest "datas/reuse/extract vectors13.pdf" 
-        |> ignore
-
-
-    testCase "extract vectors tests14" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(fun args info ->
-                    let b = Info.FillColorIs FsColor.RGB_RED args info
-                    if b && args.PageNum = 2 then ()
-                    b
-                
-                )
-            )
-        )
-        |> runTest "datas/reuse/extract vectors14.pdf" 
-        |> ignore
-
     
-    testCase "extract vectors tests15" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.ExtractIM(
-                PageSelector.All,
-                Selector.PathOrText(fun args info -> 
-                    true
+    testList "extract tests" [
+        ftestCase "extract and scale" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.TransformForEach(
+                    Selector.PathOrText(Info.StrokeColorIs (FsColor.RGB_BLUE)),
+                    transform = (fun bound -> Rectangle.applyMargin (-Margin.``MM3``) bound.Bound)
                 )
             )
-        )
-        |> runTest "datas/reuse/extract vectors15.pdf" 
-        |> ignore
+            |> runTest "datas/reuse/extract and scale.pdf" 
+            |> ignore
+
+
+        testCase "extract and scale2" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.TransformForEach(
+                    Selector.PathOrText(Info.StrokeColorIs (FsColor.RGB_BLUE)),
+                    transform = (fun bound -> Rectangle.applyMargin (-Margin.``MM3``) bound.Bound)
+                )
+            )
+            |> runTest "datas/reuse/extract and scale2.pdf" 
+            |> ignore
+
+        testCase "extract and scale3" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.TransformForEach(
+                    Selector.PathOrText(Info.StrokeColorIs (FsColor.RGB_BLUE)),
+                    transform = (fun bound -> Rectangle.applyMargin (-Margin.``MM3``) bound.Bound)
+                )
+            )
+            |> runTest "datas/reuse/extract and scale3.pdf" 
+            |> ignore
+
+        testCase "extract paths tests" <| fun _ -> 
+
+            Flow.Reuse (
+                Reuses.ExtractPaths(PageSelector.All, Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation), keepOriginPage = true)
+            )
+            |> runTest "datas/reuse/extract paths tests.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests2" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors2.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests3" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors3.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests4" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors4.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests5" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors5.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests6" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors6.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests7" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors7.pdf" 
+            |> ignore
+
+
+        testCase "extract vectors tests8" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors8.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests9" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors9.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests10" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors10.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests11" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors11.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests12" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.TrimBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors12.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests13" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.TrimBox))
+                )
+            )
+            |> runTest "datas/reuse/extract vectors13.pdf" 
+            |> ignore
+
+
+        testCase "extract vectors tests14" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(fun args info ->
+                        let b = Info.FillColorIs FsColor.RGB_RED args info
+                        if b && args.PageNum = 2 then ()
+                        b
+                    
+                    )
+                )
+            )
+            |> runTest "datas/reuse/extract vectors14.pdf" 
+            |> ignore
+
+        
+        testCase "extract vectors tests15" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(fun args info -> 
+                        true
+                    )
+                )
+            )
+            |> runTest "datas/reuse/extract vectors15.pdf" 
+            |> ignore
+    ]
+
+
 
     testCase "add background tests" <| fun _ -> 
 
@@ -608,88 +633,92 @@ let reuseTests =
         |> runTest "datas/reuse/duplicate pages by copied num sequence.pdf" 
         |> ignore
 
-
-    testCase "tile pages and NUP for big data" <| fun _ -> 
-        let colNum = 5 
-        let rowNum = 8
-        Flow.Reuse (
-            Reuses.TilePages (TileTableIndexer.Create (colNum = colNum, rowNum = rowNum), Direction.Horizontal)
-            <+>
-            Reuses.Impose(fun args ->
-                { args with 
-                    ColNums = [colNum]
-                    RowNum = rowNum
-                    Background = Background.Size FsSize.MAXIMUN
-                }
-            )
-            <+>
-            Reuses.TilePages (TileTableIndexer.Create (colNum = colNum, rowNum = rowNum), Direction.Horizontal)
-            <+>
-            Reuses.Impose(fun args ->
-                { args with 
-                    ColNums = [colNum]
-                    RowNum = rowNum
-                    Background = Background.Size FsSize.MAXIMUN
-                }
-            )
-        )
-        |> runTest "datas/reuse/tile pages and NUP for big data.pdf" 
-        |> ignore
-
-    testCase "tile pages by colNum and rowNum tests" <| fun _ -> 
-        Flow.Reuse (Reuses.TilePages (TileTableIndexer.Create (colNum = 3, rowNum = 2), Direction.Vertical))
-        |> runTest "datas/reuse/tile pages by colNum and rowNum.pdf" 
-        |> ignore
-
-    testCase "tile pages by colNum and rowNum tests2" <| fun _ -> 
-        let tileTable = 
-            TileTableIndexer.Create (
-                colNum = 6,
-                rowNum = 4,
-                HSpacing = [mm 1.; mm 2.],
-                VSpacing = [mm 3.; mm 6.; mm 9.]
-            )
-        Flow.Reuse (Reuses.TilePages (tileTable, Direction.Vertical, pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM3))
-        |> runTest "datas/reuse/tile pages by colNum and rowNum2.pdf" 
-        |> ignore
-
-    testCase "tile pages by selector tests" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.TilePages
-                (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
-                 sorter = SelectionSorter.Plane(mm 3., Direction.Vertical)
-            )
-            <.+>
-            (Reuse.Func(fun userState ->
-                Reuses.PickFromPageTilingResult(userState, PageNumSequence.Create [1])
-            ))
-
-        )
-        |> runTest "datas/reuse/tile pages by selector.pdf" 
-        |> ignore
-
-    testCase "tile pages by selector tests2" <| fun _ -> 
-        Flow.Reuse (
-            Reuses.TilePages
-                (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
-                distincter = PageTilingDistincter.Text (fun args bound infos ->
-                    let texts = 
-                        infos
-                        |> List.ofSeq
-                        |> List.choose (IIntegratedRenderInfo.asITextRenderInfo)
-                        |> List.filter(fun m -> 
-                            let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
-                            textInfoBound.IsCenterPointInsideOf(bound.Value)
-                        )
-                        |> List.map(fun m -> m.Text())
-
-                    texts :> System.IComparable
+    testList "tile page tests" [
+        testCase "tile pages and NUP for big data" <| fun _ -> 
+            let colNum = 5 
+            let rowNum = 8
+            Flow.Reuse (
+                Reuses.TilePages (TileTableIndexer.Create (colNum = colNum, rowNum = rowNum), Direction.Horizontal)
+                <+>
+                Reuses.Impose(fun args ->
+                    { args with 
+                        ColNums = [colNum]
+                        RowNum = rowNum
+                        Background = Background.Size FsSize.MAXIMUN
+                    }
+                )
+                <+>
+                Reuses.TilePages (TileTableIndexer.Create (colNum = colNum, rowNum = rowNum), Direction.Horizontal)
+                <+>
+                Reuses.Impose(fun args ->
+                    { args with 
+                        ColNums = [colNum]
+                        RowNum = rowNum
+                        Background = Background.Size FsSize.MAXIMUN
+                    }
                 )
             )
+            |> runTest "datas/reuse/tile pages and NUP for big data.pdf" 
+            |> ignore
 
-        )
-        |> runTest "datas/reuse/tile pages by selector2.pdf" 
-        |> ignore
+        testCase "tile pages by colNum and rowNum tests" <| fun _ -> 
+            Flow.Reuse (Reuses.TilePages (TileTableIndexer.Create (colNum = 3, rowNum = 2), Direction.Vertical))
+            |> runTest "datas/reuse/tile pages by colNum and rowNum.pdf" 
+            |> ignore
+
+        testCase "tile pages by colNum and rowNum tests2" <| fun _ -> 
+            let tileTable = 
+                TileTableIndexer.Create (
+                    colNum = 6,
+                    rowNum = 4,
+                    HSpacing = [mm 1.; mm 2.],
+                    VSpacing = [mm 3.; mm 6.; mm 9.]
+                )
+            Flow.Reuse (Reuses.TilePages (tileTable, Direction.Vertical, pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM3))
+            |> runTest "datas/reuse/tile pages by colNum and rowNum2.pdf" 
+            |> ignore
+
+        testCase "tile pages by selector tests" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.TilePages
+                    (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                     sorter = SelectionSorter.Plane(mm 3., Direction.Vertical)
+                )
+                <.+>
+                (Reuse.Func(fun userState ->
+                    Reuses.PickFromPageTilingResult(userState, PageNumSequence.Create [1])
+                ))
+
+            )
+            |> runTest "datas/reuse/tile pages by selector.pdf" 
+            |> ignore
+
+        testCase "tile pages by selector tests2" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.TilePages
+                    (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                    distincter = PageTilingDistincter.Text (fun args bound infos ->
+                        let texts = 
+                            infos
+                            |> List.ofSeq
+                            |> List.choose (IIntegratedRenderInfo.asITextRenderInfo)
+                            |> List.filter(fun m -> 
+                                let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
+                                textInfoBound.IsCenterPointInsideOf(bound.Value)
+                            )
+                            |> List.map(fun m -> m.Text())
+
+                        texts :> System.IComparable
+                    )
+                )
+
+            )
+            |> runTest "datas/reuse/tile pages by selector2.pdf" 
+            |> ignore
+
+    
+    ]
+
 
     testCase "trim to first stroke color" <| fun _ -> 
         let strokeColor = 

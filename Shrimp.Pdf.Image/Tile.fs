@@ -25,6 +25,7 @@ module _Tile =
     type PageTilingDistincterInfo =
         {  Bound: Rectangle
            Distincter: IComparable
+           BoundPredicate: IIntegratedRenderInfo -> bool
            Args: PageModifingArguments<unit>
         }
     with 
@@ -45,16 +46,18 @@ module _Tile =
         | Groupby_CenterPointIsInside
         | Groupby_DenseBoundIsInside of Margin
     with    
+        
+
         member internal x.GetBound() =
             match x with 
             | PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside _ ->
-                IIntegratedRenderInfoIM.getDenseBound
+                IIntegratedRenderInfoIM.getDenseBound BoundGettingStrokeOptions.WithoutStrokeWidth
     
             | PageTilingRenewInfosSplitter.Groupby_CenterPointIsInside _ ->
-                IIntegratedRenderInfoIM.getBound
+                IIntegratedRenderInfoIM.getBound BoundGettingStrokeOptions.WithoutStrokeWidth
     
             | PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross _ ->
-                IIntegratedRenderInfoIM.getBound
+                IIntegratedRenderInfoIM.getBound BoundGettingStrokeOptions.WithStrokeWidth
     
         static member ``Groupby_DenseBoundIsInside_MM1.5`` =
             PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside Margin.``MM1.5``
@@ -70,7 +73,7 @@ module _Tile =
             PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross Margin.``MM1.5``
             
     
-        member internal x.Infos__GroupOrFilter_IntoOp(bounds: Rectangle list, infos: 'info list, fBound) =
+        member internal x.Infos__GroupOrFilter_IntoOp(bounds: Rectangle list, infos: 'info list, fBound, ?predicateEx) =
             let bounds =
                 bounds
                 |> List.mapi(fun i bound ->
@@ -89,7 +92,14 @@ module _Tile =
                             match infoBound.Value with 
                             | None -> false
                             | Some infoBound ->
-                                predicate bound infoBound
+                                (match predicateEx with 
+                                    | Some predicateEx -> 
+                                        predicateEx info bound infoBound 
+                                        && predicate bound infoBound
+                                    | None -> predicate bound infoBound
+                                )
+
+                                   
                         )
 
                     let r = 
@@ -228,14 +238,14 @@ module _Tile =
                                     bounds,
                                     infos,
                                     (fun m ->   
-                                        let targetPageBox = splitter.GetBound() BoundGettingStrokeOptions.WithStrokeWidth m.OriginInfo
+                                        let targetPageBox = splitter.GetBound() m.OriginInfo
                                         TargetPageBox targetPageBox
                                     )
                                 )
                                 |> List.mapi(fun i targetPageInfoOp ->
                                     match targetPageInfoOp with 
                                     | Some (targetPageBox, infos) ->
-                                        TargetRenewablePageInfo.NewPage(TargetPageBox (Some targetPageBox.Bound), [TargetRenewableNewPageInfoElement.Create infos])
+                                        TargetRenewablePageInfo.NewPage(TargetPageBox (Some targetPageBox.Bound), TargetRenewableNewPageInfoElement.Create infos)
 
                                     | None ->
                                         TargetRenewablePageInfo.EmptyPage(TargetPageBox (Some bounds.[i]))
@@ -281,6 +291,7 @@ module _Tile =
                                 
 
                             let selector = (Selector.toRenderInfoSelector args selector)
+                            let predicate = RenderInfoSelector.toRenderInfoPredication selector
 
                             let args = args.DisposeUserState()
 
@@ -302,7 +313,8 @@ module _Tile =
                                     |> List.map(fun bound ->
                                         {  Bound = bound 
                                            Distincter = 0 :> IComparable
-                                           Args = args }
+                                           Args = args
+                                           BoundPredicate = predicate }
                                     )
 
                                 | Some (distincter) ->
@@ -340,6 +352,7 @@ module _Tile =
                                                     infos
                                                     |> distincter (args.DisposeUserState()) (Bound bound)
                                                    Args = args
+                                                   BoundPredicate = predicate
                                                 }
                                                 |> Some 
                                         )
@@ -362,7 +375,7 @@ module _Tile =
 
                 boundGroups
                 |> List.groupBy(fun m -> m.PdfPageNumber)
-                |> List.map(fun (m, boundGroups) ->
+                |> List.map(fun (pdfPageNumber, boundGroups) ->
                     match pageTilingRenewOptions with 
                     | PageTilingRenewOptions.UsingOriginPdfPage ->
                         boundGroups
@@ -398,14 +411,14 @@ module _Tile =
                                         bounds,
                                         infos,
                                         (fun m ->   
-                                            let targetPageBox = splitter.GetBound() BoundGettingStrokeOptions.WithStrokeWidth m.OriginInfo
+                                            let targetPageBox = splitter.GetBound() m.OriginInfo
                                             TargetPageBox targetPageBox
                                         )
                                     )
                                     |> List.mapi(fun i targetPageInfoOp ->
                                         match targetPageInfoOp with 
                                         | Some (targetPageBox, infos) ->
-                                            TargetRenewablePageInfo.NewPage(TargetPageBox (Some targetPageBox.Bound), [TargetRenewableNewPageInfoElement.Create infos])
+                                            TargetRenewablePageInfo.NewPage(TargetPageBox (Some targetPageBox.Bound), TargetRenewableNewPageInfoElement.Create infos)
 
                                         | None ->
                                             TargetRenewablePageInfo.EmptyPage(TargetPageBox (Some bounds.[i]))
