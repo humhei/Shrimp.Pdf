@@ -10,7 +10,15 @@ open Shrimp.FSharp.Plus
 open Shrimp.FSharp.Plus.Text
 open Shrimp.Pdf.Colors
 
-
+[<AutoOpen>]
+module _IAbstractRenderInfoExtensions =
+    type IAbstractRenderInfo with 
+        static member FsColorIs(fillOrStrokeOptions, fsColor: FsColor) =
+            fun (info: #IAbstractRenderInfo) ->
+                IAbstractRenderInfo.ColorIs(fillOrStrokeOptions, fun color ->
+                    FsColor.OfItextColor color
+                    |> FsColor.equal fsColor
+                ) info
 
 type PageOrientation =
     | Landscape  = 0

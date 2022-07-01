@@ -42,6 +42,7 @@ let allTests =
             icms2Tests.icmsTests
             ImageTests.imageTests
             ParsingTests.parsingTests
+            ExtractTests.extractTests
         ]
 
 [<EntryPoint>]

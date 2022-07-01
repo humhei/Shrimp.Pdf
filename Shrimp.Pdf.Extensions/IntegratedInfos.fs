@@ -320,6 +320,11 @@ module IntegratedInfos =
             | Text info -> Some (info)
             | _ -> None 
 
+        let asVector (info: IIntegratedRenderInfoIM) =
+            match info with
+            | Vector info -> Some (info)
+            | Pixel _ -> None 
+
         let asIImageRenderInfo (info: IIntegratedRenderInfoIM) = 
             match info with
             | Image info -> Some (info)

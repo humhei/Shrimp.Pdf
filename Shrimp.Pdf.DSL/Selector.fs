@@ -83,19 +83,19 @@ module _SelectionGrouper =
 
 [<RequireQualifiedAccess>]
 type SelectionSorter =
-    | None
+    | Non
     | Plane of tolerance: float * direction: Direction 
 with    
     /// (SelectionSorter.Plane (mm 3., Direction.Horizontal))
     static member DefaultValue =
         (SelectionSorter.Plane (mm 3., Direction.Horizontal))
 
-    member sorter.Sort(rects: iText.Kernel.Geom.Rectangle list) =
+    member sorter.SortToLists(rects: iText.Kernel.Geom.Rectangle list) =
         match sorter with 
-        | SelectionSorter.None -> rects
+        | SelectionSorter.Non -> [rects]
 
         | SelectionSorter.Plane(tolerance, direction) ->
-            let rec sortRects accum (rects: iText.Kernel.Geom.Rectangle list) =
+            let rec sortRects previousCoordinateUltraValue accum accums (rects: iText.Kernel.Geom.Rectangle list) =
                 match rects with 
                 | _ :: _ -> 
                     match direction with 
@@ -117,7 +117,10 @@ with
 
                         let leftRects = rects.[0 .. (index-1)] @ rects.[(index+1) .. (rects.Length-1)]
 
-                        sortRects (leftTopRect :: accum) leftRects
+                        match previousCoordinateUltraValue with 
+                        | Some (previousMaxY) when (abs(previousMaxY - maxY) <= tolerance) ->
+                            sortRects (Some maxY) [] (List.rev (leftTopRect :: accum) :: accums) leftRects
+                        | _ -> sortRects (Some maxY) (leftTopRect :: accum) accums leftRects
 
                     | Direction.Vertical ->
                         let minX = 
@@ -137,12 +140,21 @@ with
 
                         let leftRects = rects.[0 .. (index-1)] @ rects.[(index+1) .. (rects.Length-1)]
 
-                        sortRects (leftTopRect :: accum) leftRects
+                        match previousCoordinateUltraValue with 
+                        | Some (previousMinX) when (abs(previousMinX - minX) <= tolerance) ->
+                            sortRects (Some minX) [] (List.rev (leftTopRect :: accum) :: accums) leftRects
+                        | _ -> sortRects (Some minX) (leftTopRect :: accum) accums leftRects
 
-                | [] -> accum
 
-            sortRects [] rects
+                | [] -> accums
+
+
+            sortRects None [] [] rects
             |> List.rev
+
+    member sorter.Sort(rects: iText.Kernel.Geom.Rectangle list) =
+        sorter.SortToLists(rects)
+        |> List.concat
 
 
 

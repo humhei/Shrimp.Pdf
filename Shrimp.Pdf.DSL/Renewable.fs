@@ -48,34 +48,34 @@ module _Renewable =
                     let last = Array.last operands
                     let newRect = Rectangle.ofPoints (AtLeastTwoList.Create transformedPoints)
                     let dst = 
-                        //let newY, newHeight = 
-                        //    let newY = newRect.GetYF()
-                        //    match originRect.GetHeightF() with 
-                        //    | SmallerThan 0. -> 
-                        //        let height = newRect.GetHeightF()
-                        //        newY + height, -(height)
-                        //    | _ -> newY, newRect.GetHeightF()
+                        let newY, newHeight = 
+                            let newY = newRect.GetYF()
+                            match originRect.GetHeightF() with 
+                            | SmallerThan 0. -> 
+                                let height = newRect.GetHeightF()
+                                newY + height, -(height)
+                            | _ -> newY, newRect.GetHeightF()
 
-                        //let newX, newWidth = 
-                        //    let newX = newRect.GetXF()
-                        //    match originRect.GetWidthF() with 
-                        //    | SmallerThan 0. -> 
-                        //        let width = newRect.GetWidthF()
-                        //        newX + width, -(width)
-                        //    | _ -> newX, newRect.GetWidthF()
+                        let newX, newWidth = 
+                            let newX = newRect.GetXF()
+                            match originRect.GetWidthF() with 
+                            | SmallerThan 0. -> 
+                                let width = newRect.GetWidthF()
+                                newX + width, -(width)
+                            | _ -> newX, newRect.GetWidthF()
 
-                        //[|
-                        //    newX
-                        //    newY
-                        //    newWidth
-                        //    newHeight
-                        //|]
                         [|
-                            newRect.GetXF()
-                            newRect.GetYF()
-                            newRect.GetWidthF()
-                            newRect.GetHeightF()
+                            newX
+                            newY
+                            newWidth
+                            newHeight
                         |]
+                        //[|
+                        //    newRect.GetXF()
+                        //    newRect.GetYF()
+                        //    newRect.GetWidthF()
+                        //    newRect.GetHeightF()
+                        //|]
 
                         |> Array.map(fun m -> (PdfNumber m) :> PdfObject)
 

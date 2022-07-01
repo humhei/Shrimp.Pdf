@@ -1110,6 +1110,8 @@ module iText =
                     IAbstractRenderInfo.hasStroke info
                     && predicate(info.Value.GetStrokeColor())
 
+
+
     [<RequireQualifiedAccess>]
     module internal ClippingPathInfos =
         let (|NonExists|IntersectedNone|IntersectedSome|) (infos: ClippingPathInfos) =

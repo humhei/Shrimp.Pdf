@@ -22,6 +22,7 @@
     <Compile Include="ManipulateTests.fs" />
     <Compile Include="icms2Tests.fs" />
     <Compile Include="ImageTests.fs" />
+    <Compile Include="ExtractTests.fs" />
     <Compile Include="ReuseTests.fs" />
     <Compile Include="FlowTests.fs" />
     <Compile Include="FlowNameTests.fs" />
@@ -38,6 +39,7 @@
     <ProjectReference Include="..\Shrimp.Pdf.DSL\Shrimp.Pdf.DSL.fsproj" />
     <ProjectReference Include="..\Shrimp.Pdf.icms2.Client\Shrimp.Pdf.icms2.Client.fsproj" />
     <ProjectReference Include="..\Shrimp.Pdf.Image\Shrimp.Pdf.Image.fsproj" />
+    <ProjectReference Include="..\src\Shrimp.Pdf.Extract\Shrimp.Pdf.Extract.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
