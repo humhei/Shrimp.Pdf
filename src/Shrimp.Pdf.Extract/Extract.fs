@@ -304,9 +304,9 @@ module _Extract =
                                 then writeInfos(infoChoices.Bounds)
 
                                 if keepBorder
-                                then writeInfos(infoChoices.Infos)
+                                then writeInfos(infoChoices.TagInfos)
 
-                                writeInfos(infos)
+                                writeInfos(infoChoices.Infos)
                                 writerCanvas
                             )
 

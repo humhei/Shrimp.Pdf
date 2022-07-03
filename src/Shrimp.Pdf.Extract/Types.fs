@@ -1,14 +1,7 @@
 ﻿// Learn more about F# at http://fsharp.org
 namespace Shrimp.Pdf.Extract
 
-open Shrimp.Pdf
 open Shrimp.FSharp.Plus
-open Fake.IO
-open iText.Kernel.Geom
-open Shrimp.Pdf.Extensions
-open Shrimp.Pdf.DSL
-open Shrimp.Pdf.Parser
-open Shrimp.Pdf.Colors
 
 
 
@@ -16,13 +9,13 @@ open Shrimp.Pdf.Colors
 module _Types =
     type TextTransform = internal TextTransform of string list * delimiter: string
     with 
-        static member internal Singlton(text: string) =
+        static member Singlton(text: string) =
             TextTransform([text], "")
     
-        static member internal Empty =
+        static member Empty =
             TextTransform([], "")
     
-        static member internal Create(texts: string list, ?delimiter) =
+        static member Create(texts: string list, ?delimiter) =
             TextTransform(texts, defaultArg delimiter "")
             
         member private x.Texts =
@@ -52,7 +45,7 @@ module _Types =
         member x.OriginText = x.FileName.OriginFileName
 
     
-        member private x.Delimiter =
+        member x.Delimiter =
             let (TextTransform (texts, delimiter)) = x
             delimiter
     

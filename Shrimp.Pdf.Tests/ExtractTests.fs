@@ -355,7 +355,7 @@ let extractTests =
             |> runTest "datas/extract/tile pages by selector.pdf" 
             |> ignore
 
-        testCase "tile pages by selector tests2" <| fun _ -> 
+        ftestCase "tile pages by selector tests2" <| fun _ -> 
             Flow.Reuse (
                 Reuses.TilePages
                     (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
@@ -374,7 +374,8 @@ let extractTests =
 
                                 texts :> System.IComparable
                             )
-                        )
+                        ),
+                    pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox(PageTilingRenewInfosSplitter.``Groupby_DenseBoundIsInside_MM1.5``)
                 )
 
             )
@@ -424,7 +425,7 @@ let extractTests =
             |> runTest "datas/extract/tile pages by selector3.pdf" 
             |> ignore
     
-        ftestCase "tile pages and NUP by selector" <| fun _ -> 
+        testCase "tile pages and NUP by selector" <| fun _ -> 
             Flow.Reuse (
                 Reuses.AddForeground(
                     PdfFile (@"datas/extract/extract and scale4.template.pdf")
@@ -441,15 +442,11 @@ let extractTests =
                             )
                         }
                     ),
-                    pageTilingRenewOptions = 
-                        PageTilingRenewOptions.VisibleInfosInActualBox(
-                            PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0
-                        ),
+                    pageTilingRenewInfosSplitter = PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0,
                     transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound)
                 )
             )
             |> runTest "datas/extract/tile pages and NUP by selector.pdf" 
-            |> fun m -> failwith ""
             |> ignore
 
     ]

@@ -410,8 +410,10 @@ module Operators =
 
     /// unSerializable
     type NearbyPX(v: float) =
-        inherit CustomEquatable<float>(v, fun a b ->
-            (abs (a-b)) <= tolerance.Value
+        inherit CustomComparableBase<float>(v, fun a b ->
+            if (abs (a-b)) <= tolerance.Value
+            then 0
+            else compare a b
         )
 
         member x.Value = v

@@ -474,6 +474,7 @@ module _Tile =
                             |> List.distinctBy_explictly<_, IComparable>(fun m -> m.Distincter)
                             |> filter
                 
+
                 let r = 
                     boundGroups
                     |> List.groupBy(fun m -> m.PdfPageNumber)
@@ -617,11 +618,11 @@ module _Tile =
                   "pageTilingRenewOptions" => pageTilingRenewOptions.ToString() ]
 
 
-        static member TilePagesAndNUp(selector, textPicker: PageTilingTextPickers, ?transform, ?borderKeepingPageSelector, ?pageTilingRenewOptions, ?fArgs) =
+        static member TilePagesAndNUp(selector, textPicker: PageTilingTextPickers, ?transform, ?borderKeepingPageSelector, ?pageTilingRenewInfosSplitter, ?fArgs) =
             Reuses.TilePages
                 (selector,
                 distincterOrTextPicker = PageTilingDistincterOrTextPicker.TextPicker(textPicker),
-                ?pageTilingRenewOptions = pageTilingRenewOptions,
+                ?pageTilingRenewOptions = (pageTilingRenewInfosSplitter |> Option.map PageTilingRenewOptions.VisibleInfosInActualBox),
                 borderKeepingPageSelector = defaultArg borderKeepingPageSelector PageSelector.First,
                 ?transform = transform
             )

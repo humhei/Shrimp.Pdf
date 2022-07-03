@@ -14,7 +14,7 @@ open Shrimp.Pdf.Colors
 
 [<AutoOpen>]
 module _Template_ColoredBoxes =
-    type internal TargetPageBox = TargetPageBox of Rectangle option
+    type TargetPageBox = TargetPageBox of Rectangle option
     with 
         member x.Value =
             let (TargetPageBox v) = x
@@ -23,6 +23,7 @@ module _Template_ColoredBoxes =
     type SerializableIndexedBound =
         { Index: int 
           Bound: FsRectangle }
+
 
 
 
@@ -37,7 +38,6 @@ module _Template_ColoredBoxes =
         member x.Serializable =
             { SerializableIndexedBound.Index = x.Index
               Bound = FsRectangle.OfRectangle x.Bound }
-
 
 
 
@@ -74,7 +74,7 @@ module _Template_ColoredBoxes =
             PageInfosSplitter.Filter__BoundIs_InsideOrCross Margin.``MM1.5``
             
     
-        member internal x.Infos__GroupOrFilter_IntoOp(bounds: Rectangle list, infos: 'info list, fBound, ?predicateEx) =
+        member x.Infos__GroupOrFilter_IntoOp(bounds: Rectangle list, infos: 'info list, fBound, ?predicateEx) =
             let bounds =
                 bounds
                 |> List.mapi(fun i bound ->
@@ -200,12 +200,11 @@ module _Template_ColoredBoxes =
                         textInfos
                         |> List.sortBy(fun textInfo ->
                             let bound = textInfo.Bound
-                            bound.GetX(), bound.GetY()
+                            NearbyPX(-bound.GetYF()), NearbyPX(bound.GetXF())
                         )
 
                     textInfos
 
-                |> List.sortBy(fun m -> m.Bound.GetX())
                     //failwithf "multiple textInfos %A were found inside pathBound %A" texts (pathBound)
 
             { Text = textInfos |> List.map (fun m -> m.Text)
