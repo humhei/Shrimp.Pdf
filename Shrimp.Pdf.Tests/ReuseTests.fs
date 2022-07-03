@@ -83,18 +83,19 @@ let reuseTests =
         |> ignore
 
     testCase "preimpose" <| fun _ -> 
-        let m = FsSize.A4
-        let r = PdfRunner.PreImpose_Repeated_One
-                    {_ImposingArguments.DefaultValue 
-                        with ColNums = [0]
-                             RowNum = 0
-                             Background = Background.Size (FsSize.A4)
-                             Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(6.))
+        let r = 
+            PdfRunner.PreImpose_Repeated_One
+                {_ImposingArguments.DefaultValue 
+                    with ColNums = [0]
+                         RowNum = 0
+                         Background = Background.Size (FsSize.A4)
+                         Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(6.))
 
-                             DesiredSizeOp  = 
-                                (FsSize.landscape {Width = mm 210.; Height = mm 297.})
-                                |> Some
-                        }
+                         DesiredSizeOp  = 
+                            (FsSize.landscape {Width = mm 210.; Height = mm 297.})
+                            |> Some
+                    }
+
         let k = r.ImposingSheet.GetTableBound(FsPoint.Zero)
         ()
 
@@ -248,6 +249,31 @@ let reuseTests =
                     )
             )
             |> runTest "datas/reuse/imposing N-UP5.pdf" 
+        () 
+
+    testCase "imposing N-UP Big data tests" <| fun _ -> 
+        let r = 
+            Flow.Manipulate(
+                ModifyPage.ScaleContentsTo(PageSelector.All, fun rect ->
+                    Rectangle.applyMargin (-Margin.MM3) rect
+                )
+            )
+            <+>
+            Flow.Reuse (
+                Reuses.Impose
+                    (fun args ->
+                        { args with 
+                            ColNums = [2]
+                            RowNum = 5
+                            Background = Background.Size FsSize.A0
+                            Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 6.))
+                            UseBleed = true
+                            Cropmark = Some Cropmark.defaultValue
+                            IsRepeated = false
+                        }
+                    )
+            )
+            |> runTest "datas/reuse/Imposing N-UP Bigdata.pdf" 
         () 
 
     testCase "imposing stepAndRepeat tests" <| fun _ -> 
@@ -495,9 +521,7 @@ let reuseTests =
                 pageResizingRotatingOptions = PageResizingRotatingOptions.Keep,
                 pageResizingScalingOptions = PageResizingScalingOptions.Uniform,
                 fSize =
-                    (fun pageNumber -> { Width = mm 70.; Height = mm 40. }
-                    )
-                        
+                    (fun pageNumber -> { Width = mm 70.; Height = mm 40. })
             )
         )
         |> runTest "datas/reuse/resize pageSize to 7x4cm.pdf" 

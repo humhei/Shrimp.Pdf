@@ -1,6 +1,8 @@
 ﻿namespace Shrimp.Pdf.Extract
 
 open iText.Kernel.Pdf
+open Shrimp.Pdf.Colors
+open Shrimp.Pdf.Imposing
 
 #nowarn "0104"
 open Shrimp.Pdf.DSL
@@ -28,14 +30,46 @@ module _Tile =
         member x.PdfPage = x.Args.Page
         member x.PdfPageNumber = x.Args.PageNum
     
+    
+    type PageTilingLayoutResult =
+        { ColNums: int list 
+          RowNum: int }
+    
+    type PageTilingDistincterInfos =
+        { Value: PageTilingDistincterInfo list 
+          Layout: PageTilingLayoutResult }
+
+    type PageTilingTextPickers = 
+        { 
+            TransformTextPickers: (PageModifingArguments<unit> -> IndexedBound -> IIntegratedRenderInfo list -> IComparable)
+            TagColor: FsColor option
+        }
+
 
     [<RequireQualifiedAccess>]
     type PageTilingDistincter = 
-        | TextCase of dinstincter: (PageModifingArguments<unit> -> IndexedBound -> IntegratedTextRenderInfo list -> IComparable) * suffixFilter: (PageTilingDistincterInfo list -> PageTilingDistincterInfo list)
+        | TextCase of dinstincter: (PageModifingArguments<unit> -> IndexedBound -> IntegratedTextRenderInfo list -> IComparable) * tagColor: FsColor option * suffixFilter: (PageTilingDistincterInfo list -> PageTilingDistincterInfo list)
     with 
-        static member Text(f, ?filter) =
-            PageTilingDistincter.TextCase(f, defaultArg filter id)
+        static member Text(f, ?tagColor, ?filter) =
+            PageTilingDistincter.TextCase(f, tagColor, defaultArg filter id)
     
+        member x.TagColor =
+            match x with 
+            | PageTilingDistincter.TextCase(_, color, _) -> color
+
+    [<RequireQualifiedAccess>]
+    type PageTilingDistincterOrTextPicker =
+        | Non
+        | Distincter of PageTilingDistincter
+        | TextPicker of PageTilingTextPickers
+    with 
+        member x.TagColor =
+            match x with 
+            | PageTilingDistincterOrTextPicker.Non -> None
+            | PageTilingDistincterOrTextPicker.Distincter (v) -> v.TagColor
+            | PageTilingDistincterOrTextPicker.TextPicker v -> v.TagColor
+
+
     [<RequireQualifiedAccess>]
     type PageTilingRenewInfosSplitter =
         | Filter__BoundIs_InsideOrCross of Margin
@@ -166,11 +200,36 @@ module _Tile =
         static member DefaultValue = PageTilingRenewOptions.UsingOriginPdfPage
     
     
-    type PageTilingResultCount = PageTilingResultCount of int
+    type PageTilingResultCount = private PageTilingResultCount of int
     with 
         member x.Value = 
             let (PageTilingResultCount count) = x
             count
+
+    [<RequireQualifiedAccess>]
+    type PageTilingResultValue =
+        | UsingOriginPdfPage 
+        | Renew_EmptyPage
+        | Renew_Distincter of IComparable
+        | Renew_TextPicker of IComparable
+        | Renew_TextPicker_Distincter__Non
+
+    type PageTilingResult =
+        { PageNumber: PageNumber 
+          Bound: SerializableIndexedBound
+          Value: PageTilingResultValue }
+
+
+    [<RequireQualifiedAccess>]
+    type PageTilingLayoutResults =
+        | DistinctedOne of PageTilingLayoutResult
+        | Many of PageTilingLayoutResult al1List
+
+    type PageTilingResults = 
+        { Value:  al1List<PageTilingResult list> 
+          PageTilingResultCounts: PageTilingResultCount al1List
+          Layouts: PageTilingLayoutResults }
+
 
     type Reuses with 
         static member TilePages (tileTable: TileTableIndexer, ?direction: Direction, ?pageTilingRenewOptions: PageTilingRenewOptions) =
@@ -185,6 +244,7 @@ module _Tile =
                 let writer = splitDocument.Writer
 
                 let totalNumberOfPages = reader.GetNumberOfPages()
+                let borderKeepingPageNumbers = [1..totalNumberOfPages]
 
                 for i = 1 to totalNumberOfPages do
                     let pageNumber = i
@@ -241,7 +301,7 @@ module _Tile =
                                 |> List.mapi(fun i targetPageInfoOp ->
                                     match targetPageInfoOp with 
                                     | Some (targetPageBox, infos) ->
-                                        TargetRenewablePageInfo.NewPage(TargetPageBox (Some targetPageBox.Bound), TargetRenewableNewPageInfoElement.Create infos)
+                                        TargetRenewablePageInfo.NewPage(TargetPageBox (Some targetPageBox.Bound), TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers))
 
                                     | None ->
                                         TargetRenewablePageInfo.EmptyPage(TargetPageBox (Some bounds.[i]))
@@ -250,6 +310,7 @@ module _Tile =
                             )
                             false
                             ignore
+                            borderKeepingPageNumbers
                             reader
                             writer
                         |> ignore
@@ -267,13 +328,27 @@ module _Tile =
                  "pageTilingRenewOptions" => pageTilingRenewOptions.ToString() ]
         
 
-        static member TilePages (selector: Selector<'userState>, ?distincter: PageTilingDistincter, ?sorter: SelectionSorter, ?pageTilingRenewOptions: PageTilingRenewOptions) =
+        static member TilePages (selector: Selector<'userState>, ?distincterOrTextPicker: PageTilingDistincterOrTextPicker, ?sorter: SelectionSorter, ?pageTilingRenewOptions: PageTilingRenewOptions, ?borderKeepingPageSelector, ?transform: IndexedBound -> Rectangle) =
             let sorter = defaultArg sorter (SelectionSorter.DefaultValue)
+            let borderKeepingPageSelector = defaultArg borderKeepingPageSelector (PageSelector.All)
+
+            let distincterOrTextPicker =
+                match distincterOrTextPicker with 
+                | None -> PageTilingDistincterOrTextPicker.Non
+                | Some v -> v 
+
+            let distincter = 
+                match distincterOrTextPicker with 
+                | PageTilingDistincterOrTextPicker.Distincter (v) -> Some v
+                | _ -> None
+
             let pageTilingRenewOptions = defaultArg pageTilingRenewOptions PageTilingRenewOptions.UsingOriginPdfPage
 
             fun (flowModel: FlowModel<'userState>) (splitDocument: SplitDocument) ->
 
                 let reader = splitDocument.Reader
+
+                let borderKeepingPageNumbers = reader.GetPageNumbers(borderKeepingPageSelector)
                 let parser = new NonInitialClippingPathPdfDocumentContentParser(reader)
                 let boundGroups = 
                     [
@@ -285,14 +360,13 @@ module _Tile =
                                   TotalNumberOfPages = splitDocument.Reader.GetNumberOfPages() 
                                   PageNum = i }
                 
-                                
 
                             let selector = (Selector.toRenderInfoSelector args selector)
                             let predicate = RenderInfoSelector.toRenderInfoPredication selector
 
                             let args = args.DisposeUserState()
 
-                            let bounds = 
+                            let boundLists = 
                                 let rects =
                                     NonInitialClippingPathPdfDocumentContentParser.parse i selector parser
                                     |> List.ofSeq
@@ -301,11 +375,15 @@ module _Tile =
                                     )
                                     |> Rectangle.removeInboxes
 
-                                sorter.Sort (rects)
-                                |> List.mapi (fun i bound ->
-                                    { Index = i
-                                      Bound = bound }
+                                sorter.SortToLists (rects)
+                                |> List.map(
+                                    List.mapi (fun i bound ->
+                                        { Index = i
+                                          Bound = bound }
+                                    )
                                 )
+
+                            let bounds = List.concat boundLists
 
                             let boundGroups =
                                 match distincter with 
@@ -320,7 +398,7 @@ module _Tile =
 
                                 | Some (distincter) ->
                                     match distincter with 
-                                    | PageTilingDistincter.TextCase (distincter, _) ->
+                                    | PageTilingDistincter.TextCase (distincter, _, _) ->
                                         let infos = 
                                             let selector = 
                                                 Selector.Text(fun _ _ -> true)
@@ -358,93 +436,212 @@ module _Tile =
                                                 |> Some 
                                         )
                                  
+                            yield
+                                { Layout = 
+                                        { ColNums =
+                                            boundLists
+                                            |> List.map(fun m -> m.Length)
+                                        
+                                          RowNum = boundLists.Length
+                                        }
 
-                            yield boundGroups
+                                  Value = boundGroups }
 
                     ]
-                    |> List.concat
             
+                match boundGroups with 
+                | [] -> failwithf "Cannot tiling to any results by selector %A" selector
+                | _ -> ()
+
+                let layouts =
+                    boundGroups
+                    |> List.map(fun m ->
+                        m.Layout
+                    )
+
+
+                let boundGroups = 
+                    boundGroups
+                    |> List.collect(fun m -> m.Value)
+
                 let boundGroups =
                     match distincter with 
                     | None -> boundGroups
                     | Some v ->
                         match v with 
-                        | PageTilingDistincter.TextCase (_, filter) ->
+                        | PageTilingDistincter.TextCase (_, _, filter) ->
                             boundGroups
                             |> List.distinctBy_explictly<_, IComparable>(fun m -> m.Distincter)
                             |> filter
+                
+                let r = 
+                    boundGroups
+                    |> List.groupBy(fun m -> m.PdfPageNumber)
+                    |> List.map(fun (pdfPageNumber, boundGroups) ->
+                        match pageTilingRenewOptions with 
+                        | PageTilingRenewOptions.UsingOriginPdfPage ->
+                            boundGroups
+                            |> List.iter(fun m -> 
+                                let readerPage = m.PdfPage
+                                let bound = m.Bound
+                                let writer = splitDocument.Writer
+                                let writerPageResource = readerPage.CopyTo(writer)
+                                PdfPage.setPageBox PageBoxKind.AllBox bound writerPageResource |> ignore
+                                writer.AddPage(writerPageResource)
+                                |> ignore
+                            )
 
-                boundGroups
-                |> List.groupBy(fun m -> m.PdfPageNumber)
-                |> List.map(fun (pdfPageNumber, boundGroups) ->
-                    match pageTilingRenewOptions with 
-                    | PageTilingRenewOptions.UsingOriginPdfPage ->
-                        boundGroups
-                        |> List.iter(fun m -> 
-                            let readerPage = m.PdfPage
-                            let bound = m.Bound
-                            let writer = splitDocument.Writer
-                            let writerPageResource = readerPage.CopyTo(writer)
-                            PdfPage.setPageBox PageBoxKind.AllBox bound writerPageResource |> ignore
-                            writer.AddPage(writerPageResource)
-                            |> ignore
-                        )
+                            boundGroups
+                            |> List.map(fun boundGroup ->
+                                { PageNumber = PageNumber pdfPageNumber 
+                                  Bound = boundGroup.IndexedBound.Serializable 
+                                  Value = PageTilingResultValue.UsingOriginPdfPage }
+                            )
 
-                    | PageTilingRenewOptions.VisibleInfosInActualBox splitter ->
-                        match boundGroups with 
-                        | [] -> ()
-                        | _ ->
-                            let args: PageModifingArguments<_> =
-                                boundGroups.[0].Args
 
-                            let selector =
-                                Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                        | PageTilingRenewOptions.VisibleInfosInActualBox splitter ->
+                            match boundGroups with 
+                            | [] -> []
+                            | _ ->
+                                let args: PageModifingArguments<_> =
+                                    boundGroups.[0].Args
 
-                            extractVisibleRenewableInfosToWriter 
-                                args
-                                selector
-                                (fun infos ->
-                                    let bounds = 
-                                        boundGroups
-                                        |> List.map(fun m -> m.Bound)
+                                let selector =
+                                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                            
+                                let infos =
+                                    extractVisibleRenewableInfosToWriter 
+                                        args
+                                        selector
+                                        (fun infos ->
+                                            let bounds = 
+                                                boundGroups
+                                                |> List.map(fun m -> m.Bound)
 
-                                    splitter.Infos__GroupOrFilter_IntoOp(
-                                        bounds,
-                                        infos,
-                                        (fun m ->   
-                                            let targetPageBox = splitter.GetBound() m.OriginInfo
-                                            TargetPageBox targetPageBox
+                                            splitter.Infos__GroupOrFilter_IntoOp(
+                                                bounds,
+                                                infos,
+                                                (fun m ->   
+                                                    let targetPageBox = splitter.GetBound() m.OriginInfo
+                                                    TargetPageBox targetPageBox
+                                                )
+                                            )
+                                            |> List.mapi(fun i targetPageInfoOp ->
+                                                match targetPageInfoOp with 
+                                                | Some (targetPageBox, infos) ->
+                                                    TargetRenewablePageInfo.NewPage(
+                                                        TargetPageBox (Some targetPageBox.Bound),
+                                                        TargetRenewableNewPageInfoElement.Create(
+                                                            infos,
+                                                            borderKeepingPageNumbers,
+                                                            ?tagColor = distincterOrTextPicker.TagColor,
+                                                            boundPredicate = boundGroups.[0].BoundPredicate,
+                                                            ?rectangleTransform = 
+                                                                match transform with 
+                                                                | None -> None
+                                                                | Some transform ->
+                                                                    { 
+                                                                        OldRect = targetPageBox.Bound
+                                                                        NewRect = transform targetPageBox
+                                                                    }
+                                                                    |> Some
+
+                                                        )
+                                                    )
+
+                                                | None ->
+                                                    TargetRenewablePageInfo.EmptyPage(TargetPageBox (Some bounds.[i]))
+                                            )
                                         )
+                                        false
+                                        ignore
+                                        borderKeepingPageNumbers
+                                        reader
+                                        splitDocument.Writer
+
+                                let infos =
+                                    infos
+                                    |> List.mapi(fun i info ->
+                                        let createResult (value) =
+                                            { PageNumber = PageNumber args.PageNum
+                                              Bound = boundGroups.[i].IndexedBound.Serializable
+                                              Value = value }
+                                        match info with 
+                                        | TargetRenewablePageInfo.NewPage (bound, element) ->
+                                            match distincterOrTextPicker with 
+                                            | PageTilingDistincterOrTextPicker.Distincter _ ->
+                                                PageTilingResultValue.Renew_Distincter boundGroups.[i].Distincter
+                                            
+                                            | PageTilingDistincterOrTextPicker.Non _ ->
+                                                PageTilingResultValue.Renew_TextPicker_Distincter__Non
+
+                                            | PageTilingDistincterOrTextPicker.TextPicker textPicker ->
+                                                let textPicker = textPicker.TransformTextPickers
+
+                                                let textInfos = 
+                                                    element.RenewableInfos
+                                                    |> List.choose(fun m -> IIntegratedRenderInfoIM.asVector m.OriginInfo)
+
+                                                textPicker args boundGroups.[i].IndexedBound textInfos
+                                                |> PageTilingResultValue.Renew_TextPicker
+
+                                        | TargetRenewablePageInfo.EmptyPage _ -> 
+                                            PageTilingResultValue.Renew_EmptyPage
+                                        | _ -> failwith "Invalid token"
+                                        |> createResult
                                     )
-                                    |> List.mapi(fun i targetPageInfoOp ->
-                                        match targetPageInfoOp with 
-                                        | Some (targetPageBox, infos) ->
-                                            TargetRenewablePageInfo.NewPage(TargetPageBox (Some targetPageBox.Bound), TargetRenewableNewPageInfoElement.Create infos)
 
-                                        | None ->
-                                            TargetRenewablePageInfo.EmptyPage(TargetPageBox (Some bounds.[i]))
-                                    )
-                                )
-                                false
-                                ignore
-                                reader
-                                splitDocument.Writer
-                            |> ignore
+                                infos
 
+                    )
+                    |> AtLeastOneList.Create
 
-                    PageTilingResultCount boundGroups.Length 
+                { Value = r  
 
+                  PageTilingResultCounts =
+                    r
+                    |> AtLeastOneList.map(fun m -> PageTilingResultCount m.Length)
 
-                )
-                |> AtLeastOneList.Create
+                  Layouts =
+                    match List.distinct layouts with 
+                    | [layout] -> PageTilingLayoutResults.DistinctedOne layout
+                    | [] -> failwith "Invalid token, PageTilingLayoutResult list cannot be empty here"
+                    | layouts -> PageTilingLayoutResults.Many (AtLeastOneList.Create layouts)
+                }
 
 
             |> reuse 
                 "TilePages"
                 [ "selector" => selector.ToString()
-                  "distincter" => sprintf "%A" distincter
+                  "distincterOrTextPicker" => sprintf "%A" distincterOrTextPicker
                   "pageTilingRenewOptions" => pageTilingRenewOptions.ToString() ]
 
+
+        static member TilePagesAndNUp(selector, textPicker: PageTilingTextPickers, ?transform, ?borderKeepingPageSelector, ?pageTilingRenewOptions, ?fArgs) =
+            Reuses.TilePages
+                (selector,
+                distincterOrTextPicker = PageTilingDistincterOrTextPicker.TextPicker(textPicker),
+                ?pageTilingRenewOptions = pageTilingRenewOptions,
+                borderKeepingPageSelector = defaultArg borderKeepingPageSelector PageSelector.First,
+                ?transform = transform
+            )
+            <++>
+            Reuse.Func(fun (r: PageTilingResults) ->
+                match r.Layouts with 
+                | PageTilingLayoutResults.DistinctedOne r -> 
+                    Reuses.Impose(fun args ->
+                        { args with 
+                            ColNums = r.ColNums
+                            RowNum = r.RowNum
+                            Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.MM6)
+                            Cropmark = Some Cropmark.defaultValue
+                            Background = Background.Size FsSize.MAXIMUN
+                        }
+                        |> (defaultArg fArgs id)
+                    )
+
+                | _ -> failwith "Not implemented"
+            )
 
         static member PickFromPageTilingResult(pageTilingResults: AtLeastOneList<PageTilingResultCount>, picker: PageNumSequence) =
             let pageNumSequence = 

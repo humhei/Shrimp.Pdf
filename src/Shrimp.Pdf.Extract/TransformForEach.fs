@@ -40,11 +40,6 @@ module _TransformForEach =
         static member AddCropmarkAndCropToBorder_Default =
             TransformForEachSuffixAction.AddCropmarkAndCropToBorder(Cropmark.defaultValue, Margin.MM6)
 
-    type TransformTextPickers = 
-        { 
-            TransformTextPickers: (PageModifingArguments<unit> -> IndexedBound -> IIntegratedRenderInfo list -> obj)
-            TagColor: FsColor option
-        }
         
 
     type Reuses with 
@@ -119,6 +114,7 @@ module _TransformForEach =
 
                         let selector =
                             Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                        
                         let infos = 
                             extractVisibleRenewableInfosToWriter 
                                 args
@@ -203,6 +199,7 @@ module _TransformForEach =
                                     | None -> ()
 
                                 )
+                                borderKeepingPageNumbers
                                 reader
                                 splitDocument.Writer
 

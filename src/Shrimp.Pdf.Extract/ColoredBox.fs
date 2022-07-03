@@ -20,13 +20,26 @@ module _Template_ColoredBoxes =
             let (TargetPageBox v) = x
             v
     
+    type SerializableIndexedBound =
+        { Index: int 
+          Bound: FsRectangle }
+
+
+
+
     type IndexedBound =
         { Index: int 
           Bound: Rectangle }
     with 
         member x.ApplyMargin margin = 
             { x with Bound = Rectangle.applyMargin margin x.Bound }
-    
+        
+        member x.Serializable =
+            { SerializableIndexedBound.Index = x.Index
+              Bound = FsRectangle.OfRectangle x.Bound }
+
+
+
 
     [<RequireQualifiedAccess>]
     type PageInfosSplitter =
@@ -197,6 +210,7 @@ module _Template_ColoredBoxes =
 
             { Text = textInfos |> List.map (fun m -> m.Text)
               Box = pathBound  }
+
 
     type ColoredBoxWithTexts =
         { Text: TextTransform

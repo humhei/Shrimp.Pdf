@@ -16,6 +16,7 @@ open Shrimp.Pdf.Image
 open Shrimp.Pdf.Colors
 open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf.Extract
+open Shrimp.Pdf
 
 type Colors =
     /// 橙色
@@ -70,7 +71,7 @@ let extractTests =
                         { TagColor = Some Colors.PdfExtractorTagColor
                           TransformTextPickers = (fun args bound infos ->
                               let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
-                              box coloredBoxWithTextInfos
+                              coloredBoxWithTextInfos :> System.IComparable
                           )}
                     )
                 )
@@ -346,8 +347,8 @@ let extractTests =
                      sorter = SelectionSorter.Plane(mm 3., Direction.Vertical)
                 )
                 <.+>
-                (Reuse.Func(fun userState ->
-                    Reuses.PickFromPageTilingResult(userState, PageNumSequence.Create [1])
+                (Reuse.Func(fun (pageTilingResults: PageTilingResults) ->
+                    Reuses.PickFromPageTilingResult(pageTilingResults.PageTilingResultCounts, PageNumSequence.Create [1])
                 ))
 
             )
@@ -358,26 +359,99 @@ let extractTests =
             Flow.Reuse (
                 Reuses.TilePages
                     (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
-                    distincter = PageTilingDistincter.Text (fun args bound infos ->
-                        let texts = 
-                            infos
-                            |> List.ofSeq
-                            |> List.choose (IIntegratedRenderInfo.asITextRenderInfo)
-                            |> List.filter(fun m -> 
-                                let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
-                                textInfoBound.IsCenterPointInsideOf(bound.Bound)
-                            )
-                            |> List.map(fun m -> m.Text())
+                    distincterOrTextPicker = 
+                        PageTilingDistincterOrTextPicker.Distincter (
+                            PageTilingDistincter.Text (fun args bound infos ->
+                                let texts = 
+                                    infos
+                                    |> List.ofSeq
+                                    |> List.choose (IIntegratedRenderInfo.asITextRenderInfo)
+                                    |> List.filter(fun m -> 
+                                        let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
+                                        textInfoBound.IsCenterPointInsideOf(bound.Bound)
+                                    )
+                                    |> List.map(fun m -> m.Text())
 
-                        texts :> System.IComparable
-                    )
+                                texts :> System.IComparable
+                            )
+                        )
                 )
 
             )
             |> runTest "datas/extract/tile pages by selector2.pdf" 
             |> ignore
 
+        testCase "tile pages by selector tests3" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.AddForeground(
+                    PdfFile (@"datas/extract/extract and scale4.template.pdf")
+                )
+                <+>
+                Reuses.TilePages
+                    (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                    distincterOrTextPicker = (PageTilingDistincterOrTextPicker.TextPicker(
+                        { TagColor = Some Colors.PdfExtractorTagColor
+                          TransformTextPickers = 
+                            (fun args bound infos ->
+                                let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                                coloredBoxWithTextInfos :> System.IComparable
+                            )
+                        }
+                    )),
+                    pageTilingRenewOptions = 
+                        PageTilingRenewOptions.VisibleInfosInActualBox(
+                            PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0
+                        ),
+                    borderKeepingPageSelector = PageSelector.First,
+                    transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound)
+                )
+                <+>
+                Reuse.Func(fun (r: PageTilingResults) ->
+                    match r.Layouts with 
+                    | PageTilingLayoutResults.DistinctedOne r -> 
+                        Reuses.Impose(fun args ->
+                            { args with 
+                                ColNums = r.ColNums
+                                RowNum = r.RowNum
+                                Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.MM6)
+                                Cropmark = Some Cropmark.defaultValue
+                            }
+                        )
+
+                    | _ -> failwith "Not implemented"
+                )
+            )
+            |> runTest "datas/extract/tile pages by selector3.pdf" 
+            |> ignore
     
+        ftestCase "tile pages and NUP by selector" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.AddForeground(
+                    PdfFile (@"datas/extract/extract and scale4.template.pdf")
+                )
+                <+>
+                Reuses.TilePagesAndNUp(
+                     Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                     textPicker =( 
+                        { TagColor = Some Colors.PdfExtractorTagColor
+                          TransformTextPickers = 
+                            (fun args bound infos ->
+                                let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                                coloredBoxWithTextInfos :> System.IComparable
+                            )
+                        }
+                    ),
+                    pageTilingRenewOptions = 
+                        PageTilingRenewOptions.VisibleInfosInActualBox(
+                            PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0
+                        ),
+                    transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound)
+                )
+            )
+            |> runTest "datas/extract/tile pages and NUP by selector.pdf" 
+            |> fun m -> failwith ""
+            |> ignore
+
     ]
 
 

@@ -280,3 +280,14 @@ module Manipulates =
             )  ||>> ignore
 
 
+        static member ScaleContentsTo(pageSelector, fRect) =
+            ModifyPage.Create(
+                "scale Contents",
+                pageSelector,
+                Dummy,
+                PageModifier.ScaleContentsTo(fRect),
+                parameters = [
+                    "fRect" => fRect.ToString()
+                ]
+            )  ||>> ignore
+

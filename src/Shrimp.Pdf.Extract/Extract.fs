@@ -25,10 +25,18 @@ module _Extract =
 
 
     type internal TargetRenewableNewPageInfoElement =
-        { RenewableInfos: RenewableInfo list }
+        { RenewableInfos: RenewableInfo list
+          TagColor: FsColor option
+          BoundPredicate: (IIntegratedRenderInfo -> bool) option
+          RectangleTransform: RectangleTransform option
+          BorderKeepingPageNumbers: int list }
     with    
-        static member Create(infos: RenewableInfo list) =
-            { RenewableInfos = infos }
+        static member Create(infos: RenewableInfo list, borderKeppingPageNumbers, ?tagColor, ?boundPredicate, ?rectangleTransform) =
+            { RenewableInfos = infos
+              TagColor = tagColor
+              BorderKeepingPageNumbers = borderKeppingPageNumbers
+              BoundPredicate = boundPredicate
+              RectangleTransform = rectangleTransform }
 
     type internal TargetNewInfosInOriginPageElement =
         { RenewableInfos: RenewableInfo list
@@ -37,6 +45,32 @@ module _Extract =
           BoundPredicate: IIntegratedRenderInfo -> bool
           BorderKeepingPageNumbers: int list
           TextPickerTagColor: FsColor option }
+    with 
+        member x.RectangleTransform =
+            { OldRect = x.Bound.Bound
+              NewRect = x.NewBound.Bound }
+
+    [<RequireQualifiedAccess>]
+    type internal TargetNewInfosElementUnion =
+        | NewPageInfo of TargetRenewableNewPageInfoElement
+        | OriginPage of TargetNewInfosInOriginPageElement
+    with 
+        member x.Infos =
+            match x with 
+            | TargetNewInfosElementUnion.NewPageInfo v -> v.RenewableInfos
+            | TargetNewInfosElementUnion.OriginPage v -> v.RenewableInfos
+
+        member x.BorderKeepingPageNumbers =
+            match x with 
+            | TargetNewInfosElementUnion.NewPageInfo v -> v.BorderKeepingPageNumbers
+            | TargetNewInfosElementUnion.OriginPage v -> v.BorderKeepingPageNumbers
+
+
+        member x.TagColor =
+            match x with 
+            | TargetNewInfosElementUnion.NewPageInfo v -> v.TagColor
+            | TargetNewInfosElementUnion.OriginPage v -> v.TextPickerTagColor
+
 
     [<RequireQualifiedAccess>]
     type internal TargetRenewablePageInfo =
@@ -51,11 +85,12 @@ module _Extract =
         (infosSplitter: RenewableInfo list -> list<TargetRenewablePageInfo>)
         keepOriginPage
         suffixOperation
+        (borderKeepingPageNumbers: int list)
         (reader: PdfDocument)
         (writer: PdfDocumentWithCachedResources) =
         let parser = new NonInitialClippingPathPdfDocumentContentParser(reader)
         let pageNumber = args.PageNum
-
+        let keepBorder = List.contains pageNumber borderKeepingPageNumbers
 
         let infos =
             let selector = 
@@ -92,7 +127,6 @@ module _Extract =
 
         splittedInfos
         |> List.iter(fun (targetPageInfo) ->
-
             let readerPage = args.Page
 
             match keepOriginPage with 
@@ -103,7 +137,8 @@ module _Extract =
 
             | false -> ()
 
-            let writeAreaInfos(infos: RenewableInfo list) (areaTransform: TargetNewInfosInOriginPageElement option) (writerCanvas: PdfCanvas) (writerPage: PdfPage) =
+            let writeAreaInfos (element: TargetNewInfosElementUnion) (writerCanvas: PdfCanvas) (writerPage: PdfPage) =
+                let infos = element.Infos
                 let writeInfos(infos: RenewableInfo list) =
                 
                     infos
@@ -150,18 +185,16 @@ module _Extract =
 
                     )
 
-                match areaTransform with 
-                | None -> writeInfos(infos)
-                | Some (element) ->
+                let infoChoices(boundPredicate) =   
                     let infoChoices =
                         infos
                         |> List.map (fun info ->
                             match info.OriginInfo with 
                             | IIntegratedRenderInfoIM.Vector vector ->
-                                if element.BoundPredicate vector 
+                                if boundPredicate vector 
                                 then Choice1Of3 info
                                 else
-                                    match element.TextPickerTagColor with 
+                                    match element.TagColor with 
                                     | None -> Choice3Of3 info
                                     | Some tagColor ->
                                         let isTagColor =
@@ -173,6 +206,7 @@ module _Extract =
                                         match isTagColor with 
                                         | true -> Choice2Of3 info
                                         | false -> Choice3Of3 info
+
                             | IIntegratedRenderInfoIM.Pixel _ -> Choice3Of3 info
                         )
 
@@ -197,13 +231,20 @@ module _Extract =
                             | _ -> None
                         )
 
-                    let newArea = element.NewBound
-                    let oldArea = element.Bound
+
+                    {| Bounds = bounds 
+                       TagInfos = tagInfos
+                       Infos = infos |}
+
+                let writeInfosWithTransform (boundPredicate) (rect: RectangleTransform) =
+                    let infoChoices = infoChoices boundPredicate
+                    let newArea = rect.NewRect
+                    let oldArea = rect.OldRect
 
 
                     let transform_scale = 
-                        let scaleX = newArea.Bound.GetWidthF() / oldArea.Bound.GetWidthF()
-                        let scaleY = newArea.Bound.GetHeightF() / oldArea.Bound.GetHeightF()
+                        let scaleX = newArea.GetWidthF() / oldArea.GetWidthF()
+                        let scaleY = newArea.GetHeightF() / oldArea.GetHeightF()
 
                         //AffineTransformRecord.DefaultValue
                         { 
@@ -215,12 +256,12 @@ module _Extract =
                         
                     let scaledArea = 
                         AffineTransform.ofRecord(transform_scale).Transform(
-                            oldArea.Bound
+                            oldArea
                         )
 
                     let transform_translate =
-                        let translateX = newArea.Bound.GetXF() - scaledArea.GetXF()
-                        let translateY = (newArea.Bound.GetYF() - scaledArea.GetYF())
+                        let translateX = newArea.GetXF() - scaledArea.GetXF()
+                        let translateY = (newArea.GetYF() - scaledArea.GetYF())
                         { AffineTransformRecord.DefaultValue with 
                             TranslateX = translateX
                             TranslateY = translateY 
@@ -229,20 +270,49 @@ module _Extract =
 
 
                     PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
-                        if List.contains pageNumber element.BorderKeepingPageNumbers
-                        then writeInfos(bounds)
+
+                        if keepBorder
+                        then writeInfos(infoChoices.Bounds)
 
                         writerCanvas
                             .ConcatMatrix(AffineTransform.ofRecord transform_translate)
                             .ConcatMatrix(AffineTransform.ofRecord transform_scale)
                             |> ignore
 
-                        if List.contains pageNumber element.BorderKeepingPageNumbers
-                        then writeInfos(tagInfos)
+                        if keepBorder
+                        then writeInfos(infoChoices.TagInfos)
 
-                        writeInfos(infos)
+                        writeInfos(infoChoices.Infos)
                         writerCanvas
                     )
+
+                match element with 
+                | TargetNewInfosElementUnion.NewPageInfo element ->     
+                    match element.BoundPredicate with 
+                    | None -> writeInfos(infos)
+                    | Some boundPredicate -> 
+                        match element.RectangleTransform with 
+                        | Some rect ->  
+                            writeInfosWithTransform boundPredicate rect
+
+
+                        | None ->
+
+                            let infoChoices = infoChoices boundPredicate
+                            PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
+                                if keepBorder
+                                then writeInfos(infoChoices.Bounds)
+
+                                if keepBorder
+                                then writeInfos(infoChoices.Infos)
+
+                                writeInfos(infos)
+                                writerCanvas
+                            )
+
+
+                | TargetNewInfosElementUnion.OriginPage (element) ->
+                    writeInfosWithTransform element.BoundPredicate element.RectangleTransform
 
 
             match targetPageInfo with 
@@ -264,8 +334,7 @@ module _Extract =
                         .WriteLiteral("0 g\n")
                         |> ignore
 
-                    let infos = infos.RenewableInfos
-                    writeAreaInfos infos None writerCanvas writerPage
+                    writeAreaInfos (TargetNewInfosElementUnion.NewPageInfo infos) writerCanvas writerPage
                     writerCanvas
 
                 ) |> ignore
@@ -289,7 +358,7 @@ module _Extract =
 
                     infos
                     |> List.iter(fun infos ->    
-                        writeAreaInfos infos.RenewableInfos (Some infos) writerCanvas writerPage
+                        writeAreaInfos (TargetNewInfosElementUnion.OriginPage infos) writerCanvas writerPage
                     )
 
                     writerCanvas
@@ -309,6 +378,7 @@ module _Extract =
                 let reader = splitDocument.Reader
                 let totalNumberOfPages = reader.GetNumberOfPages()
                 let pageNumbers = reader.GetPageNumbers(pageSelector)
+                let borderKeepingPageNumbers = [1..totalNumberOfPages]
 
                 pageNumbers
                 |> List.iter(fun pageNumber ->
@@ -323,9 +393,10 @@ module _Extract =
                     extractVisibleRenewableInfosToWriter
                         args
                         selector
-                        (fun infos -> [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create infos)])
+                        (fun infos -> [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers))])
                         keepOriginPage
                         ignore
+                        borderKeepingPageNumbers
                         reader
                         splitDocument.Writer
                     |> ignore

@@ -21,6 +21,42 @@ type ColoredText =
 
 type PageModifier<'userState, 'newUserState> = PageModifingArguments<'userState> -> seq<IIntegratedRenderInfo> -> 'newUserState
 
+type RectangleTransform = 
+    { OldRect: Rectangle
+      NewRect: Rectangle}
+with
+    member x.ApplyToCanvas(canvas: PdfCanvas) =
+        let oldArea = x.OldRect
+        let newArea = x.NewRect
+
+        let transform_scale = 
+            let scaleX = newArea.GetWidthF() / oldArea.GetWidthF()
+            let scaleY = newArea.GetHeightF() / oldArea.GetHeightF()
+
+            //AffineTransformRecord.DefaultValue
+            { 
+                AffineTransformRecord.DefaultValue with 
+                    ScaleX = scaleX
+                    ScaleY = scaleY
+                    //TranslateX = 
+            }
+            
+        let scaledArea = 
+            AffineTransform.ofRecord(transform_scale).Transform(
+                oldArea
+            )
+
+        let transform_translate =
+            let translateX = newArea.GetXF() - scaledArea.GetXF()
+            let translateY = (newArea.GetYF() - scaledArea.GetYF())
+            { AffineTransformRecord.DefaultValue with 
+                TranslateX = translateX
+                TranslateY = translateY 
+            }
+
+        canvas
+            .ConcatMatrix(AffineTransform.ofRecord transform_translate)
+            .ConcatMatrix(AffineTransform.ofRecord transform_scale)
 
 
 type PageModifier =
@@ -283,6 +319,30 @@ type PageModifier =
                 IsFillOverprint = true
             }
         )
+
+    static member ScaleContentsTo(fRectangle: Rectangle -> Rectangle): PageModifier<_, _> =
+        fun (args: PageModifingArguments<_>) infos -> 
+            let pageBox = args.Page.GetActualBox()
+            let contentBox = fRectangle pageBox
+            let writerCanvas = 
+                new PdfCanvas(args.Page.NewContentStreamBefore(), args.Page.GetResources(), args.Page.GetDocument())
+
+            let transform =
+                { OldRect = pageBox 
+                  NewRect = contentBox }
+
+
+
+            writerCanvas
+                .SaveState()
+            |> transform.ApplyToCanvas
+            |> ignore
+
+            writerCanvas.AttachContentStream(args.Page.NewContentStreamAfter())
+                
+            writerCanvas.RestoreState() |> ignore
+
+
 
     static member Batch(pageModifiers: PageModifier<_, _> list) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
