@@ -1824,9 +1824,9 @@ type Modify =
             ))
         )
 
-    static member CancelFillAndStroke(selector) =
+    static member CancelFillAndStroke(selector, ?pageSelector) =
         Modify.Create_Record(
-            PageSelector.All,
+            defaultArg pageSelector PageSelector.All,
             [
                 { SelectorAndModifiersRecord.Name = "CancelFillAndStroke"
                   Selector = selector
@@ -1837,7 +1837,6 @@ type Modify =
                   }
             ]
         )
-        |> Manipulate.rename "Create Compound Path" []
 
 
     static member internal ReadCompoundPath_Then_TryCancel(selector, cancel: bool) =

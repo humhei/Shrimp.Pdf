@@ -14,8 +14,18 @@ open Newtonsoft.Json
 open Shrimp.Pdf.Constants
 open Fake.IO
 open System.IO
+open Shrimp.LiteDB
 
 
+[<AutoOpen>]
+module private _BackgroundFileCache =
+    let backgroundCache = 
+        new LightWeightFileInfoDictionary<PdfFile, PdfFile, PdfPath>(
+            cacheFileMapping = (fun m -> Path.changeExtension ".cache" m.Path),
+            keyFilesGetter = (fun m -> [m.Path]),
+            valueFilesGetter = (fun m -> [m.FileInfo]),
+            primaryKeyGetter = (fun m -> primaryKey m.PdfPath)
+        )
 
 type BackgroundFile = private BackgroundFile of originPdf: PdfFile * clearedPdf: PdfFile * currrentRotation: Rotation
 with
@@ -46,41 +56,12 @@ with
 
 
     static member Create(pdfFile: PdfFile) =
+        let clearedPdfFile = 
+            backgroundCache.GetOrAddOrUpdate(pdfFile, fun () ->
+                let targetPath =
+                    pdfFile.Path
+                    |> Path.changeExtension "backgroundFile.cleared.pdf"
 
-        let getOrAddFile(pdfFile: PdfFile) =
-            let txtFile = (Path.changeExtension ".backgroundFile.cleared.datetime.txt" pdfFile.Path)
-
-            let writeTimeFromDist =
-                match FsFileInfo.tryCreate txtFile  with 
-                | Some txtFile -> 
-                    let dateTime = File.ReadAllText(txtFile.Path)
-                    let lines = dateTime.Split([|"\r\n"; "\n"|], StringSplitOptions.RemoveEmptyEntries)
-
-                    {|
-                        Origin = System.Int64.Parse lines.[0]
-                        New = System.Int64.Parse lines.[1]
-                    |}
-                    |> Some
-                | None -> None
-            
-
-            let targetPath =
-                pdfFile.Path
-                |> Path.changeExtension "backgroundFile.cleared.pdf"
-
-            let isDateTimeEqual =
-                match writeTimeFromDist with 
-                | None -> false
-                | Some time ->
-                    match FsFileInfo.tryCreate targetPath with 
-                    | None -> false
-                    | Some newFile ->
-                        (time.Origin = pdfFile.FileInfo.LastWriteTime) 
-                        && (time.New = newFile.LastWriteTime) 
-
-            match isDateTimeEqual with 
-            | true -> PdfFile targetPath
-            | false ->
                 let newPdfFile: PdfFile = 
                     let flow = 
                         Reuses.ClearDirtyInfos()
@@ -89,24 +70,20 @@ with
                     |> List.exactlyOne_DetailFailingText
                     |> fun flowModel -> flowModel.PdfFile
 
-                let lines = 
-                    [pdfFile.FileInfo.LastWriteTime
-                     newPdfFile.FileInfo.LastWriteTime]
-                    |> List.map(string)
-
-                File.WriteAllLines(txtFile, lines)
                 newPdfFile
-
-
-
-        let clearedPdfFile = getOrAddFile pdfFile
+            )
+            |> Async.RunSynchronously
 
         (pdfFile, clearedPdfFile, Rotation.None)
         |> BackgroundFile
 
+
+
+
     static member Create(path: string) =
         PdfFile path
         |> BackgroundFile.Create
+
 
 [<RequireQualifiedAccess>]
 module BackgroundFile =
@@ -183,8 +160,6 @@ with
         | RowOrColumnNumber.ColumnNumber v -> v.Value
 
 module Imposing =
-
-
 
     type Cropmark = 
         { Length: float

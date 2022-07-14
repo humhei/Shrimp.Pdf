@@ -1,9 +1,23 @@
 ﻿// Learn more about F# at http://fsharp.org
 namespace Shrimp.Pdf.Extract
-
+open Akka.Configuration
+open Shrimp.Akkling.Cluster.Intergraction.Configuration
 open Shrimp.FSharp.Plus
 
+[<AutoOpen>]
+module internal Config =
 
+    type private AssemblyFinder = AssemblyFinder
+
+    let internal config = 
+        lazy
+            ConfigurationFactory
+                .FromResource<AssemblyFinder>("Shrimp.Pdf.Extract.reference.conf")
+            |> Configuration.fallBackByApplicationConf
+
+
+    let internal loggingPageCountInterval = 
+        lazy config.Value.GetInt("LoggingPageCountInterval")
 
 [<AutoOpen>]
 module _Types =

@@ -247,6 +247,19 @@ let extractTests =
             |> runTest "datas/extract/extract vectors15.pdf" 
             |> ignore
 
+        
+        testCase "extract vectors tests16" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(fun args info -> 
+                        true
+                    )
+                )
+            )
+            |> runTest "datas/extract/extract vectors16.pdf" 
+            |> ignore
+
 
 
 
@@ -289,9 +302,9 @@ let extractTests =
         testCase "tile pages and NUP for big data" <| fun _ -> 
             let colNum = 5 
             let rowNum = 8
-            Flow.Reuse (
-                Reuses.TilePages (TileTableIndexer.Create (colNum = colNum, rowNum = rowNum), Direction.Horizontal)
-                <+>
+            Flows.TilePages (TileTableIndexer.Create (colNum = colNum, rowNum = rowNum), Direction.Horizontal)
+            <+>
+            Flow.Reuse(
                 Reuses.Impose(fun args ->
                     { args with 
                         ColNums = [colNum]
@@ -299,9 +312,12 @@ let extractTests =
                         Background = Background.Size FsSize.MAXIMUN
                     }
                 )
-                <+>
-                Reuses.TilePages (TileTableIndexer.Create (colNum = colNum, rowNum = rowNum), Direction.Horizontal)
-                <+>
+            )
+
+            <+>
+            Flows.TilePages (TileTableIndexer.Create (colNum = colNum, rowNum = rowNum), Direction.Horizontal)
+            <+>
+            Flow.Reuse(
                 Reuses.Impose(fun args ->
                     { args with 
                         ColNums = [colNum]
@@ -314,7 +330,7 @@ let extractTests =
             |> ignore
 
         testCase "tile pages by colNum and rowNum tests" <| fun _ -> 
-            Flow.Reuse (Reuses.TilePages (TileTableIndexer.Create (colNum = 3, rowNum = 2), Direction.Vertical))
+            (Flows.TilePages (TileTableIndexer.Create (colNum = 3, rowNum = 2), Direction.Vertical))
             |> runTest "datas/extract/tile pages by colNum and rowNum.pdf" 
             |> ignore
 
@@ -324,7 +340,7 @@ let extractTests =
                     colNum = 2,
                     rowNum = 5
                 )
-            Flow.Reuse (Reuses.TilePages (tileTable, Direction.Horizontal, pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0))
+            (Flows.TilePages (tileTable, Direction.Horizontal, pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0))
             |> runTest "datas/extract/tile pages for big data.pdf" 
             |> ignore
 
@@ -336,49 +352,51 @@ let extractTests =
                     HSpacing = [mm 1.; mm 2.],
                     VSpacing = [mm 3.; mm 6.; mm 9.]
                 )
-            Flow.Reuse (Reuses.TilePages (tileTable, Direction.Vertical, pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM3))
+            (Flows.TilePages (tileTable, Direction.Vertical, pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM3))
             |> runTest "datas/extract/tile pages by colNum and rowNum2.pdf" 
             |> ignore
 
         testCase "tile pages by selector tests" <| fun _ -> 
-            Flow.Reuse (
-                Reuses.TilePages
-                    (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
-                     sorter = SelectionSorter.Plane(mm 3., Direction.Vertical)
-                )
-                <.+>
-                (Reuse.Func(fun (pageTilingResults: PageTilingResults) ->
-                    Reuses.PickFromPageTilingResult(pageTilingResults.PageTilingResultCounts, PageNumSequence.Create [1])
-                ))
-
+            Flows.TilePages(
+                Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                sorter = SelectionSorter.Plane(mm 3., Direction.Vertical)
             )
+            <.+>
+            (Flow.Func(fun (pageTilingResults: PageTilingResults) ->
+                Flows.PickFromPageTilingResult(pageTilingResults.PageTilingResultCounts, PageNumSequence.Create [1])
+            ))
+
             |> runTest "datas/extract/tile pages by selector.pdf" 
             |> ignore
 
-        ftestCase "tile pages by selector tests2" <| fun _ -> 
-            Flow.Reuse (
-                Reuses.TilePages
-                    (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
-                    distincterOrTextPicker = 
-                        PageTilingDistincterOrTextPicker.Distincter (
-                            PageTilingDistincter.Text (fun args bound infos ->
-                                let texts = 
-                                    infos
-                                    |> List.ofSeq
-                                    |> List.choose (IIntegratedRenderInfo.asITextRenderInfo)
-                                    |> List.filter(fun m -> 
-                                        let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
-                                        textInfoBound.IsCenterPointInsideOf(bound.Bound)
-                                    )
-                                    |> List.map(fun m -> m.Text())
+        testCase "tile pages by selector tests2" <| fun _ -> 
+            Flows.TilePages
+                (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                distincterOrTextPicker = 
+                    PageTilingDistincterOrTextPicker.Distincter (
+                        PageTilingDistincter.Text (fun args bound infos ->
+                            let texts = 
+                                infos
+                                |> List.ofSeq
+                                |> List.choose (IIntegratedRenderInfo.asITextRenderInfo)
+                                |> List.filter(fun m -> 
+                                    let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
+                                    textInfoBound.IsCenterPointInsideOf(bound.Bound)
+                                )
+                                |> List.map(fun m -> m.Text())
 
-                                texts :> System.IComparable
-                            )
-                        ),
-                    pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox(PageTilingRenewInfosSplitter.``Groupby_DenseBoundIsInside_MM1.5``)
-                )
+                            texts :> System.IComparable
+                        )
+                    ),
+                pageTilingRenewOptions = 
+                    (PageTilingRenewOptions.VisibleInfosInActualBox(PageTilingRenewInfosSplitter.``Groupby_DenseBoundIsInside_MM1.5``)),
+                
+                borderKeepingPageSelector = NullablePageSelector.Non,
 
+                samplePageExtractingOptions = 
+                    (SamplePageExtractingOptions.FirstPageFirstSelector (PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
             )
+
             |> runTest "datas/extract/tile pages by selector2.pdf" 
             |> ignore
 
@@ -387,26 +405,28 @@ let extractTests =
                 Reuses.AddForeground(
                     PdfFile (@"datas/extract/extract and scale4.template.pdf")
                 )
-                <+>
-                Reuses.TilePages
-                    (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
-                    distincterOrTextPicker = (PageTilingDistincterOrTextPicker.TextPicker(
-                        { TagColor = Some Colors.PdfExtractorTagColor
-                          TransformTextPickers = 
-                            (fun args bound infos ->
-                                let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
-                                coloredBoxWithTextInfos :> System.IComparable
-                            )
-                        }
-                    )),
-                    pageTilingRenewOptions = 
-                        PageTilingRenewOptions.VisibleInfosInActualBox(
-                            PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0
-                        ),
-                    borderKeepingPageSelector = PageSelector.First,
-                    transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound)
-                )
-                <+>
+            )
+            <+>
+            Flows.TilePages
+                (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                distincterOrTextPicker = (PageTilingDistincterOrTextPicker.TextPicker(
+                    { TagColor = Some Colors.PdfExtractorTagColor
+                      TransformTextPickers = 
+                        (fun args bound infos ->
+                            let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                            coloredBoxWithTextInfos :> System.IComparable
+                        )
+                    }
+                )),
+                pageTilingRenewOptions = 
+                    PageTilingRenewOptions.VisibleInfosInActualBox(
+                        PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0
+                    ),
+                borderKeepingPageSelector = NullablePageSelector.First,
+                transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound)
+            )
+            <+>
+            Flow.Reuse(
                 Reuse.Func(fun (r: PageTilingResults) ->
                     match r.Layouts with 
                     | PageTilingLayoutResults.DistinctedOne r -> 
@@ -425,29 +445,85 @@ let extractTests =
             |> runTest "datas/extract/tile pages by selector3.pdf" 
             |> ignore
     
+        testCase "tile pages by selector tests5" <| fun _ -> 
+            Flows.TilePagesAndNUp
+                (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                //pageTilingRenewOptions = 
+                //    (PageTilingRenewOptions.VisibleInfosInActualBox(PageTilingRenewInfosSplitter.``Groupby_DenseBoundIsInside_MM1.5``)),
+                textPicker =( 
+                   { TagColor = Some Colors.PdfExtractorTagColor
+                     TransformTextPickers = 
+                       (fun args bound infos ->
+                           let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                           coloredBoxWithTextInfos :> System.IComparable
+                       )
+                   }
+                ),
+                pageTilingRenewInfosSplitter = PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0,
+                borderKeepingPageSelector = NullablePageSelector.Non,
+                transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound),
+                samplePageExtractingOptions = 
+                    (SamplePageExtractingOptions.FirstPageFirstSelector (PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
+            )
+
+            |> runTest "datas/extract/tile pages by selector5.pdf" 
+            |> ignore
+
+        ftestCase "tile pages by selector tests6" <| fun _ -> 
+            Flows.TilePages
+                (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                distincterOrTextPicker = 
+                    PageTilingDistincterOrTextPicker.Distincter (
+                        PageTilingDistincter.Text (fun args bound infos ->
+                            let texts = 
+                                infos
+                                |> List.ofSeq
+                                |> List.choose (IIntegratedRenderInfo.asITextRenderInfo)
+                                |> List.filter(fun m -> 
+                                    let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
+                                    textInfoBound.IsCenterPointInsideOf(bound.Bound)
+                                )
+                                |> List.map(fun m -> m.Text())
+
+                            texts :> System.IComparable
+                        )
+                    ),
+                pageTilingRenewOptions = 
+                    (PageTilingRenewOptions.VisibleInfosInActualBox(PageTilingRenewInfosSplitter.``Groupby_DenseBoundIsInside_MM1.5``)),
+                
+                borderKeepingPageSelector = NullablePageSelector.All,
+
+                samplePageExtractingOptions = 
+                    (SamplePageExtractingOptions.FirstPageFirstSelector (PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
+            )
+
+            |> runTest "datas/extract/tile pages by selector6.pdf" 
+            |> ignore
+
         testCase "tile pages and NUP by selector" <| fun _ -> 
             Flow.Reuse (
                 Reuses.AddForeground(
                     PdfFile (@"datas/extract/extract and scale4.template.pdf")
                 )
-                <+>
-                Reuses.TilePagesAndNUp(
-                     Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
-                     textPicker =( 
-                        { TagColor = Some Colors.PdfExtractorTagColor
-                          TransformTextPickers = 
-                            (fun args bound infos ->
-                                let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
-                                coloredBoxWithTextInfos :> System.IComparable
-                            )
-                        }
-                    ),
-                    pageTilingRenewInfosSplitter = PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0,
-                    transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound)
-                )
+            )
+            <+>
+            Flows.TilePagesAndNUp(
+                 Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                 textPicker =( 
+                    { TagColor = Some Colors.PdfExtractorTagColor
+                      TransformTextPickers = 
+                        (fun args bound infos ->
+                            let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                            coloredBoxWithTextInfos :> System.IComparable
+                        )
+                    }
+                ),
+                pageTilingRenewInfosSplitter = PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0,
+                transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound)
             )
             |> runTest "datas/extract/tile pages and NUP by selector.pdf" 
             |> ignore
+
 
     ]
 

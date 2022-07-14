@@ -94,6 +94,10 @@ module FsSize =
         { Width = rect.GetWidthF() 
           Height = rect.GetHeightF() }
 
+    let ofFsRectangle (rect: FsRectangle) =
+        { Width = rect.Width
+          Height = rect.Height }
+
     let landscape (size: FsSize) =
         if size.Width >= size.Height then size
         else

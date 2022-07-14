@@ -156,6 +156,27 @@ with
         sorter.SortToLists(rects)
         |> List.concat
 
+[<RequireQualifiedAccess>]
+type SelectionDistincter =
+    | Non
+    | Plane of tolerance: float 
+with    
+    /// (SelectionSorter.Plane (mm 3.)
+    static member DefaultValue =
+        (SelectionDistincter.Plane (mm 3.))
+
+
+    member x.Distinct(rects: FsSize al1List) =
+        match x with 
+        | SelectionDistincter.Non -> rects
+        | SelectionDistincter.Plane tolerance ->
+            let createNeayByPX(v) =
+                NearbyPX(v, specificTolerance = tolerance)
+
+            rects
+            |> AtLeastOneList.distinctBy_explictly<_, _>(fun m ->
+                 createNeayByPX m.Width, createNeayByPX m.Height
+            )
 
 
 
@@ -177,6 +198,8 @@ with
             Selector.Path(fun args info -> predicate args (info:> IIntegratedRenderInfoIM) )
             Selector.Text(fun args info -> predicate args (info:> IIntegratedRenderInfoIM) )
         ]
+
+
 
 
 [<RequireQualifiedAccess>]
@@ -456,15 +479,15 @@ type Info =
 
     static member BoundSizeIs (predicate, ?isDense, ?boundGettingStrokeOptions) = 
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->
-                let boundGettingStrokeOptions = defaultArg boundGettingStrokeOptions BoundGettingStrokeOptions.WithoutStrokeWidth
-                let isDense = defaultArg isDense true
+            let boundGettingStrokeOptions = defaultArg boundGettingStrokeOptions BoundGettingStrokeOptions.WithoutStrokeWidth
+            let isDense = defaultArg isDense true
 
-                let bound: iText.Kernel.Geom.Rectangle = 
-                    match isDense with 
-                    | true -> IAbstractRenderInfo.getDenseBound boundGettingStrokeOptions info
-                    | false -> IAbstractRenderInfo.getBound boundGettingStrokeOptions info
+            let bound: iText.Kernel.Geom.Rectangle = 
+                match isDense with 
+                | true -> IAbstractRenderInfo.getDenseBound boundGettingStrokeOptions info
+                | false -> IAbstractRenderInfo.getBound boundGettingStrokeOptions info
 
-                predicate bound
+            predicate bound
 
     static member private BoundIs (isDense, relativePosition, areaGettingOptions: AreaGettingOptions, ?boundGettingStrokeOptions) =
         fun (args: PageModifingArguments<_>) (info: #IAbstractRenderInfo) ->

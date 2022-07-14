@@ -34,6 +34,10 @@ module _Tile =
     type PageTilingLayoutResult =
         { ColNums: int list 
           RowNum: int }
+    with 
+        member x.CellsCount =
+            x.ColNums
+            |> List.sum
     
     type PageTilingDistincterInfos =
         { Value: PageTilingDistincterInfo list 
@@ -69,6 +73,44 @@ module _Tile =
             | PageTilingDistincterOrTextPicker.Distincter (v) -> v.TagColor
             | PageTilingDistincterOrTextPicker.TextPicker v -> v.TagColor
 
+    type internal ExpandedRenewableInfo(info: RenewableInfo) =
+        member x.Info = info
+
+    type internal ExpandedRenewableInfos(info: RenewableInfo) =
+        let infos =
+            match info with 
+            | RenewableInfo.Image _
+            | RenewableInfo.Path _ -> [info]
+                    
+            | RenewableInfo.Text textInfo ->
+                match Seq.length textInfo.OriginInfo.ConcatedTextInfos with 
+                | 0 
+                | 1 -> [info]
+                | _ ->
+                    textInfo.OriginInfo.ConcatedTextInfos
+                    |> List.ofSeq
+                    |> List.mapi(fun i m -> 
+                        m.Renewable(
+                            isWord = true
+                        )
+                    )
+                    |> List.map RenewableInfo.Text
+            |> List.map ExpandedRenewableInfo
+
+        member x.Infos = infos
+
+    type internal BoundCachableInfo(info: ExpandedRenewableInfo, fBound) =
+        let bound: TargetPageBox = fBound info
+
+        member x.Info = info
+
+        member x.Bound = bound
+
+
+    [<RequireQualifiedAccess>]
+    type SamplePageExtractingOptions =
+        | Non
+        | FirstPageFirstSelector of PdfPath
 
     [<RequireQualifiedAccess>]
     type PageTilingRenewInfosSplitter =
@@ -77,17 +119,27 @@ module _Tile =
         | Groupby_DenseBoundIsInside of Margin
     with    
         
-
-        member internal x.GetBound() =
+        member internal x.BoundGettingStrokeOptions =
             match x with 
             | PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside _ ->
-                IIntegratedRenderInfoIM.getDenseBound BoundGettingStrokeOptions.WithoutStrokeWidth
+                BoundGettingStrokeOptions.WithoutStrokeWidth
     
             | PageTilingRenewInfosSplitter.Groupby_CenterPointIsInside _ ->
-                IIntegratedRenderInfoIM.getBound BoundGettingStrokeOptions.WithoutStrokeWidth
+                BoundGettingStrokeOptions.WithoutStrokeWidth
     
             | PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross _ ->
-                IIntegratedRenderInfoIM.getBound BoundGettingStrokeOptions.WithStrokeWidth
+                BoundGettingStrokeOptions.WithStrokeWidth
+
+        member internal x.GetInfoBound() =
+            match x with 
+            | PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside _ ->
+                IIntegratedRenderInfoIM.getDenseBound x.BoundGettingStrokeOptions
+    
+            | PageTilingRenewInfosSplitter.Groupby_CenterPointIsInside _ ->
+                IIntegratedRenderInfoIM.getBound x.BoundGettingStrokeOptions
+    
+            | PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross _ ->
+                IIntegratedRenderInfoIM.getBound x.BoundGettingStrokeOptions
     
         static member ``Groupby_DenseBoundIsInside_MM1.5`` =
             PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside Margin.``MM1.5``
@@ -103,7 +155,7 @@ module _Tile =
             PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross Margin.``MM1.5``
             
     
-        member internal x.Infos__GroupOrFilter_IntoOp(bounds: Rectangle list, infos: 'info list, fBound, ?predicateEx) =
+        member internal x.Infos__GroupOrFilter_IntoOp(bounds: Rectangle list, infos: RenewableInfo list, ?predicateEx) =
             let bounds =
                 bounds
                 |> List.mapi(fun i bound ->
@@ -111,34 +163,68 @@ module _Tile =
                       Bound = bound }
                 )
 
-            let rec loop_groupBy predicate accum bounds infos =
-                match bounds with 
-                | [] -> List.rev accum
-                | bound :: t -> 
-                    let currentInfos, leftInfos =
-                        infos
-                        |> List.partition (fun info ->
-                            let infoBound: TargetPageBox = fBound info
-                            match infoBound.Value with 
-                            | None -> false
-                            | Some infoBound ->
-                                (match predicateEx with 
-                                    | Some predicateEx -> 
-                                        predicateEx info bound infoBound 
-                                        && predicate bound infoBound
-                                    | None -> predicate bound infoBound
-                                )
+            let infos =
+                infos
+                |> List.map ExpandedRenewableInfos
+                |> List.collect(fun m -> m.Infos)
+                |> List.map(fun m -> BoundCachableInfo(m, fun info -> 
+                    (x.GetInfoBound() info.Info.OriginInfo)
+                    |> TargetPageBox
+                ))
+                |> List.filter(fun m -> m.Bound.Value.IsSome)
 
-                                   
-                        )
+            let loop_groupBy predicate bounds infos =
+                let rec loop accum (bounds: IndexedBound list) (infos: BoundCachableInfo list) =
+                    
+                    match bounds with 
+                    | [] -> List.rev accum
+                    | bound :: t -> 
+                        let currentInfos, leftInfos =
+                            let rec loop2 currentInfos leftInfos infos =
+                                match infos with 
+                                | [] -> List.rev currentInfos, List.rev leftInfos
+                                | info :: t ->
+                                    let predicateInfo (info: BoundCachableInfo) =
+                                        let infoBound: TargetPageBox = info.Bound
 
-                    let r = 
-                        match currentInfos with 
-                        | [] -> None
-                        | _ -> Some (bound, currentInfos)
+                                        match infoBound.Value with 
+                                        | None -> None
+                                        | Some infoBound ->
+                                            let b = 
+                                                (match predicateEx with 
+                                                    | Some predicateEx -> 
+                                                        predicateEx info bound infoBound 
+                                                        && predicate bound infoBound
+                                                    | None -> predicate bound infoBound
+                                                )
 
-                    loop_groupBy predicate (r :: accum) t leftInfos
+                                            match b with 
+                                            | true -> Some (Choice1Of2 info) 
+                                            | false -> Some (Choice2Of2 info) 
 
+                                    let predicateInfo__GoToNext (info: BoundCachableInfo) =
+                                        match predicateInfo info with 
+                                        | None -> loop2 currentInfos leftInfos t
+                                        | Some (Choice1Of2 currentInfo) ->
+                                            loop2 (currentInfo :: currentInfos) leftInfos t
+
+                                        | Some (Choice2Of2 leftInfo) ->
+                                            loop2 currentInfos (leftInfo :: leftInfos) t
+
+
+                                    predicateInfo__GoToNext info
+
+                            loop2 [] [] infos
+
+                        let r = 
+                            match currentInfos with 
+                            | [] -> None
+                            | _ -> Some (bound, currentInfos |> List.map(fun m -> m.Info.Info))
+
+                        loop ((r) :: accum) t leftInfos
+
+
+                loop [] bounds infos
 
             match x with 
             | PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross margin ->
@@ -151,7 +237,7 @@ module _Tile =
                     let infos = 
                         infos
                         |> List.filter(fun info -> 
-                            let infoBound: TargetPageBox = fBound info
+                            let infoBound: TargetPageBox = info.Bound
                             match infoBound.Value with 
                             | Some infoBound -> infoBound.Is_InsideOrCross_Of(bound.Bound)
                             | None -> false
@@ -159,7 +245,7 @@ module _Tile =
                     match infos with 
                     | [] -> None
                     | _ ->
-                        Some (bound.ApplyMargin -margin, infos)
+                        Some (bound.ApplyMargin -margin, infos |> List.map (fun m -> m.Info.Info))
                 )
     
             | PageTilingRenewInfosSplitter.Groupby_CenterPointIsInside ->
@@ -167,9 +253,9 @@ module _Tile =
                     (fun indexedBound infoBound ->
                         infoBound.IsCenterPointInsideOf (indexedBound.Bound)
                     )
-                    []
                     bounds
                     infos
+
      
             | PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside margin ->
                 let bounds =
@@ -180,15 +266,14 @@ module _Tile =
                     (fun (indexedBound: IndexedBound) infoBound ->
                         infoBound.IsInsideOf(indexedBound.Bound)
                     )
-                    []
                     bounds
                     infos
                 |> List.map(Option.map(fun (m, v) ->
                     m.ApplyMargin(-margin), v
                 ))
-            
 
-        member internal x.Infos__GroupOrFilter_Into(bounds: Rectangle list, infos: 'info list, fBound) =
+
+        member internal x.Infos__GroupOrFilter_Into(bounds: Rectangle list, infos: RenewableInfo list, fBound) =
             x.Infos__GroupOrFilter_IntoOp(bounds, infos, fBound)
             |> List.choose id
 
@@ -214,24 +299,101 @@ module _Tile =
         | Renew_TextPicker of IComparable
         | Renew_TextPicker_Distincter__Non
 
+    [<RequireQualifiedAccess>]
+    type PageTilingResultValue_TextPicker =
+        | Renew_TextPicker of IComparable
+        | Renew_TextPicker_Distincter__Non
+
+    type PageTilingResult_TextPicker =
+        { PageNumber: PageNumber 
+          Bound: SerializableIndexedBound
+          Value_TextPicker: PageTilingResultValue_TextPicker }
+
+
     type PageTilingResult =
         { PageNumber: PageNumber 
           Bound: SerializableIndexedBound
           Value: PageTilingResultValue }
+    with 
+        member internal x.ToTextPicker_OR_Fail() =
+            { PageNumber = x.PageNumber 
+              Bound = x.Bound
+              Value_TextPicker =
+                match x.Value with 
+                | PageTilingResultValue.Renew_TextPicker v -> 
+                    PageTilingResultValue_TextPicker.Renew_TextPicker v
 
+                | PageTilingResultValue.Renew_TextPicker_Distincter__Non ->
+                    PageTilingResultValue_TextPicker.Renew_TextPicker_Distincter__Non 
+                | _ -> failwithf "Cannot convert %A to PageTilingResultValue_TextPicker" x.Value
+              }
 
     [<RequireQualifiedAccess>]
     type PageTilingLayoutResults =
         | DistinctedOne of PageTilingLayoutResult
         | Many of PageTilingLayoutResult al1List
+    with 
+        member x.Head =
+            match x with 
+            | PageTilingLayoutResults.DistinctedOne v -> v
+            | PageTilingLayoutResults.Many v -> v.Head
+
+        static member Create(layouts: al1List<PageTilingLayoutResult>) =
+            match List.distinct layouts.AsList with 
+            | [layout] -> PageTilingLayoutResults.DistinctedOne layout
+            | [] -> failwith "Invalid token"
+            | layouts -> PageTilingLayoutResults.Many (AtLeastOneList.Create layouts)
+
+
+        static member Concat(layoutLists: al1List<PageTilingLayoutResults>) =
+            layoutLists.AsList
+            |> List.collect(fun m ->
+                match m with 
+                | PageTilingLayoutResults.DistinctedOne v -> [v]
+                | PageTilingLayoutResults.Many v -> v.AsList
+            )
+            |> AtLeastOneList.Create
+            |> PageTilingLayoutResults.Create
+
+
+
+    
+    type SamplePdfFile =
+        { PageSize: FsSize 
+          PdfFile: PdfFile }
+
+    type PageTilingResults_TextPicker = 
+        { Value_TextPicker:  al1List<PageTilingResult_TextPicker list> 
+          PageTilingResultCounts: PageTilingResultCount al1List
+          Layouts: PageTilingLayoutResults
+          SamplePdfFile: SamplePdfFile option }
+
+
+
 
     type PageTilingResults = 
         { Value:  al1List<PageTilingResult list> 
           PageTilingResultCounts: PageTilingResultCount al1List
-          Layouts: PageTilingLayoutResults }
+          Layouts: PageTilingLayoutResults
+          SamplePdfFile: SamplePdfFile option
+          OriginBorderKeepingNumbers: int list }
+    with 
+        member internal x.ToTextPicker_OR_Fail() =
+            { Value_TextPicker =
+                x.Value
+                |> AtLeastOneList.map(fun m ->
+                    m
+                    |> List.map(fun m -> m.ToTextPicker_OR_Fail())
+                )
 
+              PageTilingResultCounts = x.PageTilingResultCounts
+              Layouts = x.Layouts
+              SamplePdfFile = x.SamplePdfFile
+            }
 
-    type Reuses with 
+    
+
+    type Flows with 
         static member TilePages (tileTable: TileTableIndexer, ?direction: Direction, ?pageTilingRenewOptions: PageTilingRenewOptions) =
             let direction = defaultArg direction Direction.Horizontal
             let pageTilingRenewOptions = defaultArg pageTilingRenewOptions PageTilingRenewOptions.UsingOriginPdfPage
@@ -292,11 +454,7 @@ module _Tile =
 
                                 splitter.Infos__GroupOrFilter_IntoOp(
                                     bounds,
-                                    infos,
-                                    (fun m ->   
-                                        let targetPageBox = splitter.GetBound() m.OriginInfo
-                                        TargetPageBox targetPageBox
-                                    )
+                                    infos
                                 )
                                 |> List.mapi(fun i targetPageInfoOp ->
                                     match targetPageInfoOp with 
@@ -326,11 +484,13 @@ module _Tile =
                 "TilePages"
                 ["tileTable" => tileTable.ToString()
                  "pageTilingRenewOptions" => pageTilingRenewOptions.ToString() ]
+            |> Flow.Reuse
         
-
-        static member TilePages (selector: Selector<'userState>, ?distincterOrTextPicker: PageTilingDistincterOrTextPicker, ?sorter: SelectionSorter, ?pageTilingRenewOptions: PageTilingRenewOptions, ?borderKeepingPageSelector, ?transform: IndexedBound -> Rectangle) =
+        static member TilePages (selector: Selector<'userState>, ?distincterOrTextPicker: PageTilingDistincterOrTextPicker, ?sorter: SelectionSorter, ?pageTilingRenewOptions: PageTilingRenewOptions, ?borderKeepingPageSelector, ?transform: IndexedBound -> Rectangle, ?samplePageExtractingOptions) =
             let sorter = defaultArg sorter (SelectionSorter.DefaultValue)
-            let borderKeepingPageSelector = defaultArg borderKeepingPageSelector (PageSelector.All)
+            let borderKeepingPageSelector = defaultArg borderKeepingPageSelector (NullablePageSelector.All)
+
+            let samplePageExtractingOptions = defaultArg samplePageExtractingOptions SamplePageExtractingOptions.Non
 
             let distincterOrTextPicker =
                 match distincterOrTextPicker with 
@@ -348,7 +508,18 @@ module _Tile =
 
                 let reader = splitDocument.Reader
 
-                let borderKeepingPageNumbers = reader.GetPageNumbers(borderKeepingPageSelector)
+                let originBorderKeepingPageNumbers = reader.GetPageNumbers(borderKeepingPageSelector)
+
+                let borderKeepingPageNumbers =
+                    match samplePageExtractingOptions with 
+                    | SamplePageExtractingOptions.FirstPageFirstSelector _ ->
+                        if List.contains 1 originBorderKeepingPageNumbers 
+                        then originBorderKeepingPageNumbers
+                        else 1 :: originBorderKeepingPageNumbers
+
+                    | SamplePageExtractingOptions.Non -> originBorderKeepingPageNumbers 
+
+
                 let parser = new NonInitialClippingPathPdfDocumentContentParser(reader)
                 let boundGroups = 
                     [
@@ -474,7 +645,7 @@ module _Tile =
                             |> List.distinctBy_explictly<_, IComparable>(fun m -> m.Distincter)
                             |> filter
                 
-
+                
                 let r = 
                     boundGroups
                     |> List.groupBy(fun m -> m.PdfPageNumber)
@@ -521,11 +692,7 @@ module _Tile =
 
                                             splitter.Infos__GroupOrFilter_IntoOp(
                                                 bounds,
-                                                infos,
-                                                (fun m ->   
-                                                    let targetPageBox = splitter.GetBound() m.OriginInfo
-                                                    TargetPageBox targetPageBox
-                                                )
+                                                infos
                                             )
                                             |> List.mapi(fun i targetPageInfoOp ->
                                                 match targetPageInfoOp with 
@@ -604,10 +771,13 @@ module _Tile =
                     |> AtLeastOneList.map(fun m -> PageTilingResultCount m.Length)
 
                   Layouts =
-                    match List.distinct layouts with 
-                    | [layout] -> PageTilingLayoutResults.DistinctedOne layout
-                    | [] -> failwith "Invalid token, PageTilingLayoutResult list cannot be empty here"
-                    | layouts -> PageTilingLayoutResults.Many (AtLeastOneList.Create layouts)
+                    
+                    match AtLeastOneList.TryCreate layouts with 
+                    | Some layouts -> PageTilingLayoutResults.Create layouts
+                    | None -> failwith "Invalid token, PageTilingLayoutResult list cannot be empty here"
+
+                  SamplePdfFile = None
+                  OriginBorderKeepingNumbers = originBorderKeepingPageNumbers
                 }
 
 
@@ -615,34 +785,98 @@ module _Tile =
                 "TilePages"
                 [ "selector" => selector.ToString()
                   "distincterOrTextPicker" => sprintf "%A" distincterOrTextPicker
-                  "pageTilingRenewOptions" => pageTilingRenewOptions.ToString() ]
+                  "pageTilingRenewOptions" => pageTilingRenewOptions.ToString()
+                  "samplePageExtractingOptions" => samplePageExtractingOptions.ToString() ]
+            |> fun flow ->
+                match samplePageExtractingOptions with 
+                | SamplePageExtractingOptions.Non -> Flow.Reuse flow
+                | SamplePageExtractingOptions.FirstPageFirstSelector targetPdfPath ->
+                    Flow.Func(fun userState ->
+                        Flow.Reuse(
+                            flow
+                            <+>
+                            Reuse.Factory(fun flowModel splitDocument ->
+                                let sampleFile = 
+                                    let r = flowModel.UserState.Value
+                                    match r.Head with 
+                                    | [] -> failwith "Invalid token, tiling should be found in first page when trying extracting samplePdfFile"
+                                    | r :: _ ->
+                                        let sampleDocument = new PdfDocument(new PdfWriter(targetPdfPath.Path))
+                                        let page = splitDocument.Reader.GetPage(1)
+                                        let samplePage = page.CopyTo(sampleDocument)
+                                        sampleDocument.AddPage(samplePage) |> ignore
+                                        sampleDocument.Close()
+                                        { PdfFile = PdfFile targetPdfPath
+                                          PageSize = FsSize.ofFsRectangle r.Bound.Bound }
+
+                                Reuse.dummy()
+                                ||>> (fun _ ->
+                                    { flowModel.UserState with 
+                                        SamplePdfFile = Some sampleFile
+                                    }
+                                )
+                            )
+                        )
+                        <.+>
+                        Flow.Func(fun (pageTilingResults: PageTilingResults) ->
+                            ((fun _ -> userState) <<||
+                                if List.contains 1 pageTilingResults.OriginBorderKeepingNumbers
+                                then 
+                                    Flow.dummy() ||>> ignore
+                                else 
+                                    Flow.Manipulate(
+                                        Modify.CancelFillAndStroke(
+                                            selector,
+                                            PageSelector.Expr(
+                                                PageSelectorExpr.Between(
+                                                    SinglePageSelectorExpr.Begin 1,
+                                                    SinglePageSelectorExpr.Begin pageTilingResults.Layouts.Head.CellsCount
+                                                ))
+                                        )
+                                    )
+                            )
+                        )
 
 
-        static member TilePagesAndNUp(selector, textPicker: PageTilingTextPickers, ?transform, ?borderKeepingPageSelector, ?pageTilingRenewInfosSplitter, ?fArgs) =
-            Reuses.TilePages
-                (selector,
-                distincterOrTextPicker = PageTilingDistincterOrTextPicker.TextPicker(textPicker),
-                ?pageTilingRenewOptions = (pageTilingRenewInfosSplitter |> Option.map PageTilingRenewOptions.VisibleInfosInActualBox),
-                borderKeepingPageSelector = defaultArg borderKeepingPageSelector PageSelector.First,
-                ?transform = transform
-            )
-            <++>
-            Reuse.Func(fun (r: PageTilingResults) ->
-                match r.Layouts with 
-                | PageTilingLayoutResults.DistinctedOne r -> 
-                    Reuses.Impose(fun args ->
-                        { args with 
-                            ColNums = r.ColNums
-                            RowNum = r.RowNum
-                            Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.MM6)
-                            Cropmark = Some Cropmark.defaultValue
-                            Background = Background.Size FsSize.MAXIMUN
-                        }
-                        |> (defaultArg fArgs id)
                     )
 
-                | _ -> failwith "Not implemented"
+                    
+                    
+
+
+
+        static member TilePagesAndNUp(selector, textPicker: PageTilingTextPickers, ?transform, ?borderKeepingPageSelector, ?pageTilingRenewInfosSplitter, ?fArgs, ?samplePageExtractingOptions) =
+            (
+                Flows.TilePages
+                    (selector,
+                    distincterOrTextPicker = PageTilingDistincterOrTextPicker.TextPicker(textPicker),
+                    ?pageTilingRenewOptions = (pageTilingRenewInfosSplitter |> Option.map PageTilingRenewOptions.VisibleInfosInActualBox),
+                    borderKeepingPageSelector = defaultArg borderKeepingPageSelector NullablePageSelector.First,
+                    ?transform = transform,
+                    ?samplePageExtractingOptions = samplePageExtractingOptions
+                )
+                ||>> (fun m -> m.ToTextPicker_OR_Fail())
             )
+            <++>
+            Flow.Reuse(
+                Reuse.Func(fun (r: PageTilingResults_TextPicker) ->
+                    match r.Layouts with 
+                    | PageTilingLayoutResults.DistinctedOne r -> 
+                        Reuses.Impose(fun args ->
+                            { args with 
+                                ColNums = r.ColNums
+                                RowNum = r.RowNum
+                                Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.MM6)
+                                Cropmark = Some Cropmark.defaultValue
+                                Background = Background.Size FsSize.MAXIMUN
+                            }
+                            |> (defaultArg fArgs id)
+                        )
+
+                    | _ -> failwith "Not implemented"
+                )
+            )
+
 
         static member PickFromPageTilingResult(pageTilingResults: AtLeastOneList<PageTilingResultCount>, picker: PageNumSequence) =
             let pageNumSequence = 
@@ -663,3 +897,4 @@ module _Tile =
                 |> EmptablePageNumSequence.Create
 
             Reuses.SequencePages(pageNumSequence)
+            |> Flow.Reuse

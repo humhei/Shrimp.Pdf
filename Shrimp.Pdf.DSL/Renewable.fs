@@ -50,16 +50,18 @@ module _Renewable =
                     let dst = 
                         let newY, newHeight = 
                             let newY = newRect.GetYF()
-                            match originRect.GetHeightF() with 
-                            | SmallerThan 0. -> 
+                            match originRect.GetHeightF() < 0., affineTransform.GetScaleY() < 0. with 
+                            | true, false 
+                            | false, true -> 
                                 let height = newRect.GetHeightF()
                                 newY + height, -(height)
                             | _ -> newY, newRect.GetHeightF()
 
                         let newX, newWidth = 
                             let newX = newRect.GetXF()
-                            match originRect.GetWidthF() with 
-                            | SmallerThan 0. -> 
+                            match originRect.GetWidthF() < 0., affineTransform.GetScaleX() < 0. with 
+                            | true, false  
+                            | false, true ->
                                 let width = newRect.GetWidthF()
                                 newX + width, -(width)
                             | _ -> newX, newRect.GetWidthF()
@@ -290,9 +292,10 @@ module _Renewable =
            TextLeading: float32
            TextRenderingMode: int
            HeaderTextRenderInfo: TextRenderInfo
-           OperatorRange: OperatorRange
+           OperatorRange: OperatorRange option
            ClippingPathInfos: ClippingPathInfos
            OriginInfo: IntegratedTextRenderInfo
+           IsWord: bool
      
            }
      with 
@@ -312,7 +315,11 @@ module _Renewable =
                 //|> PdfCanvas.setTextLeading x.TextLeading
                 |> PdfCanvas.setFontAndSize(x.Font, x.RawFontSize)
                 |> PdfCanvas.setTextMatrix textMatrix
-                |> PdfCanvas.writeOperatorRange x.OperatorRange
+                |> (fun canvas ->
+                    match x.IsWord with 
+                    | false -> PdfCanvas.writeOperatorRange x.OperatorRange.Value canvas
+                    | true -> PdfCanvas.showText x.Text canvas
+                )
                 |> PdfCanvas.endText
             )
         
@@ -329,7 +336,8 @@ module _Renewable =
 
 
     type IntegratedTextRenderInfo with 
-        member x.Renewable(): RenewableTextInfo =
+        member x.Renewable(?isWord): RenewableTextInfo =
+            let isWord = defaultArg isWord false
             let renderInfo = x.TextRenderInfo
             { FillColor = x.TextRenderInfo.GetFillColor()
               StrokeColor = x.TextRenderInfo.GetStrokeColor()
@@ -347,13 +355,17 @@ module _Renewable =
                 match x.EndTextState with 
                 | EndTextState.Yes -> x.ConcatedTextInfos |> Seq.head |> fun m -> m.TextRenderInfo
                 | EndTextState.Undified -> x.TextRenderInfo
-                | EndTextState.No -> failwith "Invalid token, EndTextState should not be 'No' here"
+                | EndTextState.No -> x.TextRenderInfo
 
-              OperatorRange = x.OperatorRange.Value
+              OperatorRange = 
+                match isWord with 
+                | true -> None 
+                | false -> Some x.OperatorRange.Value
               ClippingPathInfos = x.ClippingPathInfos
               FillShading = None
               StrokeShading = None
               OriginInfo = x
+              IsWord = isWord
             }
 
 

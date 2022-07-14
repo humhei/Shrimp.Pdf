@@ -24,6 +24,11 @@ let reuseTests =
   testList "Reuse Tests" [
     
     testCase "add background tests" <| fun _ -> 
+        //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
+        //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
+        //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
+        //let a = m
+
 
         Flow.Reuse (
             Reuses.AddBackground(PdfFile @"datas/reuse/backgroundFile.pdf")
@@ -106,14 +111,15 @@ let reuseTests =
             Reuses.Impose_ForceOnePage
                 (fun args ->
                     { args with 
-                        ColNums = [2]
-                        RowNum = 4
+                        ColNums = [4]
+                        RowNum = 3
                         Cropmark = Some Cropmark.defaultValue
                         Background = Background.Size FsSize.A4
                         IsRepeated = false
-                        HSpaceExes = Spaces [Space.MiddleDashLine(mm 3., mm 1.5); Space.MiddleDashLine(mm 9., mm 3.)]
-                        VSpaceExes = Spaces [mm 3.; mm 20.]
-                        Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 30.))
+                        HSpaceExes = Spaces [mm 0.]
+                        VSpaceExes = Spaces [mm 0.]
+                        //DesiredPageOrientation = DesiredPageOrientation.Portrait
+                        Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 6.))
                     }
                 ) ||>> fun imposingDocument -> imposingDocument.GetSheets()
         )
@@ -514,6 +520,13 @@ let reuseTests =
         |> runTest "datas/reuse/move pagebox to origin2.pdf" 
         |> ignore
 
+    testCase "clear dirty infos" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.ClearDirtyInfos(keepOriginPageBoxes = true)
+        )
+        |> runTest "datas/reuse/clear dirty infos.pdf" 
+        |> ignore
+
     testCase "resize pageSize to 7x4cm tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.Resize(
@@ -521,7 +534,7 @@ let reuseTests =
                 pageResizingRotatingOptions = PageResizingRotatingOptions.Keep,
                 pageResizingScalingOptions = PageResizingScalingOptions.Uniform,
                 fSize =
-                    (fun pageNumber -> { Width = mm 70.; Height = mm 40. })
+                    (fun page pageNumber -> { Width = mm 70.; Height = mm 40. })
             )
         )
         |> runTest "datas/reuse/resize pageSize to 7x4cm.pdf" 

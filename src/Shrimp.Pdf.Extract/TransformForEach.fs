@@ -127,11 +127,7 @@ module _TransformForEach =
                                     let targetPageInfos = 
                                         splitter.Infos__GroupOrFilter_IntoOp(
                                             bounds,
-                                            infos,
-                                            (fun m ->   
-                                                let targetPageBox = splitter.GetBound() m.OriginInfo
-                                                TargetPageBox targetPageBox
-                                            )
+                                            infos
                                             //predicateEx = (fun info bound infoBound ->
                                             //    match info with 
                                             //    | RenewableInfo.Path info ->

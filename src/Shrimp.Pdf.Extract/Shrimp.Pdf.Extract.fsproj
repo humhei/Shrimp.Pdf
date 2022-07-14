@@ -5,12 +5,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="reference.conf">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </EmbeddedResource>
     <Compile Include="Types.fs" />
     <Compile Include="ColoredBox.fs" />
     <Compile Include="Extract.fs" />
     <Compile Include="Tile.fs" />
     <Compile Include="TransformForEach.fs" />
   </ItemGroup>
+
+  <ItemGroup />
 
   <ItemGroup>
     <ProjectReference Include="..\..\Shrimp.Pdf.Image\Shrimp.Pdf.Image.fsproj" />

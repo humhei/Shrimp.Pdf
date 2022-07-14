@@ -264,14 +264,16 @@ module _PrefixReuses =
                             match keepOriginPageBoxes with 
                             | true ->
                                 newPage
-                                |> setPageBox PageBoxKind.TrimBox
                                 |> setPageBox PageBoxKind.ArtBox
                                 |> setPageBox PageBoxKind.BleedBox
+                                |> setPageBox PageBoxKind.TrimBox
+
 
                             | false -> newPage
 
                         canvas.AddXObjectAbs(xobject, -actualBox.GetX(), -actualBox.GetY())
                         |> ignore
+
                     else 
                         let page = page.CopyTo(splitDocument.Writer)
                         splitDocument.Writer.AddPage(page) |> ignore

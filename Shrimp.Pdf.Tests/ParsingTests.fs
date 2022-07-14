@@ -28,9 +28,8 @@ let parsingTests =
   testList "Parsing Tests" [
     testCase "extract concated text" <| fun _ -> 
         let path = Path.getFullName "datas/parsing/extract concated text.pdf"
-        let backUp = Path.changeExtension ".tests.pdf" path
-        let texts = PdfRunner.ReadTextInfos(PdfFile path, backUp)
-        match texts.[0].[0].Text with 
+        let texts = PdfRunner.ReadTextInfos(PdfFile path)
+        match texts.[0].[0].Text() with 
         | "EXPEDITEUR:" -> pass()
         | _ -> fail()
 

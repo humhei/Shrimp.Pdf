@@ -47,7 +47,7 @@ let manipulateTests =
 
     testCase "read shading colors" <| fun _ ->  
         let path = "datas/manipulate/read shading colors.pdf" 
-        PdfRunner.ReadColors(PdfFile path, createTestPath path)
+        PdfRunner.ReadColors(PdfFile path)
         |> ignore
 
     testCase "resize path as copy" <| fun _ ->     
@@ -128,11 +128,9 @@ let manipulateTests =
 
     testCase "read separation colors" <| fun _ -> 
         let pdfFile = PdfFile @"datas/manipulate/read separation colors.pdf"
-        let testFile = Path.changeExtension ".tests.pdf" (pdfFile.Path)
         let infos =
             PdfRunner.ReadColors(
-                pdfFile,
-                testFile
+                pdfFile
             )
 
         ()
@@ -142,8 +140,7 @@ let manipulateTests =
         let testFile = Path.changeExtension ".tests.pdf" (pdfFile.Path)
         let infos =
             PdfRunner.ReadColors(
-                pdfFile,
-                testFile
+                pdfFile
             )
 
         ()
@@ -1317,7 +1314,7 @@ let manipulateTests =
             |> PdfFile
 
 
-        let colors = PdfRunner.ReadTextInfos(pdfFile, @"C:\Users\Jia\Desktop\tests.pdf")
+        let colors = PdfRunner.ReadTextInfos(pdfFile)
 
         let a = 1
 

@@ -409,15 +409,18 @@ module Operators =
     //    || (abs (a - b)) < tolerance.Value
 
     /// unSerializable
-    type NearbyPX(v: float) =
+    type NearbyPX private (v: float, tolerance) =
         inherit CustomComparableBase<float>(v, fun a b ->
-            if (abs (a-b)) <= tolerance.Value
+            if (abs (a-b)) <= tolerance
             then 0
             else compare a b
         )
 
         member x.Value = v
 
+        new (v, ?specificTolerance) =
+            NearbyPX(v, defaultArg specificTolerance tolerance.Value)
+            
 
     /// defaultConversion: mm to user unit
     let mm (mm: float) =

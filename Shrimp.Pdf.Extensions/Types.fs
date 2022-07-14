@@ -1002,6 +1002,25 @@ module ExtensionTypes =
             AtLeastOneSet.Create [pageNumber]
             |> PageSelector.Numbers
 
+
+    [<RequireQualifiedAccess>]
+    type NullablePageSelector =
+        | Last
+        | First
+        | All
+        | Expr of PageSelectorExpr
+        | Numbers of AtLeastOneSet<int>
+        | Non
+    with 
+        member x.AsPageSelector =
+            match x with 
+            | NullablePageSelector.Last         ->   Some (PageSelector.Last     )
+            | NullablePageSelector.First        ->   Some (PageSelector.First    )
+            | NullablePageSelector.All          ->   Some (PageSelector.All      )
+            | NullablePageSelector.Expr    v    ->   Some (PageSelector.Expr v   )
+            | NullablePageSelector.Numbers v    ->   Some (PageSelector.Numbers v)
+            | NullablePageSelector.Non -> None
+                                                                  
     type PdfDocument with
 
         member pdfDocument.GetPageNumber(pageSelectorExpr: SinglePageSelectorExpr) =
@@ -1032,14 +1051,14 @@ module ExtensionTypes =
             ]
 
         member pdfDocument.GetPages(pageSelectorExpr: PageSelectorExpr) =
-            let pages = pdfDocument.GetPages()
             let numbers = pdfDocument.GetPageNumbers(pageSelectorExpr)
-            pages 
-            |> List.indexed
-            |> List.filter(fun (i, page) ->
-                List.contains (i+1) (numbers)
+            numbers
+            |> List.map(fun number ->
+                pdfDocument.GetPage(number)
             )
-            |> List.map snd
+  
+
+
 
         member pdfDocument.GetPageNumbers(pageSelector) =
             let numberOfPages = pdfDocument.GetNumberOfPages()
@@ -1057,3 +1076,16 @@ module ExtensionTypes =
                     |> Set.toList
 
                 intersectedNumbers
+
+        member pdfDocument.GetPages(pageSelector: PageSelector) =
+            let numbers = pdfDocument.GetPageNumbers(pageSelector)
+            numbers
+            |> List.map(fun number ->
+                pdfDocument.GetPage(number)
+            )
+
+        member pdfDocument.GetPageNumbers(pageSelector: NullablePageSelector) =
+            match pageSelector.AsPageSelector with 
+            | Some pageSelector -> pdfDocument.GetPageNumbers(pageSelector)
+            | None -> []
+       

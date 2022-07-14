@@ -91,6 +91,14 @@ module _Extract =
         let parser = new NonInitialClippingPathPdfDocumentContentParser(reader)
         let pageNumber = args.PageNum
         let keepBorder = List.contains pageNumber borderKeepingPageNumbers
+        
+        match loggingPageCountInterval.Value with 
+        | BiggerThan 1 & interval -> 
+            match pageNumber % interval with 
+            | 0 -> Logger.info (sprintf "extracting page %d" pageNumber)
+            | _ -> ()
+
+        | _ -> ()
 
         let infos =
             let selector = 

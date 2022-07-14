@@ -98,7 +98,7 @@ module IntegratedInfos =
           EndTextState: EndTextState }
             
 
-    [<Struct>]
+    [<Struct; System.Diagnostics.DebuggerDisplay("IntegratedTextRenderInfo: {RecordValue}")>]
     type IntegratedTextRenderInfo =
         { TextRenderInfo: TextRenderInfo 
           ClippingPathInfos: ClippingPathInfos

@@ -73,9 +73,13 @@ type ResourceColor =
 
 type ReaderDocument (reader: string) =
     let reader = new PdfDocument(new PdfReader(reader))
-
+    
     member x.Reader = reader
 
+    member x.Close() = reader.Close()
+
+    interface System.IDisposable with 
+        member x.Dispose() = x.Close()
 
 
 type private PdfDocumentCache private 
@@ -426,6 +430,11 @@ and PdfDocumentWithCachedResources =
     member x.CloseAndClearCache() = 
         x.ClearCache()
         x.Close()
+
+    interface System.IDisposable with 
+        member x.Dispose() =
+            x.ClearCache()
+            x.Close()
 
     new (writer: string) as this = 
         { inherit PdfDocument(new PdfWriter(writer)); cache = new PdfDocumentCache((fun _ -> this)) }

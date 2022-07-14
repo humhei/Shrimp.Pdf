@@ -268,7 +268,7 @@ module _Reuses =
                 [ "pageSelector" => pageSelector.ToString()
                   "rotation" => rotation.ToString() ]
 
-        static member Resize (pageSelector: PageSelector, pageBoxKind: PageBoxKind, fSize: PageNumber -> FsSize) =
+        static member Resize (pageSelector: PageSelector, pageBoxKind: PageBoxKind, fSize: PdfPage -> PageNumber -> FsSize) =
             
             fun flowModel (splitDocument: SplitDocument) ->
                 let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector) 
@@ -278,7 +278,7 @@ module _Reuses =
                     let pageNum = i + 1
                     
                     let size = 
-                        let unroundSize =  (fSize (PageNumber pageNum))
+                        let unroundSize =  (fSize page (PageNumber pageNum))
                         RoundedSize.Create unroundSize
 
                     if List.contains pageNum selectedPageNumbers 
@@ -346,7 +346,7 @@ module _Reuses =
             Reuses.Resize(
                 pageSelector = pageSelector,
                 pageBoxKind = pageBoxKind,
-                fSize = (fun _ -> size)
+                fSize = (fun _ _ -> size)
             )
             |> Reuse.rename
                 "Resize"
@@ -354,7 +354,7 @@ module _Reuses =
                  "pageBoxKind" => pageBoxKind.ToString() 
                  "size" => size.ToString() ]
 
-        static member Resize (pageSelector: PageSelector, pageResizingRotatingOptions: PageResizingRotatingOptions, pageResizingScalingOptions: PageResizingScalingOptions, fSize: PageNumber -> FsSize) =
+        static member Resize (pageSelector: PageSelector, pageResizingRotatingOptions: PageResizingRotatingOptions, pageResizingScalingOptions: PageResizingScalingOptions, fSize: PdfPage -> PageNumber -> FsSize) =
             let tryRotate() =
                 match pageResizingRotatingOptions with
                 | PageResizingRotatingOptions.Keep -> Reuse.dummy() ||>> ignore
@@ -367,7 +367,7 @@ module _Reuses =
                             |> List.choose (fun (i, page) ->
                                 let pageNum = i + 1
                                 let actualBox = page.GetActualBox()
-                                match FsSize.ofRectangle actualBox, fSize (PageNumber pageNum) with
+                                match FsSize.ofRectangle actualBox, fSize page (PageNumber pageNum) with
                                 | FsSize.Portrait, FsSize.Portrait 
                                 | FsSize.Landscape, FsSize.Landscape 
                                 | FsSize.Uniform, _
@@ -424,7 +424,7 @@ module _Reuses =
                             PdfDocument.getPages splitDocument.Reader
                             |> List.mapi (fun i page ->
                                 let pageNum = i + 1
-                                let size = (fSize (PageNumber pageNum)) |> RoundedSize.Create
+                                let size = (fSize page (PageNumber pageNum)) |> RoundedSize.Create
                                 if List.contains pageNum selectedPageNumbers 
                                 then 
                                     let actualBox = page.GetActualBox()
@@ -477,7 +477,7 @@ module _Reuses =
            
 
         static member Resize (pageSelector: PageSelector, pageResizingRotatingOptions: PageResizingRotatingOptions, pageResizingScalingOptions: PageResizingScalingOptions, size: FsSize) =
-            Reuses.Resize(pageSelector, pageResizingRotatingOptions, pageResizingScalingOptions, (fun _ -> size))
+            Reuses.Resize(pageSelector, pageResizingRotatingOptions, pageResizingScalingOptions, (fun _ _ -> size))
             |> Reuse.rename
                 "Resize"
                 ["pageResizingRotatingOptions" => pageResizingRotatingOptions.ToString()
@@ -506,7 +506,7 @@ module _Reuses =
                 Reuses.Resize(
                     pageSelector = pageSelector,
                     pageBoxKind = PageBoxKind.ActualBox,
-                    fSize = (fun pageNum ->
+                    fSize = (fun _ pageNum ->
                         newPageSizes.[pageNum.Value - 1]
                     )
                 )
@@ -805,6 +805,7 @@ module _Reuses =
             Reuses.Impose(fArgs, None)
 
         static member Impose_ForceOnePage(fArgs) =
+            let args = ImposingArguments.Create fArgs
 
             Reuse.Factory(
                 fun flowModel document ->
@@ -812,7 +813,6 @@ module _Reuses =
                     let originTotalPageNumber = document.Reader.GetNumberOfPages()
 
                     let checkArgsValid (args: ImposingArguments)=
-
                         let maxiumnCellsCount =
                             match args.FillingMode with 
                             | FillingMode.Automatic _ 
@@ -831,6 +831,13 @@ module _Reuses =
                                 |> List.take v.RowNum
                                 |> List.sum
 
+                        let colNumbers = 
+                            match args.FillingMode with 
+                            | FillingMode.Automatic _ 
+                            | FillingMode.ColumnAutomatic _ -> failwithf "Impose_ForceOnePage: unsupported fillMode %A" args.FillingMode
+                            | FillingMode.RowAutomatic colNums -> colNums.ColNums
+                            | FillingMode.Numeric v -> v.ColNums
+
                         let args: _ImposingArguments = args.Value
 
                         let backgroundSize = 
@@ -843,15 +850,13 @@ module _Reuses =
                             | Sheet_PlaceTable.At _ -> failwithf "Impose_ForceOnePage: unsupported sheet_placeTable %A" args.Sheet_PlaceTable
                             | Sheet_PlaceTable.Trim_CenterTable margin -> margin
 
-                        maxiumnCellsCount, backgroundSize, margin
+                        maxiumnCellsCount, colNumbers, backgroundSize, margin
 
 
-                    let args = ImposingArguments.Create fArgs
-                    let maxiumnCellsCount, originBackgroundSize,  margin = checkArgsValid args
+                    let maxiumnCellsCount, colNums, originBackgroundSize,  margin = checkArgsValid args
                     
 
                     let sheets = 
-                        let args = (ImposingArguments.Create fArgs)
                         let document = ImposingDocument(document, args, allowRedirectCellSize = true)
                             
                         document.Build()
@@ -859,26 +864,44 @@ module _Reuses =
 
 
                     let (|Spawned|NoSpawned|) (sheets: ImposingSheet list) = 
-                        match args.Value.IsRepeated with 
+
+                        let isColNumberReached = 
+                            let sheetColNums = sheets.Head.GetRows() |> List.map(fun m -> m.Cells.Count)
+                            let sheetColNum = List.max sheetColNums
+
+                            let colNum = List.max colNums
+                            
+                            sheetColNum >= colNum
+
+                        match isColNumberReached with 
                         | true ->
-                            match sheets.Head.GetCellsCount() = maxiumnCellsCount with 
-                            | true -> NoSpawned ()
-                            | false -> Spawned ()
 
-                        | false ->
-                            let divied = 
-                                float originTotalPageNumber / float maxiumnCellsCount
-                                |> ceil
-                                |> int
+                            match args.Value.IsRepeated with 
+                            | true ->
+                                match sheets.Head.GetCellsCount() = maxiumnCellsCount with 
+                                | true -> NoSpawned ()
+                                | false -> Spawned ()
 
-                            match sheets.Length = divied with 
-                            | true -> NoSpawned
-                            | false -> Spawned()
+
+                            | false ->
+                                let divied = 
+                                    float originTotalPageNumber / float maxiumnCellsCount
+                                    |> ceil
+                                    |> int
+
+                                match sheets.Length = divied with 
+                                | true -> NoSpawned ()
+                                | false -> Spawned()
+
+                        | false -> Spawned()
 
 
                     match sheets with 
                     | NoSpawned -> Reuses.Impose(fArgs)
                     | Spawned ->
+                        let originBackgroundSize =
+                            FsSize.rotateTo sheets.[0].PageSize.PageOrientation originBackgroundSize
+
                         let sheetForScale scale = 
                             let document2 =
                                 let args = (ImposingArguments.Create (fun args ->  
@@ -903,7 +926,7 @@ module _Reuses =
                             let sheet = sheetForScale scale
                             let sheetSize = sheet.SheetSize
 
-                            let sheetSize = sheetSize.AlignDirection originBackgroundSize
+                            //let sheetSize = sheetSize.AlignDirection originBackgroundSize
                             let newScale =
                                 min 
                                     (originBackgroundSize.Width  / sheetSize.Width  )
@@ -927,6 +950,10 @@ module _Reuses =
 
 
             )
+            |> Reuse.rename
+                "Impose_ForceOnePage"
+                ["imposingArguments" => args.ToString()]
+
 
 
         static member CreatePageTemplate() =

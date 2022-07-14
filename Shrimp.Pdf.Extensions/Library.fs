@@ -650,7 +650,17 @@ module iText =
                     this.Transform(Point(values.[0], values.[1]))
                 )
                 |> Array.collect(fun point ->
-                    [|point.x; point.y|]
+                    let x = point.x
+                        //if this.GetScaleX() < 0.
+                        //then -point.x
+                        //else point.x
+
+                    let y = point.y
+                        //if this.GetScaleY() < 0.
+                        //then -point.y
+                        //else point.y
+                        
+                    [|x; y|]
                 )
                 //let dst: float [] = Array.zeroCreate values.Length
                 //this.Transform(values, 0, dst, 0, values.Length / 2)
@@ -944,6 +954,27 @@ module iText =
             info.Value
             |> TextRenderInfo.hasStroke
 
+        let getBounds (boundGettingStrokeOptions: BoundGettingStrokeOptions) (info: ITextRenderInfo) = 
+            match info.EndTextState with 
+            | EndTextState.No 
+            | EndTextState.Undified -> 
+                
+                {| ConcatedBounds = [] 
+                   Bound =
+                    TextRenderInfo.getBound boundGettingStrokeOptions info.Value |}
+                
+            | EndTextState.Yes ->
+                let bounds = 
+                    info.ConcatedTextInfos
+                    |> List.ofSeq
+                    |> List.map(TextRenderInfo.getBound boundGettingStrokeOptions)
+
+                {| ConcatedBounds = bounds
+                   Bound =
+                    bounds
+                    |> AtLeastOneList.Create
+                    |> Rectangle.ofRectangles |}
+
         
         let getBound (boundGettingStrokeOptions: BoundGettingStrokeOptions) (info: ITextRenderInfo) = 
             match info.EndTextState with 
@@ -955,6 +986,8 @@ module iText =
                 |> List.map(TextRenderInfo.getBound boundGettingStrokeOptions)
                 |> AtLeastOneList.Create
                 |> Rectangle.ofRectangles
+
+
         
 
         let getWidth (info: ITextRenderInfo) =
@@ -1585,9 +1618,9 @@ module iText =
                 page 
                 |> setMediaBox rect
                 |> setCropBox rect
-                |> setTrimBox rect
                 |> setArtBox rect
                 |> setBleedBox rect
+                |> setTrimBox rect
 
 
         let getActualWidth (page: PdfPage) = 
