@@ -42,12 +42,11 @@ module _Types =
                 |> List.map fText
             TextTransform(newTexts, x.Delimiter)
     
-        member private x.ReplaceGreaterThanSignToBar() =
-            x.MapText(fun (m: string) -> m.Replace(">", "-"))
+        //member private x.ReplaceGreaterThanSignToBar() =
+        //    x.MapText(fun (m: string) -> m.Replace(">", "-"))
 
     
         member private x.FileName =
-            let x = x.ReplaceGreaterThanSignToBar()
             let (TextTransform (texts, delimiter)) = x
             texts
             |> String.concat delimiter

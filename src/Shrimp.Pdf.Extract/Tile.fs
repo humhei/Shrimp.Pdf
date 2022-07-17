@@ -183,8 +183,9 @@ module _Tile =
                             let rec loop2 currentInfos leftInfos infos =
                                 match infos with 
                                 | [] -> List.rev currentInfos, List.rev leftInfos
-                                | info :: t ->
-                                    let predicateInfo (info: BoundCachableInfo) =
+                                | (info: BoundCachableInfo) :: t ->
+
+                                    let info =
                                         let infoBound: TargetPageBox = info.Bound
 
                                         match infoBound.Value with 
@@ -202,17 +203,16 @@ module _Tile =
                                             | true -> Some (Choice1Of2 info) 
                                             | false -> Some (Choice2Of2 info) 
 
-                                    let predicateInfo__GoToNext (info: BoundCachableInfo) =
-                                        match predicateInfo info with 
-                                        | None -> loop2 currentInfos leftInfos t
-                                        | Some (Choice1Of2 currentInfo) ->
-                                            loop2 (currentInfo :: currentInfos) leftInfos t
 
-                                        | Some (Choice2Of2 leftInfo) ->
-                                            loop2 currentInfos (leftInfo :: leftInfos) t
+                                    match info with 
+                                    | None -> loop2 currentInfos leftInfos t
+                                    | Some (Choice1Of2 currentInfo) ->
+                                        loop2 (currentInfo :: currentInfos) leftInfos t
+
+                                    | Some (Choice2Of2 leftInfo) ->
+                                        loop2 currentInfos (leftInfo :: leftInfos) t
 
 
-                                    predicateInfo__GoToNext info
 
                             loop2 [] [] infos
 
@@ -581,6 +581,11 @@ module _Tile =
                                         let infos = 
                                             infos
                                             |> List.choose IIntegratedRenderInfo.asITextRenderInfo
+                                            |> List.collect(fun m -> 
+                                                match Seq.length m.ConcatedTextInfos with 
+                                                | 0
+                                                | 1 -> [m]
+                                                | _ -> List.ofSeq m.ConcatedTextInfos)
 
                                         let groupedInfos =
                                             infos

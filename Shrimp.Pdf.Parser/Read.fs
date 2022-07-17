@@ -250,7 +250,8 @@ module internal Listeners =
                     let lastInfo = 
                         let previous =
                             concatedTextInfos
-                            |> Seq.map(fun m -> 
+                            |> List.ofSeq
+                            |> List.map(fun m -> 
                                 { m with EndTextState = EndTextState.No }
                             )
 

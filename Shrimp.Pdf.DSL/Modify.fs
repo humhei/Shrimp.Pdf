@@ -45,8 +45,7 @@ with
 
 type _SelectionModifierFixmentArgumentsIM<'userState> =
     { CurrentRenderInfoIM: IIntegratedRenderInfoIM 
-      PageModifingArguments: PageModifingArguments<'userState>
-      ConcatedTextInfos: seq<IntegratedTextRenderInfo> }
+      PageModifingArguments: PageModifingArguments<'userState> }
 with 
     member x.Tag = x.CurrentRenderInfoIM.TagIM
 
@@ -59,8 +58,7 @@ with
 
 type _SelectionModifierFixmentArguments<'userState> =
     { CurrentRenderInfo: IIntegratedRenderInfo 
-      PageModifingArguments: PageModifingArguments<'userState>
-      ConcatedTextInfos: seq<IntegratedTextRenderInfo>}
+      PageModifingArguments: PageModifingArguments<'userState> }
 
 with 
     member internal x.Tag = x.CurrentRenderInfo.Tag
@@ -129,8 +127,7 @@ module private Modifier =
     let toIM (modifier: Modifier<_>): ModifierIM<_> =
         fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
             { CurrentRenderInfo = args.CurrentRenderInfoIM :?> IIntegratedRenderInfo
-              PageModifingArguments = args.PageModifingArguments
-              ConcatedTextInfos = args.ConcatedTextInfos }
+              PageModifingArguments = args.PageModifingArguments }
             |> modifier
 
 
@@ -162,16 +159,14 @@ module private Modifiers =
     let toSelectionModifier (pageModifingArguments: PageModifingArguments<_>) (modifiers: Modifier<_> list) =
         toSelectionModifierCommon pageModifingArguments modifiers (fun args ->
             { PageModifingArguments = pageModifingArguments
-              CurrentRenderInfo = args.CurrentRenderInfo :?> IIntegratedRenderInfo
-              ConcatedTextInfos = args.ConcatedTextInfos }
+              CurrentRenderInfo = args.CurrentRenderInfo :?> IIntegratedRenderInfo }
         )
       
 
     let toSelectionModifierIM (pageModifingArguments: PageModifingArguments<_>) (modifiers: ModifierIM<_> list) =
         toSelectionModifierCommon pageModifingArguments modifiers (fun args ->
             { PageModifingArguments = pageModifingArguments
-              CurrentRenderInfoIM = args.CurrentRenderInfo
-              ConcatedTextInfos = args.ConcatedTextInfos }
+              CurrentRenderInfoIM = args.CurrentRenderInfo }
         )
        
 
@@ -1723,13 +1718,24 @@ type Modify =
                   Selector = Text(fun _ _ -> true)
                   Modifiers = [
                     (fun args ->
-                        let textInfos = List.ofSeq args.ConcatedTextInfos
-                        let lastTextInfo = List.last textInfos
+                        
+                        let textInfos = 
+                            (args.CurrentRenderInfo :?> IntegratedTextRenderInfo).ConcatedTextInfos
+                            |> List.ofSeq
+
+                        let lastTextInfo =
+                            match textInfos with
+                            | []
+                            | [_] -> (args.CurrentRenderInfo :?> IntegratedTextRenderInfo).TextRenderInfo
+                            | _ -> textInfos |> List.last |> fun m -> m.TextRenderInfo
+
                         let actions =
-                            match textInfos with 
-                            | [textInfo] -> 
-                                let matrix = textInfo.TextRenderInfo.GetTextMatrix()
+                            match textInfos with
+                            | []
+                            | [_] ->
+                                let matrix = lastTextInfo.GetTextMatrix()
                                 [PdfCanvas.setTextMatrix matrix]   
+
                             | _ ->
                                 textInfos
                                 |> List.mapi (fun i textInfo ->
@@ -1755,7 +1761,7 @@ type Modify =
 
                         { ModifierPdfCanvasActions.Actions = actions 
                           SuffixActions = []
-                          Close = CloseOperatorUnion.CreateText(text = ITextRenderInfo.getText lastTextInfo)
+                          Close = CloseOperatorUnion.CreateText(text = lastTextInfo.GetText())
                         }
                     )
                   ]

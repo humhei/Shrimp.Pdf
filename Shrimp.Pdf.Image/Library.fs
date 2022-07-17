@@ -146,8 +146,7 @@ module _ModifierIM =
     module private SelectionModifierFixmentArguments =
         let OfIM(args: _SelectionModifierFixmentArgumentsIM<_>, info) =
             { CurrentRenderInfo = info 
-              PageModifingArguments = args.PageModifingArguments
-              ConcatedTextInfos = args.ConcatedTextInfos }
+              PageModifingArguments = args.PageModifingArguments }
 
     let private cache = 
         new ConcurrentDictionary<PdfImageXObject * Icc option * Icc * Intent , ImageData option>()

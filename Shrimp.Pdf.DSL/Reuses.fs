@@ -1267,7 +1267,7 @@ module _Reuses =
                     "layer" => choice.ToString()
                 ]
 
-        static member AddBackground(pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin) =
+        static member private AddBackgroundOrForeground(backgroundOrForeground: BackgroundOrForeground, pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin) =
             (fun flowModel (doc: SplitDocument) ->
                 let reader = doc.Reader
                 PdfDocument.getPages reader
@@ -1289,7 +1289,15 @@ module _Reuses =
 
                     let writerPage = doc.Writer.AddNewPage(pageSize)
                     writerPage.SetPageBoxToPage(readerPage) |> ignore
-                    let pdfCanvas = new PdfCanvas(writerPage)
+                    let pdfCanvas = 
+                        match backgroundOrForeground with 
+                        | BackgroundOrForeground.Background ->
+                            new PdfCanvas(writerPage.NewContentStreamBefore(), writerPage.GetResources(), doc.Writer)
+
+                        | BackgroundOrForeground.Foreground ->
+                            new PdfCanvas(writerPage.NewContentStreamAfter(), writerPage.GetResources(), doc.Writer)
+                            
+
                     PdfCanvas.useCanvas pdfCanvas (
                         PdfCanvas.addRectangle readerPageBox rectOptions
                     ) 
@@ -1306,6 +1314,12 @@ module _Reuses =
                     "rectOptions" => (rectOptions PdfCanvasAddRectangleArguments.DefaultValue).ToString()
                     "margin"      => (defaultArg margin Margin.Zero).LoggingText
                 ]
+
+        static member AddBackground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin) =
+            Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Background, pageBoxKind, rectOptions, ?margin = margin)
+
+        static member AddForeground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin) =
+            Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Foreground, pageBoxKind, rectOptions, ?margin = margin)
 
 
         static member AddBackground (backgroundFile: PdfFile) =

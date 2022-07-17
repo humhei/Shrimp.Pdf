@@ -440,8 +440,7 @@ and private OperatorRangeCallbackablePdfCanvasProcessor(listener) =
 
 [<Struct>]
 type _SelectionModifierFixmentArguments =
-    { CurrentRenderInfo: IIntegratedRenderInfoIM
-      ConcatedTextInfos: IntegratedTextRenderInfo seq }
+    { CurrentRenderInfo: IIntegratedRenderInfoIM }
 
 
 type private Modifier = _SelectionModifierFixmentArguments -> ModifierPdfCanvasActions
@@ -564,8 +563,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                         match eventListener.CurrentRenderInfoToken.Value with 
                         | [token] ->
                             let fix = snd selectorModifierMapping.[token]
-                            fix { CurrentRenderInfo = eventListener.CurrentRenderInfo
-                                  ConcatedTextInfos = eventListener.ConcatedTextInfos  }    
+                            fix { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
                         | _ -> 
                             let keys = eventListener.CurrentRenderInfoToken.Value
                             failwithf "Multiple modifiers %A are not supported  when image is selectable" keys
@@ -616,8 +614,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                         eventListener.CurrentRenderInfoToken.Value
                         |> List.map(fun token -> 
                             let fix = snd selectorModifierMapping.[token]
-                            fix { CurrentRenderInfo = eventListener.CurrentRenderInfo
-                                  ConcatedTextInfos = eventListener.ConcatedTextInfos }    
+                            fix { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
                         )
                         |> ModifierPdfCanvasActions.ConcatOrKeep tag
 

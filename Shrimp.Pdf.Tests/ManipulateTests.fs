@@ -1230,6 +1230,17 @@ let manipulateTests =
         //|> runTest @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\123.pdf"
         |> ignore
 
+    testCase "split textLine to words2" <| fun _ -> 
+        let flow =
+            Modify.SplitTextLineToWords()
+
+        Flow.Manipulate(
+            flow
+        )
+        |> runTest "datas/manipulate/split textLine to words2.pdf" 
+        //|> runTest @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\123.pdf"
+        |> ignore
+
     testCase "map font for horizontal line" <| fun _ -> 
 
         let flow =

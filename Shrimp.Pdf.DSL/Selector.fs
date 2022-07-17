@@ -91,66 +91,73 @@ with
         (SelectionSorter.Plane (mm 3., Direction.Horizontal))
 
     member sorter.SortToLists(rects: iText.Kernel.Geom.Rectangle list) =
-        match sorter with 
-        | SelectionSorter.Non -> [rects]
+        match rects with 
+        | [] -> []
+        | [rect] -> [[rect]]
+        | _ ->
+            match sorter with 
+            | SelectionSorter.Non -> [rects]
 
-        | SelectionSorter.Plane(tolerance, direction) ->
-            let rec sortRects previousCoordinateUltraValue accum accums (rects: iText.Kernel.Geom.Rectangle list) =
-                match rects with 
-                | _ :: _ -> 
-                    match direction with 
-                    | Direction.Horizontal ->
-                        let maxY = 
-                            rects
-                            |> List.map(fun m -> m.GetYF())
-                            |> List.max
+            | SelectionSorter.Plane(tolerance, direction) ->
+                let rec sortRects previousCoordinateUltraValue accum accums (rects: iText.Kernel.Geom.Rectangle list) =
+                    match rects with 
+                    | _ :: _ -> 
+                        match direction with 
+                        | Direction.Horizontal ->
+                            let maxY = 
+                                rects
+                                |> List.map(fun m -> m.GetYF())
+                                |> List.max
 
-                        let (index, leftTopRect) = 
-                            rects
-                            |> List.indexed
-                            |> List.filter(fun (index, m) -> 
-                                abs(m.GetYF() - maxY) <= tolerance
-                            )
-                            |> List.minBy(fun (index, m) ->
-                                m.GetX()
-                            )
+                            let (index, leftTopRect) = 
+                                rects
+                                |> List.indexed
+                                |> List.filter(fun (index, m) -> 
+                                    abs(m.GetYF() - maxY) <= tolerance
+                                )
+                                |> List.minBy(fun (index, m) ->
+                                    m.GetX()
+                                )
 
-                        let leftRects = rects.[0 .. (index-1)] @ rects.[(index+1) .. (rects.Length-1)]
+                            let leftRects = rects.[0 .. (index-1)] @ rects.[(index+1) .. (rects.Length-1)]
 
-                        match previousCoordinateUltraValue with 
-                        | Some (previousMaxY) when (abs(previousMaxY - maxY) <= tolerance) ->
-                            sortRects (Some maxY) [] (List.rev (leftTopRect :: accum) :: accums) leftRects
-                        | _ -> sortRects (Some maxY) (leftTopRect :: accum) accums leftRects
+                            match previousCoordinateUltraValue with 
+                            | Some (previousMaxY) when (abs(previousMaxY - maxY) <= tolerance) ->
+                                sortRects (Some maxY) [] (List.rev (leftTopRect :: accum) :: accums) leftRects
+                            | _ -> sortRects (Some maxY) (leftTopRect :: accum) accums leftRects
 
-                    | Direction.Vertical ->
-                        let minX = 
-                            rects
-                            |> List.map(fun m -> m.GetXF())
-                            |> List.min
+                        | Direction.Vertical ->
+                            let minX = 
+                                rects
+                                |> List.map(fun m -> m.GetXF())
+                                |> List.min
 
-                        let (index, leftTopRect) = 
-                            rects
-                            |> List.indexed
-                            |> List.filter(fun (_, m) -> 
-                                abs(m.GetXF() - minX) <= tolerance
-                            )
-                            |> List.maxBy(fun (_, m) ->
-                                m.GetY()
-                            )
+                            let (index, leftTopRect) = 
+                                rects
+                                |> List.indexed
+                                |> List.filter(fun (_, m) -> 
+                                    abs(m.GetXF() - minX) <= tolerance
+                                )
+                                |> List.maxBy(fun (_, m) ->
+                                    m.GetY()
+                                )
 
-                        let leftRects = rects.[0 .. (index-1)] @ rects.[(index+1) .. (rects.Length-1)]
+                            let leftRects = rects.[0 .. (index-1)] @ rects.[(index+1) .. (rects.Length-1)]
 
-                        match previousCoordinateUltraValue with 
-                        | Some (previousMinX) when (abs(previousMinX - minX) <= tolerance) ->
-                            sortRects (Some minX) [] (List.rev (leftTopRect :: accum) :: accums) leftRects
-                        | _ -> sortRects (Some minX) (leftTopRect :: accum) accums leftRects
-
-
-                | [] -> accums
+                            match previousCoordinateUltraValue with 
+                            | Some (previousMinX) when (abs(previousMinX - minX) <= tolerance) ->
+                                sortRects (Some minX) [] (List.rev (leftTopRect :: accum) :: accums) leftRects
+                            | _ -> sortRects (Some minX) (leftTopRect :: accum) accums leftRects
 
 
-            sortRects None [] [] rects
-            |> List.rev
+                    | [] -> 
+                        match accum with 
+                        | [] -> accums
+                        | _ -> List.rev accum :: accums
+
+
+                sortRects None [] [] rects
+                |> List.rev
 
     member sorter.Sort(rects: iText.Kernel.Geom.Rectangle list) =
         sorter.SortToLists(rects)
@@ -171,7 +178,7 @@ with
         | SelectionDistincter.Non -> rects
         | SelectionDistincter.Plane tolerance ->
             let createNeayByPX(v) =
-                NearbyPX(v, specificTolerance = tolerance)
+                NearbyPX(v, tolerance = tolerance)
 
             rects
             |> AtLeastOneList.distinctBy_explictly<_, _>(fun m ->

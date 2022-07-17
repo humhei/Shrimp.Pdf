@@ -47,7 +47,7 @@ let extractTests =
             |> runTest "datas/extract/extract and scale2.pdf" 
             |> ignore
 
-        testCase "extract and scale3" <| fun _ -> 
+        ftestCase "extract and scale3" <| fun _ -> 
             Flow.Reuse (
                 Reuses.TransformForEach(
                     Selector.PathOrText(Info.StrokeColorIs (FsColor.RGB_BLUE)),
@@ -361,10 +361,10 @@ let extractTests =
                 Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
                 sorter = SelectionSorter.Plane(mm 3., Direction.Vertical)
             )
-            <.+>
-            (Flow.Func(fun (pageTilingResults: PageTilingResults) ->
-                Flows.PickFromPageTilingResult(pageTilingResults.PageTilingResultCounts, PageNumSequence.Create [1])
-            ))
+            //<.+>
+            //(Flow.Func(fun (pageTilingResults: PageTilingResults) ->
+            //    Flows.PickFromPageTilingResult(pageTilingResults.PageTilingResultCounts, PageNumSequence.Create [1])
+            //))
 
             |> runTest "datas/extract/tile pages by selector.pdf" 
             |> ignore
@@ -469,7 +469,7 @@ let extractTests =
             |> runTest "datas/extract/tile pages by selector5.pdf" 
             |> ignore
 
-        ftestCase "tile pages by selector tests6" <| fun _ -> 
+        testCase "tile pages by selector tests6" <| fun _ -> 
             Flows.TilePages
                 (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
                 distincterOrTextPicker = 
@@ -498,6 +498,19 @@ let extractTests =
             )
 
             |> runTest "datas/extract/tile pages by selector6.pdf" 
+            |> ignore
+
+        testCase "tile pages by selector tests7" <| fun _ -> 
+            Flows.TilePages(
+                Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                sorter = SelectionSorter.Plane(mm 3., Direction.Vertical)
+            )
+            //<.+>
+            //(Flow.Func(fun (pageTilingResults: PageTilingResults) ->
+            //    Flows.PickFromPageTilingResult(pageTilingResults.PageTilingResultCounts, PageNumSequence.Create [1])
+            //))
+
+            |> runTest "datas/extract/tile pages by selector7.pdf" 
             |> ignore
 
         testCase "tile pages and NUP by selector" <| fun _ -> 
