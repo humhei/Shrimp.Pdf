@@ -24,6 +24,8 @@ type PageOrientation =
     | Landscape  = 0
     | Portrait = 1
 
+
+
 type FsSize =
     { Width: float 
       Height: float }
@@ -216,6 +218,42 @@ module FsPageSize =
             FsPageSize (FsSize.portrait size, pageOrientation)
         | _ -> failwith "Invalid token"
 
+type PageOrientationChecker =
+    { PageOrientation: PageOrientation
+      CellSizes: FsSize list
+      Margin: Margin
+      BackgroundSize: FsSize }
+
+[<RequireQualifiedAccess>]
+module PageOrientationChecker =
+    let (|ValidOrientation|InvalidOrientation|) (checker: PageOrientationChecker) =
+        let orientation = checker.PageOrientation
+        let backgroundSize = checker.BackgroundSize
+        let cellSizes = checker.CellSizes
+        let margin = checker.Margin
+
+        let backgroundSize = 
+            match orientation with 
+            | PageOrientation.Landscape -> FsSize.landscape backgroundSize
+            | PageOrientation.Portrait -> FsSize.portrait backgroundSize
+
+    
+        let exceedHorizontal =
+            cellSizes 
+            |> List.tryFind(fun cellSize ->
+                cellSize.Width + margin.Left + margin.Right >= backgroundSize.Width + Constants.tolerance.Value
+            )
+
+        let exceedVertical =
+            cellSizes 
+            |> List.tryFind(fun cellSize ->
+                cellSize.Height + margin.Top + margin.Bottom >= backgroundSize.Height + Constants.tolerance.Value
+            )
+
+        match exceedHorizontal, exceedVertical with 
+        | None _, None _ -> ValidOrientation
+        | Some v, _ 
+        | _, Some v -> InvalidOrientation v
 
 
 

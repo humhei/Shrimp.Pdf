@@ -4,8 +4,14 @@ open System.Diagnostics
 open System.IO
 open System.Collections.Generic
 
+
+type LoggerLevel =
+    | Slient = 0 
+    | Info = 1
+
 [<RequireQualifiedAccess>]
 module Logger =
+
     let private logger: Lazy<NLog.Logger> = 
         lazy (NLog.LogManager.GetCurrentClassLogger())
       

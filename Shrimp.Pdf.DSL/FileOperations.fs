@@ -1,4 +1,5 @@
 ﻿namespace Shrimp.Pdf
+#nowarn "0104"
 open Fake.IO
 open Shrimp.Pdf.Extensions
 open iText.Kernel.Pdf
@@ -59,7 +60,7 @@ with
 [<RequireQualifiedAccess>]
 module FileOperations =
     /// expose this function for modifyAsync
-    let internal mergeDocumentsInternal (targetDocumentName: string) (writer: PdfDocument)  =
+    let internal mergeDocumentsInternal config (targetDocumentName: string) (writer: PdfDocument)  =
         fun (flowModels: FlowModel<'userState> list) ->
             for pageNum = 1 to writer.GetNumberOfPages() do
                 writer.RemovePage(1)
@@ -75,6 +76,7 @@ module FileOperations =
 
             { PdfFile = PdfFile targetDocumentName 
               UserState = flowModels |> List.map (fun m -> m.UserState)
+              Configuration = config
             }
             |> List.singleton
 
@@ -87,13 +89,13 @@ module FileOperations =
 
         fun (flowModels: _ list) ->
             if flowModels.Length < 2 then failwithf "Cannot mergeDocuments when input page count %A < 2" flowModels.Length
-
+            let config = flowModels.Head.Configuration
             Directory.ensure (Path.getDirectory args.TargetDocumentPath)
             if File.exists args.TargetDocumentPath && not args.Override then failwithf "target file %s already exists" args.TargetDocumentPath
             else File.delete args.TargetDocumentPath 
 
             let writer = new PdfDocument(new PdfWriter(args.TargetDocumentPath))
-            let flow = mergeDocumentsInternal (args.TargetDocumentPath) writer
+            let flow = mergeDocumentsInternal config (args.TargetDocumentPath) writer
 
             let result = flow.Value flowModels
 
@@ -160,7 +162,8 @@ module FileOperations =
                         writer.Close()
 
                         { PdfFile = PdfFile fileFullPath 
-                          UserState = i, flowModel.UserState }
+                          UserState = i, flowModel.UserState
+                          Configuration = flowModel.Configuration }
                     )
 
                 let newFiles = 
@@ -170,7 +173,10 @@ module FileOperations =
                     )
                     |> String.concat "\n"
 
-                Logger.info (sprintf "SPLIT document %s to %s" flowModel.File newFiles) 
+                match flowModel.Configuration.LoggerLevel with 
+                | LoggerLevel.Info -> Logger.info (sprintf "SPLIT document %s to %s" flowModel.File newFiles) 
+                | LoggerLevel.Slient -> ()
+
                 reader.Close()
                 newModels
         )
@@ -248,7 +254,8 @@ module FileOperations =
                         writer.Close()
 
                         { PdfFile = PdfFile fileFullPath 
-                          UserState = flowModel.UserState }
+                          UserState = flowModel.UserState
+                          Configuration = flowModel.Configuration }
                     )
                 let newFiles = 
                     newModels
@@ -256,7 +263,9 @@ module FileOperations =
                         m.File
                     )
                     |> String.concat "\n"
-                Logger.info (sprintf "SPLIT document %s to %s" flowModel.File newFiles) 
+                match flowModel.Configuration.LoggerLevel with 
+                | LoggerLevel.Info -> Logger.info (sprintf "SPLIT document %s to %s" flowModel.File newFiles) 
+                | LoggerLevel.Slient -> ()
                 reader.Close()
                 newModels
         )
@@ -264,67 +273,79 @@ module FileOperations =
 
 
 
+
 type PdfRunner =
-    static member MergeDocuments (inputs: PdfFile AtLeastTwoList, ?fArgs) =
+    static member MergeDocuments (inputs: PdfFile AtLeastTwoList, ?fArgs, ?config) =
         
         let flow =
             FileOperations.mergeDocuments (defaultArg fArgs id)
             |> Flow.FileOperation
 
+        let config = defaultArg config Configuration.DefaultValue
+
         let flowModels = 
             inputs.AsList
-            |> List.map (fun m -> {PdfFile = m; UserState = ()})
+            |> List.map (fun m -> {PdfFile = m; UserState = (); Configuration = config })
 
 
-        runManyWithFlowModels flowModels flow
+        runManyWithFlowModels config flowModels flow
         |> List.exactlyOne
         |> fun m -> m.PdfFile
 
-    static member MergeDocuments (inputs: PdfFile al1List, ?fArgs) =
+    static member MergeDocuments (inputs: PdfFile al1List, ?fArgs, ?config) =
         match inputs with 
-        | AtLeastOneList.Many inputs -> PdfRunner.MergeDocuments(inputs, ?fArgs = fArgs)
+        | AtLeastOneList.Many inputs -> PdfRunner.MergeDocuments(inputs, ?fArgs = fArgs, ?config = config)
         | AtLeastOneList.One input ->
-            let args = 
-                match fArgs with 
-                | Some fArgs -> fArgs DocumentMergingArguments.DefalutValue
-                | None -> DocumentMergingArguments.DefalutValue
+            match fArgs with 
+            | Some fArgs -> 
+                let args = fArgs DocumentMergingArguments.DefalutValue
+                File.Copy(input.Path, args.TargetDocumentPath, args.Override)
+
+                PdfFile args.TargetDocumentPath
+            | None -> input
 
 
 
-            File.Copy(input.Path, args.TargetDocumentPath, args.Override)
 
-            PdfFile args.TargetDocumentPath
-
-    static member SplitDocumentToMany (inputPdfFile: PdfFile, ?fArgs) =
+    static member SplitDocumentToMany (inputPdfFile: PdfFile, ?fArgs, ?config) =
         
         let flow =
             FileOperations.splitDocumentToMany (defaultArg fArgs id)
             |> Flow.FileOperation
 
-        let flowModel =  {PdfFile = inputPdfFile; UserState = () }
+        let flowModel = 
+            { PdfFile = inputPdfFile
+              UserState = ()
+              Configuration = defaultArg config Configuration.DefaultValue }
 
         runWithFlowModel flowModel flow
         |> List.map (fun m -> m.PdfFile)
 
 
-    static member SplitDocumentBySequences (inputPdfFile: PdfFile, sequenceTargets, ?isOverride) =
+    static member SplitDocumentBySequences (inputPdfFile: PdfFile, sequenceTargets, ?isOverride, ?config) =
         
         let flow =
             FileOperations.splitDocumentBySequences(sequenceTargets, defaultArg isOverride false)
             |> Flow.FileOperation
 
-        let flowModel =  {PdfFile = inputPdfFile; UserState = () }
+        let flowModel = 
+            { PdfFile = inputPdfFile
+              UserState = ()
+              Configuration = defaultArg config Configuration.DefaultValue }
 
         runWithFlowModel flowModel flow
         |> List.map (fun m -> m.PdfFile)
 
-    static member SplitDocumentByPageCounts (inputPdfFile: PdfFile, pageCounts, ?isOverride) =
+    static member SplitDocumentByPageCounts (inputPdfFile: PdfFile, pageCounts, ?isOverride, ?config) =
         
         let flow =
             FileOperations.splitDocumentByPageCounts(pageCounts, defaultArg isOverride false)
             |> Flow.FileOperation
 
-        let flowModel =  {PdfFile = inputPdfFile; UserState = () }
+        let flowModel =  
+            { PdfFile = inputPdfFile
+              UserState = ()
+              Configuration = defaultArg config Configuration.DefaultValue }
 
         runWithFlowModel flowModel flow
         |> List.map (fun m -> m.PdfFile)

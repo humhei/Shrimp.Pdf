@@ -17,7 +17,7 @@ module internal Config =
 
 
     let internal loggingPageCountInterval = 
-        lazy config.Value.GetInt("LoggingPageCountInterval")
+        lazy config.Value.GetInt("Shrimp.Pdf.Extract.LoggingPageCountInterval")
 
 [<AutoOpen>]
 module _Types =

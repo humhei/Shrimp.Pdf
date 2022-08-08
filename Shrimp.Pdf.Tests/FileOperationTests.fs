@@ -48,7 +48,7 @@ let fileOperationTests =
                     TargetDocumentPath = targetFile }
             )
         )
-        |> runMany inputFiles
+        |> runMany Configuration.DefaultValue inputFiles
         |> ignore
 
     testCase "merge documents PdfRunner" <| fun _ ->

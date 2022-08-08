@@ -42,4 +42,4 @@ let runManyWithBackup (files: string list) outputDir flow =
             newPath
         )
 
-    runMany newPaths flow
+    runMany Configuration.DefaultValue newPaths flow

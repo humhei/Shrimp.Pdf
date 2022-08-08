@@ -26,7 +26,7 @@ module DSL_Flow =
                 | pdfFiles -> failwithf "Multiple pdfFiles %A are found" pdfFiles
 
 
-        static member OneFileFlow_UserState(pdfFile: PdfFile, ?backupPdfPath) = 
+        static member OneFileFlow__FlowModel(pdfFile: PdfFile, ?backupPdfPath) = 
             
             fun flow ->
                 let targetPdfFile = defaultArg backupPdfPath pdfFile.Path 
@@ -36,7 +36,14 @@ module DSL_Flow =
                 | true -> ()
 
                 match run targetPdfFile (flow) with 
-                | [flowModel] -> flowModel.UserState
+                | [flowModel] -> flowModel
                 | [] -> failwith "Invalid token"
                 | flowModels -> failwithf "Multiple flowModels %A are found" flowModels
 
+        static member OneFileFlow_UserState(pdfFile: PdfFile, ?backupPdfPath) = 
+            fun flow ->
+                let flowModel = 
+                    flow
+                    |> PdfRunner.OneFileFlow__FlowModel(pdfFile, ?backupPdfPath = backupPdfPath)
+                
+                flowModel.UserState

@@ -732,6 +732,7 @@ module iText =
             | _ -> failwith "Not implemented"
 
 
+
     [<RequireQualifiedAccess>]
     module Subpath =
 
@@ -1239,7 +1240,6 @@ module iText =
                 | VisibleBoundResult.None -> None
                 | VisibleBoundResult.Some rect -> Some rect
                 | VisibleBoundResult.SameToInfoBound -> None
-
 
         let isStrokeVisible (info: IIntegratedRenderInfo) = 
             IAbstractRenderInfo.isVisible FillOrStrokeOptions.Stroke info.ClippingPathInfos info

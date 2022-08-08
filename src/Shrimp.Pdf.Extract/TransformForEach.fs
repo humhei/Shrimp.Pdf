@@ -117,6 +117,7 @@ module _TransformForEach =
                         
                         let infos = 
                             extractVisibleRenewableInfosToWriter 
+                                flowModel.Configuration
                                 args
                                 selector
                                 (fun infos ->

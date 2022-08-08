@@ -476,9 +476,9 @@ module _ModifierIM =
                       ]}
                 ])
 
-        static member ConvertAllObjectsToDeviceGray(?selector) =
+        static member ConvertAllObjectsToDeviceGray(?selector, ?pageSelector) =
             Modify.Create_RecordIM(
-                PageSelector.All,
+                defaultArg pageSelector PageSelector.All,
                 selectorAndModifiersList = [
                     { SelectorAndModifiersRecordIM.Name = "convert all objects to gray" 
                       Selector = defaultArg selector (Selector.All (fun _ _ -> true))

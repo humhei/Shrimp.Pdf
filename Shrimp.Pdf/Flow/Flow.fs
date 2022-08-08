@@ -1,4 +1,5 @@
 ﻿namespace  Shrimp.Pdf
+#nowarn "0104"
 open Fake.IO
 open Fake.IO.FileSystemOperators
 open System.IO
@@ -54,7 +55,8 @@ module rec _FlowMutualTypes =
                         { File = flowModel.File 
                           FlowName = flowModel.FlowName
                           UserState = newFlowModel.UserState
-                          OperatedFlowNames = flowModel.OperatedFlowNames }
+                          OperatedFlowNames = flowModel.OperatedFlowNames
+                          Configuration =flowModel.Configuration }
                     )
 
                 else 
@@ -63,7 +65,8 @@ module rec _FlowMutualTypes =
                         { File = flowModel.File 
                           FlowName = None 
                           UserState = flowModel.UserState
-                          OperatedFlowNames = [] }
+                          OperatedFlowNames = []
+                          Configuration =flowModel.Configuration }
                     )
 
             | Flow.TupledFlow flow ->
@@ -431,49 +434,67 @@ module rec _FlowMutualTypes =
 module Operators =
     let (=>) a b = a,b
 
-    let runManyWithFlowModels (flowModels: FlowModel<_> list) flow = 
-        let flow = Flow.SetParentFlowName(None, flow)
-        let filesListText =
-            flowModels 
-            |> List.map (fun m -> m.File)
-            |> String.concat "\n"
 
-        let flowModels =
-            flowModels
-            |> List.map (fun m -> 
-                { File = m.PdfFile.Path 
-                  UserState = m.UserState 
-                  FlowName = None
-                  OperatedFlowNames = [] }
-            )
+    let runManyWithFlowModels (config: Configuration) (flowModels: FlowModel<_> list) flow = 
+        match flowModels with 
+        | [] -> []
+        | _ ->
+            let flow = Flow.SetParentFlowName(None, flow)
 
-        Logger.infoWithStopWatch(sprintf "RUN: %s" filesListText) (fun _ ->
-            Flow<_, _>.Run(flowModels, flow)
-            |> List.map InternalFlowModel.toFlowModel
-        )
+            let flowModels =
+                flowModels
+                |> List.map (fun m -> 
+                    { File = m.PdfFile.Path 
+                      UserState = m.UserState 
+                      FlowName = None
+                      OperatedFlowNames = []
+                      Configuration =m.Configuration }
+                )
 
-    let runMany (files: string list) flow = 
+            match config.LoggerLevel with 
+            | LoggerLevel.Info ->
+                let filesListText =
+                    flowModels 
+                    |> List.map (fun m -> m.File)
+                    |> String.concat "\n"
+
+                Logger.infoWithStopWatch(sprintf "RUN: %s" filesListText) (fun _ ->
+                    Flow<_, _>.Run(flowModels, flow)
+                    |> List.map InternalFlowModel.toFlowModel
+                )
+
+            | LoggerLevel.Slient ->
+                Flow<_, _>.Run(flowModels, flow)
+                |> List.map InternalFlowModel.toFlowModel
+
+    let runMany config (files: string list) flow = 
 
         let flowModels =
             files 
             |> List.map (fun file ->
                 { PdfFile = PdfFile file 
-                  UserState = () }
+                  UserState = ()
+                  Configuration = config
+                  }
             )
 
-        runManyWithFlowModels flowModels flow
+        runManyWithFlowModels config flowModels flow
 
-    let run (file: string) flow = 
-        runMany [file] flow
+    let runWith config (file: string) flow = 
+        runMany config [file] flow
+
+    let run file flow = runWith Configuration.DefaultValue file flow
 
     let runWithFlowModel (flowModel: FlowModel<_>) flow = 
-        runManyWithFlowModels [flowModel] flow
+        runManyWithFlowModels flowModel.Configuration [flowModel] flow
  
     let runWithBackup backupPath file flow =
         File.Copy(file, backupPath, true)
         run backupPath flow
 
-
+    let runWithBackupAndConfiguration config backupPath file flow =
+        File.Copy(file, backupPath, true)
+        runWith config backupPath flow
 
 
 

@@ -1,4 +1,7 @@
 ﻿namespace Shrimp.Pdf
+
+open Shrimp.Pdf.Colors
+
 #nowarn "0104"
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Extensions
@@ -6,12 +9,23 @@ open Shrimp.Pdf.DSL
 open Shrimp.FSharp.Plus
 open iText.Kernel.Pdf
 open iText.Kernel.Geom
+open Fake.IO
 open System.IO
 
 
 [<AutoOpen>]
 module Manipulates =
     
+    //type SampledPdfFile =
+    //    { PdfFile: Lazy<PdfFile>
+    //      SamplePdfFile: PdfFile }
+    //with 
+    //    static member Create(pdfFile: PdfFile) =
+    //        let samplePdfFile =
+    //            let flow = 
+    //                Reuses.
+
+
 
     type PdfRunner with 
         static member Manipulate(pdfFile, ?backupPdfPath) = 

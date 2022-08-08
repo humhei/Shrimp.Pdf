@@ -111,6 +111,7 @@ module _Tile =
     type SamplePageExtractingOptions =
         | Non
         | FirstPageFirstSelector of PdfPath
+        | FirstPageMultipleSelectors of pageNumbers: PageNumber al2List * targetPdfPath: PdfPath
 
     [<RequireQualifiedAccess>]
     type PageTilingRenewInfosSplitter =
@@ -443,6 +444,7 @@ module _Tile =
                             Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
 
                         extractVisibleRenewableInfosToWriter 
+                            flowModel.Configuration
                             args
                             selector
                             (fun infos ->
@@ -512,6 +514,7 @@ module _Tile =
 
                 let borderKeepingPageNumbers =
                     match samplePageExtractingOptions with 
+                    | SamplePageExtractingOptions.FirstPageMultipleSelectors _ 
                     | SamplePageExtractingOptions.FirstPageFirstSelector _ ->
                         if List.contains 1 originBorderKeepingPageNumbers 
                         then originBorderKeepingPageNumbers
@@ -688,6 +691,7 @@ module _Tile =
                             
                                 let infos =
                                     extractVisibleRenewableInfosToWriter 
+                                        flowModel.Configuration
                                         args
                                         selector
                                         (fun infos ->
@@ -795,7 +799,17 @@ module _Tile =
             |> fun flow ->
                 match samplePageExtractingOptions with 
                 | SamplePageExtractingOptions.Non -> Flow.Reuse flow
-                | SamplePageExtractingOptions.FirstPageFirstSelector targetPdfPath ->
+                | SamplePageExtractingOptions.FirstPageFirstSelector targetPdfPath 
+                | SamplePageExtractingOptions.FirstPageMultipleSelectors (_, targetPdfPath) ->
+                    let pageNumbers = 
+                        match samplePageExtractingOptions with 
+                        | SamplePageExtractingOptions.FirstPageMultipleSelectors (pageNumbers, targetPdfPath) ->
+                            pageNumbers.AsList
+
+                        | SamplePageExtractingOptions.FirstPageFirstSelector (_) -> [PageNumber 1]
+                        | _ -> failwith "Invaldi token"
+
+
                     Flow.Func(fun userState ->
                         Flow.Reuse(
                             flow
@@ -807,9 +821,10 @@ module _Tile =
                                     | [] -> failwith "Invalid token, tiling should be found in first page when trying extracting samplePdfFile"
                                     | r :: _ ->
                                         let sampleDocument = new PdfDocument(new PdfWriter(targetPdfPath.Path))
-                                        let page = splitDocument.Reader.GetPage(1)
-                                        let samplePage = page.CopyTo(sampleDocument)
-                                        sampleDocument.AddPage(samplePage) |> ignore
+                                        for pageNumber in pageNumbers do 
+                                            let page = splitDocument.Reader.GetPage(pageNumber.Value)
+                                            let samplePage = page.CopyTo(sampleDocument)
+                                            sampleDocument.AddPage(samplePage) |> ignore
                                         sampleDocument.Close()
                                         { PdfFile = PdfFile targetPdfPath
                                           PageSize = FsSize.ofFsRectangle r.Bound.Bound }

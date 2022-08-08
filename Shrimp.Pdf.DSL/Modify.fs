@@ -1207,10 +1207,10 @@ module ModifyOperators =
 
                     let mergeFlow = 
                         Flow.FileOperation 
-                            (FileOperations.mergeDocumentsInternal flowModel.File (document.Value))
+                            (FileOperations.mergeDocumentsInternal flowModel.Configuration flowModel.File (document.Value))
 
 
-                    runManyWithFlowModels flowModels mergeFlow
+                    runManyWithFlowModels flowModel.Configuration flowModels mergeFlow
                     |> ignore
 
                     for flowModel in flowModels do

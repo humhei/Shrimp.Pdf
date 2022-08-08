@@ -359,7 +359,7 @@ type PageModifier =
 [<AutoOpen>]
 module ModifyPageOperators =
     type ModifyPage =
-        static member Create(name, pageSelector: PageSelector, selector, pageModifier, ?parameters: list<string * string>) =
+        static member private CreateCommon(parse, name, pageSelector: PageSelector, selector, pageModifier, ?parameters: list<string * string>) =
             let flowName = 
                 let parameters =
                     match parameters with 
@@ -402,7 +402,7 @@ module ModifyPageOperators =
                                       PageNum = pageNum }
 
                                 let renderInfoSelector = Selector.toRenderInfoSelector args selector
-                                let infos = NonInitialClippingPathPdfDocumentContentParser.parse pageNum renderInfoSelector parser
+                                let infos = parse pageNum renderInfoSelector parser
                                 Some (pageModifier args infos) 
                             else None
                         )
@@ -412,18 +412,38 @@ module ModifyPageOperators =
                 flowName = flowName,
                 f = f
             )
+        static member Create(name, pageSelector: PageSelector, selector, pageModifier, ?parameters: list<string * string>) =
+            ModifyPage.CreateCommon(
+                NonInitialClippingPathPdfDocumentContentParser.parse,
+                name,
+                pageSelector,
+                selector,
+                pageModifier,
+                ?parameters = parameters)
 
-
-
+        static member CreateIM(name, pageSelector: PageSelector, selector, pageModifier, ?parameters: list<string * string>) =
+            ModifyPage.CreateCommon(
+                NonInitialClippingPathPdfDocumentContentParser.parseIM,
+                name,
+                pageSelector,
+                selector,
+                pageModifier,
+                ?parameters = parameters
+            )
 
     type PdfRunner with 
-        
-        static member ReadInfos(pdfFile: PdfFile, selector, fInfos, ?pageSelector) =
+    
+        static member private ReadInfosCommon(parse, pdfFile: PdfFile, selector, fInfos, ?pageSelector, ?inShadowMode) =
             let pdfFile = 
-                let ext = Path.GetFileName pdfFile.Path
-                let tmpPath = System.IO.Path.GetTempFileName() |> Path.changeExtension ext
-                System.IO.File.Copy(pdfFile.Path, tmpPath, true)
-                PdfFile tmpPath
+                match defaultArg inShadowMode true with 
+                | true ->
+                    let ext = Path.GetFileName pdfFile.Path
+                    let tmpPath = System.IO.Path.GetTempFileName() |> Path.changeExtension ext
+                    System.IO.File.Copy(pdfFile.Path, tmpPath, true)
+                    PdfFile tmpPath
+
+                | false -> pdfFile
+
             use document = new ReaderDocument(pdfFile.Path)
             let document = document.Reader
             let pageSelector = defaultArg pageSelector PageSelector.All
@@ -435,77 +455,115 @@ module ModifyPageOperators =
             pageNumbers
             |> List.map(fun pageNumber ->
                 let page = document.GetPage(pageNumber)
+                let args =
+                    { PageModifingArguments.UserState = () 
+                      Page = page 
+                      PageNum = pageNumber
+                      TotalNumberOfPages = totalNumberOfPages }
                 let selector = 
-                    let args =
-                        { PageModifingArguments.UserState = () 
-                          Page = page 
-                          PageNum = pageNumber
-                          TotalNumberOfPages = totalNumberOfPages }
+
                     Selector.toRenderInfoSelector args selector
-                let infos = NonInitialClippingPathPdfDocumentContentParser.parse pageNumber selector parser
-                fInfos infos
+                let infos = parse pageNumber selector parser
+                fInfos args infos
             )
 
-       
-        static member ReadTextInfos(pdfFile: PdfFile, ?selector, ?pageSelector) =
+        static member ReadInfos(pdfFile: PdfFile, selector, fInfos, ?pageSelector, ?inShadowMode) =
+            PdfRunner.ReadInfosCommon(
+                NonInitialClippingPathPdfDocumentContentParser.parse,
+                pdfFile,
+                selector,
+                fInfos,
+                ?pageSelector = pageSelector,
+                ?inShadowMode = inShadowMode
+            )
+
+        static member ReadInfosIM(pdfFile: PdfFile, selector, fInfos, ?pageSelector, ?inShadowMode) =
+            PdfRunner.ReadInfosCommon(
+                NonInitialClippingPathPdfDocumentContentParser.parseIM,
+                pdfFile,
+                selector,
+                fInfos,
+                ?pageSelector = pageSelector,
+                ?inShadowMode = inShadowMode
+            )
+
+        static member ReadInfosIMStoppable(pdfFile: PdfFile, selector, fInfos, ?pageSelector, ?inShadowMode) =
+            PdfRunner.ReadInfosCommon(
+                NonInitialClippingPathPdfDocumentContentParser.parseIMStoppable,
+                pdfFile,
+                selector,
+                fInfos,
+                ?pageSelector = pageSelector,
+                ?inShadowMode = inShadowMode
+            )
+   
+        static member ReadTextInfos(pdfFile: PdfFile, ?selector, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadInfos(
                 pdfFile, 
                 Selector.Text (defaultArg selector (fun _ _ -> true)),
-                fInfos = (fun infos ->
+                fInfos = (fun args infos ->
                     infos
                     |> List.ofSeq
                     |> List.choose (IIntegratedRenderInfo.asITextRenderInfo)
                 ),
-                ?pageSelector = pageSelector
+                ?pageSelector = pageSelector,
+                ?inShadowMode = inShadowMode
             )
 
-        static member ReadTextInfos_Record(pdfFile, ?selector, ?pageSelector) =
-            PdfRunner.ReadTextInfos(pdfFile, ?selector = selector, ?pageSelector = pageSelector)
+        static member ReadTextInfos_Record(pdfFile, ?selector, ?pageSelector, ?inShadowMode) =
+            PdfRunner.ReadTextInfos(pdfFile, ?selector = selector, ?pageSelector = pageSelector, ?inShadowMode = inShadowMode)
             |> List.map(List.map(fun m -> m.RecordValue))
 
 
-        static member ReadPathInfos(pdfFile: PdfFile, ?selector, ?pageSelector) =
+        static member ReadPathInfos(pdfFile: PdfFile, ?selector, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadInfos(
                 pdfFile, 
                 Selector.Path (defaultArg selector (fun _ _ -> true)),
-                fInfos = (fun infos ->
+                fInfos = (fun args infos ->
                     infos
                     |> List.ofSeq
                     |> List.choose (IIntegratedRenderInfo.asIPathRenderInfo)
                 ),
-                ?pageSelector = pageSelector
+                ?pageSelector = pageSelector,
+                ?inShadowMode = inShadowMode
             )
 
-        static member ReadPathInfos_Record(pdfFile, ?selector, ?pageSelector) =
-            PdfRunner.ReadPathInfos(pdfFile, ?selector = selector, ?pageSelector = pageSelector)
+        static member ReadPathInfos_Record(pdfFile, ?selector, ?pageSelector, ?inShadowMode) =
+            PdfRunner.ReadPathInfos(pdfFile, ?selector = selector, ?pageSelector = pageSelector, ?inShadowMode = inShadowMode)
             |> List.map(List.map(fun m -> m.RecordValue))
 
 
 
-        static member ReadColors(pdfFile: PdfFile, ?selector, ?pageSelector) =
+        static member ReadColors(pdfFile: PdfFile, ?selector, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadInfos(
                 pdfFile, 
                 defaultArg selector (Selector.PathOrText (fun _ _ -> true)),
-                fInfos = (fun infos ->
+                fInfos = (fun args infos ->
                     infos
                     |> List.ofSeq
                     |> List.collect (fun m -> 
                         [
-                            FsColor.OfItextColor <| m.Value.GetFillColor()
-                            FsColor.OfItextColor <| m.Value.GetStrokeColor()
-                        ] 
+                            match IAbstractRenderInfo.hasFill m with 
+                            | true -> yield FsColor.OfItextColor <| m.Value.GetFillColor()
+                            | false -> ()
+
+                            match IAbstractRenderInfo.hasStroke m with 
+                            | true -> yield FsColor.OfItextColor <| m.Value.GetStrokeColor()
+                            | false -> ()
+                        ]
                     )
                 ),
-                ?pageSelector = pageSelector
+                ?pageSelector = pageSelector,
+                ?inShadowMode = inShadowMode
             )
             |> List.concat
             |> FsColors.distinct
             |> List.ofSeq
 
         /// default pageSelector should be PageSelector.First
-        static member CheckInfos(pageSelector, pdfFile: PdfFile, selector) =
-            PdfRunner.ReadInfos(pdfFile, selector, id, pageSelector)
+        static member CheckInfos(pageSelector, pdfFile: PdfFile, selector, ?inShadowMode) =
+            PdfRunner.ReadInfos(pdfFile, selector, (fun _ infos -> infos), pageSelector, ?inShadowMode = inShadowMode)
             |> List.forall(fun infos ->
                 Seq.length infos > 0
             )
-           
+       

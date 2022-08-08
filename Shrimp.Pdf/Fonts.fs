@@ -14,8 +14,15 @@ with
 
     member x.LoggingText = x.FontFamily
 
+
+type CommonFontWeight =
+    | Light = 0
+    | Regular = 1
+    | Bold = 2
+
 /// PostScript FontNames
 module FontNames =
+    
     /// PostScript FontNames
     module Query =  
 
@@ -1425,6 +1432,7 @@ module FontNames =
 
 module RegisterableFonts =
 
+
     //module AlibabaPuHuiTi = 
     //    type FontWeight =
     //        | Light = 0
@@ -1513,6 +1521,15 @@ module RegisterableFonts =
             | Light = 0
             | Regular = 1
             | Bold = 2
+
+        [<RequireQualifiedAccess>]
+        module FontWeight = 
+            let asCommonFontWeight = function
+            | FontWeight.Light -> CommonFontWeight.Light
+            | FontWeight.Regular -> CommonFontWeight.Regular
+            | FontWeight.Bold -> CommonFontWeight.Bold
+
+
 
         let yaHei (weight: FontWeight) =
             let weightText = 

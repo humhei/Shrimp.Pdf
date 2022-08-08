@@ -9,21 +9,35 @@ type NameAndParameters =
     { Name: string 
       Parameters: list<string * string>}
 
+
+type Configuration =
+    { LoggerLevel: LoggerLevel }
+with 
+    static member DefaultValue = { LoggerLevel = LoggerLevel.Info }
+
 type FlowModel<'userState> =
     { PdfFile: PdfFile 
-      UserState: 'userState }
+      UserState: 'userState
+      Configuration: Configuration }
     with 
         member x.File = x.PdfFile.Path
+
+        member x.MapUserState(fUserState) =
+            { PdfFile = x.PdfFile
+              UserState = fUserState x.UserState
+              Configuration = x.Configuration }
 
 [<RequireQualifiedAccess>]
 module FlowModel =
     let mapM mapping flowModel =
         { PdfFile = flowModel.PdfFile 
-          UserState = mapping flowModel.UserState }
+          UserState = mapping flowModel.UserState
+          Configuration = flowModel.Configuration }
 
     let mapTo userState flowModel =
         { PdfFile = flowModel.PdfFile 
-          UserState = userState }
+          UserState = userState
+          Configuration =flowModel.Configuration }
 
 
 
@@ -145,9 +159,11 @@ type internal InternalFlowModel<'userState> =
     { File: string 
       UserState: 'userState 
       FlowName: FlowName option
-      OperatedFlowNames: FlowName list }
+      OperatedFlowNames: FlowName list
+      Configuration: Configuration }
 
 with
+    member x.LoggerLevel = x.Configuration.LoggerLevel
 
     member internal flowModel.TryGetBackupDirectory() =
         match flowModel.FlowName with 
@@ -208,11 +224,13 @@ module internal InternalFlowModel =
         { File = flowModel.File 
           UserState = mapping flowModel.UserState 
           FlowName = flowModel.FlowName
-          OperatedFlowNames = flowModel.OperatedFlowNames }
+          OperatedFlowNames = flowModel.OperatedFlowNames
+          Configuration =flowModel.Configuration }
 
     let toFlowModel (internalFlowModel: InternalFlowModel<_>): FlowModel<_> =
         { PdfFile = PdfFile internalFlowModel.File 
-          UserState = internalFlowModel.UserState }
+          UserState = internalFlowModel.UserState
+          Configuration = internalFlowModel.Configuration }
 
 
     let mapTo userState (flowModel: InternalFlowModel<_>) =
@@ -228,58 +246,63 @@ module internal Logger_FlowModel =
         static member TryInfoWithFlowModel (flowNameIndex, flowModel: InternalFlowModel<_>, f) =
             match flowModel.FlowName with 
             | Some flowName ->
-                match flowName.FlowNameKind.NameAndParameters with 
-                | Some (name, parameters) ->
-                    let indentsCount = flowName.RelativeDirectoryNames.Length
+                match flowModel.LoggerLevel with 
+                | LoggerLevel.Info ->
+                    match flowName.FlowNameKind.NameAndParameters with 
+                    | Some (name, parameters) ->
+                        let indentsCount = flowName.RelativeDirectoryNames.Length
 
-                    let indentText =
-                        List.replicate indentsCount "    "
-                        |> String.concat ""
+                        let indentText =
+                            List.replicate indentsCount "    "
+                            |> String.concat ""
 
-                    let beginMessage =
-                        let splitLine = 
-                            if indentsCount = 0
-                            then
-                                sprintf "[%d]------------------------------------------------------------------\n" flowNameIndex
-                            else ""
+                        let beginMessage =
+                            let splitLine = 
+                                if indentsCount = 0
+                                then
+                                    sprintf "[%d]------------------------------------------------------------------\n" flowNameIndex
+                                else ""
 
 
-                        let message =
-                            [ 
+                            let message =
+                                [ 
                           
-                              sprintf "Name: %s" name
-                              "Parameters:" ]
-                            @ (
-                                parameters
-                                |> List.map (fun (paramter, paramterValue) ->
-                                    sprintf "    %s: %s" paramter paramterValue
+                                  sprintf "Name: %s" name
+                                  "Parameters:" ]
+                                @ (
+                                    parameters
+                                    |> List.map (fun (paramter, paramterValue) ->
+                                        sprintf "    %s: %s" paramter paramterValue
+                                    )
                                 )
-                            )
-                            |> List.map (sprintf "%s    %s" indentText)
-                            |> String.concat "\n"
+                                |> List.map (sprintf "%s    %s" indentText)
+                                |> String.concat "\n"
 
-                        sprintf "%s\n%sBEGIN\n%s" splitLine indentText message
+                            sprintf "%s\n%sBEGIN\n%s" splitLine indentText message
 
-                    let endMessage (elapsed: System.TimeSpan) =
-
+                        let endMessage (elapsed: System.TimeSpan) =
 
 
-                        let message = sprintf "\n%sEND %s" indentText name
-                        sprintf "%s in %O \n" message elapsed
 
-                    let (result, message) = Logger.infoWithStopWatchAndReturnFinalMessage (beginMessage) endMessage f
+                            let message = sprintf "\n%sEND %s" indentText name
+                            sprintf "%s in %O \n" message elapsed
+
+                        let (result, message) = Logger.infoWithStopWatchAndReturnFinalMessage (beginMessage) endMessage f
                     
-                    match flowModel.TryGetBackupDirectory() with 
-                    | Some directory ->
-                        let file = directory </> "Log.txt"
-                        match flowNameIndex with 
-                        | 0 -> File.delete file
-                        | _ -> ()
-                        File.AppendAllText(file, message + "\n", System.Text.Encoding.UTF8)
+                        match flowModel.TryGetBackupDirectory() with 
+                        | Some directory ->
+                            let file = directory </> "Log.txt"
+                            match flowNameIndex with 
+                            | 0 -> File.delete file
+                            | _ -> ()
+                            File.AppendAllText(file, message + "\n", System.Text.Encoding.UTF8)
                     
-                    | None -> ()
+                        | None -> ()
 
-                    result
+                        result
 
-                | None -> f ()
+                    | None -> f ()
+
+                | LoggerLevel.Slient -> f ()
+
             | None -> f()

@@ -273,10 +273,41 @@ module Imposing =
     [<RequireQualifiedAccess>]
     module DesiredPageOrientation =
 
-        let (|PageOrientation|_|) = function
-            | DesiredPageOrientation.Landscape -> Some PageOrientation.Landscape
-            | DesiredPageOrientation.Portrait -> Some PageOrientation.Portrait
-            | DesiredPageOrientation.Automatic -> None
+        let (|PageOrientation|Automatic|) = function
+            | DesiredPageOrientation.Landscape -> PageOrientation PageOrientation.Landscape
+            | DesiredPageOrientation.Portrait ->  PageOrientation PageOrientation.Portrait
+            | DesiredPageOrientation.Automatic -> Automatic ()
+
+        let ofPageOrientation = function
+            | PageOrientation.Portrait -> DesiredPageOrientation.Portrait
+            | PageOrientation.Landscape -> DesiredPageOrientation.Landscape
+
+        let redirectByChecker (checker: PageOrientationChecker) (pageOrientation: DesiredPageOrientation) =
+            let tryGetValidOrientation pageOrientation =
+                match pageOrientation with 
+                | PageOrientation.Landscape ->
+                    match { checker with PageOrientation = PageOrientation.Landscape } with 
+                    | PageOrientationChecker.ValidOrientation -> Some PageOrientation.Landscape
+                    | PageOrientationChecker.InvalidOrientation _ -> None
+
+                | PageOrientation.Portrait ->
+                    match { checker with PageOrientation = PageOrientation.Portrait } with 
+                    | PageOrientationChecker.ValidOrientation -> Some PageOrientation.Portrait
+                    | PageOrientationChecker.InvalidOrientation _ -> None
+
+            match pageOrientation with 
+            | PageOrientation r -> tryGetValidOrientation r |> Option.map ofPageOrientation
+            | Automatic ->
+                match tryGetValidOrientation PageOrientation.Landscape, tryGetValidOrientation PageOrientation.Portrait with 
+                | Some _, Some _ -> 
+                    Some DesiredPageOrientation.Automatic
+
+                | Some _, None _ -> Some DesiredPageOrientation.Landscape
+                | None, Some _ -> Some DesiredPageOrientation.Portrait
+                | None, None -> None
+
+
+
 
     [<RequireQualifiedAccess>]
     type CellRotation =
@@ -747,7 +778,6 @@ module Imposing =
             )
 
             pdfCanvas
-
 
 
 
@@ -1472,7 +1502,7 @@ module Imposing =
         member private x.CellsCount = x.GetCellsCount()
 
     /// Build() -> Draw()
-    and ImposingDocument (splitDocument: SplitDocument, imposingArguments: ImposingArguments, ?allowRedirectCellSize) =  
+    and ImposingDocument internal (splitDocument: SplitDocument, imposingArguments: ImposingArguments, allowRedirectCellSize: bool option) =  
         let sheets = new ResizeArray<ImposingSheet>()
         let mutable isDrawed = false
 
@@ -1509,7 +1539,7 @@ module Imposing =
                     isDrawed <- true
 
         /// NOTE: Internal Use
-        member internal x.Build() =
+        member x.Build() =
             let args = x.ImposingArguments.Value
             sheets.Clear()
 
@@ -1603,28 +1633,16 @@ module Imposing =
                          Background.getSize args.Background
 
                     let (|ValidOrientation|InvalidOrientation|) (orientation, backgroundSize) =
-                        let backgroundSize = 
-                            match orientation with 
-                            | PageOrientation.Landscape -> FsSize.landscape backgroundSize
-                            | PageOrientation.Portrait -> FsSize.portrait backgroundSize
+                        let checker: PageOrientationChecker =
+                            { PageOrientation = orientation
+                              CellSizes =  cellSizes
+                              BackgroundSize = backgroundSize
+                              Margin = margin }
 
-                    
-                        let exceedHorizontal =
-                            cellSizes 
-                            |> List.tryFind(fun cellSize ->
-                                cellSize.Width + margin.Left + margin.Right >= backgroundSize.Width + tolerance.Value
-                            )
+                        match checker with 
+                        | PageOrientationChecker.ValidOrientation   -> ValidOrientation ()
+                        | PageOrientationChecker.InvalidOrientation v -> InvalidOrientation v
 
-                        let exceedVertical =
-                            cellSizes 
-                            |> List.tryFind(fun cellSize ->
-                                cellSize.Height + margin.Top + margin.Bottom >= backgroundSize.Height + tolerance.Value
-                            )
-
-                        match exceedHorizontal, exceedVertical with 
-                        | None _, None _ -> ValidOrientation
-                        | Some v, _ 
-                        | _, Some v -> InvalidOrientation v
 
 
                     match args.DesiredPageOrientation with 
@@ -1685,6 +1703,9 @@ module Imposing =
         member x.GetSheets() = List.ofSeq sheets
 
         member x.GetSheet(index) = sheets.[index]
+
+        new (splitDocument: SplitDocument, imposingArguments: ImposingArguments) =
+            ImposingDocument(splitDocument, imposingArguments, allowRedirectCellSize = None)
 
 
     [<RequireQualifiedAccess>]

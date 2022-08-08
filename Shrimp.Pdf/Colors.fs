@@ -1101,14 +1101,15 @@ module _Colors =
                         let colorName = 
                             let uri = 
                                 (colorSpacePdfArray.Get(1)
-                                 |> string).TrimStart('/')
+                                 |> string)
 
-                            uri.Replace("#20", " ")
+                            EncodedPdfName(uri)
+
     
                         try 
-                            FsSeparation.Create(colorName, separation.GetAlterateColor())
+                            FsSeparation.Create(colorName.ReadableName, separation.GetAlterateColor())
                         with ex ->
-                            raise (new AccumulatedException(sprintf "Error when parsing separation color %s" colorName, ex))
+                            raise (new AccumulatedException(sprintf "Error when parsing separation color %s" colorName.ReadableName, ex))
                 )
 
             { v with Transparency = float transparency }

@@ -29,17 +29,20 @@ module internal rec ManipulateOrReuse =
           Document: SplitOrIntegratedDocument 
           FlowName: FlowName option
           OperatedFlowNames: FlowName list
+          Configuration: Configuration
           UserState: 'userState }
     with 
         member flowModel.ToPublicFlowModel() =
             { PdfFile = PdfFile flowModel.File 
-              UserState = flowModel.UserState }
+              UserState = flowModel.UserState
+              Configuration = flowModel.Configuration }
 
         member flowModel.ToInternalFlowModel() =
             { File = flowModel.File 
               UserState = flowModel.UserState 
               FlowName = flowModel.FlowName
-              OperatedFlowNames = flowModel.OperatedFlowNames }
+              OperatedFlowNames = flowModel.OperatedFlowNames
+              Configuration =flowModel.Configuration }
 
 
     [<RequireQualifiedAccess>]
@@ -49,7 +52,8 @@ module internal rec ManipulateOrReuse =
               UserState = mapping flowModel.UserState
               FlowName = flowModel.FlowName
               Document = flowModel.Document
-              OperatedFlowNames = flowModel.OperatedFlowNames }
+              OperatedFlowNames = flowModel.OperatedFlowNames
+              Configuration =flowModel.Configuration }
 
         let mapTo userState (flowModel: FlowModel<_>) =
             mapM (fun _ -> userState) flowModel
@@ -496,7 +500,8 @@ type Reuse<'oldUserState, 'newUserState> internal
               Document = SplitOrIntegratedDocument.SplitDocument document
               UserState = flowModel.UserState
               FlowName = flowModel.FlowName
-              OperatedFlowNames = flowModel.OperatedFlowNames }
+              OperatedFlowNames = flowModel.OperatedFlowNames
+              Configuration =flowModel.Configuration }
         )
         |> fun flowModel ->
             flowModel.ToInternalFlowModel()
@@ -607,7 +612,8 @@ type Manipulate<'oldUserState, 'newUserState> internal (flow: Flow<'oldUserState
               Document = SplitOrIntegratedDocument.IntegratedDocument document
               UserState = flowModel.UserState
               FlowName = flowModel.FlowName
-              OperatedFlowNames = flowModel.OperatedFlowNames }
+              OperatedFlowNames = flowModel.OperatedFlowNames
+              Configuration =flowModel.Configuration }
         ) 
         |> fun flowModel ->
             flowModel.ToInternalFlowModel()

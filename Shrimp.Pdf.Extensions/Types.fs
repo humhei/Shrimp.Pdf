@@ -36,6 +36,58 @@ module ExtensionTypes =
             inherit PathRenderInfo(canvasTagHierarchy, gs, path, PathRenderInfo.FILL)
 
 
+    [<RequireQualifiedAccess>]
+    type EncodedPdfNamePart =
+        | Literal of char
+        | Hex of char * char
+    with 
+        member x.ToByte() =
+            match x with 
+            | Literal char ->
+                System.Convert.ToByte(char)
+
+            | Hex (hex1, hex2) ->
+                let string = System.String [|hex1; hex2|]
+                System.Convert.ToByte(string, 16)
+
+    type EncodedPdfName(v) =
+        inherit POCOBaseV<string>(v)
+        let v2 =
+            match v.TryReplaceStarting("/", "") with 
+            | Some v -> v
+            | None -> failwithf "An encoded PdfName %s should starts with \/" v
+
+        let parts =
+            let rec loop accum (chars: char list) =
+                match chars with 
+                | char :: t ->
+                    match char with 
+                    | '#' ->
+                        let token = 
+                            EncodedPdfNamePart.Hex(chars.[1], chars.[2])
+
+                        loop (token :: accum) chars.[3..]
+                    | _ -> 
+                        loop (EncodedPdfNamePart.Literal char :: accum) t
+
+                | [] -> List.rev accum
+                    
+            loop [] (v2.ToCharArray() |> List.ofArray)
+
+        let bytes = 
+            parts
+            |> List.map (fun m -> m.ToByte())
+
+        let readableName =  
+            System.Text.Encoding.UTF8.GetString(List.toArray bytes)
+            
+        member x.ReadableName = readableName
+
+        member x.Parts = parts
+
+        member x.RawName = v
+
+
     [<Struct>]
     type OperatorRange =
         { Operator: PdfLiteral 
@@ -508,7 +560,27 @@ module ExtensionTypes =
                 }
 
       
+    type PositiveMargin = private PositiveMargin of Margin 
+    with 
+        member x.Value =
+            let (PositiveMargin v) = x
+            v
 
+        static member Create(margin: Margin) =
+            margin
+            |> Margin.mapValues(fun m -> (abs m))
+            |> PositiveMargin
+
+    type NegativeMargin = private NegativeMargin of Margin 
+    with 
+        member x.Value =
+            let (NegativeMargin v) = x
+            v
+
+        static member Create(margin: Margin) =
+            margin
+            |> Margin.mapValues(fun m -> -(abs m))
+            |> NegativeMargin
 
     type TileTableIndexer = 
         private TileTableIndexer of colNum: int * rowNum: int * hSpacing: float list * vSpacing: float list
@@ -615,6 +687,28 @@ module ExtensionTypes =
 
     [<RequireQualifiedAccess>]
     module Rotation =
+        let ofCharOp(char: char) =
+            match char with 
+            | '>' -> Some Rotation.Clockwise
+            | '<' -> Some Rotation.Counterclockwise
+            | '*' -> Some Rotation.R180
+            | _ -> None
+
+
+        let ofChar(char: char) =
+            match ofCharOp char with 
+            | Some rotation -> rotation
+            | None -> failwithf "Cannot create rotation from %A, avaliable chars are %A" char [">"; "<"; "*"]
+
+
+
+        let toChar = function
+            | Rotation.Clockwise  -> Some '>'
+            | Rotation.Counterclockwise -> Some '<'
+            | Rotation.R180 -> Some '*'
+            | Rotation.None -> None
+
+
         let getAngle = function
             | Rotation.Clockwise  -> 90.
             | Rotation.Counterclockwise -> -90.

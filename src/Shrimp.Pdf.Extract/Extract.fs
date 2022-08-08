@@ -80,6 +80,7 @@ module _Extract =
         | NewInfosInOriginPage of TargetNewInfosInOriginPageElement list
 
     let internal extractVisibleRenewableInfosToWriter 
+        (configuration: Configuration)
         (args: PageModifingArguments<_>) 
         selector 
         (infosSplitter: RenewableInfo list -> list<TargetRenewablePageInfo>)
@@ -90,15 +91,27 @@ module _Extract =
         (writer: PdfDocumentWithCachedResources) =
         let parser = new NonInitialClippingPathPdfDocumentContentParser(reader)
         let pageNumber = args.PageNum
+        let stopWatch = System.Diagnostics.Stopwatch.StartNew()
         let keepBorder = List.contains pageNumber borderKeepingPageNumbers
         
-        match loggingPageCountInterval.Value with 
-        | BiggerThan 1 & interval -> 
-            match pageNumber % interval with 
-            | 0 -> Logger.info (sprintf "extracting page %d" pageNumber)
-            | _ -> ()
+        let loggingPageCountInterval = loggingPageCountInterval.Value
 
-        | _ -> ()
+        let logInfo (text) =
+            match configuration.LoggerLevel with 
+            | LoggerLevel.Info ->
+                match pageNumber = 1 with 
+                | true -> Logger.info (text())
+                | false -> 
+
+                    match loggingPageCountInterval with 
+                    | BiggerThan 1 & interval -> 
+                        match pageNumber % interval with 
+                        | 0 -> Logger.info (text())
+                        | _ -> ()
+                    | _ -> ()
+
+            | LoggerLevel.Slient -> ()
+
 
         let infos =
             let selector = 
@@ -127,6 +140,13 @@ module _Extract =
                     image.Renewable()
                     |> RenewableInfo.Image
             )
+
+        stopWatch.Stop()
+        logInfo(fun () ->
+            sprintf "extracting page %d, found infos %d in %O" pageNumber infos.Length stopWatch.Elapsed
+        )
+
+        stopWatch.Restart()
 
         let splittedInfos = 
             infos
@@ -373,7 +393,12 @@ module _Extract =
                 )
                 suffixOperation (writerPage, writerCanvas)
 
+        )
 
+
+        stopWatch.Stop()
+        logInfo(fun () ->
+            sprintf "writedAreaInfos in %O" stopWatch.Elapsed
         )
 
         splittedInfos
@@ -399,6 +424,7 @@ module _Extract =
                         }
 
                     extractVisibleRenewableInfosToWriter
+                        flowModel.Configuration
                         args
                         selector
                         (fun infos -> [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers))])

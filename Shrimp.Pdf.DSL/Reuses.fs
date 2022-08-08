@@ -23,7 +23,9 @@ open Fake.IO.FileSystemOperators
 open Shrimp.FSharp.Plus.Math
 open iText.Layout
 
-
+type RotationIfNeeded =
+    | Clockwise = 0
+    | Counterclockwise = 1
 
 type RegularImposingSheet<'T> private (userState: 'T, imposingSheet: ImposingSheet) =
     let rows = imposingSheet.GetRows()
@@ -619,11 +621,14 @@ module _Reuses =
 
 
 
-        static member ChangePageOrientation(pageSelector: PageSelector, orientation: PageOrientation) =
-
+        static member ChangePageOrientation(pageSelector: PageSelector, orientation: PageOrientation, ?fRotationIfNeeded) =
             Reuse.Factory(
 
                 fun flowModel (splitDocument: SplitDocument) ->
+                    let fRotationIfNeeded (pageNumber: PageNumber) =
+                        match fRotationIfNeeded with 
+                        | None -> RotationIfNeeded.Counterclockwise
+                        | Some f -> f pageNumber
 
                     let pageNumberSequence =
                         let selectedPageNumbers = splitDocument.Reader.GetPageNumbers(pageSelector)
@@ -636,7 +641,12 @@ module _Reuses =
                                 | FsSize.Portrait, PageOrientation.Portrait 
                                 | FsSize.Landscape, PageOrientation.Landscape
                                 | FsSize.Uniform, _ -> pageNumber, Rotation.None
-                                | _ -> pageNumber, Rotation.Clockwise
+                                | _ -> 
+                                    let rotation =
+                                        match fRotationIfNeeded (PageNumber pageNumber) with 
+                                        | RotationIfNeeded.Clockwise -> Rotation.Clockwise
+                                        | RotationIfNeeded.Counterclockwise -> Rotation.Counterclockwise
+                                    pageNumber, rotation
                             | false ->
                                 pageNumber, Rotation.None
                         )
@@ -645,7 +655,8 @@ module _Reuses =
             |> Reuse.rename 
                 "ChangePageOrientation"
                 ["pageSelector" => pageSelector.ToString()
-                 "orientation" => orientation.ToString() ]
+                 "orientation" => orientation.ToString()
+                 "rotationIfNeeded" => fRotationIfNeeded.ToString() ]
 
 
     
@@ -857,7 +868,7 @@ module _Reuses =
                     
 
                     let sheets = 
-                        let document = ImposingDocument(document, args, allowRedirectCellSize = true)
+                        let document = ImposingDocument(document, args, allowRedirectCellSize = Some true)
                             
                         document.Build()
                         document.GetSheets()
@@ -955,7 +966,7 @@ module _Reuses =
                 ["imposingArguments" => args.ToString()]
 
 
-
+        /// PageBorder + pageNumber 
         static member CreatePageTemplate() =
             fun flowModel (doc: SplitDocument) ->
                 let writer = doc.Writer

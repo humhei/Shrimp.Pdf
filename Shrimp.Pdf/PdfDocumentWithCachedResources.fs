@@ -1,4 +1,5 @@
 ﻿namespace Shrimp.Pdf
+#nowarn "0104"
 open iText.Kernel.Font
 open System.IO
 open iText.Kernel.Colors
@@ -43,6 +44,7 @@ open Newtonsoft.Json
 open Shrimp.Pdf.FontNames.Query
 open iText.Kernel.Pdf.Xobject
 open iText.Kernel.Pdf.Canvas.Parser.Data
+open RegisterableFonts
 
 [<RequireQualifiedAccess>]
 type FsPdfFontFactory =
@@ -61,6 +63,25 @@ with
         | FsPdfFontFactory.StandardFonts v -> v
         | FsPdfFontFactory.DocumentFont (documentFont) -> documentFont.LoggingText
 
+    static member ChooseFontByText (fontWeight: CommonFontWeight) (text: string) =
+        match AsianLanguage.Detect text with 
+        | AsianLanguage.Korean -> 
+            let fontWeight = 
+                match fontWeight with 
+                | CommonFontWeight.Light -> ArialUnicode.FontWeight.Regular
+                | CommonFontWeight.Regular -> ArialUnicode.FontWeight.Regular
+                | CommonFontWeight.Bold -> ArialUnicode.FontWeight.Bold
+
+            RegisterableFonts.ArialUnicode.arial_unicode fontWeight
+        | _ -> 
+            let fontWeight =
+                match fontWeight with 
+                | CommonFontWeight.Light -> YaHei.FontWeight.Light
+                | CommonFontWeight.Regular -> YaHei.FontWeight.Regular
+                | CommonFontWeight.Bold -> YaHei.FontWeight.Bold
+
+            RegisterableFonts.YaHei.yaHei fontWeight
+        |> FsPdfFontFactory.Registerable
 
 
 [<RequireQualifiedAccess>]
@@ -73,13 +94,13 @@ type ResourceColor =
 
 type ReaderDocument (reader: string) =
     let reader = new PdfDocument(new PdfReader(reader))
-    
     member x.Reader = reader
 
-    member x.Close() = reader.Close()
+    member x.Close() = x.Reader.Close()
 
     interface System.IDisposable with 
         member x.Dispose() = x.Close()
+
 
 
 type private PdfDocumentCache private 
@@ -250,7 +271,7 @@ type private PdfDocumentCache private
 
     member internal x.GetOrCreateXObject(pdfFile: PdfFile) =
         xobjectCache.GetOrAdd((pdfFile), fun (pdfFile) ->
-            let doc = ReaderDocument(pdfFile.Path)
+            use doc = new ReaderDocument(pdfFile.Path)
             doc, doc.Reader.GetPage(1).CopyAsFormXObject(pdfDocument())
         )
         |> snd

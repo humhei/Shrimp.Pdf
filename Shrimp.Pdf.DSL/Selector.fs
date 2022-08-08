@@ -122,9 +122,12 @@ with
                             let leftRects = rects.[0 .. (index-1)] @ rects.[(index+1) .. (rects.Length-1)]
 
                             match previousCoordinateUltraValue with 
-                            | Some (previousMaxY) when (abs(previousMaxY - maxY) <= tolerance) ->
-                                sortRects (Some maxY) [] (List.rev (leftTopRect :: accum) :: accums) leftRects
-                            | _ -> sortRects (Some maxY) (leftTopRect :: accum) accums leftRects
+                            | Some (previousMaxY) when (abs(previousMaxY - maxY) <= tolerance) -> 
+                                sortRects (Some maxY) (leftTopRect :: accum) accums leftRects
+                            | None ->
+                                sortRects (Some maxY) (leftTopRect :: accum) accums leftRects
+                            | _ -> 
+                                sortRects (Some maxY) [leftTopRect] (List.rev (accum) :: accums) leftRects
 
                         | Direction.Vertical ->
                             let minX = 
@@ -173,18 +176,21 @@ with
         (SelectionDistincter.Plane (mm 3.))
 
 
-    member x.Distinct(rects: FsSize al1List) =
+    member x.DistinctBy(frect: _ -> FsSize) values =
         match x with 
-        | SelectionDistincter.Non -> rects
+        | SelectionDistincter.Non -> values
         | SelectionDistincter.Plane tolerance ->
             let createNeayByPX(v) =
                 NearbyPX(v, tolerance = tolerance)
 
-            rects
+            values
             |> AtLeastOneList.distinctBy_explictly<_, _>(fun m ->
-                 createNeayByPX m.Width, createNeayByPX m.Height
+                let rect = frect m
+                createNeayByPX rect.Width, createNeayByPX rect.Height
             )
 
+    member x.Distinct(rects) =
+        x.DistinctBy id rects
 
 
 

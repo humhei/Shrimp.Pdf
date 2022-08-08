@@ -87,6 +87,13 @@ let reuseTests =
         |> runTest "datas/reuse/Clipping Contents To PageBox2.pdf" 
         |> ignore
 
+    testCase "impose for heavy data" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.MergeTwoPages(useBleed = true, margin = Margin.MM6)
+        )
+        |> runTest "datas/reuse/impose for heavy data.pdf" 
+        |> ignore
+
     testCase "preimpose" <| fun _ -> 
         let r = 
             PdfRunner.PreImpose_Repeated_One
@@ -453,7 +460,16 @@ let reuseTests =
             [1, Flip.HFlip; 5, Flip.VFlip]
             |> List.map PageNumSequenceToken.PageNumWithFlip
 
-        Flow.Reuse (Reuses.SequencePages (PageNumSequence.Create (tokens1 @ tokens2)))
+        let tokens3 = 
+            [1, Rotation.Clockwise, Flip.HFlip]
+            |> List.map PageNumSequenceToken.PageNumWithRotationAndFlip
+
+        let tokens4 = 
+            [1, Flip.HFlip, Rotation.Clockwise]
+            |> List.map PageNumSequenceToken.PageNumWithFlipAndRotation
+
+
+        Flow.Reuse (Reuses.SequencePages (PageNumSequence.Create (tokens1 @ tokens2 @ tokens3 @ tokens4)))
         |> runTest "datas/reuse/duplicate pages by page num sequence3.pdf" 
         |> ignore
 

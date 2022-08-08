@@ -5,6 +5,7 @@ open iText.Kernel.Geom
 
 #nowarn "0104"
 open iText.Kernel.Colors
+open iText.Kernel.Exceptions
 open iText.Kernel.Pdf.Colorspace
 open iText.Kernel.Pdf.Canvas.Parser
 open iText.Kernel.Pdf.Canvas.Parser.Listener
@@ -18,6 +19,12 @@ open iText.Kernel.Pdf
 open Shrimp.Pdf.Constants.Operators
 open System.Collections.Concurrent
 
+
+
+type RenderInfoStoppedException(info: IIntegratedRenderInfoIM) =
+    inherit System.Exception()
+
+    member x.StoppedInfo = info
 
 [<RequireQualifiedAccess>]
 type RenderInfoSelector = 
@@ -516,6 +523,7 @@ module internal Listeners =
 
             member this.GetSupportedEvents() = supportedEventTypes
 
+
     type DummyListener() =
         let supportedEvents = List () :> ICollection<_>
             
@@ -756,8 +764,11 @@ type internal ReaderPdfCanvasProcessor(listener: FilteredEventListenerEx, additi
         | _ -> formOperator
 
 
+
+
 type NonInitialClippingPathPdfDocumentContentParser(pdfDocument) =
     inherit PdfDocumentContentParser(pdfDocument)
+
     override this.ProcessContent(pageNumber, renderListener, additionalContentOperators) =  
         
         let listener = (renderListener :> IEventListener) :?> FilteredEventListenerEx
@@ -765,6 +776,16 @@ type NonInitialClippingPathPdfDocumentContentParser(pdfDocument) =
         processor.ProcessPageContent(pdfDocument.GetPage(pageNumber))
         renderListener
 
+type StoppedParsedRenderInfoIMs =
+    { PageNumber: PageNumber
+      RenderInfoStoppedException: RenderInfoStoppedException
+      ParsedInfos: seq<IIntegratedRenderInfoIM> }
+
+
+[<RequireQualifiedAccess>]
+type StoppableParsedRenderInfoIMs =
+    | Stopped of StoppedParsedRenderInfoIMs
+    | NonStopped of seq<IIntegratedRenderInfoIM>
 
 [<RequireQualifiedAccess>]
 module NonInitialClippingPathPdfDocumentContentParser =
@@ -796,3 +817,20 @@ module NonInitialClippingPathPdfDocumentContentParser =
             let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
             parser.ProcessContent(pageNum, listener).ParsedRenderInfos
         
+    let parseIMStoppable (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: NonInitialClippingPathPdfDocumentContentParser) =
+        let et = RenderInfoSelector.toEventTypes renderInfoSelector
+
+        match et with 
+        | [] -> [] :> seq<IIntegratedRenderInfoIM> |>StoppableParsedRenderInfoIMs.NonStopped
+        | _ ->
+            let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled"}, renderInfoSelector]
+            let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
+            try
+                parser.ProcessContent(pageNum, listener).ParsedRenderInfos
+                |> StoppableParsedRenderInfoIMs.NonStopped
+            with :? RenderInfoStoppedException as ex ->
+                { RenderInfoStoppedException = ex 
+                  PageNumber = PageNumber pageNum
+                  ParsedInfos = listener.ParsedRenderInfos }
+                |> StoppableParsedRenderInfoIMs.Stopped
+                

@@ -47,11 +47,11 @@ let extractTests =
             |> runTest "datas/extract/extract and scale2.pdf" 
             |> ignore
 
-        ftestCase "extract and scale3" <| fun _ -> 
+        testCase "extract and scale3" <| fun _ -> 
             Flow.Reuse (
                 Reuses.TransformForEach(
                     Selector.PathOrText(Info.StrokeColorIs (FsColor.RGB_BLUE)),
-                    transform = (fun bound -> Rectangle.applyMargin (-Margin.``MM3``) bound.Bound)
+                    transform = (fun bound -> Rectangle.applyMargin (-Margin.``MM6``) bound.Bound)
                 )
             )
             |> runTest "datas/extract/extract and scale3.pdf" 
@@ -537,6 +537,38 @@ let extractTests =
             |> runTest "datas/extract/tile pages and NUP by selector.pdf" 
             |> ignore
 
+        testCase "tile pages and NUP by selector2" <| fun _ -> 
+            let pageNumbers =
+                [1; 10]
+                |> List.map PageNumber
+                |> AtLeastTwoList.Create 
+
+            Flow.Reuse (
+                Reuses.AddForeground(
+                    PdfFile (@"datas/extract/tile pages and NUP by selector2_CustomSupply.pdf")
+                )
+            )
+            <+>
+            Flows.TilePagesAndNUp(
+                 Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                 textPicker =( 
+                    { TagColor = Some Colors.PdfExtractorTagColor
+                      TransformTextPickers = 
+                        (fun args bound infos ->
+                            let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                            coloredBoxWithTextInfos :> System.IComparable
+                        )
+                    }
+                ),
+                pageTilingRenewInfosSplitter = PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0,
+                transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound),
+                samplePageExtractingOptions = 
+
+                    (SamplePageExtractingOptions.FirstPageMultipleSelectors (pageNumbers,PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
+            )
+            |> runTest "datas/extract/tile pages and NUP by selector2.pdf" 
+            |> fun m -> failwith ""
+            |> ignore
 
     ]
 
