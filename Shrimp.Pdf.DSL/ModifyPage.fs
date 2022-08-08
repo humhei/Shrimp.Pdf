@@ -431,6 +431,7 @@ module ModifyPageOperators =
                 ?parameters = parameters
             )
 
+
     type PdfRunner with 
     
         static member private ReadInfosCommon(parse, pdfFile: PdfFile, selector, fInfos, ?pageSelector, ?inShadowMode) =
@@ -497,6 +498,8 @@ module ModifyPageOperators =
                 ?inShadowMode = inShadowMode
             )
    
+
+
         static member ReadTextInfos(pdfFile: PdfFile, ?selector, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadInfos(
                 pdfFile, 

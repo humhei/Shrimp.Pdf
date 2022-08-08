@@ -1,6 +1,7 @@
 ﻿module ParsingTests
 open Expecto
 open Shrimp.Pdf
+open Shrimp.Pdf.Image
 open Shrimp.Pdf.Colors
 open iText.Kernel.Colors
 open iText.Kernel.Geom
@@ -21,6 +22,8 @@ open iText.IO.Font.Constants
 open iText.IO.Font
 open iText.Kernel.Font
 open Shrimp.Pdf.Image
+open iText.Kernel.Pdf
+
 
 type BookTagColors =
     static member PageNumber = 
@@ -37,7 +40,7 @@ type BookTagColors =
 
     static member 帖标文本 =
         FsSeparation.Create(
-            "PANTONE DS 130-8 C",
+            "帖标文本",
             FsValueColor.Cmyk(FsDeviceCmyk.Create(0.f, 0.758f, 0.668f, 0.f))
         )
 
@@ -59,19 +62,21 @@ type BookTagColors =
             "PANTONE 10219 C",
             FsValueColor.Lab(FsLab.Create(29.f, 34.f, -43.f))
         )
+
+    static member 贴标文本颜色 = FsGray.WHITE
         
     static member AllBookTagColors =
         [ 
-            BookTagColors.BorderDash
-            BookTagColors.PageNumber
-            BookTagColors.内页裁切标记
-            BookTagColors.帖标
-            BookTagColors.帖标文本
-            BookTagColors.虚线裁切框
+            FsColor.Separation BookTagColors.BorderDash
+            FsColor.Separation BookTagColors.PageNumber
+            FsColor.Separation BookTagColors.内页裁切标记
+            FsColor.Separation BookTagColors.帖标
+            FsColor.Separation BookTagColors.帖标文本
+            FsColor.Separation BookTagColors.虚线裁切框
+            FsColor.valueColor BookTagColors.贴标文本颜色
         ]
 
-type RenderInfoStoppedException_EmptyPage(info) =
-    inherit RenderInfoStoppedException(info)
+
 
 let parsingTests =
   testList "Parsing Tests" [
@@ -83,31 +88,11 @@ let parsingTests =
         | _ -> fail()
 
     ftestCase "parsing empty pages" <| fun _ -> 
-        let path = Path.getFullName "datas/parsing/parsing empty pages.pdf" 
+        let path = 
+            Path.getFullName "datas/parsing/parsing empty pages.pdf" 
 
-        let selector =
-            let allTagColors = BookTagColors.AllBookTagColors |> List.map FsColor.Separation
-            Selector.All(fun args info ->
-                match InfoIM.IsVisible() args info with 
-                | true ->
-                    match info with 
-                    | IIntegratedRenderInfoIM.Pixel image -> raise (new RenderInfoStoppedException_EmptyPage(info))
-                    | IIntegratedRenderInfoIM.Vector vector ->
-                        match Info.ColorIsOneOf(FillOrStrokeOptions.FillOrStroke, allTagColors) args vector with 
-                        | true -> true
-                        | false -> 
-                            let color = vector.Value.GetFillColor() |> FsColor.OfItextColor
-                            let b = Info.ColorIsOneOf(FillOrStrokeOptions.FillOrStroke, allTagColors) args vector
-                            raise (new RenderInfoStoppedException_EmptyPage(info))
-                | false -> true
-
-            )
-
-        let texts = PdfRunner.ReadInfosIMStoppable(PdfFile path, selector, (fun args infos ->
-            match infos with 
-            | StoppableParsedRenderInfoIMs.Stopped stopped -> true
-            | StoppableParsedRenderInfoIMs.NonStopped _ -> false
-        ), pageSelector = PageSelector.Number 16)
+        let emptablePageNumbers =
+            PdfRunner.ReadEmptyPages(PdfFile path, ignoreColors = BookTagColors.AllBookTagColors, inShadowMode = false)
         
         pass()
 

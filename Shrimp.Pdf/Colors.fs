@@ -1,4 +1,7 @@
 ﻿namespace Shrimp.Pdf.Colors
+
+open iText.Kernel.Exceptions
+
 #nowarn "0104"
 open System.Drawing
 open iText.Kernel.Pdf
@@ -94,6 +97,9 @@ module _Colors =
         static member DefaultRoundedValue = 
             ValueEqualOptions.RoundedValue(ValueEqualOptionsTolerance.DefaultValue)
 
+        static member DefaultRough =
+            ValueEqualOptions.RoundedValue(ValueEqualOptionsTolerance.Rough)
+            
 
 
 
@@ -835,7 +841,8 @@ module _Colors =
 
             match pdfName with 
             | PdfName PdfName.DeviceCMYK -> ColorSpace.Cmyk
-            | PdfName PdfName.DeviceRGB -> ColorSpace.Rgb
+            | PdfName PdfName.DeviceRGB 
+            | PdfName PdfName.CalRGB -> ColorSpace.Rgb
             | PdfName PdfName.DeviceGray -> ColorSpace.Gray
             | PdfName PdfName.Lab -> ColorSpace.Lab
             | _ -> failwithf "Cannot convert %A to colorSpace" pdfName
@@ -880,6 +887,9 @@ module _Colors =
 
                     | ColorSpace.Cmyk ->
                         [ dictionaryRange.[1]; dictionaryRange.[3]; dictionaryRange.[5]; dictionaryRange.[7] ]
+
+                    | ColorSpace.Rgb ->
+                        [ dictionaryRange.[0]; dictionaryRange.[2]; dictionaryRange.[4] ]
 
                     | _ -> failwith "Not implemnted"
 
@@ -982,6 +992,15 @@ module _Colors =
         member x.GetAlterateColor() =
             getAlterColor (x.GetAlternateSpace()) (x.GetAlternateColorValue())
 
+    let private createSeparation (name: PdfName, alternateSpace: PdfColorSpace, tintTransform: PdfFunction) =
+        if not (tintTransform.CheckCompatibilityWithColorSpace(alternateSpace))
+        then
+            let ex = new PdfException(KernelExceptionMessageConstant.FUNCTION_IS_NOT_COMPATIBLE_WITH_COLOR_SPACE, (alternateSpace, tintTransform))
+            raise ex
+
+        new PdfSpecialCs.Separation(name, alternateSpace.GetPdfObject(), tintTransform.GetPdfObject())
+
+
     type Separation with 
         member separation.GetAlterateColor() =
             let colorSpace = separation.GetColorSpace() :?> PdfSpecialCs.Separation
@@ -1020,7 +1039,7 @@ module _Colors =
                     PdfArray(color.GetColorValue()),
                     PdfNumber(1)
                 )
-            let colorSpace = new PdfSpecialCs.Separation(name, new PdfDeviceCs.Cmyk(), separationPdfFunction)
+            let colorSpace = createSeparation(name, new PdfDeviceCs.Cmyk(), separationPdfFunction)
             new Separation(colorSpace, float32 transparency)
 
         static member Create(name, color: DeviceRgb, ?transparency: float) =
@@ -1035,7 +1054,15 @@ module _Colors =
                     PdfNumber(1)
                 )
 
-            let colorSpace = new PdfSpecialCs.Separation(name, PdfDeviceCs.Rgb(), separationPdfFunction)
+            let colorSpace = 
+                let alternateSpace = PdfDeviceCs.Rgb()
+                //if (not (separationPdfFunction.CheckCompatibilityWithColorSpace(alternateSpace))) 
+                //then 
+                //    let ex = new PdfException(KernelExceptionMessageConstant.FUNCTION_IS_NOT_COMPATIBLE_WITH_COLOR_SPACE, ((separationPdfFunction, alternateSpace)))
+                //    raise ex
+
+                createSeparation(name, alternateSpace, separationPdfFunction)
+            
             new Separation(colorSpace, float32 transparency)
 
         static member Create(name, color: DeviceGray, ?transparency: float) =
@@ -1050,7 +1077,7 @@ module _Colors =
                     PdfArray(color.GetColorValue()),
                     PdfNumber(1)
                 )
-            let colorSpace = new PdfSpecialCs.Separation(name, new PdfDeviceCs.Gray(), separationPdfFunction)
+            let colorSpace = createSeparation(name, new PdfDeviceCs.Gray(), separationPdfFunction)
             new Separation(colorSpace, float32 transparency)
 
         static member Create(name, color: Lab, ?transparency: float) =
@@ -1065,7 +1092,7 @@ module _Colors =
                     PdfNumber(1)
                 )
 
-            let colorSpace = new PdfSpecialCs.Separation(name, color.GetColorSpace(), separationPdfFunction)
+            let colorSpace = createSeparation(name, color.GetColorSpace(), separationPdfFunction)
             new Separation(colorSpace, float32 transparency)
 
 
@@ -1103,7 +1130,7 @@ module _Colors =
                                 (colorSpacePdfArray.Get(1)
                                  |> string)
 
-                            EncodedPdfName(uri)
+                            DecodedPdfName.Create(uri)
 
     
                         try 

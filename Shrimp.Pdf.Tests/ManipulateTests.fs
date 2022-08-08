@@ -805,7 +805,7 @@ let manipulateTests =
                       { args with 
                           PdfFontFactory = FsPdfFontFactory.Registerable (Arial.arial Arial.FontWeight.Italic)
                           CanvasFontSize = CanvasFontSize.Numeric 25. 
-                          FontColor = PdfCanvasColor.Separation (FsSeparation.Create("专色1",FsValueColor.RGB_BLUE))
+                          FontColor = PdfCanvasColor.Separation (FsSeparation.Create("帖标",FsValueColor.RGB_BLUE))
                           FontRotation = Rotation.None 
                           Position = Position.RightTop(0., 0.)}
                     )
@@ -814,7 +814,7 @@ let manipulateTests =
                       { args with 
                           PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
                           CanvasFontSize = CanvasFontSize.Numeric 25. 
-                          FontColor = PdfCanvasColor.Separation (FsSeparation.Create("专色1",FsValueColor.RGB_BLUE))
+                          FontColor = PdfCanvasColor.Separation (FsSeparation.Create("帖标",FsValueColor.RGB_BLUE))
                           FontRotation = Rotation.None 
                           Position = Position.LeftTop(0., 0.)}
                     )

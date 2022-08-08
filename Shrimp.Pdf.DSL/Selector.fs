@@ -456,8 +456,12 @@ type Info =
         Info.ColorIs(FillOrStrokeOptions.Stroke, (fun color -> color.IsInColorSpace(colorSpace)), not)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
-    static member ColorIsOneOf (fillOrStrokeOptions: FillOrStrokeOptions, colors: FsColor list) =
-        Info.ColorIs(fillOrStrokeOptions, fun color -> FsColors.contains (color) colors)
+    static member ColorIsOneOf (fillOrStrokeOptions: FillOrStrokeOptions, colors: FsColor list, ?valueEqualOptions) =
+        let valueEqualOptions = 
+            ValueEqualOptions.DefaultRoundedValue
+            |> defaultArg valueEqualOptions 
+
+        Info.ColorIs(fillOrStrokeOptions, fun color -> FsColors.containsWith (valueEqualOptions) (color) colors)
         |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
     static member ColorIsOneOf (fillOrStrokeOptions: FillOrStrokeOptions, fsSeparations: FsSeparation list) =

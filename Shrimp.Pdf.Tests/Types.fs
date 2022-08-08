@@ -21,6 +21,11 @@ let cuttingLineSeparation =
       Color = FsValueColor.RGB_BLUE
       Transparency = 1.0 }
 
+let cuttingLineSeparationZH =
+    { FsSeparation.Name = "刀版"
+      Color = FsValueColor.RGB_BLUE
+      Transparency = 1.0 }
+
 let createTestPath file = 
     Path.changeExtension ".tests.pdf" file
     

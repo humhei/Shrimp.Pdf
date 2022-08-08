@@ -262,9 +262,15 @@ type private PdfDocumentCache private
                     | FsValueColor.Lab labColor -> labToItextColor labColor
                     | color -> FsValueColor.ToItextColor color
 
+                let name = 
+                    EncodedPdfName(separation.Name).RawPdfName
+                    //|> System.Text.Encoding.UTF8.GetBytes
+                    //|> PdfName
+                    //separation.Name
 
-                Separation.Create(separation.Name, valueColor, separation.Transparency) :> Color
 
+                let r = Separation.Create(name, valueColor, separation.Transparency) :> Color
+                r
 
             | ResourceColor.Lab labColor -> labToItextColor labColor
         )

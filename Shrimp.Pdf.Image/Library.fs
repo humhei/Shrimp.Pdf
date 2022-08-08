@@ -516,3 +516,37 @@ module _ModifierIM =
             //    ]
             //)
 
+    type RenderInfoStoppedException_EmptyPage(info) =
+        inherit RenderInfoStoppedException(info)
+
+    [<RequireQualifiedAccess>]
+    type EmptablePageNumber =
+        | Empty of PageNumber
+        | NotEmpty of PageNumber
+
+    type PdfRunner with 
+        static member ReadEmptyPages(pdfFile: PdfFile, ignoreColors: FsColor list, ?inShadowMode) =
+            let selector =
+                let allTagColors = ignoreColors
+                Selector.All(fun args info ->
+                    match InfoIM.IsVisible() args info with 
+                    | true ->
+                        match info with 
+                        | IIntegratedRenderInfoIM.Pixel image -> raise (new RenderInfoStoppedException_EmptyPage(info))
+                        | IIntegratedRenderInfoIM.Vector vector ->
+                            match Info.ColorIsOneOf(FillOrStrokeOptions.FillOrStroke, allTagColors, ValueEqualOptions.DefaultRough) args vector with 
+                            | true -> true
+                            | false -> raise (new RenderInfoStoppedException_EmptyPage(info))
+
+                    | false -> true
+
+                )
+
+            PdfRunner.ReadInfosIMStoppable(pdfFile, selector, (fun args infos ->
+                match infos with 
+                | StoppableParsedRenderInfoIMs.Stopped stopped -> 
+                    EmptablePageNumber.NotEmpty (PageNumber args.PageNum)
+
+                | StoppableParsedRenderInfoIMs.NonStopped _ -> 
+                    EmptablePageNumber.Empty (PageNumber args.PageNum)
+            ), pageSelector = PageSelector.All, ?inShadowMode = inShadowMode)

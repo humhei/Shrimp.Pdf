@@ -3,7 +3,8 @@
 open Newtonsoft.Json
 open iText.IO.Font
 open System.Collections.Generic
-
+open System
+open System.Text
 #nowarn "0104"
 open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas.Parser.Data
@@ -37,7 +38,7 @@ module ExtensionTypes =
 
 
     [<RequireQualifiedAccess>]
-    type EncodedPdfNamePart =
+    type DecodedPdfNamePart =
         | Literal of char
         | Hex of char * char
     with 
@@ -50,12 +51,14 @@ module ExtensionTypes =
                 let string = System.String [|hex1; hex2|]
                 System.Convert.ToByte(string, 16)
 
-    type EncodedPdfName(v) =
+    /// decoding
+    type DecodedPdfName [<JsonConstructor>] private (v) =
         inherit POCOBaseV<string>(v)
         let v2 =
             match v.TryReplaceStarting("/", "") with 
             | Some v -> v
             | None -> failwithf "An encoded PdfName %s should starts with \/" v
+
 
         let parts =
             let rec loop accum (chars: char list) =
@@ -64,11 +67,11 @@ module ExtensionTypes =
                     match char with 
                     | '#' ->
                         let token = 
-                            EncodedPdfNamePart.Hex(chars.[1], chars.[2])
+                            DecodedPdfNamePart.Hex(chars.[1], chars.[2])
 
                         loop (token :: accum) chars.[3..]
                     | _ -> 
-                        loop (EncodedPdfNamePart.Literal char :: accum) t
+                        loop (DecodedPdfNamePart.Literal char :: accum) t
 
                 | [] -> List.rev accum
                     
@@ -77,16 +80,89 @@ module ExtensionTypes =
         let bytes = 
             parts
             |> List.map (fun m -> m.ToByte())
+            |> List.toArray
+
+        let fixGarbled (text: string): string =
+            let chars = text.ToCharArray()
+
+            let existsGarbled =
+                chars
+                |> Array.exists(fun m -> int m = 65533)
+            
+            match existsGarbled with 
+            | true -> Encoding.ANSICodePage.Value.GetString(bytes)
+            | false -> text
 
         let readableName =  
-            System.Text.Encoding.UTF8.GetString(List.toArray bytes)
-            
+            System.Text.Encoding.UTF8.GetString(bytes)
+            |> fixGarbled
+
+
         member x.ReadableName = readableName
 
         member x.Parts = parts
 
         member x.RawName = v
 
+        static member Create(v: string) =
+            //v.Replace("#23", "#")
+            DecodedPdfName v
+    
+    [<RequireQualifiedAccess>]
+    type EncodedPdfNamePart =   
+        | LetterOrDigit of char
+        | Space 
+        | Symbol of char
+    with 
+        static member Parse(char: char) =
+            match char with 
+            | If Char.IsDigit -> EncodedPdfNamePart.LetterOrDigit(char)
+            | If Char.isEnglishLetter -> EncodedPdfNamePart.LetterOrDigit(char)
+            | ' ' -> EncodedPdfNamePart.Space
+            | char -> EncodedPdfNamePart.Symbol char
+        
+        member x.EncodedText =
+            match x with 
+            | LetterOrDigit v -> String(v, 1)
+            | Space -> "#20"
+            | Symbol char ->
+                Encoding.UTF8.GetBytes([|char|])
+                |> Array.map(fun m -> "#" + m.ToString("X2"))
+                |> String.concat ""
+    
+    /// encoding
+    type EncodedPdfName(v) =
+        inherit POCOBaseV<string>(v)
+        let __checkEncodedPdfNameValid =
+            match v.TryReplaceStarting("/", "") with 
+            | Some v2 -> failwithf "An decoded PdfName %s should not starts with \/" v2
+            | None -> ()
+        
+        //let __checkNonSharpOperator =
+        //    if v.Contains "#"
+        //    then failwithf "An decoded PdfName %s should not contains #" v
+        //    else ()
+
+        let parts =
+            v.ToCharArray()
+            |> Array.map EncodedPdfNamePart.Parse
+            
+        let rawName = 
+            parts
+            |> Array.map(fun m -> m.EncodedText)
+            |> String.concat ""
+    
+        let rawPdfName =
+            let bytes = 
+                rawName.ToCharArray()
+                |> Array.map(System.Convert.ToByte)
+
+            PdfName bytes
+
+        member x.RawName = "/" + rawName
+        member x.RawPdfName = rawPdfName
+    
+        member x.ReadableName = v
 
     [<Struct>]
     type OperatorRange =
