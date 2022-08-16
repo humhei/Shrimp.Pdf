@@ -87,7 +87,7 @@ let parsingTests =
         | "EXPEDITEUR:" -> pass()
         | _ -> fail()
 
-    ftestCase "parsing empty pages" <| fun _ -> 
+    testCase "parsing empty pages" <| fun _ -> 
         let path = 
             Path.getFullName "datas/parsing/parsing empty pages.pdf" 
 

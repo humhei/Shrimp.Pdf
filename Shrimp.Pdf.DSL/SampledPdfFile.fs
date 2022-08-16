@@ -364,10 +364,10 @@ module _SampledPdfFile =
             )
 
 
-        static member SplitDocumentBySequences_Sampled (inputPdfFile: SampledPdfFile, sequenceTargets, ?isOverride) =
+        static member SplitDocumentBySequences_Sampled (inputPdfFile: SampledPdfFile, fSequenceTargets, ?isOverride) =
             inputPdfFile.Binds(fun pdfFile ->
                 let flow =
-                    FileOperations.splitDocumentBySequences(sequenceTargets, defaultArg isOverride false)
+                    FileOperations.splitDocumentBySequences(fSequenceTargets, defaultArg isOverride false)
                     |> Flow.FileOperation
 
                 let flowModel =  
@@ -379,11 +379,11 @@ module _SampledPdfFile =
             )
 
 
-        static member SplitDocumentByPageCounts_Sampled (inputPdfFile: SampledPdfFile, pageCounts, ?isOverride) =
+        static member SplitDocumentByPageCounts_Sampled (inputPdfFile: SampledPdfFile, fPageCounts, ?isOverride) =
             
             inputPdfFile.Binds(fun pdfFile ->
                 let flow =
-                    FileOperations.splitDocumentByPageCounts(pageCounts, defaultArg isOverride false)
+                    FileOperations.splitDocumentByPageCounts(fPageCounts, defaultArg isOverride false)
                     |> Flow.FileOperation
 
                 let flowModel =  

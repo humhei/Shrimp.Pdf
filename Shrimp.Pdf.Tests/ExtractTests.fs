@@ -292,6 +292,37 @@ let extractTests =
             )
             |> runTest "datas/extract/extract objects3.pdf" 
             |> ignore
+
+        
+        testCase "extract objects tests4" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.TrimBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects4.pdf" 
+            |> ignore
+
+        testCase "extract objects tests5" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.TrimBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects5.pdf" 
+            |> ignore
+
+        testCase "extract objects tests7" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.TrimBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects7.pdf" 
+            |> ignore
     ]
 
 
@@ -568,6 +599,38 @@ let extractTests =
             )
             |> runTest "datas/extract/tile pages and NUP by selector2.pdf" 
             |> fun m -> failwith ""
+            |> ignore
+
+        testCase "tile pages by selector tests8" <| fun _ -> 
+            Flows.TilePages
+                (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                distincterOrTextPicker = 
+                    PageTilingDistincterOrTextPicker.Distincter (
+                        PageTilingDistincter.Text (fun args bound infos ->
+                            let texts = 
+                                infos
+                                |> List.ofSeq
+                                |> List.choose (IIntegratedRenderInfo.asITextRenderInfo)
+                                |> List.filter(fun m -> 
+                                    let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
+                                    textInfoBound.IsCenterPointInsideOf(bound.Bound)
+                                )
+                                |> List.map(fun m -> m.Text())
+
+                            texts :> System.IComparable
+                        )
+                    ),
+                pageTilingRenewOptions = 
+                    (PageTilingRenewOptions.UsingOriginPdfPage),
+                    //(PageTilingRenewOptions.VisibleInfosInActualBox(PageTilingRenewInfosSplitter.``Groupby_DenseBoundIsInside_MM1.5``)),
+                
+                borderKeepingPageSelector = NullablePageSelector.All,
+
+                samplePageExtractingOptions = 
+                    (SamplePageExtractingOptions.FirstPageFirstSelector (PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
+            )
+
+            |> runTest "datas/extract/tile pages by selector8.pdf" 
             |> ignore
 
     ]

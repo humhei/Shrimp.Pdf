@@ -106,7 +106,7 @@ module FileOperations =
 
 
 
-    let splitDocumentBySequences(sequenceTargets: DocumentSplitSequenceTarget list, isOverride) =
+    let splitDocumentBySequences(fSequenceTargets: TotalNumberOfPages -> DocumentSplitSequenceTarget list, isOverride) =
         fun (flowModels: FlowModel<'userState> list)  ->
             flowModels
             |> List.collect (fun flowModel ->
@@ -116,6 +116,11 @@ module FileOperations =
                 let readerPages = 
                     reader
                     |> PdfDocument.getPages
+
+                let sequenceTargets = 
+                    (readerPages.Length)
+                    |> TotalNumberOfPages
+                    |> fSequenceTargets
 
                 let baseDir = (Path.getDirectory flowModel.File)
 
@@ -182,9 +187,9 @@ module FileOperations =
         )
         |> FileOperation
 
-    let splitDocumentByPageCounts(pageCountsTarget: DocumentSplitPageCountTarget list, isOverride) =
-        let sequenceTargets =
-            (0, pageCountsTarget)
+    let splitDocumentByPageCounts(fPageCountsTarget: TotalNumberOfPages -> DocumentSplitPageCountTarget list, isOverride) =
+        let sequenceTargets totalPageCount =
+            (0, fPageCountsTarget totalPageCount)
             ||> List.mapFold(fun i target ->
                 let pageNumberSequence = 
                     [0 .. target.PageCount.Value-1]
@@ -322,10 +327,10 @@ type PdfRunner =
         |> List.map (fun m -> m.PdfFile)
 
 
-    static member SplitDocumentBySequences (inputPdfFile: PdfFile, sequenceTargets, ?isOverride, ?config) =
+    static member SplitDocumentBySequences (inputPdfFile: PdfFile, fSequenceTargets, ?isOverride, ?config) =
         
         let flow =
-            FileOperations.splitDocumentBySequences(sequenceTargets, defaultArg isOverride false)
+            FileOperations.splitDocumentBySequences(fSequenceTargets, defaultArg isOverride false)
             |> Flow.FileOperation
 
         let flowModel = 
@@ -336,10 +341,10 @@ type PdfRunner =
         runWithFlowModel flowModel flow
         |> List.map (fun m -> m.PdfFile)
 
-    static member SplitDocumentByPageCounts (inputPdfFile: PdfFile, pageCounts, ?isOverride, ?config) =
+    static member SplitDocumentByPageCounts (inputPdfFile: PdfFile, fPageCounts, ?isOverride, ?config) =
         
         let flow =
-            FileOperations.splitDocumentByPageCounts(pageCounts, defaultArg isOverride false)
+            FileOperations.splitDocumentByPageCounts(fPageCounts, defaultArg isOverride false)
             |> Flow.FileOperation
 
         let flowModel =  

@@ -392,9 +392,169 @@ module _Tile =
               SamplePdfFile = x.SamplePdfFile
             }
 
+    [<RequireQualifiedAccess>]
+    module private Array2D =
+
+        let private toSeqs (input: 'a[,]) =
+            let l1 = input.GetLowerBound(0)
+            let u1 = input.GetUpperBound(0)
+            seq {
+                for i = l1 to u1 do
+                    yield input.[i,*] :> seq<'a>
+            }
+
+        let toLists (input: 'a[,]) =
+            let l1 = input.GetLowerBound(0)
+            let u1 = input.GetUpperBound(0)
+            [
+                for i = l1 to u1 do
+                    yield List.ofArray input.[i,*] 
+            ]
+
+        let transpose (input: 'a[,]) =
+            let l1 = input.GetLowerBound(1)
+            let u1 = input.GetUpperBound(1)
+            seq {
+                for i = l1 to u1 do
+                    yield input.[*,i]
+            }
+            |> array2D
     
+    [<RequireQualifiedAccess>]
+    type private TileTableIndexerOrAreaTable =
+        | TileTableIndexer of TileTableIndexer
+        | AreaTables of AreaTable list
+    with 
+        member x.GetIndexedAreas(pageNumber: PageNumber, actualBox: Rectangle, direction) =
+            match x with 
+            | TileTableIndexerOrAreaTable.AreaTables tables ->
+                let rows = tables.[pageNumber.Value].Rows
+                let areas = 
+                    rows.AsList
+                    |> List.map(fun (AreaRow row) ->
+                        row.AsList
+                    )
+
+                match direction with 
+                | Direction.Horizontal -> 
+                    areas
+                    |> List.concat
+
+                | Direction.Vertical ->
+                    areas
+                    |> array2D
+                    |> Array2D.transpose
+                    |> Array2D.toLists
+                    |> List.concat
+
+            | TileTableIndexerOrAreaTable.TileTableIndexer tileTable ->
+                let colNum = tileTable.ColNum
+                let rowNum = tileTable.RowNum
+                let cellsCount = colNum * rowNum
+                let tileIndexeres =
+                    [ 1 .. cellsCount ]
+                    |> List.map(fun j ->
+                        let index = (pageNumber.Value-1) * cellsCount + j
+                        TileCellIndexer.Create((index-1), direction)
+                    )
+
+                tileIndexeres
+                |> List.map(fun tileIndexer ->
+                    Rectangle.getTile tileIndexer tileTable actualBox
+                    |> FsRectangle.OfRectangle
+                )
+
+
 
     type Flows with 
+        static member TilePages (areaTables: AreaTable list, ?sorter: SelectionSorter, ?pageTilingRenewOptions: PageTilingRenewOptions) =
+            let pageTilingRenewOptions = defaultArg pageTilingRenewOptions PageTilingRenewOptions.UsingOriginPdfPage
+            let sorter = defaultArg sorter (SelectionSorter.DefaultValue)
+
+            Reuse(fun flowModel splitDocument ->
+                let reader = splitDocument.Reader
+                let writer = splitDocument.Writer
+
+                let totalNumberOfPages = reader.GetNumberOfPages()
+                let borderKeepingPageNumbers = [1..totalNumberOfPages]
+                let __ensureAreaTableLengthEqualToTotalPageCount =
+                    match areaTables.Length = totalNumberOfPages with 
+                    | true -> ()
+                    | false -> failwithf "totalNumberOfPages %d <> areaTables's Length %d" totalNumberOfPages areaTables.Length
+
+                for i = 1 to totalNumberOfPages do
+                    let areaTable = areaTables.[i-1]
+                    let pageNumber = i
+                    let readerPage = reader.GetPage(i)
+
+                    let cells = 
+                        areaTable.Cells.AsList
+                        |> List.map(fun m -> m.AsRectangle)
+                        |> sorter.Sort
+
+                    match pageTilingRenewOptions with 
+                    | PageTilingRenewOptions.UsingOriginPdfPage ->
+
+
+                        for cell in cells do
+                            let tileBox = cell
+
+                            let writerPage = readerPage.CopyTo(writer)
+                            writer.AddPage(writerPage) |> ignore
+
+                            PdfPage.setPageBox PageBoxKind.AllBox tileBox writerPage
+                            |> ignore
+
+                    | PageTilingRenewOptions.VisibleInfosInActualBox splitter ->
+                        let args: PageModifingArguments<_> = 
+                            { UserState = flowModel.UserState
+                              Page = readerPage
+                              TotalNumberOfPages = totalNumberOfPages
+                              PageNum = pageNumber
+                            }
+
+                        let selector =
+                            Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+
+                        extractVisibleRenewableInfosToWriter 
+                            flowModel.Configuration
+                            args
+                            selector
+                            (fun infos ->
+                                let bounds = cells
+
+                                splitter.Infos__GroupOrFilter_IntoOp(
+                                    bounds,
+                                    infos
+                                )
+                                |> List.mapi(fun i targetPageInfoOp ->
+                                    match targetPageInfoOp with 
+                                    | Some (targetPageBox, infos) ->
+                                        TargetRenewablePageInfo.NewPage(TargetPageBox (Some targetPageBox.Bound), TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers))
+
+                                    | None ->
+                                        TargetRenewablePageInfo.EmptyPage(TargetPageBox (Some bounds.[i]))
+                                )
+
+                            )
+                            false
+                            ignore
+                            borderKeepingPageNumbers
+                            reader
+                            writer
+                        |> ignore
+                            
+                areaTables
+                |> List.map(fun areaTable -> PageTilingResultCount areaTable.CellsCount)
+                |> AtLeastOneList.Create
+
+            ) 
+            |> Reuse.rename 
+                "TilePages"
+                ["tileTable" => areaTables.ToString()
+                 "pageTilingRenewOptions" => pageTilingRenewOptions.ToString() ]
+            |> Flow.Reuse
+        
         static member TilePages (tileTable: TileTableIndexer, ?direction: Direction, ?pageTilingRenewOptions: PageTilingRenewOptions) =
             let direction = defaultArg direction Direction.Horizontal
             let pageTilingRenewOptions = defaultArg pageTilingRenewOptions PageTilingRenewOptions.UsingOriginPdfPage
@@ -487,7 +647,7 @@ module _Tile =
                 ["tileTable" => tileTable.ToString()
                  "pageTilingRenewOptions" => pageTilingRenewOptions.ToString() ]
             |> Flow.Reuse
-        
+
         static member TilePages (selector: Selector<'userState>, ?distincterOrTextPicker: PageTilingDistincterOrTextPicker, ?sorter: SelectionSorter, ?pageTilingRenewOptions: PageTilingRenewOptions, ?borderKeepingPageSelector, ?transform: IndexedBound -> Rectangle, ?samplePageExtractingOptions) =
             let sorter = defaultArg sorter (SelectionSorter.DefaultValue)
             let borderKeepingPageSelector = defaultArg borderKeepingPageSelector (NullablePageSelector.All)

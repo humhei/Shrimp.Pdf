@@ -115,6 +115,22 @@ let manipulateTests =
         |> runTest "datas/manipulate/make clipping path from blue strokes and keep2.pdf" 
         |> ignore
 
+    testCase "clipping Contents To Pagebox" <| fun _ -> 
+
+        Flow.Manipulate (
+            //ModifyPage.Create(
+            //    "AddRect",
+            //    PageSelector.All,
+            //    Dummy,
+            //    PageModifier.AddRectangleToCanvasRootArea(AreaGettingOptions.PageBoxWithOffset (PageBoxKind.ActualBox, -Margin.MM3), fun args ->
+            //        { args with FillColor = NullablePdfCanvasColor.valueColor FsDeviceCmyk.MAGENTA}
+            //    )
+            //)
+            ModifyPage.ClippingContentsToPageBox(PageBoxKind.ActualBox, -Margin.MM3)
+        )
+        |> runTest "datas/manipulate/clipping Contents To Pagebox.pdf" 
+        |> ignore
+
 
     testCase "expand stroke width" <| fun _ -> 
         Flow.Manipulate (
@@ -524,7 +540,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/add bound to text2.pdf" 
         |> ignore
 
-    testCase "add bound to text5" <| fun _ -> 
+    testCase "add bound to text6" <| fun _ -> 
         Flow.Reuse(
             Reuses.ClearDirtyInfos()
         )
@@ -544,7 +560,30 @@ let manipulateTests =
                 ]
             )
         )
-        |> runTest "datas/manipulate/add bound to text5.pdf" 
+        |> runTest "datas/manipulate/add bound to text6.pdf" 
+        |> ignore
+
+    testCase "add bound to text7" <| fun _ -> 
+        Flow.Reuse(
+            Reuses.ClearDirtyInfos()
+        )
+        <+>
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "add bound to text5"
+                      Selector = Text(fun _ _ -> true) 
+                      Modifiers = [
+                        Modifier.AddRectangleToBound(fun args -> 
+                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor(PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
+                        )
+                      ]
+                    }
+                ]
+            )
+        )
+        |> runTest "datas/manipulate/add bound to text7.pdf" 
         |> ignore
 
     testCase "add bound to bound1" <| fun _ -> 
@@ -1241,6 +1280,17 @@ let manipulateTests =
         //|> runTest @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\123.pdf"
         |> ignore
 
+    testCase "split textLine to words3" <| fun _ -> 
+        let flow =
+            Modify.SplitTextLineToWords()
+
+        Flow.Manipulate(
+            flow
+        )
+        |> runTest "datas/manipulate/split textLine to words3.pdf" 
+        //|> runTest @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\123.pdf"
+        |> ignore
+
     testCase "map font for horizontal line" <| fun _ -> 
 
         let flow =
@@ -1276,10 +1326,11 @@ let manipulateTests =
                           Modifiers = 
                             [ 
                                 Modifier.AddBackground (PdfFile @"datas/manipulate/star.pdf", PasteObjectSize.BySelection Margin.MM6) 
+                                Modifier.SetFillColor(DeviceCmyk.CYAN)
                                 Modifier.ChangeTextStyle(
                                     TextStyle(
-                                        VectorStyle.ColorIs(PdfCanvasColor.WHITE),
-                                        NewFontAndSize(FsPdfFontFactory.CreateDocumentFont(FontNames.``Tahoma-Bold``), alignment = XEffort.Middle)
+                                        VectorStyle.OpacityIs(0.5f),
+                                        newFontAndSize = NewFontAndSize(FsPdfFontFactory.CreateDocumentFont(FontNames.``Tahoma-Bold``), alignment = XEffort.Middle)
                                     )
                                 )
                             ]
@@ -1321,7 +1372,7 @@ let manipulateTests =
     testCase "test infos" <| fun _ -> 
 
         let pdfFile = 
-            @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\KICKS\.flow\#2022-05-21#(宏途, 宏途第85单)\VerifyDocuments\宏途 宏途第85单\价格贴.verifyDocuments\价格贴\HAVEN_GREEN_BLUE.pdf"
+            @"C:\Users\Jia\Desktop\内盒90×40mmExtractor.pdf"
             |> PdfFile
 
 

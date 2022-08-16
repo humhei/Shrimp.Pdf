@@ -10,6 +10,7 @@ open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open iText.Kernel.Pdf
 open Shrimp.FSharp.Plus
+open Shrimp.FSharp.Plus.Math
 
 
 
@@ -325,35 +326,89 @@ module ExtensionTypes =
         | Standard = 0
         | Illustractor = 1
 
+    type ExtGStateAppereance =
+        { IsOverprint: bool 
+          Opacity: float32 }
+    with 
+        static member DefaultValue =
+            { IsOverprint = false
+              Opacity = 1.0f }
+
     type FsExtGState =
         { 
             OPM: FsOPM
-            IsStrokeOverprint: bool
-            IsFillOverprint: bool
+            Fill: ExtGStateAppereance
+            Stroke: ExtGStateAppereance
             BlendModes: BlendMode list
         }
     with 
+        member x.IsFillOverprint = x.Fill.IsOverprint
+        member x.IsStrokeOverprint = x.Stroke.IsOverprint
+
+        member x.MapFill(f) =
+            { x with Fill = f x.Fill }
+
+        member x.MapStroke(f) =
+            { x with Stroke = f x.Stroke }
+
+        member x.SetStrokeIsOverprint(isOverprint) =
+            x.MapStroke(fun m -> 
+                { m with IsOverprint = isOverprint }
+            )
+
+        member x.SetStrokeOpacity(opacity) =
+            x.MapStroke(fun m -> 
+                { m with Opacity = opacity }
+            )
+
+        member x.SetFillIsOverprint(isOverprint) =
+            x.MapFill(fun m -> 
+                { m with IsOverprint = isOverprint }
+            )
+
+        member x.SetFillOpacity(opacity) =
+            x.MapFill(fun m -> 
+                { m with Opacity = opacity }
+            )
+
+        member x.MapAppereance(f) =
+            { x with 
+                Stroke = f x.Stroke
+                Fill = f x.Fill}
+
+
         static member DefaultValue =
             { OPM = FsOPM.Illustractor 
-              IsStrokeOverprint = false
-              IsFillOverprint = false
+              Fill = ExtGStateAppereance.DefaultValue
+              Stroke = ExtGStateAppereance.DefaultValue
               BlendModes = [] }
 
         static member StrokeOverprint =
-            { FsExtGState.DefaultValue with 
-                IsStrokeOverprint = true 
-            }
+            FsExtGState.DefaultValue.MapStroke(fun m ->
+                { m with IsOverprint = true }
+            )
 
         static member FillOverprint =
-            { FsExtGState.DefaultValue with 
-                IsFillOverprint = true 
-            }
+            FsExtGState.DefaultValue.MapFill(fun m ->
+                { m with IsOverprint = true }
+            )
 
         static member FillStrokeOverprint =
-            { FsExtGState.DefaultValue with 
-                IsFillOverprint = true 
-                IsStrokeOverprint = true
-            }
+            FsExtGState.DefaultValue.MapAppereance(fun m ->
+                { m with IsOverprint = true }
+            )
+
+        static member FillTransparent(opacity) =
+            FsExtGState.DefaultValue.MapFill(fun m ->
+                { m with Opacity = opacity }
+            )
+
+
+        static member Transparent(opacity) =
+            FsExtGState.DefaultValue.MapAppereance(fun m ->
+                { m with Opacity = opacity }
+            )
+
 
             
 
@@ -391,6 +446,16 @@ module ExtensionTypes =
         | FillAndStroke = 3
 
     type PageNumber(v) =
+        inherit POCOBaseV<int>(v)
+
+        let __checkPageNumberValid =
+            match v > 0 with 
+            | true -> ()
+            | false -> failwithf "Cannot create pageNumber by %d" v
+
+        member x.Value = v
+
+    type TotalNumberOfPages(v) =
         inherit POCOBaseV<int>(v)
 
         let __checkPageNumberValid =
@@ -740,7 +805,42 @@ module ExtensionTypes =
             | length -> failwithf "Cannot create tileTable collection from (tileTable: %A, values length: %d)" (tileTable) length
 
 
+    type AreaRow = AreaRow of FsRectangle al1List
+    with 
+        member x.Length = 
+            let (AreaRow v) = x
+            v.Length
 
+        member x.Cells =
+            let (AreaRow v) = x
+            v
+
+    type AreaTable = private AreaTable of AreaRow al1List
+    with 
+        member x.Rows =
+            let (AreaTable (v)) = x
+            v
+
+        member x.Cells =
+            x.Rows
+            |> AtLeastOneList.collect(fun m -> m.Cells)
+
+        member x.CellsCount = 
+            x.Rows
+            |> AtLeastOneList.sumBy(fun m -> m.Length)
+
+        //member x.ColNum =
+        //    let (AreaTable (v, _)) = x
+        //    v
+
+        static member Create(rows: AreaRow al1List) =
+            //let colNum = 
+            //    rows
+            //    |> AtLeastOneList.map(fun m -> m.Length)
+            //    |> AtLeastOneList.exactlyOne_DetailFailingText
+
+            AreaTable(rows)
+            
 
     [<RequireQualifiedAccess>]
     type Rotation =
@@ -1135,14 +1235,29 @@ module ExtensionTypes =
         | Last
         | First
         | All
+        | MultipleOf of int
+        | Odd 
+        | Even
         | Expr of PageSelectorExpr
         | Numbers of AtLeastOneSet<int>
+        | And of PageSelector list
     with 
         override x.ToString() =
             match x with 
             | PageSelector.Last -> "1R"
             | PageSelector.First -> "1"
             | PageSelector.All -> "ALL"
+            | PageSelector.MultipleOf multiple -> sprintf "X%d" multiple
+            | PageSelector.Odd -> "Odd"
+            | PageSelector.Even -> "Even"
+            | PageSelector.And pageSelectors ->
+                let listText = 
+                    pageSelectors
+                    |> List.map(fun pageSelector -> pageSelector.ToString())
+                    |> String.concat "; "
+
+                sprintf "AND [%s]" listText 
+
             | PageSelector.Expr expr -> expr.ToString()
             | PageSelector.Numbers numbers -> 
                 let numbers = 
@@ -1175,20 +1290,40 @@ module ExtensionTypes =
 
     [<RequireQualifiedAccess>]
     type NullablePageSelector =
-        | Last
-        | First
-        | All
-        | Expr of PageSelectorExpr
-        | Numbers of AtLeastOneSet<int>
+        | PageSelector of PageSelector
+        //| Last
+        //| First
+        //| All
+        //| Expr of PageSelectorExpr
+        //| Numbers of AtLeastOneSet<int>
         | Non
     with 
+
+        static member Last                = PageSelector(PageSelector.Last)     
+        
+        static member First               = PageSelector(PageSelector.First)      
+        
+        static member All                 = PageSelector(PageSelector.All)         
+        
+        static member Expr(expr)          = PageSelector(PageSelector.Expr(expr))       
+        
+        static member Numbers(numbers)    = PageSelector(PageSelector.Numbers(numbers))   
+        
+        static member And(pageSelectors)  = PageSelector(PageSelector.And(pageSelectors)) 
+        
+        static member Odd                 = PageSelector(PageSelector.Odd) 
+        
+        static member Even                = PageSelector(PageSelector.Even)       
+
+
         member x.AsPageSelector =
             match x with 
-            | NullablePageSelector.Last         ->   Some (PageSelector.Last     )
-            | NullablePageSelector.First        ->   Some (PageSelector.First    )
-            | NullablePageSelector.All          ->   Some (PageSelector.All      )
-            | NullablePageSelector.Expr    v    ->   Some (PageSelector.Expr v   )
-            | NullablePageSelector.Numbers v    ->   Some (PageSelector.Numbers v)
+            //| NullablePageSelector.Last         ->   Some (PageSelector.Last     )
+            //| NullablePageSelector.First        ->   Some (PageSelector.First    )
+            //| NullablePageSelector.All          ->   Some (PageSelector.All      )
+            //| NullablePageSelector.Expr    v    ->   Some (PageSelector.Expr v   )
+            //| NullablePageSelector.Numbers v    ->   Some (PageSelector.Numbers v)
+            | NullablePageSelector.PageSelector pageSelector -> Some pageSelector
             | NullablePageSelector.Non -> None
                                                                   
     type PdfDocument with
@@ -1235,6 +1370,19 @@ module ExtensionTypes =
             match pageSelector with 
             | PageSelector.First -> [1]
             | PageSelector.Last -> [numberOfPages]
+            | PageSelector.MultipleOf multiple -> 
+                [1..numberOfPages]
+                |> List.filter(fun m ->
+                    m % multiple = 0
+                )
+            | PageSelector.Odd -> 
+                [1..numberOfPages]
+                |> List.filter(isOdd)
+
+            | PageSelector.Even -> 
+                [1..numberOfPages]
+                |> List.filter(isEven)
+
             | PageSelector.Expr expr -> 
                 pdfDocument.GetPageNumbers(expr)
             | PageSelector.All -> [1..numberOfPages]
@@ -1246,6 +1394,25 @@ module ExtensionTypes =
                     |> Set.toList
 
                 intersectedNumbers
+
+            | PageSelector.And (pageSelectors: PageSelector list) ->
+                let pageNumberLists = 
+                    pageSelectors
+                    |> List.map(fun pageSelector ->
+                        pdfDocument.GetPageNumbers(pageSelector)
+                    )
+
+                match pageNumberLists with 
+                | [] -> []
+                | _ ->
+                    pageNumberLists
+                    |> List.reduce(fun pageNumbers1 pageNumbers2 ->
+                        pageNumbers1
+                        |> List.filter(fun pageNumber1 ->
+                            List.contains pageNumber1 pageNumbers2
+                        )
+                    )
+
 
         member pdfDocument.GetPages(pageSelector: PageSelector) =
             let numbers = pdfDocument.GetPageNumbers(pageSelector)

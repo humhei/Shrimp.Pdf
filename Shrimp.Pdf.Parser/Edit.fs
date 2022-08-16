@@ -357,7 +357,9 @@ with
 
                 match close.Text with 
                 | None -> PdfCanvas.writeOperatorRange originCloseOperatorRange canvas
-                | Some text -> PdfCanvas.showText(text) canvas
+                | Some text -> 
+                    //PdfCanvas.writeOperatorRange originCloseOperatorRange canvas
+                    PdfCanvas.showText(text) canvas
 
             | CloseOperatorUnion.Path close ->
                 let newOperatorName = close.Apply(originCloseOperatorRange.Operator.Text())

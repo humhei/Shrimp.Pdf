@@ -188,6 +188,7 @@ module PdfDocumentWithCachedResources =
 
                 | NullablePdfCanvasColor.Non -> canvas
 
+
         static member SetFillColor(fillColor: NullablePdfCanvasColor) =
 
             fun (canvas: PdfCanvas) ->
@@ -224,6 +225,8 @@ module PdfDocumentWithCachedResources =
         let setTextMatrixByTransform (transform: AffineTransformRecord) (canvas: PdfCanvas) =
             canvas.SetTextMatrix(AffineTransformRecord.toAffineTransform transform)
 
+        //let setTransport (transport) (canvas: PdfCanvas) =
+        //    canvas.SetExtGState
 
         let addLine (line: StraightLine) (mapping: PdfCanvasAddLineArguments -> PdfCanvasAddLineArguments) (canvas: PdfCanvas) =
             let args = mapping PdfCanvasAddLineArguments.DefaultValue

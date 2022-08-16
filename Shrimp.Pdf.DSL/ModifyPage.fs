@@ -322,6 +322,27 @@ type PageModifier =
             }
         )
 
+    static member ClippingContentsToPageBox(pageBoxKind: PageBoxKind, ?margin: Margin): PageModifier<_, _> =
+        fun (args: PageModifingArguments<_>) infos -> 
+            let pageBox = args.Page.GetPageBox(pageBoxKind)
+            let contentBox = 
+                pageBox |> Rectangle.applyMargin (defaultArg margin Margin.Zero)
+            let writerCanvas = 
+                new PdfCanvas(args.Page.NewContentStreamBefore(), args.Page.GetResources(), args.Page.GetDocument())
+
+            writerCanvas
+                .SaveState()
+                .Rectangle(contentBox)
+                .EoClip()
+                .EndPath()
+                |> ignore
+
+            writerCanvas.AttachContentStream(args.Page.NewContentStreamAfter())
+                    
+            writerCanvas.RestoreState() |> ignore
+
+
+
     static member ScaleContentsTo(fRectangle: Rectangle -> Rectangle): PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos -> 
             let pageBox = args.Page.GetActualBox()

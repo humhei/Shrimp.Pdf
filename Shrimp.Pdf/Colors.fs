@@ -346,7 +346,10 @@ module _Colors =
         member x.LoggingText_Raw =
             let colorName = sprintf "%.2f %.2f %.2f %.2f" (x.C) x.M x.Y x.K
             "CMYK " + colorName
-            
+        
+        /// Color => Literal NAME
+        ///
+        /// e.g: FsDeviceCmyk.CYAN => CYAN
         static member RegularColorMapping =
             [
                 FsDeviceCmyk.CYAN => "CYAN"

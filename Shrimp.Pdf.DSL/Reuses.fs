@@ -654,9 +654,9 @@ module _Reuses =
             )
             |> Reuse.rename 
                 "ChangePageOrientation"
-                ["pageSelector" => pageSelector.ToString()
-                 "orientation" => orientation.ToString()
-                 "rotationIfNeeded" => fRotationIfNeeded.ToString() ]
+                [ "pageSelector" => pageSelector.ToString()
+                  "orientation" => orientation.ToString()
+                  "rotationIfNeeded" => sprintf "%O" fRotationIfNeeded ]
 
 
     

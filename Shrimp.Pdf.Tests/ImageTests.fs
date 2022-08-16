@@ -43,6 +43,7 @@ let imageTests =
             |> runTest "datas/image/change blending mode.pdf" 
             |> ignore
 
+
         testCase "convert rgb image to gray" <| fun _ -> 
             let flow = ModifyIM.ConvertImagesToDeviceGray()
 
@@ -129,6 +130,15 @@ let imageTests =
             |> runTest "datas/image/convert all objects to gray.pdf" 
             |> ignore
 
+
+        ftestCase "convert all objects to gray2" <| fun _ -> 
+            let flow = ModifyIM.ConvertAllObjectsToDeviceGray()
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/convert all objects to gray2.pdf" 
+            |> ignore
 
         testCase "set image maximun dpi to 150" <| fun _ -> 
             let flow =

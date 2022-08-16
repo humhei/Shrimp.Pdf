@@ -258,6 +258,14 @@ module Client =
             Info.ColorIs(fillOrStrokeOptions, FsColor.predicateByAlternativeFsColor <| AlternativeFsColor.IsCmsWhite(?labIcc = labIcc, ?predicateCompose = predicateCompose, ?intent = intent, ?inputIcc = inputIcc))
             |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
 
+        static member ColorIsWhite(fillOrStrokeOptions) =
+            Info.ColorIs(fillOrStrokeOptions, FsColor.predicateByAlternativeFsColor <| (fun m -> m.IsWhite()))
+            |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
+        static member ColorIsNotWhite(fillOrStrokeOptions) =
+            Info.ColorIs(fillOrStrokeOptions, FsColor.predicateByAlternativeFsColor <| (fun m -> not(m.IsWhite())))
+            |> reSharp (fun (info: #IAbstractRenderInfo) -> info)
+
         static member ColorIsCmsGray(fillOrStrokeOptions, ?predicateCompose, ?maxDeviation: float32, ?labIcc, ?intent, ?inputIcc) =
             Info.ColorIs(fillOrStrokeOptions, FsColor.predicateByAlternativeFsColor <| AlternativeFsColor.IsCmsGray(?predicateCompose = predicateCompose, ?maxDeviation = maxDeviation ,?labIcc = labIcc,?intent = intent, ?inputIcc = inputIcc))
             |> reSharp (fun (info: #IAbstractRenderInfo) -> info)

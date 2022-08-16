@@ -305,3 +305,15 @@ module Manipulates =
                 ]
             )  ||>> ignore
 
+
+        static member ClippingContentsToPageBox(pageBoxKind: PageBoxKind, ?margin, ?pageSelector) =
+            let margin = defaultArg margin (Margin.Create 0.)
+            ModifyPage.Create(
+                "clipping conetents to " + pageBoxKind.Text(),
+                defaultArg pageSelector PageSelector.All,
+                Dummy,
+                PageModifier.ClippingContentsToPageBox(pageBoxKind, margin = margin),
+                parameters = [
+                    "margin" => margin.LoggingText
+                ]
+            )  ||>> ignore

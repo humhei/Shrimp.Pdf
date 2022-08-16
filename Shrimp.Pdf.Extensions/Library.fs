@@ -74,7 +74,9 @@ module iText =
                 let line = font.CreateGlyphLine(line)
                 let unit =
                     GlyphLine.getAllGlyphs line
-                    |> List.map (fun gl -> gl.GetWidth())
+                    |> List.map (fun gl -> 
+                        gl.GetWidth()
+                    )
                     |> List.sum
                     |> float
                 unit / TEXT_SPACE_COEFF
@@ -703,8 +705,13 @@ module iText =
 
         let getExtGState (gs: CanvasGraphicsState): FsExtGState =
             { OPM = gs.GetOverprintMode() |> enum
-              IsStrokeOverprint = gs.GetStrokeOverprint()
-              IsFillOverprint = gs.GetFillOverprint()
+              Fill = 
+                { IsOverprint = gs.GetFillOverprint() 
+                  Opacity = gs.GetFillOpacity() }
+
+              Stroke = 
+                { IsOverprint = gs.GetStrokeOverprint() 
+                  Opacity = gs.GetStrokeOpacity() }
               BlendModes = 
                 match gs.GetBlendMode() with 
                 | :? PdfName as pdfName -> [BlendMode.ofPdfName pdfName]
@@ -844,6 +851,21 @@ module iText =
             descent.GetStartPoint().Get(0)
             |> float
 
+        let getDocumentFontName (info: TextRenderInfo) =
+            let fontNames = info.GetFont().GetFontProgram().GetFontNames()
+            let fontName = 
+                fontNames
+                |> FsFontName.TryCreate
+
+            match fontName with 
+            | None -> DocumentFontName.Invalid
+            | Some fontName -> DocumentFontName.Valid fontName
+
+        let getWidth (info: TextRenderInfo) =
+            let ascent = info.GetAscentLine()
+            ascent.GetEndPoint().Get(0) - ascent.GetStartPoint().Get(0)
+            |> float
+
         let getHeight (info: TextRenderInfo) =
             let ascent = info.GetAscentLine()
             let descent = info.GetDescentLine()
@@ -851,13 +873,11 @@ module iText =
                 ascent.GetStartPoint().Get(1) - descent.GetStartPoint().Get(1)
                 |> float
 
-            let redirectedHeight = baseHeight
+            let redirectedHeight = 
+                match getDocumentFontName info with 
+                | DocumentFontName.Invalid -> (getWidth info) * 0.5
+                | DocumentFontName.Valid _ -> baseHeight
             redirectedHeight
-
-        let getWidth (info: TextRenderInfo) =
-            let ascent = info.GetAscentLine()
-            ascent.GetEndPoint().Get(0) - ascent.GetStartPoint().Get(0)
-            |> float
 
         let hasStroke (info: TextRenderInfo) =             
             let textRenderMode = info.GetTextRenderMode()
@@ -909,14 +929,8 @@ module iText =
                 actualFontSize / (info.ScaleY()) 
 
             member info.GetFontName() =
-                let fontNames = info.GetFont().GetFontProgram().GetFontNames()
-                let fontName = 
-                    fontNames
-                    |> FsFontName.TryCreate
-
-                match fontName with 
-                | None -> DocumentFontName.Invalid
-                | Some fontName -> DocumentFontName.Valid fontName
+                TextRenderInfo.getDocumentFontName info
+          
 
 
         /// GetFontSize() * ctm.m00

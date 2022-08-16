@@ -27,7 +27,7 @@ let fileOperationTests =
         |> ignore
 
     testCase "split document by PagesCount PdfRunner" <| fun _ ->
-        let pagesCount =
+        let pagesCount totalNumberOfPages =
             [2; 3; 4]
             |> List.map(DocumentSplitPageCountTarget.Create)
         PdfRunner.SplitDocumentByPageCounts(PdfFile "datas/file operation/split document by pageCounts.pdf", pagesCount, true)

@@ -253,17 +253,19 @@ type CloseStyle =
     | KeepOperationAndChangeColor of PdfCanvasColor
 
 type ColorStyle [<JsonConstructor>] private (v) =
-    inherit POCOBaseV<NullablePdfCanvasColor option * CloseOperator option * bool option>(v) 
+    inherit POCOBaseV<NullablePdfCanvasColor option * CloseOperator option * bool option * float32 option>(v) 
 
-        member x.NullablePdfCanvasColor   = x.VV.Item3_1()
+        member x.NullablePdfCanvasColor   = x.VV.Item4_1()
 
-        member x.CloseOperator            = x.VV.Item3_2()
+        member x.CloseOperator            = x.VV.Item4_2()
 
-        member x.Overprint                = x.VV.Item3_3()
+        member x.Overprint                = x.VV.Item4_3()
 
-        new(?color, ?closeOperator, ?overprint) =
-            DefaultArgs.CheckAllInputsAreNotEmpty(color, closeOperator, overprint)
-            new ColorStyle((color, closeOperator, overprint))
+        member x.Opacity                = x.VV.Item4_4()
+
+        new(?color, ?closeOperator, ?overprint, ?opacity) =
+            DefaultArgs.CheckAllInputsAreNotEmpty(color, closeOperator, overprint, opacity)
+            new ColorStyle((color, closeOperator, overprint, opacity))
 
     static member DefaultValue = ColorStyle()
 
@@ -298,6 +300,10 @@ type StrokeStyle [<JsonConstructor>] private  (v) =
         | Some colorStyle -> colorStyle.Overprint
         | None -> None
 
+    member x.Opacity =
+        match x.ColorStyle with
+        | Some colorStyle -> colorStyle.Opacity
+        | None -> None
 
     member x.AsModifier(args: _SelectionModifierFixmentArguments<_>) =
         let pdfCanvasActions = 
@@ -314,15 +320,25 @@ type StrokeStyle [<JsonConstructor>] private  (v) =
                 | None -> ()
                 | Some lineJoinStyle -> PdfCanvas.setLineJoinStyle lineJoinStyle
 
-                match x.Overprint with 
-                | None -> ()
-                | Some isStrokeOverprint -> 
+                match x.Overprint, x.Opacity with 
+                | None, None -> ()
+                | _ ->
+                    
                     let originExtGState = IAbstractRenderInfo.getExtGState args.CurrentRenderInfo
-                    let newExtGState = 
-                        {
-                            originExtGState with IsStrokeOverprint = isStrokeOverprint
-                        }
-                    PdfCanvas.setExtGState newExtGState
+                    let setOverprint(extGState: FsExtGState) = 
+                        match x.Overprint with 
+                        | Some overprint -> extGState.SetStrokeIsOverprint overprint
+                        | None -> extGState
+
+                    let setOpacity(extGState: FsExtGState) = 
+                        match x.Opacity with 
+                        | Some opacity -> extGState.SetStrokeOpacity(opacity)
+                        | None -> extGState
+
+                    originExtGState
+                    |> setOverprint
+                    |> setOpacity
+                    |> PdfCanvas.setExtGState
 
                 match x.DashPattern with 
                 | None -> ()
@@ -352,6 +368,11 @@ type StrokeStyle [<JsonConstructor>] private  (v) =
             ColorStyle(NullablePdfCanvasColor.OfPdfCanvasColor color)
         )
 
+    static member OpacityIs(opacity: float32) =
+        StrokeStyle(
+            ColorStyle(opacity = opacity)
+        )
+
 
 type FillStyle [<JsonConstructor>] (?v) =
     inherit POCOBaseV<ColorStyle option>(v)
@@ -368,6 +389,12 @@ type FillStyle [<JsonConstructor>] (?v) =
         | Some colorStyle -> colorStyle.Overprint
         | None -> None
 
+    member x.Opacity =
+        match x.ColorStyle with
+        | Some colorStyle -> colorStyle.Opacity
+        | None -> None
+
+
     member x.CloseOperator =
         match x.ColorStyle with 
         | None -> None
@@ -382,16 +409,31 @@ type FillStyle [<JsonConstructor>] (?v) =
                 | None -> ()
                 | Some canvasColor -> PdfCanvas.SetFillColor(canvasColor)
 
-                match x.Overprint with 
-                | None -> ()
-                | Some isStrokeOverprint -> 
-                
+                match x.Overprint, x.Opacity with 
+                | None, None -> ()
+                | _ ->
+                    
                     let originExtGState = IAbstractRenderInfo.getExtGState args.CurrentRenderInfo
-                    let newExtGState = 
-                        {
-                            originExtGState with IsStrokeOverprint = isStrokeOverprint
+                    let newExtGState =
+                        let fill = originExtGState.Fill
+                        let newFill = 
+                            { fill with 
+                                Opacity = 
+                                    match x.Opacity with 
+                                    | None -> fill.Opacity
+                                    | Some opacity -> opacity
+
+                                IsOverprint =
+                                    match x.Overprint with 
+                                    | Some overprint -> overprint
+                                    | None -> fill.IsOverprint
+                            }
+                        { originExtGState with 
+                            Fill = newFill        
                         }
+                    
                     PdfCanvas.setExtGState newExtGState
+
             ]
  
         { Actions = pdfCanvasActions
@@ -401,6 +443,11 @@ type FillStyle [<JsonConstructor>] (?v) =
     static member ColorIs(color) =
         FillStyle(
             ColorStyle(NullablePdfCanvasColor.OfPdfCanvasColor color)
+        )
+
+    static member OpacityIs(opacity) =
+        FillStyle(
+            ColorStyle(opacity = opacity)
         )
 
 
@@ -485,11 +532,10 @@ type VectorStyle [<JsonConstructor>] private (v) =
                     | Some fillOverprint, Some strokeOverprint ->
                         let originExtGState = IAbstractRenderInfo.getExtGState args.CurrentRenderInfo
                         let newExtGState = 
-                            {
-                                originExtGState with 
-                                    IsStrokeOverprint = strokeOverprint
-                                    IsFillOverprint = fillOverprint
-                            }
+                            originExtGState
+                                .SetStrokeIsOverprint(strokeOverprint)
+                                .SetFillIsOverprint(fillOverprint)
+
                         { concated with 
                             Actions =
                                 concated.Actions
@@ -551,6 +597,30 @@ type VectorStyle [<JsonConstructor>] private (v) =
             | None -> None
 
         VectorStyle(?fill = fill, ?stroke = stroke)
+
+    static member OpacityIs(?fillOpacity, ?strokeOpacity) =
+        DefaultArgs.CheckAllInputsAreNotEmpty(fillOpacity, strokeOpacity)
+        
+        let fill =
+            match fillOpacity with 
+            | Some fillOpacity -> Some (FillStyle.OpacityIs(fillOpacity))
+            | None -> None
+
+        let stroke =
+            match strokeOpacity with 
+            | Some strokeOpacity -> 
+                Some (StrokeStyle.OpacityIs(strokeOpacity))
+                //Some (
+                //    StrokeStyle(
+                //        ColorStyle(opacity = strokeOpacity)
+                //        //(strokeOpacity))
+                //    )
+                //)
+
+            | None -> None
+
+        VectorStyle(?fill = fill, ?stroke = stroke)
+
 
 
 [<RequireQualifiedAccess>]
@@ -986,9 +1056,7 @@ type Modifier =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
             let info =  args.CurrentRenderInfo
             let originExtGSState = args.CurrentRenderInfo.Value.GetGraphicsState() |> CanvasGraphicsState.getExtGState
-            let newExtGSState =
-                { originExtGSState with 
-                    IsStrokeOverprint = true }
+            let newExtGSState = originExtGSState.SetStrokeIsOverprint(true)
             let setStroke(width) =
                 [
                     PdfCanvas.setLineWidth width
@@ -1718,52 +1786,64 @@ type Modify =
                   Selector = Text(fun _ _ -> true)
                   Modifiers = [
                     (fun args ->
-                        
-                        let textInfos = 
-                            (args.CurrentRenderInfo :?> IntegratedTextRenderInfo).ConcatedTextInfos
-                            |> List.ofSeq
+                        let currentInfo = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
 
-                        let lastTextInfo =
-                            match textInfos with
-                            | []
-                            | [_] -> (args.CurrentRenderInfo :?> IntegratedTextRenderInfo).TextRenderInfo
-                            | _ -> textInfos |> List.last |> fun m -> m.TextRenderInfo
+                        let font = ITextRenderInfo.getFontName currentInfo
 
-                        let actions =
-                            match textInfos with
-                            | []
-                            | [_] ->
-                                let matrix = lastTextInfo.GetTextMatrix()
-                                [PdfCanvas.setTextMatrix matrix]   
+                        match font with 
+                        | DocumentFontName.Invalid -> 
+                            ModifierPdfCanvasActions.Keep(args.CurrentRenderInfo.Tag)
 
-                            | _ ->
-                                textInfos
-                                |> List.mapi (fun i textInfo ->
-                                    let matrix = textInfo.TextRenderInfo.GetTextMatrix()
-                                    let lastIndex = (textInfos.Length - 1)
-                                    match i with 
-                                    | 0 -> 
-                                        [
-                                            PdfCanvas.setTextMatrix matrix
-                                            PdfCanvas.showText(ITextRenderInfo.getText textInfo)
-                                        ]
-                                    | EqualTo lastIndex -> 
-                                        [
-                                            PdfCanvas.setTextMatrix(matrix)
-                                        ]
-                                    | _ ->
-                                        [
-                                            PdfCanvas.setTextMatrix matrix
-                                            PdfCanvas.showText(ITextRenderInfo.getText textInfo)
-                                        ]
-                                )
-                                |> List.concat
+                        | DocumentFontName.Valid _ ->
+                            let textInfos = 
+                                currentInfo.ConcatedTextInfos
+                                |> List.ofSeq
 
-                        { ModifierPdfCanvasActions.Actions = actions 
-                          SuffixActions = []
-                          Close = CloseOperatorUnion.CreateText(text = lastTextInfo.GetText())
-                        }
-                    )
+                            let lastTextInfo =
+                                match textInfos with
+                                | []
+                                | [_] -> (args.CurrentRenderInfo :?> IntegratedTextRenderInfo).TextRenderInfo
+                                | _ -> textInfos |> List.last |> fun m -> m.TextRenderInfo
+
+                            let actions =
+                                match textInfos with
+                                | []
+                                | [_] ->
+                                    let matrix = lastTextInfo.GetTextMatrix()
+                                    [PdfCanvas.setTextMatrix matrix]   
+
+                                | _ ->
+                                    textInfos
+                                    |> List.mapi (fun i textInfo ->
+                                        let matrix = textInfo.TextRenderInfo.GetTextMatrix()
+                                        let lastIndex = (textInfos.Length - 1)
+                                        match i with 
+                                        | 0 -> 
+                                            [
+                                                PdfCanvas.setTextMatrix matrix
+                                                PdfCanvas.showText(ITextRenderInfo.getText textInfo)
+                                            ]
+                                        | EqualTo lastIndex -> 
+                                            [
+                                                PdfCanvas.setTextMatrix(matrix)
+                                            ]
+                                        | _ ->
+                                            [
+                                                PdfCanvas.setTextMatrix matrix
+                                                PdfCanvas.showText(ITextRenderInfo.getText textInfo)
+                                            ]
+                                    )
+                                    |> List.concat
+
+                            { ModifierPdfCanvasActions.Actions = actions 
+                              SuffixActions = []
+                              Close = 
+                                match textInfos with 
+                                | []
+                                | [ _ ] -> CloseOperatorUnion.Keep(args.CurrentRenderInfo.Tag)
+                                | _ -> CloseOperatorUnion.CreateText(text = lastTextInfo.GetText())
+                            }
+                        )
                   ]
                   }
             ]
@@ -1972,4 +2052,6 @@ type Modify =
 
         Modify.CreateCompoundPathCommon(selector, options)
         |> Manipulate.rename "Create Clipping Path" []
+
+
 

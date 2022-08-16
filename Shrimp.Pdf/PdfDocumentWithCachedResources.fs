@@ -320,6 +320,8 @@ type private PdfDocumentCache private
                 .SetOverprintMode(int extGState.OPM)
                 .SetFillOverPrintFlag(extGState.IsFillOverprint)
                 .SetStrokeOverPrintFlag(extGState.IsStrokeOverprint)
+                .SetFillOpacity(extGState.Fill.Opacity)
+                .SetStrokeOpacity(extGState.Stroke.Opacity)
                 |> ignore
 
             match extGState.BlendModes with 
