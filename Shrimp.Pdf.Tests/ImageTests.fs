@@ -102,6 +102,37 @@ let imageTests =
             |> runTest "datas/image/add image border.pdf" 
             |> ignore
 
+        testCase "add image border2" <| fun _ -> 
+            let flow =
+                Modify.Create_RecordIM(
+                    PageSelector.All,
+                    selectorAndModifiersList = [
+                        { SelectorAndModifiersRecordIM.Name = "add image border" 
+                          Selector = Selector.ImageX(fun args m -> 
+                            let pageBox = args.Page.GetActualBox()
+                            match m.VisibleBound() with 
+                            | Some bound -> 
+                                let b = bound.IsInsideOf(pageBox)
+                                if b 
+                                then b 
+                                else b
+                            | None -> false
+                          )
+                          Modifiers = [
+                            ModifierIM.AddImageBorder(fun args ->
+                                { args with StrokeColor = NullablePdfCanvasColor.valueColor FsDeviceCmyk.CYAN }
+                            )
+
+                          ]}
+                    ]
+                )
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/add image border2.pdf" 
+            |> ignore
+
         testCase "convert rgb image to gray inside pageBox" <| fun _ -> 
             let flow =
                 ModifyIM.ConvertImagesToDeviceGray(fun args image ->
@@ -131,13 +162,68 @@ let imageTests =
             |> ignore
 
 
-        ftestCase "convert all objects to gray2" <| fun _ -> 
+        testCase "convert all objects to gray2" <| fun _ -> 
             let flow = ModifyIM.ConvertAllObjectsToDeviceGray()
 
             Flow.Manipulate(
                 flow
             )
             |> runTest "datas/image/convert all objects to gray2.pdf" 
+            //|> runTest @"C:\Users\Jia\Desktop\convert all objects to gray22.pdf"
+            |> ignore
+
+        testCase "convert all objects to gray3" <| fun _ -> 
+            let flow = 
+                ModifyIM.ConvertAllObjectsToDeviceGray(
+                    Selector.All(
+                        InfoIM.BoundIs(
+                            RelativePosition.Inbox,
+                            AreaGettingOptions.PageBox(PageBoxKind.ActualBox)))
+                    )
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/convert all objects to gray3.pdf" 
+            |> ignore
+
+        testCase "convert all objects to gray4" <| fun _ -> 
+            let flow = ModifyIM.ConvertAllObjectsToDeviceGray()
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/convert all objects to gray4.pdf" 
+            |> ignore
+
+        testCase "convert all objects to gray5" <| fun _ -> 
+            let flow = 
+                ModifyIM.ConvertAllObjectsToDeviceGray(
+                    Selector.All(
+                        InfoIM.BoundIs(
+                            RelativePosition.Inbox,
+                            AreaGettingOptions.PageBox(PageBoxKind.ActualBox)))
+                    )
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/convert all objects to gray5.pdf" 
+            |> ignore
+
+        testCase "convert all objects to gray6" <| fun _ -> 
+            let flow = 
+                ModifyIM.ConvertAllObjectsToDeviceGray(
+                    Selector.All(
+                        InfoIM.BoundIs(
+                            RelativePosition.Inbox,
+                            AreaGettingOptions.PageBox(PageBoxKind.ActualBox)))
+                    )
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/convert all objects to gray6.pdf" 
             |> ignore
 
         testCase "set image maximun dpi to 150" <| fun _ -> 

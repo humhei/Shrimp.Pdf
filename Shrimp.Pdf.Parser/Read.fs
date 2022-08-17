@@ -429,8 +429,36 @@ module internal Listeners =
                                   ClippingPathInfoState = currentClippingPathInfo }
                               ImageRenderInfo = imageRenderInfo
                               LazyImageData = 
-                                let bitsPer = imageRenderInfo.GetImage().GetPdfObject().Get(PdfName.BitsPerComponent)
-                                lazy (ImageDataFactory.Create(imageRenderInfo.GetImage().GetImageBytes()))
+                                lazy 
+                                    let rgbIndexedColorSpace =
+                                        let image = 
+                                            imageRenderInfo
+                                                .GetImage()
+
+                                        let bitsPerComponent = 
+                                            image
+                                                .GetPdfObject()
+                                                .GetAsNumber(PdfName.BitsPerComponent)
+                                                .IntValue()
+
+                                        let imageType =
+                                            image.IdentifyImageType()
+
+                                        let colorSpace = image.GetPdfObject().GetAsArray(PdfName.ColorSpace)
+
+                                        match bitsPerComponent, imageType with 
+                                        | 2, _ -> 
+                                            match colorSpace.Contains(PdfName.Indexed) && colorSpace.Contains(PdfName.DeviceRGB) with 
+                                            | true -> Some { ImageXObject = image; ImageType = imageType }
+                                                
+                                            | false -> None
+                                        | _ -> None
+                                    
+                                    match rgbIndexedColorSpace with 
+                                    | Some rgbIndexedColorSpace -> FsImageData.IndexedRgb rgbIndexedColorSpace
+                                    | None -> 
+                                        (ImageDataFactory.Create(imageRenderInfo.GetImage().GetImageBytes()))
+                                        |> FsImageData.ImageData
 
                               LazyColorSpace = 
                                 lazy 
@@ -462,7 +490,10 @@ module internal Listeners =
                                                             match array.Get(1) with 
                                                             | :? PdfName as name -> fromPdfName name
                                                             | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
-                                                        let indexedTable = (array.Get(3) :?> PdfStream).GetBytes()
+                                                        let indexedTable = 
+                                                            match array.Get(3) with 
+                                                            | :? PdfStream as pdfStream -> pdfStream.GetBytes()
+                                                            | :? PdfString as pdfString -> pdfString.GetValueBytes()
 
                                                         { ColorSpace = colorSpace; IndexTable = Some indexedTable; Decode = decode }
                                                         |> ImageColorSpaceData.Indexable

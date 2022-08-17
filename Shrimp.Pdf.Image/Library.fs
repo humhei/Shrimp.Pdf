@@ -95,10 +95,13 @@ module _ModifierIM =
 
     [<RequireQualifiedAccess>]
     module BitmapColorValues =
-        let toIndexableStorage (colorSpace: IndexableColorSpace) (colorValues: BitmapColorValues) =
+        let toIndexableStorage (colorSpace: IndexableColorSpace) size (colorValues: BitmapColorValues option) =
             match colorSpace.IndexTable with 
             | None -> 
-                colorValues.ToStorage() |> IndexableBitmapColorValuesStorage.Origin
+                match colorValues with 
+                | None -> failwithf "colorValues cannot be empty here"
+                | Some colorValues ->
+                    colorValues.ToStorage() |> IndexableBitmapColorValuesStorage.Origin
             | Some indexTable ->
                 let indexTableGroup = 
                     let chunkSize =
@@ -112,17 +115,21 @@ module _ModifierIM =
                     |> Array.chunkBySize chunkSize
 
                 let bytes =     
-                    colorValues.RemovePlaceHolder()
-                    |> Array.collect(fun indexes ->
-                        indexes
-                        |> Array.collect(fun index ->
-                            indexTableGroup.[int index]
+                    match colorValues with 
+                    | Some colorValues ->
+                        colorValues.RemovePlaceHolder()
+                        |> Array.collect(fun indexes ->
+                            indexes
+                            |> Array.collect(fun index ->
+                                indexTableGroup.[int index]
+                            )
                         )
-                    )
+
+                    | None -> indexTable
 
                 let rawFile = System.IO.Path.ChangeExtension(Path.GetTempFileName(), ".raw")
                 File.WriteAllBytes(rawFile, bytes)
-                (colorValues.Size, RawFile rawFile)
+                (size, RawFile rawFile)
                 |> IndexableBitmapColorValuesStorage.Indexed
 
     type IntegratedImageRenderInfo with 
@@ -130,14 +137,24 @@ module _ModifierIM =
         member internal x.SaveToTmpColorValuesStorage(indexableColorSpace) =
             
             let image = x.ImageRenderInfo.GetImage()
-            let bytes = image.GetImageBytes()
             let imageData = x.ImageData
             let storage = 
-                use stream = new MemoryStream(bytes)
-                use bitmap = new Bitmap(stream)
-                let colorValues = BitmapUtils.ReadColorValues(bitmap)
-                colorValues
-                |> BitmapColorValues.toIndexableStorage indexableColorSpace
+                match imageData with 
+                | FsImageData.ImageData imageData ->
+                    let bytes = image.GetImageBytes()
+                    let colorValues = 
+                        use stream = new MemoryStream(bytes)
+                        use bitmap = new Bitmap(stream)
+                        let colorValues = BitmapUtils.ReadColorValues(bitmap)
+                        (colorValues)
+
+                    BitmapColorValues.toIndexableStorage indexableColorSpace (BitmapSize.OfDrawingSize colorValues.Size) (Some colorValues)
+
+                | FsImageData.IndexedRgb indexedRGB -> 
+                    BitmapColorValues.toIndexableStorage indexableColorSpace (indexedRGB.Size() |> BitmapSize.OfDrawingSize) (None)
+
+                    
+                
 
             storage, imageData
 
@@ -149,7 +166,7 @@ module _ModifierIM =
               PageModifingArguments = args.PageModifingArguments }
 
     let private cache = 
-        new ConcurrentDictionary<PdfImageXObject * Icc option * Icc * Intent , ImageData option>()
+        new ConcurrentDictionary<PdfImageXObject * Icc option * Icc * Intent , ImageDataOrImageXObject option>()
 
 
     type ModifierIM =
@@ -161,6 +178,7 @@ module _ModifierIM =
                 | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->   
                     let key = 
                         (imageRenderInfo.ImageRenderInfo.GetImage(), inputIcc, outputIcc, intent)
+
 
                     match imageRenderInfo.ImageColorSpaceData with 
                     | ImageColorSpaceData.Indexable indexableColorSpace ->
@@ -186,32 +204,6 @@ module _ModifierIM =
                                             | ColorSpace.Gray -> 1
                                             | ColorSpace.Rgb  -> 3
                                             | ColorSpace.Lab  -> 3
-
-                                        let rgbIndexedColorSpace =
-                                            let image = 
-                                                imageRenderInfo
-                                                    .ImageRenderInfo
-                                                    .GetImage()
-
-                                            let bitsPerComponent = 
-                                                image
-                                                    .GetPdfObject()
-                                                    .GetAsNumber(PdfName.BitsPerComponent)
-                                                    .IntValue()
-
-                                            let imageType =
-                                                image.IdentifyImageType()
-
-                                            let colorSpace = image.GetPdfObject().GetAsArray(PdfName.ColorSpace)
-
-                                            match bitsPerComponent, imageType with 
-                                            | 2, ImageType.TIFF -> 
-                                                match colorSpace.Contains(PdfName.Indexed) && colorSpace.Contains(PdfName.DeviceRGB) with 
-                                                | true ->
-                                                    
-                                                    failwith ""
-                                                | false -> None
-                                            | _ -> None
 
 
                                         match inputIcc.ColorSpace, imageRenderInfo.ImageData.GetOriginalType() with 
@@ -260,7 +252,7 @@ module _ModifierIM =
                                                 |> RawFile
 
                                             let size = 
-                                                Size(
+                                                BitmapSize.Create(
                                                     int <| imageData.GetWidth(),
                                                     int <| imageData.GetHeight())
 
@@ -278,19 +270,18 @@ module _ModifierIM =
 
                                             let image = 
                                                 ImageDataFactory.Create(
-                                                    width = size.Width,
-                                                    height = size.Height,
+                                                    width = size.BitmapWidth,
+                                                    height = size.BitmapHeight,
                                                     components = components,
-                                                    bpc = 8,
+                                                    bpc = imageData.GetBpc(),
                                                     data = bytes,
                                                     transparency = null
                                                 )
-                                            Some image
+                                            Some (ImageDataOrImageXObject.ImageData image)
 
                                         | ColorSpace.Cmyk, imageType -> failwithf "Not implemented when input %A is cmyk" imageType
                                         | _ ->
-                                            let storage, imageData = imageRenderInfo.SaveToTmpColorValuesStorage(indexableColorSpace)
-                                            let size = storage.Size
+                                            
                                             match inputIcc = outputIcc with 
                                             | true -> None
                                             | false ->  
@@ -310,6 +301,8 @@ module _ModifierIM =
                                                 match convertiable with 
                                                 | false -> None
                                                 | true ->
+                                                    let storage, imageData = imageRenderInfo.SaveToTmpColorValuesStorage(indexableColorSpace)
+                                                    let size = storage.Size
                                                     let newArrayRawFile: RawFile = 
                                                         client.Value <? 
                                                             ServerMsg.ConvertImageColorSpace (
@@ -322,16 +315,41 @@ module _ModifierIM =
 
                                                     let bytes = File.ReadAllBytes newArrayRawFile.Path
 
-                                                    let image = 
-                                                        ImageDataFactory.Create(
-                                                            width = size.Width,
-                                                            height = size.Height,
-                                                            components = components,
-                                                            bpc = 8,
-                                                            data = bytes,
-                                                            transparency = null
-                                                        )
-                                                    Some image
+                                                    match imageData with 
+                                                    | FsImageData.IndexedRgb _ ->
+                                                        let xobject = imageRenderInfo.ImageRenderInfo.GetImage().GetPdfObject().Clone() :?> PdfStream
+                                                        let xobject = PdfImageXObject(xobject)
+                                                        match outputIcc with
+                                                        | Icc.Gray _  ->
+                                                            let colorSpace = xobject.GetPdfObject().GetAsArray (PdfName.ColorSpace)
+                                                            let colorSpace = colorSpace.Clone() :?> PdfArray
+                                                            colorSpace
+                                                                .Set(1, PdfName.DeviceGray)
+                                                                |> ignore
+
+                                                            let bytesStream = 
+                                                                new PdfStream(bytes)
+
+                                                            colorSpace
+                                                                .Set(3, bytesStream)
+                                                                |> ignore
+
+                                                            xobject.Put(PdfName.ColorSpace, colorSpace) |> ignore
+                                                            ImageDataOrImageXObject.ImageXObject(xobject)
+                                                            |> Some
+
+                                                    | FsImageData.ImageData _ ->
+
+                                                        let image = 
+                                                            ImageDataFactory.Create(
+                                                                width = size.BitmapWidth,
+                                                                height = size.BitmapHeight,
+                                                                components = components,
+                                                                bpc = imageData.GetBpc(),
+                                                                data = bytes,
+                                                                transparency = null
+                                                            )
+                                                        Some (ImageDataOrImageXObject.ImageData image)
                                     | None -> None
                         
                                 
@@ -447,10 +465,11 @@ module _ModifierIM =
                                         width = newSize.Width,
                                         height = newSize.Height,
                                         components = 3,
-                                        bpc = 8,
+                                        bpc = imageData.GetBpc(),
                                         data = rgbByteValues,
                                         transparency = null
                                     )
+                                    |> ImageDataOrImageXObject.ImageData
                     
                                 let ctm = AffineTransformRecord.DefaultValue
 
@@ -500,7 +519,8 @@ module _ModifierIM =
                       Selector = Selector.ImageX(defaultArg imageSelector (fun _ _ -> true))
                       Modifiers = [ 
                         ModifierIM.ConvertImageToGray()
-                      ]}
+                      ]
+                    }
                 ])
 
         static member ConvertAllObjectsToDeviceGray(?selector, ?pageSelector) =
@@ -511,7 +531,8 @@ module _ModifierIM =
                       Selector = defaultArg selector (Selector.All (fun _ _ -> true))
                       Modifiers = [ 
                         ModifierIM.ConvertAllObjectsToDeviceGray()
-                      ]}
+                      ]
+                    }
                 ])
 
     type Flows with

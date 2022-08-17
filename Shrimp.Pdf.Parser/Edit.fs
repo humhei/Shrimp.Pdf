@@ -169,9 +169,14 @@ with
             textRenderingMode
     
 [<RequireQualifiedAccess>]
+type ImageDataOrImageXObject =
+    | ImageData of ImageData
+    | ImageXObject of PdfImageXObject
+
+[<RequireQualifiedAccess>]
 type ImageCloseOperator =
     | Keep
-    | New of ctm: AffineTransformRecord * ImageData
+    | New of ctm: AffineTransformRecord * ImageDataOrImageXObject
 
 [<RequireQualifiedAccess>]
 type CloseOperatorUnion =
@@ -375,8 +380,15 @@ with
                     PdfCanvas.writeOperatorRange originCloseOperatorRange canvas
                     
                 | ImageCloseOperator.New (ctm, image) ->
-                    canvas.AddImage(image, ctm) |> ignore
-                    canvas
+                    match image with 
+                    | ImageDataOrImageXObject.ImageData image ->
+                        canvas.AddImage(image, ctm) |> ignore
+                        canvas
+
+                    | ImageDataOrImageXObject.ImageXObject image ->
+                        canvas.AddXObject(image, ctm) 
+                        
+
 
                     
 
@@ -539,15 +551,19 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
             match subType with 
             | Form ->
                 let xobjectStream = xobjectStream.Clone() :?> PdfStream
-
                 let xobjectResources = 
                     let subResources = xobjectStream.GetAsDictionary(PdfName.Resources)
                     match subResources with 
                     | null -> resources
                     | _ -> PdfResources subResources
 
+
                 let fixedStream: PdfStream = this.EditContent(xobjectResources, xobjectStream)
+                let name = resources.AddForm(fixedStream)
                 container.Put(name, fixedStream) |> ignore
+                let operatorRange =
+                    { Operator = operatorRange.Operator 
+                      Operands = [| name :> PdfObject; PdfLiteral("Do") :> PdfObject |] }
 
                 PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
                 |> ignore
@@ -657,7 +673,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
             let pdfCanvas = pdfCanvasStack.Pop()
             resourcesStack.Pop()|> ignore
-            //let clonedStream = stream.Clone() :?> PdfStream
+            //let stream = stream.Clone() :?> PdfStream
             stream.SetData(pdfCanvas.GetContentStream().GetBytes()) |> ignore
             stream
 

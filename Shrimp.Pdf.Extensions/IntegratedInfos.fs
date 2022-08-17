@@ -8,6 +8,7 @@ open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open FParsec
 open iText.Kernel.Pdf
+open iText.Kernel.Pdf.Xobject
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Font
 open Shrimp.FSharp.Plus
@@ -184,11 +185,52 @@ module IntegratedInfos =
           ImageColorSpaceData: ImageColorSpaceData
           VisibleBound: FsRectangle option }
 
-    []
+    type IndexedRGBImageData =
+        { ImageXObject: PdfImageXObject
+          ImageType:    ImageType }
+    with 
+        member x.GetWidth() = x.ImageXObject.GetWidth()
+
+        member x.GetHeight() = x.ImageXObject.GetHeight()
+
+        member x.Size() = System.Drawing.Size(x.GetWidth() |> int, x.GetHeight() |> int)
+
+    [<RequireQualifiedAccess>]
     type FsImageData =
         | ImageData of ImageData
-        | IndexedRgb
+        | IndexedRgb of IndexedRGBImageData
+    with 
 
+        member x.GetColorEncodingComponentsNumber() =
+            match x with 
+            | ImageData v -> v.GetColorEncodingComponentsNumber()
+            | IndexedRgb _ -> 3
+
+        member x.GetBpc() =
+            match x with 
+            | ImageData v -> v.GetBpc()
+            | IndexedRgb _ -> 2
+
+        member x.GetOriginalType() =
+            match x with 
+            | ImageData v -> v.GetOriginalType()
+            | IndexedRgb indexedRGB -> indexedRGB.ImageType
+
+        member x.GetWidth() =
+            match x with 
+            | ImageData v -> v.GetWidth()
+            | IndexedRgb xobject -> xobject.GetWidth() 
+
+
+        member x.GetHeight() =
+            match x with 
+            | ImageData v -> v.GetHeight()
+            | IndexedRgb xobject -> xobject.GetHeight() 
+
+        member x.GetData() =
+            match x with 
+            | ImageData v -> v.GetData()
+            | IndexedRgb xobject -> failwithf "Cannot get bytes for indexedRGB image data"
 
     [<Struct>]
     type IntegratedImageRenderInfo =

@@ -11,21 +11,37 @@ open System.Drawing
 
 [<AutoOpen>]
 module Core =
+    type BitmapSize =
+        { BitmapWidth: int 
+          BitmapHeight: int }
+    with
+        static member OfDrawingSize(size: Size) =
+            { BitmapWidth = size.Width
+              BitmapHeight = size.Height }
+
+        member x.AsDrawingSize =
+            Size(x.BitmapWidth, x.BitmapHeight)
+
+        static member Create(width, height) =
+            { BitmapWidth  = width 
+              BitmapHeight = height}
+
     type BitmapColorValuesStorage =
         { File: RawFile 
           Stride: int 
-          Size: Size
-          PixelFormat: PixelFormat }
+          Size: BitmapSize
+          PixelFormat: int }
     with 
         member x.Path = x.File.Path
 
 
 
+
     [<RequireQualifiedAccess>]
     type IndexableBitmapColorValuesStorage =
-        | Indexed of Size * RawFile
+        | Indexed of BitmapSize * RawFile
         | Origin of BitmapColorValuesStorage
-        | Express of Size * RawFile
+        | Express of BitmapSize * RawFile
     with 
         member x.File = 
             match x with 
@@ -93,12 +109,12 @@ module Core =
             File.WriteAllBytes(rawFile, x.Values)
             { File = RawFile rawFile 
               Stride = x.Stride
-              Size = x.Size
-              PixelFormat = x.PixelFormat }
+              Size = BitmapSize.OfDrawingSize x.Size
+              PixelFormat = int x.PixelFormat }
 
         static member OfStorage(storage: BitmapColorValuesStorage) =
             let bytes = System.IO.File.ReadAllBytes storage.File.Path
-            BitmapColorValues(bytes, storage.Stride, storage.Size, storage.PixelFormat)
+            BitmapColorValues(bytes, storage.Stride, storage.Size.AsDrawingSize, enum<PixelFormat> storage.PixelFormat)
 
     [<AutoOpen>]
     module _Image =
