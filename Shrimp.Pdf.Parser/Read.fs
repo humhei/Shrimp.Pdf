@@ -429,6 +429,7 @@ module internal Listeners =
                                   ClippingPathInfoState = currentClippingPathInfo }
                               ImageRenderInfo = imageRenderInfo
                               LazyImageData = 
+                                let bitsPer = imageRenderInfo.GetImage().GetPdfObject().Get(PdfName.BitsPerComponent)
                                 lazy (ImageDataFactory.Create(imageRenderInfo.GetImage().GetImageBytes()))
 
                               LazyColorSpace = 

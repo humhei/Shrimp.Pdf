@@ -187,6 +187,33 @@ module _ModifierIM =
                                             | ColorSpace.Rgb  -> 3
                                             | ColorSpace.Lab  -> 3
 
+                                        let rgbIndexedColorSpace =
+                                            let image = 
+                                                imageRenderInfo
+                                                    .ImageRenderInfo
+                                                    .GetImage()
+
+                                            let bitsPerComponent = 
+                                                image
+                                                    .GetPdfObject()
+                                                    .GetAsNumber(PdfName.BitsPerComponent)
+                                                    .IntValue()
+
+                                            let imageType =
+                                                image.IdentifyImageType()
+
+                                            let colorSpace = image.GetPdfObject().GetAsArray(PdfName.ColorSpace)
+
+                                            match bitsPerComponent, imageType with 
+                                            | 2, ImageType.TIFF -> 
+                                                match colorSpace.Contains(PdfName.Indexed) && colorSpace.Contains(PdfName.DeviceRGB) with 
+                                                | true ->
+                                                    
+                                                    failwith ""
+                                                | false -> None
+                                            | _ -> None
+
+
                                         match inputIcc.ColorSpace, imageRenderInfo.ImageData.GetOriginalType() with 
                                         | ColorSpace.Cmyk, ImageType.JPEG ->
                                             let rawFile =

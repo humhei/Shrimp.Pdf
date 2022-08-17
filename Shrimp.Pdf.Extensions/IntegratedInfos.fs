@@ -184,13 +184,19 @@ module IntegratedInfos =
           ImageColorSpaceData: ImageColorSpaceData
           VisibleBound: FsRectangle option }
 
+    []
+    type FsImageData =
+        | ImageData of ImageData
+        | IndexedRgb
+
 
     [<Struct>]
     type IntegratedImageRenderInfo =
         { ImageRenderInfo: ImageRenderInfo 
           ClippingPathInfos: ClippingPathInfos
-          LazyImageData: Lazy<ImageData>
-          LazyColorSpace: Lazy<ImageColorSpaceData option> }
+          LazyImageData: Lazy<FsImageData>
+          LazyColorSpace: Lazy<ImageColorSpaceData option> 
+        }
 
     with 
         member x.ImageData = x.LazyImageData.Value
