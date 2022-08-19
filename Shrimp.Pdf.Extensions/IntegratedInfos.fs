@@ -91,6 +91,7 @@ module IntegratedInfos =
     type TextInfoRecord =
         { Text: string 
           FontSize: float 
+          TextRotation: Rotation
           FillColor: iText.Kernel.Colors.Color 
           StrokeColor: iText.Kernel.Colors.Color 
           FontName: DocumentFontName
@@ -131,6 +132,7 @@ module IntegratedInfos =
             { Text = integratedInfo.Text()
               FontSize = ITextRenderInfo.getActualFontSize integratedInfo
               FontName = ITextRenderInfo.getFontName integratedInfo
+              TextRotation = ITextRenderInfo.getTextRotation integratedInfo
               FillColor = renderInfo.GetFillColor()
               StrokeColor = renderInfo.GetStrokeColor()
               Bound = 

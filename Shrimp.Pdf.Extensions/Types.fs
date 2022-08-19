@@ -863,6 +863,12 @@ module ExtensionTypes =
 
     [<RequireQualifiedAccess>]
     module Rotation =
+        let toDirection = function
+            | Rotation.None
+            | Rotation.R180 -> Direction.Horizontal
+            | Rotation.Clockwise
+            | Rotation.Counterclockwise -> Direction.Vertical
+
         let ofCharOp(char: char) =
             match char with 
             | '>' -> Some Rotation.Clockwise
@@ -943,6 +949,17 @@ module ExtensionTypes =
         member x.m02 = x.TranslateX
 
         member x.m12 = x.TranslateY
+
+        member x.MapValue(fValue) =
+            {
+                ScaleX      = fValue x.ScaleX
+                ShearX      = fValue x.ShearX
+                ShearY      = fValue x.ShearY
+                ScaleY      = fValue x.ScaleY
+                TranslateX  = fValue x.TranslateX
+                TranslateY  = fValue x.TranslateY   
+            }
+
         
         static member DefaultValue =
             { ScaleX = 1. 
@@ -990,7 +1007,9 @@ module ExtensionTypes =
         let toMatrix (record: AffineTransformRecord) =
             let values = Array.create 6 0.f
             (toAffineTransform record).GetMatrix(values)
-            new Matrix(values.[Matrix.I11], values.[Matrix.I12], values.[Matrix.I21], values.[Matrix.I22], values.[Matrix.I31], values.[Matrix.I32])
+            
+            new Matrix(values.[0], values.[1], values.[2], values.[3], values.[4], values.[5])
+            //new Matrix(values.[Matrix.I11], values.[Matrix.I12], values.[Matrix.I21], values.[Matrix.I22], values.[Matrix.I31], values.[Matrix.I32])
 
 
     type DashPattern =

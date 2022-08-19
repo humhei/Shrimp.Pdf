@@ -279,6 +279,9 @@ module _ModifierIM =
                                                 )
                                             Some (ImageDataOrImageXObject.ImageData image)
 
+
+                                        // Pdf.js PDFImage.buildImage => createImageData
+                                        // Whilte itext ImageData bytes is totally different
                                         | ColorSpace.Cmyk, imageType -> failwithf "Not implemented when input %A is cmyk" imageType
                                         | _ ->
                                             

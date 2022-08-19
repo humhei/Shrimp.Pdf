@@ -586,6 +586,52 @@ let manipulateTests =
         |> runTest "datas/manipulate/add bound to text7.pdf" 
         |> ignore
 
+    testCase "add bound to vertical text" <| fun _ -> 
+        Flow.Reuse(
+            Reuses.ClearDirtyInfos()
+        )
+        <+>
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "add bound to text5"
+                      Selector = Text(fun _ _ -> true) 
+                      Modifiers = [
+                        Modifier.AddRectangleToBound(fun args -> 
+                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor(PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
+                        )
+                      ]
+                    }
+                ]
+            )
+        )
+        |> runTest "datas/manipulate/add bound to vertical text.pdf" 
+        |> ignore
+
+    testCase "add bound to vertical text2" <| fun _ -> 
+        Flow.Reuse(
+            Reuses.ClearDirtyInfos()
+        )
+        <+>
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "add bound to text5"
+                      Selector = Text(fun _ _ -> true) 
+                      Modifiers = [
+                        Modifier.AddRectangleToBound(fun args -> 
+                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor(PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
+                        )
+                      ]
+                    }
+                ]
+            )
+        )
+        |> runTest "datas/manipulate/add bound to vertical text2.pdf" 
+        |> ignore
+
     testCase "add bound to bound1" <| fun _ -> 
         Flow.Reuse(
             Reuses.ClearDirtyInfos()
@@ -1369,7 +1415,22 @@ let manipulateTests =
             ]
         )
 
-    testCase "test infos" <| fun _ -> 
+
+    ftestCase "read vertical texts" <| fun _ -> 
+
+        let pdfFile = 
+            @"datas/manipulate/add bound to vertical text2.pdf" 
+            |> PdfFile
+
+
+        let textInfos = 
+            PdfRunner.ReadTextInfos_Record(pdfFile)
+            |> List.concat
+            |> List.filter(fun m -> m.TextRotation <> Rotation.None)
+        ()
+        
+
+    ptestCase "test infos" <| fun _ -> 
 
         let pdfFile = 
             @"C:\Users\Jia\Desktop\内盒90×40mmExtractor.pdf"

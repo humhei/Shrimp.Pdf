@@ -12,6 +12,7 @@ open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Parser
 open Shrimp.Pdf
+open iText.Kernel.Geom
 open Shrimp.Pdf.Colors
 open Shrimp.FSharp.Plus
 open System.Collections.Generic
@@ -79,7 +80,14 @@ module _SelectionGrouper =
 
     
           
-
+type RectangleWithUserState<'UserState> =
+    { UserState: 'UserState
+      Rectangle: Rectangle }
+with     
+    member x.GetYF() = x.Rectangle.GetYF()
+    member x.GetXF() = x.Rectangle.GetXF()
+    member x.GetX() = x.Rectangle.GetX()
+    member x.GetY() = x.Rectangle.GetY()
 
 [<RequireQualifiedAccess>]
 type SelectionSorter =
@@ -90,7 +98,13 @@ with
     static member DefaultValue =
         (SelectionSorter.Plane (mm 3., Direction.Horizontal))
 
-    member sorter.SortToLists(rects: iText.Kernel.Geom.Rectangle list) =
+    static member CreatePlane(?tolerance, ?direction) =
+        SelectionSorter.Plane(
+            (defaultArg tolerance (mm 3.)),
+            defaultArg direction Direction.Horizontal
+        )
+
+    member sorter.SortToLists_WithUserState(rects: RectangleWithUserState<_> list) =
         match rects with 
         | [] -> []
         | [rect] -> [[rect]]
@@ -99,7 +113,7 @@ with
             | SelectionSorter.Non -> [rects]
 
             | SelectionSorter.Plane(tolerance, direction) ->
-                let rec sortRects previousCoordinateUltraValue accum accums (rects: iText.Kernel.Geom.Rectangle list) =
+                let rec sortRects previousCoordinateUltraValue accum accums (rects: RectangleWithUserState<_> list) =
                     match rects with 
                     | _ :: _ -> 
                         match direction with 
@@ -161,6 +175,17 @@ with
 
                 sortRects None [] [] rects
                 |> List.rev
+
+    member sorter.SortToLists(rects: iText.Kernel.Geom.Rectangle list) =
+        let rects =
+            rects
+            |> List.map(fun rect ->
+                { UserState = () 
+                  Rectangle = rect }
+            )
+
+        sorter.SortToLists_WithUserState(rects)
+        |> List.map (List.map (fun m -> m.Rectangle))
 
     member sorter.Sort(rects: iText.Kernel.Geom.Rectangle list) =
         sorter.SortToLists(rects)

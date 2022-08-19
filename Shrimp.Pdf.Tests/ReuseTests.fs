@@ -264,6 +264,22 @@ let reuseTests =
             |> runTest "datas/reuse/imposing N-UP5.pdf" 
         () 
 
+    testCase "imposing N-UP6 tests" <| fun _ -> 
+        let r = 
+            Flow.Reuse (
+                Reuses.Impose
+                    (fun args ->
+                        { args with 
+                            ColNums = [1]
+                            RowNum = 2
+                            Background = Background.Size FsSize.MAXIMUN
+                            Cropmark = (Some Cropmark.defaultValue)
+                        }
+                    )
+            )
+            |> runTest "datas/reuse/imposing N-UP6.pdf" 
+        () 
+
     testCase "imposing N-UP Big data tests" <| fun _ -> 
         let r = 
             Flow.Manipulate(
@@ -541,6 +557,13 @@ let reuseTests =
             Reuses.ClearDirtyInfos(keepOriginPageBoxes = true)
         )
         |> runTest "datas/reuse/clear dirty infos.pdf" 
+        |> ignore
+
+    testCase "clear dirty infos2" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.ClearDirtyInfos(keepOriginPageBoxes = true)
+        )
+        |> runTest "datas/reuse/clear dirty infos2.pdf" 
         |> ignore
 
     testCase "resize pageSize to 7x4cm tests" <| fun _ -> 

@@ -53,7 +53,7 @@ let imageTests =
             |> runTest "datas/image/convert rgb image to gray.pdf" 
             |> ignore
 
-        testCase "convert index rgb image to gray" <| fun _ -> 
+        ptestCase "convert index rgb image to gray" <| fun _ -> 
             let flow = ModifyIM.ConvertImagesToDeviceGray()
 
             Flow.Manipulate(
@@ -303,7 +303,7 @@ let imageTests =
             //|> runTest "D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\image\cmyk\C.pdf"
             |> ignore
 
-        testCase "convert cmyk image to gray4" <| fun _ -> 
+        ptestCase "convert cmyk image to gray4" <| fun _ -> 
             let flow =
                 Modify.Create_RecordIM(
                     PageSelector.All,
@@ -313,6 +313,7 @@ let imageTests =
                           Modifiers = [
                             ModifierIM.ConvertImageToGray()
                           ]}
+
                     ]
                     )
 
@@ -357,7 +358,7 @@ let imageTests =
             Flow.Manipulate(
                 flow
             )
-            |> runTest "datas\image\cmyk\cmyk2.pdf"
+            |> runTest @"datas\image\data\cmyk\cmyk2.pdf"
             |> ignore
 
 

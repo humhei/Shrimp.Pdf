@@ -861,23 +861,50 @@ module iText =
             | None -> DocumentFontName.Invalid
             | Some fontName -> DocumentFontName.Valid fontName
 
-        let getWidth (info: TextRenderInfo) =
-            let ascent = info.GetAscentLine()
-            ascent.GetEndPoint().Get(0) - ascent.GetStartPoint().Get(0)
-            |> float
+        let getAffineTransfrom(info: TextRenderInfo) =
+            let matrix = 
+                info.GetGraphicsState().GetCtm()
+                |> AffineTransform.ofMatrix
 
-        let getHeight (info: TextRenderInfo) =
+            let textMatrix = 
+                info.GetTextMatrix()
+                |> AffineTransform.ofMatrix
+
+            matrix.Concatenate textMatrix
+
+            matrix
+
+        let getAffineTransfromRecord(info: TextRenderInfo) =
+            getAffineTransfrom info
+            |> AffineTransformRecord.ofAffineTransform
+
+        let getBoundWithoutStrokeWidth (info: TextRenderInfo) =
             let ascent = info.GetAscentLine()
             let descent = info.GetDescentLine()
-            let baseHeight = 
-                ascent.GetStartPoint().Get(1) - descent.GetStartPoint().Get(1)
-                |> float
+            let vectorToPoint (vector: Vector) =
+                Point(float <| vector.Get(0), float <| vector.Get(1))
 
-            let redirectedHeight = 
-                match getDocumentFontName info with 
-                | DocumentFontName.Invalid -> (getWidth info) * 0.5
-                | DocumentFontName.Valid _ -> baseHeight
-            redirectedHeight
+            let rect = 
+                [ 
+                    ascent.GetStartPoint()      |> vectorToPoint
+                    ascent.GetEndPoint()        |> vectorToPoint
+                    descent.GetStartPoint()     |> vectorToPoint
+                    descent.GetEndPoint()       |> vectorToPoint
+                ]
+                |> AtLeastTwoList.Create
+                |> Rectangle.ofPoints
+
+            rect
+
+
+        let getWidth (info: TextRenderInfo) =
+            getBoundWithoutStrokeWidth(info)
+            |> fun rect -> rect.GetWidthF()
+
+        let getHeight (info: TextRenderInfo) =
+            getBoundWithoutStrokeWidth(info)
+            |> fun rect -> rect.GetHeightF()
+
 
         let hasStroke (info: TextRenderInfo) =             
             let textRenderMode = info.GetTextRenderMode()
@@ -890,11 +917,8 @@ module iText =
                 false
 
         let getBound (boundGettingStrokeOptions: BoundGettingStrokeOptions) (info: TextRenderInfo) =
-            let width = getWidth info
-            let height = getHeight info
-            let x = getX info
-            let y = getY info
-            let boundWithoutWidth = Rectangle.create x y width height
+            
+            let boundWithoutWidth = getBoundWithoutStrokeWidth info
 
             match boundGettingStrokeOptions with 
             | BoundGettingStrokeOptions.WithoutStrokeWidth -> boundWithoutWidth
@@ -922,8 +946,67 @@ module iText =
 
                 matrix.ScaleY * textMatrix.ScaleY
 
+            member private info.GetAffineTransfrom() =
+                let matrix = 
+                    info.GetGraphicsState().GetCtm()
+                    |> AffineTransform.ofMatrix
+
+                let textMatrix = 
+                    info.GetTextMatrix()
+                    |> AffineTransform.ofMatrix
+
+                matrix.Concatenate textMatrix
+
+                matrix
+
+            member private info.GetAffineTransfromRecord() =
+                info.GetAffineTransfrom()
+                |> AffineTransformRecord.ofAffineTransform
+
+            member info.GetTextRotation() =
+                let affimeRecord = info.GetAffineTransfromRecord() 
+                let rotation = 
+                    let tolerance = 0.00001
+                    let ng_tolerance = -tolerance
+
+                    let (|ApproximateZero|_|) (v: float) =
+                        if v > ng_tolerance && v < tolerance
+                        then Some ()
+                        else None
+
+                    match affimeRecord.ShearX, affimeRecord.ShearY with 
+                    | SmallerThan ng_tolerance, BiggerThan tolerance -> Rotation.Counterclockwise
+                    | BiggerThan tolerance, SmallerThan ng_tolerance -> Rotation.Clockwise
+                    | ApproximateZero, ApproximateZero -> 
+                        match affimeRecord.ScaleX, affimeRecord.ScaleY with 
+                        | BiggerThan tolerance, BiggerThan tolerance -> Rotation.None
+                        | SmallerThan ng_tolerance, SmallerThan ng_tolerance -> Rotation.R180
+                        | _ -> failwithf "Cannot get text rotation from %A" affimeRecord
+                    | _ -> failwithf "Cannot get text rotation from %A" affimeRecord
+
+                rotation
+
             member info.GetActualFontSize() =
-                float (info.GetFontSize()) * info.ScaleY() |> float
+                let affime = info.GetAffineTransfrom() 
+                //let m = AffineTransform.GetRotateInstance(90.) |> AffineTransformRecord.ofAffineTransform
+                //let affimeRecord = info.GetAffineTransfromRecord()
+
+                let baseFontSize = info.GetFontSize()
+                
+                let textRotation = info.GetTextRotation()
+                let direction = textRotation |> Rotation.toDirection
+
+                let rect = new Rectangle(1.f, baseFontSize)
+                let newRect = affime.Transform(rect)
+
+                match direction with 
+                | Direction.Vertical -> newRect.GetWidthF()
+                | Direction.Horizontal -> newRect.GetHeightF()
+
+
+                //let fontSize = info.GetFontSize()
+                //let scaleY = info.ScaleY()
+                //float (fontSize) * scaleY
 
             member info.ToTransformedFontSize(actualFontSize: float) =
                 actualFontSize / (info.ScaleY()) 
@@ -932,6 +1015,9 @@ module iText =
                 TextRenderInfo.getDocumentFontName info
           
 
+        /// GetFontSize() * ctm.m00
+        let getTextRotation (info: ITextRenderInfo) =
+            info.Value.GetTextRotation()
 
         /// GetFontSize() * ctm.m00
         let getActualFontSize (info: ITextRenderInfo) =
@@ -1001,7 +1087,6 @@ module iText =
                 |> List.map(TextRenderInfo.getBound boundGettingStrokeOptions)
                 |> AtLeastOneList.Create
                 |> Rectangle.ofRectangles
-
 
         
 

@@ -333,7 +333,10 @@ let extractTests =
         testCase "tile pages and NUP for big data" <| fun _ -> 
             let colNum = 5 
             let rowNum = 8
-            Flows.TilePages (TileTableIndexer.Create (colNum = colNum, rowNum = rowNum), Direction.Horizontal)
+            Flows.TilePages (
+                TileTableIndexer.Create (colNum = colNum, rowNum = rowNum),
+                Direction.Horizontal,
+                pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox (PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0))
             <+>
             Flow.Reuse(
                 Reuses.Impose(fun args ->

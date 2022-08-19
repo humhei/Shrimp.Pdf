@@ -157,6 +157,9 @@ module _Tile =
             
     
         member internal x.Infos__GroupOrFilter_IntoOp(bounds: Rectangle list, infos: RenewableInfo list, ?predicateEx) =
+            //let selectionSorter = 
+            //    defaultArg selectionSorter (SelectionSorter.CreatePlane(mm 0.5))
+
             let bounds =
                 bounds
                 |> List.mapi(fun i bound ->
@@ -220,7 +223,26 @@ module _Tile =
                         let r = 
                             match currentInfos with 
                             | [] -> None
-                            | _ -> Some (bound, currentInfos |> List.map(fun m -> m.Info.Info))
+                            | _ -> 
+                                //let currentInfos =
+                                //    currentInfos
+                                //    |> List.map(fun info ->
+                                //        { UserState = info 
+                                //          Rectangle = 
+                                //            match info.Bound.Value with 
+                                //            | Some rect -> rect 
+                                //            | None -> Rectangle(0.f, 0.f)
+                                //        }
+                                //    )
+
+                                //let currentInfos =
+                                //    currentInfos
+                                //    |> selectionSorter.SortToLists_WithUserState
+                                //    |> List.concat
+                                //    |> List.map(fun m -> m.UserState)
+
+
+                                Some (bound, currentInfos |> List.map(fun m -> m.Info.Info))
 
                         loop ((r) :: accum) t leftInfos
 

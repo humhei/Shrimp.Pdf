@@ -657,88 +657,93 @@ module Imposing =
             |> AtLeastOneList.Create
 
         static member internal AddCropmarkToPdfCanvas_ForCell(cell: Rectangle, rowPos, colPos, cropmark: Cropmark, cellContentAreas_ExtendByCropmarkDistance, isYNegative, (pdfCanvas: PdfCanvas)) =
-            pdfCanvas
-                .SetLineWidth(float32 cropmark.Width) 
-                .SetStrokeColor(NullablePdfCanvasColor.OfPdfCanvasColor cropmark.Color)
-                |> ignore
-
-            let height = cell.GetHeightF()
-
-            let allCropmarkLines = 
-                let x = cell.GetXF()
-                let y = cell.GetYF()
-                let distance = cropmark.Distance
-                let length = cropmark.Length
-                let width = cell.GetWidthF()
-
-                let leftTopV = x, y-distance, x, y-distance-length                                   
-                let leftTopH = x-distance, y, x-distance-length, y            
-                let leftBottomV = x, y+distance+height, x, y+distance+length+height
-                let leftBottomH = x-distance, y+height, x-distance-length, y+height     
-                let rightTopV = x+width, y-distance, x+width, y-distance-length  
-                let rightTopH = x+distance+width, y, x+distance+length+width, y        
-                let rightBottomV = x+width, y+distance+height, x+width, y+distance+length+height
-                let rightBottomH = x+distance+width, y+height, x+distance+length+width, y+height
-                match cropmark.IsRevealedBetweenCells with 
-                | true ->
-                    [
-                        leftTopV
-                        leftTopH
-                        leftBottomV
-                        leftBottomH
-                        rightTopV
-                        rightTopH
-                        rightBottomV
-                        rightBottomH
-                    ] 
-                | false ->
-                    [
-                        match rowPos with 
-                        | ItemPosition.First | ItemPosition.FirstAndLast -> 
-                            leftTopV
-                            rightTopV
-
-                        | _ -> ()
-
-                        match colPos with 
-                        | ItemPosition.First | ItemPosition.FirstAndLast -> 
-                            leftTopH
-                            leftBottomH
-                        | _ -> ()
-
-                        match rowPos with 
-                        | ItemPosition.FirstAndLast | ItemPosition.Last ->
-                            leftBottomV
-                            rightBottomV
-                        | _ -> ()
-
-                        match colPos with 
-                        | ItemPosition.FirstAndLast | ItemPosition.Last ->
-                            rightTopH
-                            rightBottomH
-                        | _ -> ()
-                    ] 
-
-                |> List.map (fun (x1, y1, x2 , y2) ->
-                    { Start = new Point(x1, y1); End = new Point(x2, y2) }
-                )
-            
-            let interspatialCropmarkLines = 
-                allCropmarkLines
-                |> List.filter (fun l -> List.forall (fun cropamrkRedArea -> l.IsOutsideOf(cropamrkRedArea)) cellContentAreas_ExtendByCropmarkDistance)
-                
-            let transformY y =  
-                match isYNegative with 
-                | true -> -y
-                | false -> y
-
-            (pdfCanvas, interspatialCropmarkLines)
-            ||> List.fold (fun (pdfCanvas: PdfCanvas) line ->
+            PdfCanvas.useCanvas pdfCanvas (fun pdfCanvas ->
                 pdfCanvas
-                    .MoveTo(line.Start.x, transformY (line.Start.y))
-                    .LineTo(line.End.x, transformY (line.End.y))
-                    .Stroke()
+                    .SetLineWidth(float32 cropmark.Width) 
+                    .SetStrokeColor(NullablePdfCanvasColor.OfPdfCanvasColor cropmark.Color)
+                    |> ignore
+
+                let height = cell.GetHeightF()
+
+                let allCropmarkLines = 
+                    let x = cell.GetXF()
+                    let y = cell.GetYF()
+                    let distance = cropmark.Distance
+                    let length = cropmark.Length
+                    let width = cell.GetWidthF()
+
+                    let leftTopV = x, y-distance, x, y-distance-length                                   
+                    let leftTopH = x-distance, y, x-distance-length, y            
+                    let leftBottomV = x, y+distance+height, x, y+distance+length+height
+                    let leftBottomH = x-distance, y+height, x-distance-length, y+height     
+                    let rightTopV = x+width, y-distance, x+width, y-distance-length  
+                    let rightTopH = x+distance+width, y, x+distance+length+width, y        
+                    let rightBottomV = x+width, y+distance+height, x+width, y+distance+length+height
+                    let rightBottomH = x+distance+width, y+height, x+distance+length+width, y+height
+                    match cropmark.IsRevealedBetweenCells with 
+                    | true ->
+                        [
+                            leftTopV
+                            leftTopH
+                            leftBottomV
+                            leftBottomH
+                            rightTopV
+                            rightTopH
+                            rightBottomV
+                            rightBottomH
+                        ] 
+                    | false ->
+                        [
+                            match rowPos with 
+                            | ItemPosition.First | ItemPosition.FirstAndLast -> 
+                                leftTopV
+                                rightTopV
+
+                            | _ -> ()
+
+                            match colPos with 
+                            | ItemPosition.First | ItemPosition.FirstAndLast -> 
+                                leftTopH
+                                leftBottomH
+                            | _ -> ()
+
+                            match rowPos with 
+                            | ItemPosition.FirstAndLast | ItemPosition.Last ->
+                                leftBottomV
+                                rightBottomV
+                            | _ -> ()
+
+                            match colPos with 
+                            | ItemPosition.FirstAndLast | ItemPosition.Last ->
+                                rightTopH
+                                rightBottomH
+                            | _ -> ()
+                        ] 
+
+                    |> List.map (fun (x1, y1, x2 , y2) ->
+                        { Start = new Point(x1, y1); End = new Point(x2, y2) }
+                    )
+                
+                let interspatialCropmarkLines = 
+                    allCropmarkLines
+                    |> List.filter (fun l -> List.forall (fun cropamrkRedArea -> l.IsOutsideOf(cropamrkRedArea)) cellContentAreas_ExtendByCropmarkDistance)
+                    
+                let transformY y =  
+                    match isYNegative with 
+                    | true -> -y
+                    | false -> y
+
+                (pdfCanvas, interspatialCropmarkLines)
+                ||> List.fold (fun (pdfCanvas: PdfCanvas) line ->
+                    pdfCanvas
+                        .MoveTo(line.Start.x, transformY (line.Start.y))
+                        .LineTo(line.End.x, transformY (line.End.y))
+                        .Stroke()
+                )
             )
+
+            pdfCanvas
+
 
         member x.AddCropmarkToPdfCanvas(cropmark: Cropmark, (pdfCanvas: PdfCanvas)) =
             let (CropmarkAreas table) = x
@@ -1004,7 +1009,6 @@ module Imposing =
                 pdfCanvas.AddXObject(xObject, affineTransform)
 
             let addCropmarks (pdfCanvas: PdfCanvas) =
-
                 match cell.Cropmark with 
                 | Some cropmark ->
                     let colPos = cell.ColumnPosition()
