@@ -25,6 +25,39 @@ type Colors =
 let extractTests =
   testList "Extract Tests" [
     
+    testList "groupInto tests" [
+        ftestCase "group into test1" <| fun _ ->
+            Flow.Manipulate (
+                ModifyPage.Create(
+                    "ReadTextInfos",
+                    PageSelector.All,
+                    Selector.Text(fun _ _ -> true),
+                    fun args infos ->
+                        let infos =
+                            infos
+                            |> List.ofSeq
+                            |> List.choose IIntegratedRenderInfo.asITextRenderInfo
+
+                        let result = 
+                            PageInfosSplitter.Groupby_CenterPointIsInside.Infos__GroupOrFilter_IntoOp(
+                                [args.Page.GetActualBox()],
+                                infos,
+                                (fun m -> 
+                                    let bound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
+                                    TargetPageBox(Some bound)
+                                )
+                            )
+
+                        result
+
+                )
+            )
+            |> runTest "datas/extract/group into.pdf" 
+            |> ignore
+            failwith ""
+
+    ]
+
     testList "extract tests" [
         testCase "extract and scale" <| fun _ -> 
             Flow.Reuse (
@@ -323,6 +356,8 @@ let extractTests =
             )
             |> runTest "datas/extract/extract objects7.pdf" 
             |> ignore
+
+
     ]
 
 

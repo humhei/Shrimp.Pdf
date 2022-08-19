@@ -1,6 +1,6 @@
 ﻿// Learn more about F# at http://fsharp.org
 namespace Shrimp.Pdf.Extract
-
+#nowarn "0104"
 open Shrimp.Pdf
 open Shrimp.FSharp.Plus
 open Fake.IO
@@ -27,7 +27,7 @@ module _Template_ColoredBoxes =
 
 
 
-
+    /// Zero indexed
     type IndexedBound =
         { Index: int 
           Bound: Rectangle }
@@ -176,6 +176,7 @@ module _Template_ColoredBoxes =
                         Text = textInfo.Text()
                         Bound = bound
                         FsBound = bound.FsRectangle()
+                        Rotation = ITextRenderInfo.getTextRotation textInfo
                     |}
             
                 )
@@ -196,14 +197,32 @@ module _Template_ColoredBoxes =
                     | true -> []
                     | false -> failwithf "No textInfo was found inside pathBound %A\nAvaiableTexts:\n%A" (pathBound.FsRectangle()) textInfos
                 | textInfos -> 
-                    let textInfos = 
+                    let rotations = 
                         textInfos
-                        |> List.sortBy(fun textInfo ->
-                            let bound = textInfo.Bound
-                            NearbyPX(-bound.GetYF()), NearbyPX(bound.GetXF())
-                        )
+                        |> List.map(fun m -> m.Rotation)
+                        |> List.distinct
 
-                    textInfos
+                    match rotations with 
+                    | [rotation] ->
+                        let textInfos = 
+                            textInfos
+                            |> List.sortBy(fun textInfo ->
+                                let bound = textInfo.Bound
+                                match rotation with 
+                                | Rotation.None -> NearbyPX(-bound.GetYF()), NearbyPX(bound.GetXF())
+                                | Rotation.R180 -> 
+                                    NearbyPX(-bound.GetYF()), NearbyPX(-bound.GetXF())
+
+                                | Rotation.Counterclockwise ->
+                                    NearbyPX(bound.GetXF()), NearbyPX(bound.GetYF())
+
+                                | Rotation.Clockwise ->
+                                    NearbyPX(bound.GetXF()), NearbyPX(-bound.GetYF())
+                            )
+
+                        textInfos
+                    | _ ->
+                        textInfos
 
                     //failwithf "multiple textInfos %A were found inside pathBound %A" texts (pathBound)
 

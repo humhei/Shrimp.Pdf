@@ -1337,6 +1337,32 @@ let manipulateTests =
         //|> runTest @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\123.pdf"
         |> ignore
 
+    testCase "split textLine to words4" <| fun _ -> 
+        let flow =
+            Modify.SplitTextLineToWords()
+            <+>
+            ModifyPage.Create(
+                "ReadTextInfos",
+                PageSelector.All,
+                Selector.Text(fun _ _ -> true),
+                (fun args infos ->
+                    infos
+                    |> List.ofSeq
+                    |> List.choose IIntegratedRenderInfo.asITextRenderInfo
+                    |> List.map (fun m -> m.RecordValue)
+                )
+            )
+
+        Flow.Manipulate(
+            flow
+        )
+        |> runTest "datas/manipulate/split textLine to words4.pdf" 
+        //|> runTest @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\123.pdf"
+        |> fun a -> 
+            failwith ""
+
+        |> ignore
+
     testCase "map font for horizontal line" <| fun _ -> 
 
         let flow =
@@ -1416,7 +1442,7 @@ let manipulateTests =
         )
 
 
-    ftestCase "read vertical texts" <| fun _ -> 
+    testCase "read vertical texts" <| fun _ -> 
 
         let pdfFile = 
             @"datas/manipulate/add bound to vertical text2.pdf" 

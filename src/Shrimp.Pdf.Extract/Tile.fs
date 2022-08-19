@@ -157,6 +157,9 @@ module _Tile =
             
     
         member internal x.Infos__GroupOrFilter_IntoOp(bounds: Rectangle list, infos: RenewableInfo list, ?predicateEx) =
+            /// NOTE: BoxWithText.Pick already sort infos
+            /// SO we shouldn't use sorter here
+
             //let selectionSorter = 
             //    defaultArg selectionSorter (SelectionSorter.CreatePlane(mm 0.5))
 
