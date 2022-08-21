@@ -488,12 +488,127 @@ type ResizingStyle [<JsonConstructor>] (v) =
             PdfCanvas.concatMatrixByTransform transform
         ]
 
+type FlipStyle [<JsonConstructor>] private (v) =
+    inherit POCOBaseV<Flip * PageBoxKind option >(v)
+
+    member x.FlippingWay = x.VV.Item2_1()
+
+    member x.PageBoxKind = x.VV.Item2_2()
+
+
+    member x.AsPdfActions(args: _SelectionModifierFixmentArguments<_>) =
+        let originSize = 
+            IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth args.CurrentRenderInfo
+        
+        let originCtm = 
+            args.CurrentRenderInfo.Value.GetGraphicsState().GetCtm()
+            |> AffineTransformRecord.ofMatrix
+
+        let transform =
+            match x.PageBoxKind with 
+            | None ->
+                let baseTransform = AffineTransformRecord.GetFlipInstance x.FlippingWay
+                { baseTransform with 
+                    TranslateX = 
+                        match x.FlippingWay with 
+                        | Flip.HFlip -> -originSize.GetWidthF() / originCtm.ScaleX
+                        | Flip.VFlip -> 0.
+
+                    TranslateY = 
+                        match x.FlippingWay with 
+                        | Flip.VFlip -> -originSize.GetHeightF() / originCtm.ScaleY
+                        | Flip.HFlip -> 0.
+                }
+
+            | Some pageBoxKind ->
+                let pageBox = args.Page.GetPageBox(pageBoxKind)
+                let baseTransform = AffineTransformRecord.GetFlipInstance x.FlippingWay
+                { baseTransform with 
+                    TranslateX = 
+                        match x.FlippingWay with 
+                        | Flip.HFlip -> 
+                            let middleSpace = (originSize.GetXF() - pageBox.GetXCenterF()) * 2.
+                        
+                            ((-originSize.GetWidthF() * 2.) - middleSpace) / originCtm.ScaleX
+                        | Flip.VFlip -> 0.
+
+                    TranslateY = 
+                        match x.FlippingWay with 
+                        | Flip.VFlip -> 
+                            let middleSpace = (originSize.GetYF() - pageBox.GetYCenterF()) * 2.
+                            ((-originSize.GetHeightF() * 2.) - middleSpace) / originCtm.ScaleY
+
+                        | Flip.HFlip -> 0.
+                }
+
+        //let transform = 
+        //    match x.PageBoxKind with 
+        //    | None ->
+        //        let baseTransform = AffineTransformRecord.GetFlipInstance x.FlippingWay
+        //        let translate = 
+        //            { AffineTransformRecord.DefaultValue with 
+        //                TranslateX = 
+        //                    match x.FlippingWay with 
+        //                    | Flip.HFlip -> -originSize.GetWidthF() / originCtm.ScaleX
+        //                    | Flip.VFlip -> 0.
+
+        //                TranslateY = 
+        //                    match x.FlippingWay with 
+        //                    | Flip.VFlip -> -originSize.GetHeightF() / originCtm.ScaleY
+        //                    | Flip.HFlip -> 0.
+        //            }
+
+        //        originCtm.Concatenate(baseTransform)
+
+        //        //baseTransform.Concatenate translate
+
+        //    | Some pageBoxKind ->
+        //        let pageBox = args.Page.GetPageBox(pageBoxKind)
+        //        let baseTransform = AffineTransformRecord.GetFlipInstance x.FlippingWay
+        //        let translate = 
+        //            { AffineTransformRecord.DefaultValue with 
+        //                TranslateX = 
+        //                    match x.FlippingWay with 
+        //                    | Flip.HFlip -> 
+        //                        let middleSpace = (originSize.GetXF() - pageBox.GetXCenterF()) * 2.
+                                
+        //                        ((-originSize.GetWidthF() * 2.) - middleSpace) 
+        //                    | Flip.VFlip -> 0.
+
+        //                TranslateY = 
+        //                    match x.FlippingWay with 
+        //                    | Flip.VFlip -> -originSize.GetHeightF() 
+        //                    | Flip.HFlip -> 0.
+        //            }
+
+        //        failwith ""
+
+
+        [
+            PdfCanvas.concatMatrixByTransform transform
+        ]
+
+
+    new (?flip, ?pageBoxKind) =
+        FlipStyle((defaultArg flip Flip.HFlip, pageBoxKind))
+
+[<RequireQualifiedAccess>]
+type TransformStyle =   
+    | Resize of ResizingStyle
+    | Flip of FlipStyle
+with 
+    member x.AsPdfActions(args) =
+        match x with 
+        | Resize v -> v.AsPdfActions(args)
+        | Flip v -> v.AsPdfActions(args)
+
+
 type BackgroundOrForegroundFile =
     { File: BackgroundFile
       BackgroundOrForeground: BackgroundOrForeground }
 
 type VectorStyle [<JsonConstructor>] private (v) =
-    inherit POCOBaseV<FillStyle option * StrokeStyle option * ResizingStyle option * bool>(v)
+    inherit POCOBaseV<FillStyle option * StrokeStyle option * TransformStyle option * bool>(v)
 
     member x.FillStyle = x.VV.Item4_1()
 
@@ -579,10 +694,10 @@ type VectorStyle [<JsonConstructor>] private (v) =
 
 
 
-    new (?fill, ?stroke, ?resizingStyle, ?asCopy) =
-        DefaultArgs.CheckAllInputsAreNotEmpty(fill, stroke, resizingStyle, asCopy)
+    new (?fill, ?stroke, ?transformStyle, ?asCopy) =
+        DefaultArgs.CheckAllInputsAreNotEmpty(fill, stroke, transformStyle, asCopy)
     
-        new VectorStyle((fill, stroke, resizingStyle, defaultArg asCopy false))
+        new VectorStyle((fill, stroke, transformStyle, defaultArg asCopy false))
 
     static member ColorIs(?fillColor, ?strokeColor) =
         DefaultArgs.CheckAllInputsAreNotEmpty(fillColor, strokeColor)

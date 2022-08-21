@@ -26,7 +26,7 @@ let extractTests =
   testList "Extract Tests" [
     
     testList "groupInto tests" [
-        ftestCase "group into test1" <| fun _ ->
+        testCase "group into test1" <| fun _ ->
             Flow.Manipulate (
                 ModifyPage.Create(
                     "ReadTextInfos",

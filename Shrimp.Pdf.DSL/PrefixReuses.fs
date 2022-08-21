@@ -19,9 +19,6 @@ open Shrimp.FSharp.Plus.Math
 open Newtonsoft.Json
 open Shrimp.Pdf.Constants
 
-type Flip =
-    | HFlip = 0
-    | VFlip = 1
 
 module Flip =
     let ofCharOp(char: char) =
@@ -504,21 +501,8 @@ module _PrefixReuses =
                                         let affineTransfrom_Flip = 
                                             match flip with 
                                             | None -> AffineTransformRecord.DefaultValue
-                                            | Some Flip.HFlip -> 
-                                                { ScaleX = -1.0
-                                                  ShearX = 0.0 
-                                                  ShearY = 0.0 
-                                                  ScaleY = 1.0
-                                                  TranslateX = 0.0
-                                                  TranslateY = 0.0 }
-                                                
-                                            | Some Flip.VFlip ->
-                                                { ScaleX = 1.0
-                                                  ShearX = 0.0 
-                                                  ShearY = 0.0 
-                                                  ScaleY = -1.0
-                                                  TranslateX = 0.0
-                                                  TranslateY = 0.0 }
+                                            | Some flip -> AffineTransformRecord.GetFlipInstance flip
+                                
                                             |> AffineTransform.ofRecord
 
                                         let affineTransform_Translate = 

@@ -61,12 +61,71 @@ let manipulateTests =
                 selector = (
                     Selector.Path(Info.BoundSizeIs(fun size -> size.GetWidthF() >= mm 30.))
                 ),
-                targetStyle = VectorStyle(resizingStyle = resizingStyle, asCopy = true)
+                targetStyle = VectorStyle(transformStyle = TransformStyle.Resize resizingStyle, asCopy = true)
             )
         )
         |> runTest "datas/manipulate/resize path as copy.pdf" 
         |> ignore
+
+    ftestCase "flip path as copy" <| fun _ ->     
+        let resizingStyle = 
+            FlipStyle(Flip.HFlip)
+
+        Flow.Manipulate (
+            Modify.ChangeStyle(
+                selector = (
+                    Selector.Path(Info.StrokeColorIs (FsColor.valueColor FsDeviceCmyk.MAGENTA))
+                ),
+                targetStyle = VectorStyle(transformStyle = TransformStyle.Flip resizingStyle, asCopy = false)
+            )
+        )
+        |> runTest "datas/manipulate/flip path as copy.pdf" 
+        |> ignore
        
+    testCase "flip path as copy2" <| fun _ ->     
+        let resizingStyle = 
+            FlipStyle(Flip.VFlip, PageBoxKind.CropBox)
+
+        Flow.Manipulate (
+            Modify.ChangeStyle(
+                selector = (
+                    Selector.Path(Info.StrokeColorIs (FsColor.valueColor FsDeviceCmyk.MAGENTA))
+                ),
+                targetStyle = VectorStyle(transformStyle = TransformStyle.Flip resizingStyle, asCopy = false)
+            )
+        )
+        |> runTest "datas/manipulate/flip path as copy2.pdf" 
+        |> ignore
+
+    testCase "flip path as copy3" <| fun _ ->     
+        let resizingStyle = 
+            FlipStyle(Flip.VFlip)
+
+        Flow.Manipulate (
+            Modify.ChangeStyle(
+                selector = (
+                    Selector.Path(Info.StrokeColorIs (FsColor.valueColor FsDeviceCmyk.MAGENTA))
+                ),
+                targetStyle = VectorStyle(transformStyle = TransformStyle.Flip resizingStyle, asCopy = false)
+            )
+        )
+        |> runTest "datas/manipulate/flip path as copy3.pdf" 
+        |> ignore
+
+    testCase "flip path as copy4" <| fun _ ->     
+        let resizingStyle = 
+            FlipStyle(Flip.VFlip, PageBoxKind.ActualBox)
+
+        Flow.Manipulate (
+            Modify.ChangeStyle(
+                selector = (
+                    Selector.Path(Info.StrokeColorIs (FsColor.valueColor FsDeviceCmyk.MAGENTA))
+                ),
+                targetStyle = VectorStyle(transformStyle = TransformStyle.Flip resizingStyle, asCopy = false)
+            )
+        )
+        |> runTest "datas/manipulate/flip path as copy4.pdf" 
+        |> ignore
 
     testCase "release compound path" <| fun _ -> 
         Flow.Manipulate (

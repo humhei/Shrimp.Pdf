@@ -841,6 +841,10 @@ module ExtensionTypes =
 
             AreaTable(rows)
             
+    
+    type Flip =
+        | HFlip = 0
+        | VFlip = 1
 
     [<RequireQualifiedAccess>]
     type Rotation =
@@ -950,6 +954,25 @@ module ExtensionTypes =
 
         member x.m12 = x.TranslateY
 
+        static member GetFlipInstance(flip: Flip) =
+            match flip with 
+            | Flip.HFlip -> 
+                { ScaleX = -1.0
+                  ShearX = 0.0 
+                  ShearY = 0.0 
+                  ScaleY = 1.0
+                  TranslateX = 0.0
+                  TranslateY = 0.0 }
+                
+            | Flip.VFlip ->
+                { ScaleX = 1.0
+                  ShearX = 0.0 
+                  ShearY = 0.0 
+                  ScaleY = -1.0
+                  TranslateX = 0.0
+                  TranslateY = 0.0 }
+                
+
         member x.MapValue(fValue) =
             {
                 ScaleX      = fValue x.ScaleX
@@ -968,6 +991,8 @@ module ExtensionTypes =
               TranslateY = 0.
               ShearX = 0.
               ShearY = 0. }
+
+            
 
     module AffineTransformRecord =
         let ofAffineTransform (affineTransform: AffineTransform) =
@@ -1010,6 +1035,17 @@ module ExtensionTypes =
             
             new Matrix(values.[0], values.[1], values.[2], values.[3], values.[4], values.[5])
             //new Matrix(values.[Matrix.I11], values.[Matrix.I12], values.[Matrix.I21], values.[Matrix.I22], values.[Matrix.I31], values.[Matrix.I32])
+
+    type AffineTransformRecord with 
+        member x.Concatenate(y: AffineTransformRecord) =
+            let x = AffineTransformRecord.toAffineTransform x
+            (x).Concatenate(AffineTransformRecord.toAffineTransform y)
+            AffineTransformRecord.ofAffineTransform x
+
+        member x.PreConcatenate(y: AffineTransformRecord) =
+            let x = AffineTransformRecord.toAffineTransform x
+            (x).PreConcatenate(AffineTransformRecord.toAffineTransform y)
+            AffineTransformRecord.ofAffineTransform x
 
 
     type DashPattern =
