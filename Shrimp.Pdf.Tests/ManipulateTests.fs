@@ -67,7 +67,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/resize path as copy.pdf" 
         |> ignore
 
-    ftestCase "flip path as copy" <| fun _ ->     
+    testCase "flip path as copy" <| fun _ ->     
         let resizingStyle = 
             FlipStyle(Flip.HFlip)
 
@@ -125,6 +125,24 @@ let manipulateTests =
             )
         )
         |> runTest "datas/manipulate/flip path as copy4.pdf" 
+        |> ignore
+
+
+    testCase "flip path as copy5" <| fun _ ->     
+        let resizingStyle = 
+            FlipStyle(Flip.HFlip, PageBoxKind.TrimBox)
+
+        let color = FsSeparation.Create ("Braille", FsValueColor.CMYK_CYAN)
+
+        Flow.Manipulate (
+            Modify.ChangeStyle(
+                selector = (
+                    Selector.Path(Info.FillColorIs (FsColor.Separation color))
+                ),
+                targetStyle = VectorStyle(transformStyle = TransformStyle.Flip resizingStyle, asCopy = false)
+            )
+        )
+        |> runTest "datas/manipulate/flip path as copy5.pdf" 
         |> ignore
 
     testCase "release compound path" <| fun _ -> 

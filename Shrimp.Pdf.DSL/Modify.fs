@@ -511,35 +511,48 @@ type FlipStyle [<JsonConstructor>] private (v) =
                 { baseTransform with 
                     TranslateX = 
                         match x.FlippingWay with 
-                        | Flip.HFlip -> -originSize.GetWidthF() / originCtm.ScaleX
+                        | Flip.HFlip -> 
+                            let offsetByCtm = ((originSize.GetRightF() - originCtm.TranslateX) * 2.)
+                            let offsetByCenter = (-originSize.GetWidthF() + offsetByCtm)
+                            offsetByCenter / originCtm.ScaleX
                         | Flip.VFlip -> 0.
 
                     TranslateY = 
                         match x.FlippingWay with 
-                        | Flip.VFlip -> -originSize.GetHeightF() / originCtm.ScaleY
+                        | Flip.VFlip -> 
+                            let offsetByCtm = ((originCtm.TranslateY - originSize.GetBottomF()) * 2.)
+                            let offsetByCenter = (-originSize.GetHeightF() - offsetByCtm)
+                            offsetByCenter / originCtm.ScaleY
                         | Flip.HFlip -> 0.
                 }
 
             | Some pageBoxKind ->
                 let pageBox = args.Page.GetPageBox(pageBoxKind)
                 let baseTransform = AffineTransformRecord.GetFlipInstance x.FlippingWay
-                { baseTransform with 
-                    TranslateX = 
-                        match x.FlippingWay with 
-                        | Flip.HFlip -> 
-                            let middleSpace = (originSize.GetXF() - pageBox.GetXCenterF()) * 2.
-                        
-                            ((-originSize.GetWidthF() * 2.) - middleSpace) / originCtm.ScaleX
-                        | Flip.VFlip -> 0.
+                let translate = 
+                    { baseTransform with 
+                        TranslateX = 
+                            match x.FlippingWay with 
+                            | Flip.HFlip -> 
+                                let offsetByCtm = ((originSize.GetRightF() - originCtm.TranslateX) * 2.)
+                                let offsetByCenter = (-originSize.GetWidthF() + offsetByCtm)
+                                let middleSpace = (originSize.GetXF() - pageBox.GetXCenterF()) * 2.
+                                
+                                (offsetByCenter - middleSpace - originSize.GetWidthF()) / originCtm.ScaleX
+                            | Flip.VFlip -> 0.
 
-                    TranslateY = 
-                        match x.FlippingWay with 
-                        | Flip.VFlip -> 
-                            let middleSpace = (originSize.GetYF() - pageBox.GetYCenterF()) * 2.
-                            ((-originSize.GetHeightF() * 2.) - middleSpace) / originCtm.ScaleY
+                        TranslateY = 
+                            match x.FlippingWay with 
+                            | Flip.VFlip -> 
+                                let offsetByCtm = ((originCtm.TranslateY - originSize.GetBottomF()) * 2.)
+                                let offsetByCenter = (-originSize.GetHeightF() - offsetByCtm)
+                                let middleSpace = (originSize.GetYF() - pageBox.GetYCenterF()) * 2.
+                                (offsetByCenter - middleSpace - originSize.GetHeightF()) / originCtm.ScaleY
 
-                        | Flip.HFlip -> 0.
-                }
+                            | Flip.HFlip -> 0.
+                    }
+
+                translate
 
         //let transform = 
         //    match x.PageBoxKind with 

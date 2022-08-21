@@ -1047,6 +1047,10 @@ module ExtensionTypes =
             (x).PreConcatenate(AffineTransformRecord.toAffineTransform y)
             AffineTransformRecord.ofAffineTransform x
 
+        member x.Inverse() =
+            let x = AffineTransformRecord.toAffineTransform x
+            x.CreateInverse()
+            |> AffineTransformRecord.ofAffineTransform
 
     type DashPattern =
         { DashArray: float []
