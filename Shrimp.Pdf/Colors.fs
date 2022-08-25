@@ -142,7 +142,7 @@ module _Colors =
             | Success (r, _, _) -> FsGray (float32 r)
             | Failure (error, _, _) -> failwith error
 
-    /// valueRange: 0 -> 1
+    /// valueRange: BLACK 0 -> WHITE 1
     type FsDeviceRgb =
         { R: float32 
           G: float32 
@@ -317,7 +317,7 @@ module _Colors =
             FsLab.OfHex (int pantoneColor)
 
 
-    /// valueRange: 0 -> 1
+    /// valueRange: WHITE 0 -> BLACK 1
     type FsDeviceCmyk =
         { C: float32 
           M: float32
@@ -663,34 +663,39 @@ module _Colors =
                 FsDeviceRgb.Create(int color.R, int color.G, int color.B)
                 |> FsValueColor.Rgb
     
-
+    [<StructuredFormatDisplayAttribute("{LoggingTextWithColor}")>]
     type FsSeparation =
         { Name: string 
-          Color: FsValueColor
+          BaseColor: FsValueColor
           Transparency: float }
     with 
+        member x.Color =
+            x.BaseColor.MapColorValue(fun m -> m * float32 x.Transparency)
+
 
         member x.LoggingText = x.Name
 
+        member private x.LoggingTextWithColor = x.Name + " " + x.Color.LoggingText_Raw
+
         static member Create(name: string, color: Color, ?transparency) =
             { Name = name 
-              Color = FsValueColor.OfItextColor color
+              BaseColor = FsValueColor.OfItextColor color
               Transparency = defaultArg transparency 1. }
 
         static member Create(name: string, color: FsLab, ?transparency) =
             { Name = name 
-              Color = FsValueColor.Lab color
+              BaseColor = FsValueColor.Lab color
               Transparency = defaultArg transparency 1. }
 
 
         static member Create(name: string, color: FsValueColor, ?transparency) =
             { Name = name 
-              Color = color
+              BaseColor = color
               Transparency = defaultArg transparency 1. }
 
         static member Registration =
             { Name = "All";
-              Color = 
+              BaseColor = 
                 FsValueColor.Cmyk 
                     { C = 1.f 
                       M = 1.f 
@@ -710,7 +715,7 @@ module _Colors =
     
             let separationName1 = color.ToString()
             
-            { Color = FsValueColor.Lab fsValueColor
+            { BaseColor = FsValueColor.Lab fsValueColor
               Name = separationName1
               Transparency = 1. }
 
@@ -719,7 +724,7 @@ module _Colors =
     
             let separationName1 = color.ToString()
             
-            { Color = FsValueColor.Lab fsValueColor
+            { BaseColor = FsValueColor.Lab fsValueColor
               Name = separationName1
               Transparency = 1. }
 
@@ -1005,12 +1010,17 @@ module _Colors =
 
 
     type Separation with 
-        member separation.GetAlterateColor() =
+        member separation.GetBaseAlterateColor() =
             let colorSpace = separation.GetColorSpace() :?> PdfSpecialCs.Separation
             let color = 
                 colorSpace.GetAlterateColor()
 
-            color.MapColorValue(fun color -> color * (separation.GetColorValue().[0]))
+            color
+            //let colorValues = separation.GetColorValue()
+
+            //let multiple = colorValues.[0]
+
+            //color.MapColorValue(fun color -> color * (multiple))
 
         static member private Range(color: Color) =
             let colorValues = color.GetColorValue()
@@ -1134,15 +1144,19 @@ module _Colors =
                                  |> string)
 
                             DecodedPdfName.Create(uri)
-
     
                         try 
-                            FsSeparation.Create(colorName.ReadableName, separation.GetAlterateColor())
+                            FsSeparation.Create(colorName.ReadableName, separation.GetBaseAlterateColor())
                         with ex ->
                             raise (new AccumulatedException(sprintf "Error when parsing separation color %s" colorName.ReadableName, ex))
                 )
 
-            { v with Transparency = float transparency }
+
+            { v with 
+                BaseColor = v.Color
+                Transparency = float transparency
+            }
+
 
        
 

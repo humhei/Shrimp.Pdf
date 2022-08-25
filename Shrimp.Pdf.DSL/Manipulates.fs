@@ -317,3 +317,18 @@ module Manipulates =
                     "margin" => margin.LoggingText
                 ]
             )  ||>> ignore
+
+
+        static member AddRectangleToCanvasRootArea(canvasAreaOptions, ?fArgs, ?pageSelector) =
+            let fArgs = defaultArg fArgs id
+            ModifyPage.Create(
+                "add rectangle to canvas root area",
+                defaultArg pageSelector PageSelector.All,
+                Dummy,
+                PageModifier.AddRectangleToCanvasRootArea(canvasAreaOptions, fArgs)
+            )  ||>> ignore
+            |> Manipulate.rename 
+                "add rectangle to canvas root area"
+                [
+                    "canvasAreaOptions" => canvasAreaOptions.ToString()
+                ]

@@ -1253,6 +1253,7 @@ type Modifier =
                             |> List.splitIfChangedWith ChangedItemIntoPosition.Previous (fun _ item ->
                                 match item.Operator.ToString() with 
                                 | EQ h -> false
+                                | EQ l -> false
                                 | _ -> true
                             )
 

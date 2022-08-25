@@ -50,6 +50,12 @@ let manipulateTests =
         PdfRunner.ReadColors(PdfFile path)
         |> ignore
 
+    testCase "read shading colors2" <| fun _ ->  
+        let path = "datas/manipulate/read shading colors2.pdf" 
+        let colors = PdfRunner.ReadColors(PdfFile path)
+        ()
+        
+
     testCase "resize path as copy" <| fun _ ->     
         let resizingStyle = 
             ResizingStyle
@@ -157,6 +163,13 @@ let manipulateTests =
             Modify.ReleaseCompoundPath(Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation))
         )
         |> runTest "datas/manipulate/release compound path2.pdf" 
+        |> ignore
+
+    ftestCase "release compound path3" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.ReleaseCompoundPath(fun _ _ -> true)
+        )
+        |> runTest "datas/manipulate/release compound path3.pdf" 
         |> ignore
 
     testCase "make combound path from blue strokes" <| fun _ -> 
@@ -281,7 +294,7 @@ let manipulateTests =
         let colors = 
             [
                 { Name = "CuttingLine_BLUE" 
-                  Color = FsValueColor.RGB_BLUE
+                  BaseColor = FsValueColor.RGB_BLUE
                   Transparency = 1. }
 
                 FsSeparation.Create("PageNumber", DeviceRgb(200, 0, 56))
@@ -308,7 +321,7 @@ let manipulateTests =
         let colors = 
             [
                 { Name = "CuttingLine_BLUE" 
-                  Color = FsValueColor.RGB_BLUE
+                  BaseColor = FsValueColor.RGB_BLUE
                   Transparency = 1. }
 
                 FsSeparation.Create("PageNumber", DeviceRgb(200, 0, 56))
@@ -1533,14 +1546,16 @@ let manipulateTests =
         ()
         
 
-    ptestCase "test infos" <| fun _ -> 
+    ftestCase "test infos" <| fun _ -> 
 
         let pdfFile = 
-            @"C:\Users\Jia\Desktop\内盒90×40mmExtractor.pdf"
+            @"D:\VsCode\Workspace\ExcelDnaWidget\QuickImpose.Book\tests\QuickImpose.Book.Tests\folders\LED420 快速指导页 quick start guider（英文）.pdf"
+            //@"D:\VsCode\Workspace\Shrimp.Pdf.Enhancement\tests\Shrimp.Pdf.Enhancement.Tests\datas\flows\Tile pages by cropLine3.pdf"
             |> PdfFile
 
 
-        let colors = PdfRunner.ReadTextInfos(pdfFile)
+        let colors = PdfRunner.ReadColors(pdfFile)
+
 
         let a = 1
 

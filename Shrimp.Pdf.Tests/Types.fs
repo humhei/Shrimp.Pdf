@@ -18,12 +18,12 @@ let fail() = Expect.isTrue false "failed"
 
 let cuttingLineSeparation =
     { FsSeparation.Name = "CuttingLine"
-      Color = FsValueColor.RGB_BLUE
+      BaseColor = FsValueColor.RGB_BLUE
       Transparency = 1.0 }
 
 let cuttingLineSeparationZH =
     { FsSeparation.Name = "刀版"
-      Color = FsValueColor.RGB_BLUE
+      BaseColor = FsValueColor.RGB_BLUE
       Transparency = 1.0 }
 
 let createTestPath file = 

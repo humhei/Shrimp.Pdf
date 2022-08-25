@@ -21,16 +21,25 @@ module ExtensionTypes =
         open iText.Kernel.Colors
         open iText.Kernel.Pdf.Colorspace
         
-        type PdfShadingColor(shading: PdfShading, colorSpace) =
+
+        type PdfShadingColor(shading: PdfShading, colorSpace: PdfColorSpace) = 
             inherit Color(colorSpace, [||])
 
-            member x.ColorSpace = colorSpace
+            //member x.ColorSpace = colorSpace
 
             member x.Shading = shading
 
             new (shading: PdfShading) =
-                let colorSpace =
-                    PdfSpecialCs.NChannel(shading.GetColorSpace() :?> PdfArray)
+                let colorSpace = 
+                    match shading.GetColorSpace() with 
+                    | :? PdfName as pdfName ->
+                        match pdfName with 
+                        | EqualTo PdfName.DeviceCMYK -> PdfDeviceCs.Cmyk() :> PdfColorSpace
+                        | EqualTo PdfName.DeviceGray -> PdfDeviceCs.Gray() :> PdfColorSpace
+                        | EqualTo PdfName.DeviceRGB  -> PdfDeviceCs.Rgb() :> PdfColorSpace
+
+                    | :? PdfArray as array ->
+                        PdfSpecialCs.NChannel(array) :> PdfColorSpace
 
                 new PdfShadingColor(shading, colorSpace)
 
@@ -805,7 +814,7 @@ module ExtensionTypes =
             | length -> failwithf "Cannot create tileTable collection from (tileTable: %A, values length: %d)" (tileTable) length
 
 
-    type AreaRow = AreaRow of FsRectangle al1List
+    type AreaRow = AreaRow of FsRectangle list
     with 
         member x.Length = 
             let (AreaRow v) = x
@@ -815,7 +824,15 @@ module ExtensionTypes =
             let (AreaRow v) = x
             v
 
-    type AreaTable = private AreaTable of AreaRow al1List
+    //type PageAreas = PageAreas of FsRectangle list
+    //with 
+    //    member x.Areas =
+    //        let (PageAreas v) = x
+    //        v
+
+    //    member x.AreasCount = x.Areas.Length
+
+    type AreaTable = private AreaTable of AreaRow list
     with 
         member x.Rows =
             let (AreaTable (v)) = x
@@ -823,17 +840,21 @@ module ExtensionTypes =
 
         member x.Cells =
             x.Rows
-            |> AtLeastOneList.collect(fun m -> m.Cells)
+            |> List.collect(fun m -> m.Cells)
+
+        //member x.AsPageAreas =
+        //    x.Cells
+        //    |> PageAreas
 
         member x.CellsCount = 
             x.Rows
-            |> AtLeastOneList.sumBy(fun m -> m.Length)
+            |> List.sumBy(fun m -> m.Length)
 
         //member x.ColNum =
         //    let (AreaTable (v, _)) = x
         //    v
 
-        static member Create(rows: AreaRow al1List) =
+        static member Create(rows: AreaRow list) =
             //let colNum = 
             //    rows
             //    |> AtLeastOneList.map(fun m -> m.Length)
@@ -841,6 +862,15 @@ module ExtensionTypes =
 
             AreaTable(rows)
             
+
+        static member Create(rows: FsRectangle list list) =
+            //let colNum = 
+            //    rows
+            //    |> AtLeastOneList.map(fun m -> m.Length)
+            //    |> AtLeastOneList.exactlyOne_DetailFailingText
+            rows
+            |> List.map(AreaRow)
+            |> AreaTable
     
     type Flip =
         | HFlip = 0
@@ -1135,6 +1165,17 @@ module ExtensionTypes =
             { XEffort = XEffort.Middle 
               YEffort = YEffort.Middle }
 
+    type PositionEnum =
+        | LeftBottom          =    0
+        | LeftMiddle          =    1
+        | LeftTop             =    2
+        | TopMiddle           =    3
+        | RightTop            =    4
+        | RightMiddle         =    5
+        | RightBottom         =    6
+        | BottomMiddle        =    7
+        | Center              =    8
+
     [<RequireQualifiedAccess>]
     type Position =
         | LeftBottom of float * float
@@ -1152,6 +1193,17 @@ module ExtensionTypes =
 
     [<RequireQualifiedAccess>]
     module Position =
+        let create x y = function
+            | PositionEnum.LeftBottom          ->   Position.LeftBottom      (x, y)
+            | PositionEnum.LeftMiddle          ->   Position.LeftMiddle      (x, y)
+            | PositionEnum.LeftTop             ->   Position.LeftTop         (x, y)
+            | PositionEnum.TopMiddle           ->   Position.TopMiddle       (x, y)
+            | PositionEnum.RightTop            ->   Position.RightTop        (x, y)
+            | PositionEnum.RightMiddle         ->   Position.RightMiddle     (x, y)
+            | PositionEnum.RightBottom         ->   Position.RightBottom     (x, y)
+            | PositionEnum.BottomMiddle        ->   Position.BottomMiddle    (x, y)
+            | PositionEnum.Center              ->   Position.Center          (x, y)
+
 
         let (|Left|XCenter|Right|) = function
             | Position.LeftTop (x, y) 

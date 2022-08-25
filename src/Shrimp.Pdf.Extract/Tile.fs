@@ -445,50 +445,49 @@ module _Tile =
             }
             |> array2D
     
-    [<RequireQualifiedAccess>]
-    type private TileTableIndexerOrAreaTable =
-        | TileTableIndexer of TileTableIndexer
-        | AreaTables of AreaTable list
-    with 
-        member x.GetIndexedAreas(pageNumber: PageNumber, actualBox: Rectangle, direction) =
-            match x with 
-            | TileTableIndexerOrAreaTable.AreaTables tables ->
-                let rows = tables.[pageNumber.Value].Rows
-                let areas = 
-                    rows.AsList
-                    |> List.map(fun (AreaRow row) ->
-                        row.AsList
-                    )
+    //[<RequireQualifiedAccess>]
+    //type private TileTableIndexerOrAreaTable =
+    //    | TileTableIndexer of TileTableIndexer
+    //    | AreaTables of AreaTable list
+    //with 
+    //    member x.GetIndexedAreas(pageNumber: PageNumber, actualBox: Rectangle, direction) =
+    //        match x with 
+    //        | TileTableIndexerOrAreaTable.AreaTables tables ->
+    //            let rows = tables.[pageNumber.Value].Rows
+    //            let areas = 
+    //                rows
+    //                |> List.map(fun (AreaRow row) ->
+    //                    row
+    //                )
 
-                match direction with 
-                | Direction.Horizontal -> 
-                    areas
-                    |> List.concat
+    //            match direction with 
+    //            | Direction.Horizontal -> 
+    //                areas
+    //                |> List.concat
 
-                | Direction.Vertical ->
-                    areas
-                    |> array2D
-                    |> Array2D.transpose
-                    |> Array2D.toLists
-                    |> List.concat
+    //            | Direction.Vertical ->
+    //                areas
+    //                |> array2D
+    //                |> Array2D.transpose
+    //                |> Array2D.toLists
+    //                |> List.concat
 
-            | TileTableIndexerOrAreaTable.TileTableIndexer tileTable ->
-                let colNum = tileTable.ColNum
-                let rowNum = tileTable.RowNum
-                let cellsCount = colNum * rowNum
-                let tileIndexeres =
-                    [ 1 .. cellsCount ]
-                    |> List.map(fun j ->
-                        let index = (pageNumber.Value-1) * cellsCount + j
-                        TileCellIndexer.Create((index-1), direction)
-                    )
+    //        | TileTableIndexerOrAreaTable.TileTableIndexer tileTable ->
+    //            let colNum = tileTable.ColNum
+    //            let rowNum = tileTable.RowNum
+    //            let cellsCount = colNum * rowNum
+    //            let tileIndexeres =
+    //                [ 1 .. cellsCount ]
+    //                |> List.map(fun j ->
+    //                    let index = (pageNumber.Value-1) * cellsCount + j
+    //                    TileCellIndexer.Create((index-1), direction)
+    //                )
 
-                tileIndexeres
-                |> List.map(fun tileIndexer ->
-                    Rectangle.getTile tileIndexer tileTable actualBox
-                    |> FsRectangle.OfRectangle
-                )
-
+    //            tileIndexeres
+    //            |> List.map(fun tileIndexer ->
+    //                Rectangle.getTile tileIndexer tileTable actualBox
+    //                |> FsRectangle.OfRectangle
+    //            )
 
 
     type Flows with 
@@ -507,71 +506,75 @@ module _Tile =
                     | true -> ()
                     | false -> failwithf "totalNumberOfPages %d <> areaTables's Length %d" totalNumberOfPages areaTables.Length
 
-                for i = 1 to totalNumberOfPages do
-                    let areaTable = areaTables.[i-1]
-                    let pageNumber = i
-                    let readerPage = reader.GetPage(i)
+                for pageNumber = 1 to totalNumberOfPages do
+                    let readerPage = reader.GetPage(pageNumber)
+                    let areaTable = areaTables.[pageNumber-1]
 
                     let cells = 
-                        areaTable.Cells.AsList
+                        areaTable.Cells
                         |> List.map(fun m -> m.AsRectangle)
-                        |> sorter.Sort
 
-                    match pageTilingRenewOptions with 
-                    | PageTilingRenewOptions.UsingOriginPdfPage ->
+                    match cells with 
+                    | [] -> ()
+                    | _ ->
+                        let cells = 
+                            cells
+                            |> sorter.Sort
+
+                        match pageTilingRenewOptions with 
+                        | PageTilingRenewOptions.UsingOriginPdfPage ->
 
 
-                        for cell in cells do
-                            let tileBox = cell
+                            for cell in cells do
+                                let tileBox = cell
 
-                            let writerPage = readerPage.CopyTo(writer)
-                            writer.AddPage(writerPage) |> ignore
+                                let writerPage = readerPage.CopyTo(writer)
+                                writer.AddPage(writerPage) |> ignore
 
-                            PdfPage.setPageBox PageBoxKind.AllBox tileBox writerPage
+                                PdfPage.setPageBox PageBoxKind.AllBox tileBox writerPage
+                                |> ignore
+
+                        | PageTilingRenewOptions.VisibleInfosInActualBox splitter ->
+                            let args: PageModifingArguments<_> = 
+                                { UserState = flowModel.UserState
+                                  Page = readerPage
+                                  TotalNumberOfPages = totalNumberOfPages
+                                  PageNum = pageNumber
+                                }
+
+                            let selector =
+                                Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+
+                            extractVisibleRenewableInfosToWriter 
+                                flowModel.Configuration
+                                args
+                                selector
+                                (fun infos ->
+                                    let bounds = cells
+
+                                    splitter.Infos__GroupOrFilter_IntoOp(
+                                        bounds,
+                                        infos
+                                    )
+                                    |> List.mapi(fun i targetPageInfoOp ->
+                                        match targetPageInfoOp with 
+                                        | Some (targetPageBox, infos) ->
+                                            TargetRenewablePageInfo.NewPage(TargetPageBox (Some targetPageBox.Bound), TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers))
+
+                                        | None ->
+                                            TargetRenewablePageInfo.EmptyPage(TargetPageBox (Some bounds.[i]))
+                                    )
+
+                                )
+                                false
+                                ignore
+                                borderKeepingPageNumbers
+                                reader
+                                writer
                             |> ignore
-
-                    | PageTilingRenewOptions.VisibleInfosInActualBox splitter ->
-                        let args: PageModifingArguments<_> = 
-                            { UserState = flowModel.UserState
-                              Page = readerPage
-                              TotalNumberOfPages = totalNumberOfPages
-                              PageNum = pageNumber
-                            }
-
-                        let selector =
-                            Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
-
-                        extractVisibleRenewableInfosToWriter 
-                            flowModel.Configuration
-                            args
-                            selector
-                            (fun infos ->
-                                let bounds = cells
-
-                                splitter.Infos__GroupOrFilter_IntoOp(
-                                    bounds,
-                                    infos
-                                )
-                                |> List.mapi(fun i targetPageInfoOp ->
-                                    match targetPageInfoOp with 
-                                    | Some (targetPageBox, infos) ->
-                                        TargetRenewablePageInfo.NewPage(TargetPageBox (Some targetPageBox.Bound), TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers))
-
-                                    | None ->
-                                        TargetRenewablePageInfo.EmptyPage(TargetPageBox (Some bounds.[i]))
-                                )
-
-                            )
-                            false
-                            ignore
-                            borderKeepingPageNumbers
-                            reader
-                            writer
-                        |> ignore
                             
                 areaTables
                 |> List.map(fun areaTable -> PageTilingResultCount areaTable.CellsCount)
-                |> AtLeastOneList.Create
 
             ) 
             |> Reuse.rename 
@@ -580,8 +583,11 @@ module _Tile =
                  "pageTilingRenewOptions" => pageTilingRenewOptions.ToString() ]
             |> Flow.Reuse
         
-        static member TilePages (tileTable: TileTableIndexer, ?direction: Direction, ?pageTilingRenewOptions: PageTilingRenewOptions) =
+        static member TilePages (tileTable: TileTableIndexer, ?direction: Direction, ?pageTilingRenewOptions: PageTilingRenewOptions, ?pageBoxKind, ?margin: Margin) =
+            let pageBoxKind = defaultArg pageBoxKind PageBoxKind.ActualBox
+            let margin = defaultArg margin Margin.Zero
             let direction = defaultArg direction Direction.Horizontal
+            
             let pageTilingRenewOptions = defaultArg pageTilingRenewOptions PageTilingRenewOptions.UsingOriginPdfPage
             let colNum = tileTable.ColNum
             let rowNum = tileTable.RowNum
@@ -594,22 +600,21 @@ module _Tile =
                 let totalNumberOfPages = reader.GetNumberOfPages()
                 let borderKeepingPageNumbers = [1..totalNumberOfPages]
 
-                for i = 1 to totalNumberOfPages do
-                    let pageNumber = i
-                    let readerPage = reader.GetPage(i)
-                    let actualBox = readerPage.GetActualBox()
+                for pageNumber = 1 to totalNumberOfPages do
+                    let readerPage = reader.GetPage(pageNumber)
+                    let tilingPageBox = readerPage.GetPageBox(pageBoxKind) |> Rectangle.applyMargin margin
 
                     let tileIndexeres =
                         [ 1 .. cellsCount ]
-                        |> List.map(fun j ->
-                            let index = (i-1) * cellsCount + j
+                        |> List.map(fun i ->
+                            let index = (pageNumber-1) * cellsCount + i
                             TileCellIndexer.Create((index-1), direction)
                         )
 
                     match pageTilingRenewOptions with 
                     | PageTilingRenewOptions.UsingOriginPdfPage ->
                         for tileIndexer in tileIndexeres do
-                            let tileBox = Rectangle.getTile tileIndexer tileTable actualBox
+                            let tileBox = Rectangle.getTile tileIndexer tileTable tilingPageBox
 
                             let writerPage = readerPage.CopyTo(writer)
                             writer.AddPage(writerPage) |> ignore
@@ -636,7 +641,7 @@ module _Tile =
                                 let bounds = 
                                     tileIndexeres
                                     |> List.map(fun tileIndexer ->
-                                        Rectangle.getTile tileIndexer tileTable actualBox
+                                        Rectangle.getTile tileIndexer tileTable tilingPageBox
                                     )
 
                                 splitter.Infos__GroupOrFilter_IntoOp(
@@ -669,7 +674,9 @@ module _Tile =
             ) 
             |> Reuse.rename 
                 "TilePages"
-                ["tileTable" => tileTable.ToString()
+                ["tileTable" => tileTable.ToString() 
+                 "pageBoxKind" => pageBoxKind.ToString()
+                 "margin" => margin.ToString()
                  "pageTilingRenewOptions" => pageTilingRenewOptions.ToString() ]
             |> Flow.Reuse
 

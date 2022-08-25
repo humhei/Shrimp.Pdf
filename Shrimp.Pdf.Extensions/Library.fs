@@ -363,8 +363,8 @@ module iText =
             let customEquality (x: float) =
                 NearbyPX x
             (
-                customEquality(rect.GetXCenterF()),
-                customEquality(rect.GetYCenterF()),
+                customEquality(rect.GetXF()),
+                customEquality(rect.GetYF()),
                 customEquality(rect.GetWidthF()),
                 customEquality(rect.GetHeightF())
             )

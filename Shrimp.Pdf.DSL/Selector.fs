@@ -176,6 +176,18 @@ with
                 sortRects None [] [] rects
                 |> List.rev
 
+    member sorter.SortBy(fRect: 'info -> Rectangle) (infos: 'info list) =
+        let rects =
+            infos
+            |> List.map(fun info ->
+                { Rectangle = fRect info 
+                  UserState = (info)}
+            )
+
+        sorter.SortToLists_WithUserState(rects)
+        |> List.map (List.map(fun m -> m.UserState))
+
+
     member sorter.SortToLists(rects: iText.Kernel.Geom.Rectangle list) =
         let rects =
             rects
@@ -196,9 +208,9 @@ type SelectionDistincter =
     | Non
     | Plane of tolerance: float 
 with    
-    /// (SelectionSorter.Plane (mm 3.)
+    /// (SelectionSorter.Plane (tolerance 0.1)
     static member DefaultValue =
-        (SelectionDistincter.Plane (mm 3.))
+        (SelectionDistincter.Plane (tolerance.Value))
 
 
     member x.DistinctBy(frect: _ -> FsSize) values =
