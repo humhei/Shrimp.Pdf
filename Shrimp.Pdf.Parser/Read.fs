@@ -785,7 +785,7 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
 type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXObjectOperator, fCurrentResource) =
     member this.OriginalOperator: IContentOperator = originalOperator
 
-    member this.Invoke(processor: PdfCanvasProcessor ,operator: PdfLiteral, operands, invokeOperatorRange) =
+    member this.Invoke(processor: PdfCanvasProcessor, operator: PdfLiteral, operands, invokeOperatorRange) =
         let processor = processor :?> NonInitialCallbackablePdfCanvasProcessor
         let operatorName = operator.Text()
         match operatorName with 

@@ -1250,10 +1250,10 @@ type Modifier =
                         let splittedOperatorRanges = 
                             pathInfo.AccumulatedPathOperatorRanges
                             |> List.ofSeq
-                            |> List.splitIfChangedWith ChangedItemIntoPosition.Previous (fun _ item ->
+                            |> List.splitIfChangedWith ChangedItemIntoPosition.Next (fun _ item ->
                                 match item.Operator.ToString() with 
-                                | EQ h -> false
-                                | EQ l -> false
+                                | EQ m -> false
+                                //| EQ l -> false
                                 | _ -> true
                             )
 

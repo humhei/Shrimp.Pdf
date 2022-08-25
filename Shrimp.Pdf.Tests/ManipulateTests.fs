@@ -55,6 +55,10 @@ let manipulateTests =
         let colors = PdfRunner.ReadColors(PdfFile path)
         ()
         
+    ptestCase "read complex infos" <| fun _ ->  
+        let path = "datas/manipulate/read complex infos.pdf" 
+        let colors = PdfRunner.ReadColors(PdfFile path)
+        ()
 
     testCase "resize path as copy" <| fun _ ->     
         let resizingStyle = 
@@ -165,7 +169,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/release compound path2.pdf" 
         |> ignore
 
-    ftestCase "release compound path3" <| fun _ -> 
+    testCase "release compound path3" <| fun _ -> 
         Flow.Manipulate (
             Modify.ReleaseCompoundPath(fun _ _ -> true)
         )
@@ -1546,7 +1550,7 @@ let manipulateTests =
         ()
         
 
-    ftestCase "test infos" <| fun _ -> 
+    testCase "test infos" <| fun _ -> 
 
         let pdfFile = 
             @"D:\VsCode\Workspace\ExcelDnaWidget\QuickImpose.Book\tests\QuickImpose.Book.Tests\folders\LED420 快速指导页 quick start guider（英文）.pdf"
