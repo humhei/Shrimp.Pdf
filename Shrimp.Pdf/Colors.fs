@@ -225,7 +225,7 @@ module _Colors =
 
         static member OfLoggingText_Raw(text: string) = 
             let parser = 
-                pstringCI "RGB " >>. (sepBy1 pfloat spaces) .>> eof
+                pstringCI "RGB " >>. (sepBy1 pfloat spaces1) .>> eof
 
             match run parser text with 
             | Success (r, _, _) -> FsDeviceRgb.Create(int r.[0], int r.[1], int r.[2])
@@ -344,7 +344,8 @@ module _Colors =
         static member GREEN =  { C = 1.0f; M = 0.0f; Y = 1.0f; K = 0.0f }
 
         member x.LoggingText_Raw =
-            let colorName = sprintf "%.2f %.2f %.2f %.2f" (x.C) x.M x.Y x.K
+            let x = x.Range100
+            let colorName = sprintf "%.1f %.1f %.1f %.1f" (x.C) x.M x.Y x.K
             "CMYK " + colorName
         
         /// Color => Literal NAME
@@ -384,7 +385,10 @@ module _Colors =
             match run parser text with 
             | Success (r, _, _) ->
                 let r = List.map float32 r
-                FsDeviceCmyk.Create(r.[0], r.[1], r.[2], r.[3])
+                let (!) (v: float32) =
+                    v / 100.f
+
+                FsDeviceCmyk.Create(!r.[0], !r.[1], !r.[2], !r.[3])
             
             | Failure (error, _, _) -> failwith error
 

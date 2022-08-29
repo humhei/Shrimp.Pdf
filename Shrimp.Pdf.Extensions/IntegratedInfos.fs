@@ -50,7 +50,9 @@ module IntegratedInfos =
     type IntegratedPathRenderInfo =
         { PathRenderInfo: PathRenderInfo 
           ClippingPathInfos: ClippingPathInfos
-          AccumulatedPathOperatorRanges: seq<OperatorRange> }
+          AccumulatedPathOperatorRanges: seq<OperatorRange>
+          FillOpacity: float32 option 
+          StrokeOpacity: float32 option }
     with 
         member x.IsShading = 
             match x.PathRenderInfo with 
@@ -59,6 +61,16 @@ module IntegratedInfos =
 
         member x.IsClippingPath = x.PathRenderInfo.IsPathModifiesClippingPath()
 
+        member x.GetAppliedExtGState() =
+            let exState = CanvasGraphicsState.getExtGState (x.PathRenderInfo.GetGraphicsState())
+
+            let exState =
+                exState
+                    .SetFillOpacity(defaultArg x.FillOpacity 1.0f)
+                    .SetStrokeOpacity(defaultArg x.FillOpacity 1.0f)
+            
+            exState
+
         member integratedInfo.RecordValue =
             let renderInfo = integratedInfo.PathRenderInfo
             { FillColor = renderInfo.GetFillColor()
@@ -66,6 +78,7 @@ module IntegratedInfos =
               Bound = 
                 let bound = (IPathRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo)
                 bound.FsRectangle()
+
               }
 
 
@@ -106,9 +119,21 @@ module IntegratedInfos =
           ClippingPathInfos: ClippingPathInfos
           EndTextState: EndTextState
           ConcatedTextInfos: IntegratedTextRenderInfo seq
-          OperatorRange: OperatorRange option }
+          OperatorRange: OperatorRange option
+          FillOpacity: float32 option
+          StrokeOpacity: float32 option }
 
     with 
+        member x.GetAppliedExtGState() =
+            let exState = CanvasGraphicsState.getExtGState (x.TextRenderInfo.GetGraphicsState())
+
+            let exState =
+                exState
+                    .SetFillOpacity(defaultArg x.FillOpacity 1.0f)
+                    .SetStrokeOpacity(defaultArg x.FillOpacity 1.0f)
+            
+            exState
+
         member integratedInfo.Text() =
             let renderInfo = integratedInfo.TextRenderInfo
             match integratedInfo.EndTextState with 
@@ -240,9 +265,22 @@ module IntegratedInfos =
           ClippingPathInfos: ClippingPathInfos
           LazyImageData: Lazy<FsImageData>
           LazyColorSpace: Lazy<ImageColorSpaceData option> 
+          FillOpacity: float32 option
+          StrokeOpacity: float32 option
+
         }
 
     with 
+        member x.GetAppliedExtGState() =
+            let exState = CanvasGraphicsState.getExtGState (x.ImageRenderInfo.GetGraphicsState())
+
+            let exState =
+                exState
+                    .SetFillOpacity(defaultArg x.FillOpacity 1.0f)
+                    .SetStrokeOpacity(defaultArg x.FillOpacity 1.0f)
+            
+            exState
+
         member x.ImageData = x.LazyImageData.Value
 
         member x.ImageColorSpaceData = 

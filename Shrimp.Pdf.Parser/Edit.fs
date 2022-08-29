@@ -274,6 +274,8 @@ type ModifierPdfCanvasActions =
       SuffixActions: list<PdfCanvas -> PdfCanvas>
       Close: CloseOperatorUnion }
 with 
+    member internal x.AllActionsLength =
+        x.Actions.Length + x.SuffixActions.Length
 
     member x.AddActions(actions) =
         { x with Actions = x.Actions @ actions}
@@ -540,7 +542,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
         match operatorName with 
         | Do ->
-
+            
             let resources = resourcesStack.Peek()
             let name = operatorRange.Operands.[0] :?> PdfName
             let container = resources.GetResource(PdfName.XObject)
@@ -550,6 +552,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
             let subType = xobjectStream.GetAsName(PdfName.Subtype)
             match subType with 
             | Form ->
+                this.Listener.SaveGS_XObject(this.GetGraphicsState())
                 let xobjectStream = xobjectStream.Clone() :?> PdfStream
                 let xobjectResources = 
                     let subResources = xobjectStream.GetAsDictionary(PdfName.Resources)
@@ -567,6 +570,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
                 PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
                 |> ignore
+                this.Listener.RestoreGS_XObject()
 
             | Image ->  
                 match eventListener.CurrentRenderInfoStatus with 
@@ -636,7 +640,6 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                         )
                         |> ModifierPdfCanvasActions.ConcatOrKeep tag
 
-
                     PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
                         (canvas, modifierPdfCanvasActions.Actions)
                         ||> List.fold(fun canvas action ->
@@ -644,6 +647,29 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                         )
                         |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
                     )
+
+                    //let onlyWriteClose = 
+                    //    match tag with 
+                    //    | IntegratedRenderInfoTag.Text ->
+                    //        match modifierPdfCanvasActions.AllActionsLength with 
+                    //        | 0 -> true
+                    //        | _ -> false
+                    //    | _ -> false
+
+                    //match onlyWriteClose with 
+                    //| true -> 
+                    //    (currentPdfCanvas :> PdfCanvas)
+                    //    |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
+                    //    |> ignore
+
+                    //| false ->
+                    //    PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
+                    //        (canvas, modifierPdfCanvasActions.Actions)
+                    //        ||> List.fold(fun canvas action ->
+                    //            action canvas 
+                    //        )
+                    //        |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
+                    //    )
 
 
 

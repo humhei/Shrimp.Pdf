@@ -293,6 +293,28 @@ let manipulateTests =
         |> runTest "datas/manipulate/change separation color of pdfFunction2 PageNumber to m100.pdf" 
         |> ignore
 
+    testCase "remove R255B255" <| fun _ -> 
+
+        let colors = 
+            [
+                PdfCanvasColor.valueColor FsDeviceRgb.MAGENTA
+            ]
+
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "remove specfic separation colors"
+                      Selector = 
+                        PathOrText(Info.ColorIsOneOf (FillOrStrokeOptions.FillOrStroke, colors))
+                      Modifiers = [Modifier.CancelFillAndStroke()]
+                    }
+                ]
+            ) 
+        )
+        |> runTest "datas/manipulate/remove R255B255.pdf" 
+        |> ignore
+
     testCase "remove specfic separation colors" <| fun _ -> 
 
         let colors = 
@@ -1551,7 +1573,7 @@ let manipulateTests =
         
 
     testCase "test infos" <| fun _ -> 
-
+        let m = FsDeviceRgb.OfLoggingText_Raw @"RGB 81 0 0"
         let pdfFile = 
             @"D:\VsCode\Workspace\ExcelDnaWidget\QuickImpose.Book\tests\QuickImpose.Book.Tests\folders\LED420 快速指导页 quick start guider（英文）.pdf"
             //@"D:\VsCode\Workspace\Shrimp.Pdf.Enhancement\tests\Shrimp.Pdf.Enhancement.Tests\datas\flows\Tile pages by cropLine3.pdf"

@@ -7,6 +7,7 @@ open iText.Kernel.Geom
 open iText.Kernel.Colors
 open iText.Kernel.Exceptions
 open iText.Kernel.Pdf.Colorspace
+open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf.Canvas.Parser
 open iText.Kernel.Pdf.Canvas.Parser.Listener
 open System.Collections.Generic
@@ -198,10 +199,71 @@ module internal Listeners =
 
     let private imageColorSpaceCache = new ConcurrentDictionary<_, _>()
 
+    type FsParserGraphicsState(gs: ParserGraphicsState, previous: FsParserGraphicsState option) =
+        let innerGSStack = 
+            new Stack<_>([|new CanvasGraphicsState(gs)|])
+            
+        let mutable fillOpacity = previous |> Option.bind(fun m -> m.FillOpacity)
+        let mutable strokeOpacity = previous |> Option.bind(fun m -> m.StrokeOpacity)
+
+        member private x.ApplyFillOpacity(v) =
+            match v with 
+            | 1.0f -> ()
+            | _ -> 
+                match fillOpacity with 
+                | None -> fillOpacity <- Some v
+                | Some fillOpacity2 -> fillOpacity <- Some (v * fillOpacity2)
+
+        member internal x.FillOpacity = fillOpacity
+        member internal x.StrokeOpacity = strokeOpacity
+
+        member private x.ApplyStrokeOpacity(v) =
+            match v with 
+            | 1.0f -> ()
+            | _ -> 
+                match strokeOpacity with 
+                | None -> strokeOpacity <- Some v
+                | Some strokeOpacity2 -> strokeOpacity <- Some (v * strokeOpacity2)
+
+        member x.Value = innerGSStack.Peek()
+
+        member x.ProcessGraphicsStateResource(gs: ParserGraphicsState) = 
+            x.ApplyFillOpacity(gs.GetFillOpacity())
+            x.ApplyStrokeOpacity(gs.GetStrokeOpacity())
+            innerGSStack.Push(CanvasGraphicsState gs)
+            |> ignore
+
+    [<AllowNullLiteral>]
+    type GSStateStackableEventListener() =
+        let gsStack = new Stack<_>()
+
+
+        member internal x.SaveGS(gs: ParserGraphicsState) =
+            let gs = 
+                match gsStack.Count with 
+                | 0 -> FsParserGraphicsState (gs, None)
+                | _ -> FsParserGraphicsState (gs, Some (gsStack.Peek()))
+
+            gsStack.Push(gs)
+
+        member internal x.ProcessGraphicsStateResource(gs) =
+            gsStack.Peek().ProcessGraphicsStateResource(gs)
+
+        member internal x.FillOpacity =
+            gsStack.Peek().FillOpacity
+
+        member internal x.StrokeOpacity =
+            gsStack.Peek().StrokeOpacity
+
+        member internal x.RestoreGS() = 
+            gsStack.Pop()
+            |> ignore
+
     [<AllowNullLiteral>]
     /// a type named FilteredEventListener is already defined in itext7
     /// renderInfoSelectorMapping bitwise relation: OR 
     type FilteredEventListenerEx(renderInfoSelectorMapping: Map<SelectorModiferToken, RenderInfoSelector>) =
+        inherit GSStateStackableEventListener()
         let et = 
             renderInfoSelectorMapping
             |> Map.toList
@@ -317,9 +379,20 @@ module internal Listeners =
         member this.CurrentRenderInfoToken = currentRenderInfoToken
 
         member this.ParsedRenderInfos = parsedRenderInfos :> seq<IIntegratedRenderInfoIM>
-        member internal this.SaveGS() = currentClippingPathInfoElementsStack.Push(ResizeArray()) |> ignore
+        member internal this.SaveGS(gs) = 
+            base.SaveGS(gs)
+            currentClippingPathInfoElementsStack.Push(ResizeArray()) |> ignore
         
-        member internal this.RestoreGS() = currentClippingPathInfoElementsStack.Pop() |> ignore
+        member internal this.RestoreGS() = 
+            base.RestoreGS()
+            currentClippingPathInfoElementsStack.Pop() |> ignore
+
+        member internal this.SaveGS_XObject(gs) = 
+            base.SaveGS(gs)
+        
+        member internal this.RestoreGS_XObject() = 
+            base.RestoreGS()
+
 
         member private this.GetCurrentClippingPathInfoElements() = 
             currentClippingPathInfoElementsStack.Peek()
@@ -381,7 +454,9 @@ module internal Listeners =
                                     { XObjectClippingBoxState = currentXObjectClippingBox
                                       ClippingPathInfoState = currentClippingPathInfo }
                                   PathRenderInfo = pathRenderInfo
-                                  AccumulatedPathOperatorRanges = accumulatedPathOperatorRanges }
+                                  AccumulatedPathOperatorRanges = accumulatedPathOperatorRanges
+                                  FillOpacity = this.FillOpacity
+                                  StrokeOpacity = this.StrokeOpacity }
 
 
                             match pathRenderInfo.IsPathModifiesClippingPath() with 
@@ -422,6 +497,8 @@ module internal Listeners =
                               EndTextState = EndTextState.Undified
                               ConcatedTextInfos = []
                               OperatorRange = None
+                              FillOpacity = this.FillOpacity
+                              StrokeOpacity = this.StrokeOpacity
                               }
                             :> IIntegratedRenderInfoIM
 
@@ -430,6 +507,8 @@ module internal Listeners =
                                 { XObjectClippingBoxState = currentXObjectClippingBox
                                   ClippingPathInfoState = currentClippingPathInfo }
                               ImageRenderInfo = imageRenderInfo
+                              FillOpacity = this.FillOpacity
+                              StrokeOpacity = this.StrokeOpacity
                               LazyImageData = 
                                 lazy 
                                     let rgbIndexedColorSpace =
@@ -603,6 +682,8 @@ open Listeners
 
         
 open Constants
+
+
 
 type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventListenerEx, additionalContentOperators) =
     inherit PdfCanvasProcessor(listener, additionalContentOperators)
@@ -789,7 +870,7 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
         let processor = processor :?> NonInitialCallbackablePdfCanvasProcessor
         let operatorName = operator.Text()
         match operatorName with 
-        | EQ q -> processor.Listener.SaveGS()
+        | EQ q -> processor.Listener.SaveGS(processor.GetGraphicsState())
         | EQ Q -> processor.Listener.RestoreGS()
         | ContainsBy [Tj; TJ; "'"; "''"] -> 
             processor.Listener.BeginShowText()
@@ -815,13 +896,17 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
             | null -> 
                 match invokeXObjectOperator with 
                 | true ->
+                    processor.Listener.SaveGS_XObject(processor.GetGraphicsState())
                     this.OriginalOperator.Invoke(processor, operator, operands)
+                    processor.Listener.RestoreGS_XObject()
+
                 | false -> ()
 
             | _ -> 
                 this.OriginalOperator.Invoke(processor, operator, operands)
 
         match operatorName with 
+        | EQ gs -> processor.Listener.ProcessGraphicsStateResource(processor.GetGraphicsState())
         | EQ sh -> processor.PaintShading_InClippingArea(operands.[0] :?> PdfName)
         | ContainsBy [Tj; TJ; "'"; "''"] -> 
             processor.Listener.EndShoeText({Operator = operator; Operands = ResizeArray operands})

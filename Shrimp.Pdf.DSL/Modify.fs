@@ -997,7 +997,7 @@ type Modifier =
                 [
                     match strokeColor with 
                     | Some (fillColor: PdfCanvasColor) -> 
-                        PdfCanvas.SetFillColor (NullablePdfCanvasColor.OfPdfCanvasColor fillColor)
+                        PdfCanvas.SetStrokeColor (NullablePdfCanvasColor.OfPdfCanvasColor fillColor)
                     | None -> ()
                 ]
               SuffixActions = []

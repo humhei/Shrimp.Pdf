@@ -199,6 +199,7 @@ module _Renewable =
           AccumulatedPathOperatorRanges: seq<OperatorRange>
           LineWidth: float32
           DashPattern: DashPattern
+          ExtGState: FsExtGState option
           ClippingPathInfos: ClippingPathInfos
           IsShading: bool
           OriginInfo: IntegratedPathRenderInfo
@@ -231,6 +232,10 @@ module _Renewable =
                     
                     let operatorRanges = x.ApplyCtm_To_AccumulatedPathOperatorRanges()
                     //canvas.ConcatMatrix(AffineTransform.ofMatrix x.Ctm) |> ignore
+                    match x.ExtGState with 
+                    | None -> ()
+                    | Some extGState -> PdfCanvas.setExtGState extGState canvas |> ignore
+
                     canvas
                     |> PdfCanvas.setFillColor x.FillColor
                     |> PdfCanvas.setStrokeColor x.StrokeColor
@@ -260,6 +265,11 @@ module _Renewable =
         member x.Renewable() =
             let info = x.PathRenderInfo
             let gs = info.GetGraphicsState()
+            let extGState = 
+                match x.GetAppliedExtGState() with 
+                | EqualTo FsExtGState.DefaultValue -> None
+                | extGState -> Some extGState
+
             {
                 Ctm = info.GetCtm()
                 FillColor = info.GetFillColor()
@@ -273,6 +283,7 @@ module _Renewable =
                 FillShading = None
                 StrokeShading = None
                 IsShading = x.IsShading
+                ExtGState = extGState
                 OriginInfo = x
             }
 
@@ -286,6 +297,7 @@ module _Renewable =
            Text: string
            RawFontSize: float32
            Font: PdfFont
+           ExtGState: FsExtGState option
            Ctm: Matrix
            FontName: DocumentFontName
            TextMatrix: Matrix
@@ -302,6 +314,12 @@ module _Renewable =
         member x.ApplyCtm_WriteToCanvas(pdfCanvas: PdfCanvas) =
             PdfCanvas.useCanvas pdfCanvas (fun pdfCanvas ->
                 let textMatrix = x.HeaderTextRenderInfo.GetTextMatrix()
+
+                match x.ExtGState with 
+                | None -> ()
+                | Some extGState -> PdfCanvas.setExtGState extGState pdfCanvas |> ignore
+
+
                 pdfCanvas
                 |> PdfCanvas.setFillColor x.FillColor
                 |> PdfCanvas.setStrokeColor x.StrokeColor
@@ -339,6 +357,13 @@ module _Renewable =
         member x.Renewable(?isWord): RenewableTextInfo =
             let isWord = defaultArg isWord false
             let renderInfo = x.TextRenderInfo
+            let gs = renderInfo.GetGraphicsState()
+
+            let extGState = 
+                match x.GetAppliedExtGState() with 
+                | EqualTo FsExtGState.DefaultValue -> None
+                | extGState -> Some extGState
+
             { FillColor = x.TextRenderInfo.GetFillColor()
               StrokeColor = x.TextRenderInfo.GetStrokeColor()
               Text = x.Text()
@@ -350,7 +375,8 @@ module _Renewable =
               TextLeading = renderInfo.GetLeading()
               TextRenderingMode = renderInfo.GetTextRenderMode()
               LineWidth = renderInfo.GetGraphicsState().GetLineWidth()
-              DashPattern = CanvasGraphicsState.getDashPattern (renderInfo.GetGraphicsState())
+              ExtGState = extGState
+              DashPattern = CanvasGraphicsState.getDashPattern (gs)
               HeaderTextRenderInfo = 
                 match x.EndTextState with 
                 | EndTextState.Yes -> x.ConcatedTextInfos |> Seq.head |> fun m -> m.TextRenderInfo
@@ -373,6 +399,7 @@ module _Renewable =
         { Image: ImageRenderInfo
           CurrentDocumentImage: Xobject.PdfImageXObject option
           ClippingPathInfos: ClippingPathInfos
+          ExtGState: FsExtGState option
           OriginInfo: IntegratedImageRenderInfo }
     with 
         member x.CopyToDocument(document: PdfDocumentWithCachedResources) =
@@ -385,6 +412,11 @@ module _Renewable =
             match x.CurrentDocumentImage with 
             | Some currentDocumentImage ->
                 PdfCanvas.useCanvas pdfCanvas (fun pdfCanvas ->
+                    match x.ExtGState with 
+                    | None -> ()
+                    | Some extGState -> PdfCanvas.setExtGState extGState pdfCanvas |> ignore
+
+
                     pdfCanvas
                     |> PdfCanvas.concatMatrix (x.Image.GetImageCtm())
                     |> PdfCanvas.addXObject currentDocumentImage AffineTransformRecord.DefaultValue
@@ -396,10 +428,16 @@ module _Renewable =
 
     type IntegratedImageRenderInfo with 
         member x.Renewable(): RenewableImageInfo =
+            let extGState = 
+                match x.GetAppliedExtGState() with 
+                | EqualTo FsExtGState.DefaultValue -> None
+                | extGState -> Some extGState
+
             { Image = x.ImageRenderInfo
               CurrentDocumentImage = None
               ClippingPathInfos = x.ClippingPathInfos
-              OriginInfo = x }
+              OriginInfo = x
+              ExtGState = extGState }
 
 
     [<RequireQualifiedAccess>]
