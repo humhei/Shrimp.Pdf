@@ -1222,9 +1222,9 @@ module _Reuses =
 
         
 
-        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground) =
+        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground, ?pageSelector) =
+            let pageSelector = defaultArg pageSelector PageSelector.All
             (fun flowModel (doc: SplitDocument) ->
-
 
                 let backgroundInfos =
 
@@ -1240,33 +1240,46 @@ module _Reuses =
                     |}
 
                 let reader = doc.Reader
+                let selectedPages = reader.GetPageNumbers(pageSelector)
                 PdfDocument.getPages reader
                 |> List.mapi (fun i readerPage ->
-                    let backgroundPageBox, backgroundXObject = backgroundInfos.GetPageBoxAndXObject(i+1)
-                    let readerPageBox = readerPage.GetActualBox()
-                    let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
+                    
+                    match List.contains (i+1) selectedPages with 
+                    | true ->
+                        let backgroundPageBox, backgroundXObject = backgroundInfos.GetPageBoxAndXObject(i+1)
+                        let readerPageBox = readerPage.GetActualBox()
+                        let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
 
-                    let pageSize = 
-                        readerPage.GetActualBox()
-                        |> PageSize
+                        let pageSize = 
+                            readerPage.GetActualBox()
+                            |> PageSize
 
-                    let writerPage = doc.Writer.AddNewPage(pageSize)
-                    writerPage.SetPageBoxToPage(readerPage) |> ignore
-                    let pdfCanvas = new PdfCanvas(writerPage)
-                    let bk_x = readerPageBox.GetX() - backgroundPageBox.GetX() 
-                    let bk_y = readerPageBox.GetY() - backgroundPageBox.GetY() 
+                        let writerPage = doc.Writer.AddNewPage(pageSize)
+                        writerPage.SetPageBoxToPage(readerPage) |> ignore
+                        let pdfCanvas = new PdfCanvas(writerPage)
+                        let bk_x = readerPageBox.GetX() - backgroundPageBox.GetX() 
+                        let bk_y = readerPageBox.GetY() - backgroundPageBox.GetY() 
 
-                    match choice with 
-                    | BackgroundOrForeground.Background ->
-                        pdfCanvas
-                            .AddXObjectAbs(backgroundXObject, bk_x , bk_y)
-                            .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                        match choice with 
+                        | BackgroundOrForeground.Background ->
+                            pdfCanvas
+                                .AddXObjectAbs(backgroundXObject, bk_x , bk_y)
+                                .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                            |> ignore
 
-                    | BackgroundOrForeground.Foreground -> 
-                        pdfCanvas
-                            .AddXObjectAbs(readerXObject, 0.f, 0.f)
-                            .AddXObjectAbs(backgroundXObject, bk_x, bk_y)
-                ) |> ignore
+                        | BackgroundOrForeground.Foreground -> 
+                            pdfCanvas
+                                .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                                .AddXObjectAbs(backgroundXObject, bk_x, bk_y)
+
+                            |> ignore
+                    | false ->
+                        let page = readerPage.CopyTo(doc.Writer)
+                        doc.Writer.AddPage(page)
+                        |> ignore
+                    )
+                    |> ignore
+
 
                 backgroundInfos.Close()
 
@@ -1274,70 +1287,82 @@ module _Reuses =
             |> reuse 
                 "AddBackgroundOrForeground"
                 [
+                    "pageSelector" => pageSelector.ToString()
                     "backgroundFile" => backgroundFile.ToString()
                     "layer" => choice.ToString()
                 ]
 
-        static member private AddBackgroundOrForeground(backgroundOrForeground: BackgroundOrForeground, pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin) =
+        static member private AddBackgroundOrForeground(backgroundOrForeground: BackgroundOrForeground, pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?pageSelector) =
+            let pageSelector = defaultArg pageSelector PageSelector.All
             (fun flowModel (doc: SplitDocument) ->
                 let reader = doc.Reader
                 PdfDocument.getPages reader
                 |> List.mapi (fun i readerPage ->
+                    let selectedPages = reader.GetPageNumbers(pageSelector)
+                    match List.contains (i+1) selectedPages with 
+                    | true ->
+                        let readerPageBox = 
+                            match margin with 
+                            | Some margin ->
+                                readerPage.GetPageBox(pageBoxKind)
+                                |> Rectangle.applyMargin margin
+                            | None -> 
+                                readerPage.GetPageBox(pageBoxKind)
 
-                    let readerPageBox = 
-                        match margin with 
-                        | Some margin ->
-                            readerPage.GetPageBox(pageBoxKind)
-                            |> Rectangle.applyMargin margin
-                        | None -> 
-                            readerPage.GetPageBox(pageBoxKind)
+                        let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
 
-                    let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
+                        let pageSize = 
+                            readerPage.GetActualBox()
+                            |> PageSize
 
-                    let pageSize = 
-                        readerPage.GetActualBox()
-                        |> PageSize
+                        let writerPage = doc.Writer.AddNewPage(pageSize)
+                        writerPage.SetPageBoxToPage(readerPage) |> ignore
+                        let pdfCanvas = 
+                            match backgroundOrForeground with 
+                            | BackgroundOrForeground.Background ->
+                                new PdfCanvas(writerPage.NewContentStreamBefore(), writerPage.GetResources(), doc.Writer)
 
-                    let writerPage = doc.Writer.AddNewPage(pageSize)
-                    writerPage.SetPageBoxToPage(readerPage) |> ignore
-                    let pdfCanvas = 
-                        match backgroundOrForeground with 
-                        | BackgroundOrForeground.Background ->
-                            new PdfCanvas(writerPage.NewContentStreamBefore(), writerPage.GetResources(), doc.Writer)
-
-                        | BackgroundOrForeground.Foreground ->
-                            new PdfCanvas(writerPage.NewContentStreamAfter(), writerPage.GetResources(), doc.Writer)
+                            | BackgroundOrForeground.Foreground ->
+                                new PdfCanvas(writerPage.NewContentStreamAfter(), writerPage.GetResources(), doc.Writer)
                             
 
-                    PdfCanvas.useCanvas pdfCanvas (
-                        PdfCanvas.addRectangle readerPageBox rectOptions
-                    ) 
+                        PdfCanvas.useCanvas pdfCanvas (
+                            PdfCanvas.addRectangle readerPageBox rectOptions
+                        ) 
 
-                    pdfCanvas
-                        .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                        pdfCanvas
+                            .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                        |> ignore
+
+
+                    | false ->
+                        let page = readerPage.CopyTo(doc.Writer)
+                        doc.Writer.AddPage(page)
+                        |> ignore
 
                 ) |> ignore
             )
             |> reuse 
                 "AddBackground"
                 [
+                    "pageSelector" => pageSelector.ToString()
                     "pageBoxKind" => pageBoxKind.ToString()
                     "rectOptions" => (rectOptions PdfCanvasAddRectangleArguments.DefaultValue).ToString()
                     "margin"      => (defaultArg margin Margin.Zero).LoggingText
                 ]
 
-        static member AddBackground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin) =
-            Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Background, pageBoxKind, rectOptions, ?margin = margin)
+        static member AddBackground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?pageSelector) =
+            Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Background, pageBoxKind, rectOptions, ?margin = margin, ?pageSelector = pageSelector)
 
-        static member AddForeground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin) =
-            Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Foreground, pageBoxKind, rectOptions, ?margin = margin)
+        static member AddForeground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?pageSelector) =
+            Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Foreground, pageBoxKind, rectOptions, ?margin = margin, ?pageSelector = pageSelector)
 
 
-        static member AddBackground (backgroundFile: PdfFile) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background)
+        static member AddBackground (backgroundFile: PdfFile, ?pageSelector) =
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background, ?pageSelector = pageSelector)
 
-        static member AddForeground (foregroundFile: PdfFile) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create foregroundFile, BackgroundOrForeground.Foreground)
+        static member AddForeground (foregroundFile: PdfFile, ?pageSelector) =
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create foregroundFile, BackgroundOrForeground.Foreground, ?pageSelector = pageSelector)
 
 
 

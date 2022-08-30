@@ -191,8 +191,8 @@ module _Renewable =
     type RenewablePathInfo =
         { FillColor: iText.Kernel.Colors.Color 
           StrokeColor: iText.Kernel.Colors.Color
-          FillShading: PdfName option 
-          StrokeShading: PdfName option 
+          FillShading: option<PdfName * Matrix> 
+          StrokeShading: option<PdfName * Matrix> 
           Path: Path
           Ctm: Matrix
           Operation: int
@@ -215,13 +215,15 @@ module _Renewable =
             PdfCanvas.useCanvas canvas (fun canvas ->
                 match x.IsShading with 
                 | true -> 
-                    let shading = 
+                    let shading, ctm = 
                         [ x.FillShading
                           x.StrokeShading ]
                         |> List.choose id
                         |> List.distinct
                         |> List.exactlyOne_DetailFailingText
                     let outputStream = canvas.GetContentStream().GetOutputStream()
+
+                    canvas.ConcatMatrix(AffineTransform.ofMatrix ctm) |> ignore
 
                     outputStream.WriteString(BX).Write(shading).WriteSpace().WriteString(sh).WriteSpace().WriteString(EX).WriteNewLine()
                     |> ignore
@@ -290,8 +292,8 @@ module _Renewable =
     type RenewableTextInfo =
          { FillColor: iText.Kernel.Colors.Color 
            StrokeColor: iText.Kernel.Colors.Color
-           FillShading: PdfName option 
-           StrokeShading: PdfName option 
+           FillShading: option<PdfName * Matrix> 
+           StrokeShading: option<PdfName * Matrix> 
            LineWidth: float32
            DashPattern: DashPattern
            Text: string
@@ -312,6 +314,10 @@ module _Renewable =
            }
      with 
         member x.ApplyCtm_WriteToCanvas(pdfCanvas: PdfCanvas) =
+            match x.FillShading, x.StrokeShading with 
+            | None, None -> ()
+            | _ -> failwithf "Not implemented when renewing text with shading color"
+
             PdfCanvas.useCanvas pdfCanvas (fun pdfCanvas ->
                 let textMatrix = x.HeaderTextRenderInfo.GetTextMatrix()
 

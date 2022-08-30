@@ -5,6 +5,7 @@ open iText.Kernel.Exceptions
 #nowarn "0104"
 open System.Drawing
 open iText.Kernel.Pdf
+open Shrimp.FSharp.Plus
 open Shrimp.Pdf
 open iText.Kernel.Colors
 open System
@@ -100,7 +101,8 @@ module _Colors =
         static member DefaultRough =
             ValueEqualOptions.RoundedValue(ValueEqualOptionsTolerance.Rough)
             
-
+        /// ValueEqualOptions.DefaultRoundedValue
+        static member DefaultValue = ValueEqualOptions.DefaultRoundedValue
 
 
 
@@ -676,10 +678,40 @@ module _Colors =
         member x.Color =
             x.BaseColor.MapColorValue(fun m -> m * float32 x.Transparency)
 
+        member private x.LoggingTextWithColor = 
+            match x.Transparency with 
+            | 1.0 -> x.Name + "|" + x.Color.LoggingText
+            | _ -> x.Name + "|" + x.Color.LoggingText + "|" + x.Transparency.ToString()
 
-        member x.LoggingText = x.Name
 
-        member private x.LoggingTextWithColor = x.Name + " " + x.Color.LoggingText_Raw
+        member private x.LoggingTextWithColor_Raw = 
+            match x.Transparency with 
+            | 1.0 -> x.Name + "|" + x.Color.LoggingText_Raw
+            | _ -> x.Name + "|" + x.Color.LoggingText_Raw + "|" + x.Transparency.ToString()
+
+        member x.LoggingText = 
+            //x.Name
+            x.LoggingTextWithColor
+
+        member x.LoggingText_Raw = 
+            //x.Name
+            x.LoggingTextWithColor_Raw
+
+        static member OfLoggingText_Raw(text: string) =
+            try
+                let parts = text.Split '|'
+                let name = parts.[0]
+                let valueColor = FsValueColor.OfLoggingText_Raw parts.[1]
+                let transparency =
+                    match Array.tryItem 2 parts with 
+                    | None -> 1.0
+                    | Some transparency -> System.Double.Parse transparency
+
+                { Name = name 
+                  BaseColor = valueColor
+                  Transparency = transparency }
+            with ex ->
+                failwithf "Cannot parse %s to FsSeparation" text
 
         static member Create(name: string, color: Color, ?transparency) =
             { Name = name 
@@ -1184,6 +1216,7 @@ module _Colors =
           Color: FsValueColor }
     with 
         member x.LoggingText = x.Icc.LoggingText + " " + x.Color.LoggingText
+        member x.LoggingText_Raw = x.Icc.LoggingText + " " + x.Color.LoggingText_Raw
 
         member x.IsEqualTo(y, valueEqualOptions) =
             x.Icc = y.Icc
@@ -1220,9 +1253,60 @@ module _Colors =
             | AlternativeFsColor.IccBased v ->   v.LoggingText
             | AlternativeFsColor.Separation v -> v.LoggingText
 
+        member x.LoggingText_Raw =
+            match x with 
+            | AlternativeFsColor.ValueColor v -> v.LoggingText_Raw
+            | AlternativeFsColor.IccBased v ->   v.LoggingText_Raw
+            | AlternativeFsColor.Separation v -> v.LoggingText_Raw
+
+        static member OfLoggingText_Raw(text: string) =
+            match text.Contains "|" with 
+            | true -> 
+                FsSeparation.OfLoggingText_Raw text
+                |> AlternativeFsColor.Separation
+
+            | false ->
+                FsValueColor.OfLoggingText_Raw text
+                |> AlternativeFsColor.ValueColor
+
         static member BLACK = FsValueColor.BLACK |> AlternativeFsColor.ValueColor
         
         static member WHITE = FsValueColor.WHITE |> AlternativeFsColor.ValueColor
+
+        static member RGB_BLACK = FsValueColor.RGB_BLACK  |> AlternativeFsColor.ValueColor
+        static member RGB_WHITE = FsValueColor.RGB_WHITE  |> AlternativeFsColor.ValueColor
+        static member RGB_RED = FsValueColor.RGB_RED  |> AlternativeFsColor.ValueColor
+        static member RGB_BLUE = FsValueColor.RGB_BLUE  |> AlternativeFsColor.ValueColor
+        static member RGB_MAGENTA = FsValueColor.RGB_MAGENTA  |> AlternativeFsColor.ValueColor
+
+        static member CMYK_WHITE = FsValueColor.CMYK_WHITE  |> AlternativeFsColor.ValueColor
+        static member CMYK_BLACK = FsValueColor.CMYK_BLACK  |> AlternativeFsColor.ValueColor
+        static member CMYK_CYAN = FsValueColor.CMYK_CYAN  |> AlternativeFsColor.ValueColor
+        static member CMYK_MAGENTA = FsValueColor.CMYK_MAGENTA  |> AlternativeFsColor.ValueColor
+        static member CMYK_YELLOW = FsValueColor.CMYK_YELLOW  |> AlternativeFsColor.ValueColor
+
+
+        static member GRAY = FsValueColor.GRAY |> AlternativeFsColor.ValueColor
+
+        static member CreateRGB(r, g, b: int) =
+            FsValueColor.CreateRGB(r, g, b)
+            |> AlternativeFsColor.ValueColor
+
+        static member CreateRGB(r, g, b: float32) =
+            FsValueColor.CreateRGB(r, g, b)
+            |> AlternativeFsColor.ValueColor
+
+        static member valueColor(valueColor: FsValueColor) =
+            AlternativeFsColor.ValueColor valueColor
+
+        static member valueColor(valueColor: FsDeviceRgb) =
+            AlternativeFsColor.ValueColor (FsValueColor.Rgb valueColor)
+
+        static member valueColor(valueColor: FsDeviceCmyk) =
+            AlternativeFsColor.ValueColor (FsValueColor.Cmyk valueColor)
+
+        static member valueColor(valueColor: FsGray) =
+            AlternativeFsColor.ValueColor (FsValueColor.Gray valueColor)
 
         static member Whites = 
             [ FsValueColor.WHITE
@@ -1232,7 +1316,29 @@ module _Colors =
 
         override x.ToString() = x.GetType().Name + " " + x.LoggingText
             
+        member x.IsEqualsTo(y, valueEqualOptions) =
+            let FALSE = false
+            match x with 
+            | AlternativeFsColor.IccBased x -> 
+                match y with 
+                | AlternativeFsColor.IccBased y -> x.IsEqualTo(y, valueEqualOptions)
+                | _ -> FALSE
+            | AlternativeFsColor.Separation x -> 
+                match y with 
+                | AlternativeFsColor.Separation y -> x.IsEqualTo(y, valueEqualOptions)
+                | _ -> FALSE
 
+            | AlternativeFsColor.ValueColor x -> 
+                match y with 
+                | AlternativeFsColor.ValueColor y -> x.IsEqualTo(y, valueEqualOptions)
+                | _ -> FALSE
+
+
+    [<RequireQualifiedAccess>]
+    module AlternativeFsColors =
+        let contains (color: AlternativeFsColor) colors =
+            let valueEqualOptions = ValueEqualOptions.DefaultValue
+            colors |> List.exists (fun color' -> color.IsEqualsTo(color', valueEqualOptions))
 
     [<RequireQualifiedAccess>]
     type FsColor =

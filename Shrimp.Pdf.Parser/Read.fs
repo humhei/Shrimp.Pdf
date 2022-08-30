@@ -247,6 +247,10 @@ module internal Listeners =
             gsStack.Push(gs)
 
         member internal x.ProcessGraphicsStateResource(gs) =
+            match gsStack.Count with 
+            | 0 -> x.SaveGS(gs)
+            | _-> ()
+
             gsStack.Peek().ProcessGraphicsStateResource(gs)
 
         member internal x.FillOpacity =
@@ -708,10 +712,9 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
                         | true -> renderInfo.PathRenderInfo.GetCanvasTagHierarchy()
                         | false -> failwith "currentRenderInfo should be clipping path here"
 
-                    let color = new PdfShadingColor(shading)
+                    let color = new PdfShadingColor(shading, x.GetGraphicsState().GetCtm())
                     let gsState = renderInfo.PathRenderInfo.GetGraphicsState()
                     gsState.SetFillColor(color)
-
                     let newPathRenderInfo =
                         PdfShadingPathRenderInfo(color, Stack canvasTag, gsState, renderInfo.PathRenderInfo.GetPath())
                     
@@ -743,7 +746,7 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
 
                                 let canvasTag = [||] :> IList<_>
 
-                                let color = new PdfShadingColor(shading)
+                                let color = new PdfShadingColor(shading, gs.GetCtm())
                                 let gsState = gs
                                 gsState.SetFillColor(color)
 

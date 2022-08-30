@@ -22,14 +22,16 @@ module ExtensionTypes =
         open iText.Kernel.Pdf.Colorspace
         
 
-        type PdfShadingColor(shading: PdfShading, colorSpace: PdfColorSpace) = 
+        type PdfShadingColor(shading: PdfShading, colorSpace: PdfColorSpace, ctm: Matrix) = 
             inherit Color(colorSpace, [||])
 
             //member x.ColorSpace = colorSpace
 
+            member x.Ctm = ctm
+
             member x.Shading = shading
 
-            new (shading: PdfShading) =
+            new (shading: PdfShading, ctm) =
                 let colorSpace = 
                     match shading.GetColorSpace() with 
                     | :? PdfName as pdfName ->
@@ -41,11 +43,13 @@ module ExtensionTypes =
                     | :? PdfArray as array ->
                         PdfSpecialCs.NChannel(array) :> PdfColorSpace
 
-                new PdfShadingColor(shading, colorSpace)
+                new PdfShadingColor(shading, colorSpace, ctm)
 
         type PdfShadingPathRenderInfo(color: PdfShadingColor, canvasTagHierarchy, gs, path) =
             inherit PathRenderInfo(canvasTagHierarchy, gs, path, PathRenderInfo.FILL)
 
+
+            member x.ShadingColor = color
 
     [<RequireQualifiedAccess>]
     type DecodedPdfNamePart =

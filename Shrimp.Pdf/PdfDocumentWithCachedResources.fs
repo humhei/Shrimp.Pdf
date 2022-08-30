@@ -429,7 +429,7 @@ and PdfDocumentWithCachedResources =
         match otherDocumentColor with 
         | :? PdfShadingColor as color ->
             let shading = x.cache.GetOrCreateSharding_FromOtherDocument(color.Shading)
-            writerResource.AddShading(shading)
+            (writerResource.AddShading(shading), color.Ctm)
             |> Some
         | _ -> None
 

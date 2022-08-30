@@ -369,7 +369,7 @@ let extractTests =
             |> ignore
 
 
-        ftestCase "extract objects tests9" <| fun _ -> 
+        testCase "extract objects tests9" <| fun _ -> 
             Flow.Reuse (
                 Reuses.ExtractIM(
                     PageSelector.All,
@@ -377,6 +377,26 @@ let extractTests =
                 )
             )
             |> runTest "datas/extract/extract objects9.pdf" 
+            |> ignore
+
+        testCase "extract objects tests10" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects10.pdf" 
+            |> ignore
+
+        ftestCase "extract objects tests11" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects11.pdf" 
             |> ignore
     ]
 
