@@ -293,6 +293,17 @@ let extractTests =
             |> runTest "datas/extract/extract vectors16.pdf" 
             |> ignore
 
+        ftestCase "extract vectors tests17" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(fun args info -> 
+                        true
+                    )
+                )
+            )
+            |> runTest "datas/extract/extract vectors17.pdf" 
+            |> ignore
 
 
 
@@ -389,7 +400,10 @@ let extractTests =
             |> runTest "datas/extract/extract objects10.pdf" 
             |> ignore
 
-        ftestCase "extract objects tests11" <| fun _ -> 
+        testCase "extract objects tests11" <| fun _ -> 
+            let m = FsValueColor.OfLoggingText_Raw "CMYK 0.0 96.5 100.0 0.09"
+            let m = FsSeparation.OfLoggingText_Raw "All#CMYK 99 99 99 99"
+            let m = FsSeparation.OfLoggingText_Raw "All#CMYK 100.0 100.0 100.0 100.0"
             Flow.Reuse (
                 Reuses.ExtractIM(
                     PageSelector.All,

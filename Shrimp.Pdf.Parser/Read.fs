@@ -254,10 +254,14 @@ module internal Listeners =
             gsStack.Peek().ProcessGraphicsStateResource(gs)
 
         member internal x.FillOpacity =
-            gsStack.Peek().FillOpacity
+            match gsStack.Count with 
+            | 0 -> None
+            | _ -> gsStack.Peek().FillOpacity
 
         member internal x.StrokeOpacity =
-            gsStack.Peek().StrokeOpacity
+            match gsStack.Count with 
+            | 0 -> None
+            | _ -> gsStack.Peek().StrokeOpacity
 
         member internal x.RestoreGS() = 
             gsStack.Pop()

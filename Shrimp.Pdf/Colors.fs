@@ -171,6 +171,10 @@ module _Colors =
         static member WHITE = { R = 1.0f; G = 1.0f; B = 1.0f }
         static member GRAY = { R = 0.5f; G = 0.5f; B = 0.5f }
 
+        member x.WindowColor =
+            let color = x.Range255
+            Color.FromArgb(int color.R, int color.G, int color.B)
+
         member x.MapValue(mapping) =
             { R = mapping x.R
               G = mapping x.G 
@@ -274,7 +278,7 @@ module _Colors =
 
         static member OfLoggingText_Raw(text) = 
             let parser = 
-                pstringCI "LAB " >>. (sepBy1 pfloat spaces) .>> eof
+                pstringCI "LAB " >>. (sepBy1 pfloat spaces1) .>> eof
 
             match run parser text with 
             | Success (r, _, _) -> 
@@ -382,7 +386,7 @@ module _Colors =
 
         static member OfLoggingText_Raw(text) = 
             let parser = 
-                pstringCI "CMYK " >>. (sepBy1 pfloat spaces) .>> eof
+                pstringCI "CMYK " >>. (sepBy1 pfloat spaces1) .>> eof
 
             match run parser text with 
             | Success (r, _, _) ->
@@ -657,6 +661,22 @@ module _Colors =
             | Result.Ok y -> x.IsEqualTo(y, valueEqualOptions)
             | Result.Error _ -> false
 
+        member x.IsWhite() =
+            match x with 
+            | FsValueColor.Gray (EqualTo FsGray.WHITE) -> true
+            | FsValueColor.Cmyk (EqualTo FsDeviceCmyk.WHITE) -> true
+            | FsValueColor.Rgb (EqualTo FsDeviceRgb.WHITE) -> true
+            | FsValueColor.Lab (EqualTo FsLab.WHITE) -> true
+            | _ -> false
+
+        member x.IsBlack() =
+            match x with 
+            | FsValueColor.Gray (EqualTo FsGray.BLACK) -> true
+            | FsValueColor.Cmyk (EqualTo FsDeviceCmyk.BLACK) -> true
+            | FsValueColor.Rgb (EqualTo FsDeviceRgb.BLACK) -> true
+            | FsValueColor.Lab (EqualTo FsLab.BLACK) -> true
+            | _ -> false
+
     [<RequireQualifiedAccess>]
     module FsValueColor =
         let fromKnownColor (knownColor: KnownColor) =
@@ -680,14 +700,14 @@ module _Colors =
 
         member private x.LoggingTextWithColor = 
             match x.Transparency with 
-            | 1.0 -> x.Name + "|" + x.Color.LoggingText
-            | _ -> x.Name + "|" + x.Color.LoggingText + "|" + x.Transparency.ToString()
+            | 1.0 -> x.Name + "#" + x.Color.LoggingText
+            | _ -> x.Name + "#" + x.Color.LoggingText + "#" + x.Transparency.ToString()
 
 
         member private x.LoggingTextWithColor_Raw = 
             match x.Transparency with 
-            | 1.0 -> x.Name + "|" + x.Color.LoggingText_Raw
-            | _ -> x.Name + "|" + x.Color.LoggingText_Raw + "|" + x.Transparency.ToString()
+            | 1.0 -> x.Name + "#" + x.Color.LoggingText_Raw
+            | _ -> x.Name + "#" + x.Color.LoggingText_Raw + "#" + x.Transparency.ToString()
 
         member x.LoggingText = 
             //x.Name
@@ -699,7 +719,7 @@ module _Colors =
 
         static member OfLoggingText_Raw(text: string) =
             try
-                let parts = text.Split '|'
+                let parts = text.Split '#'
                 let name = parts.[0]
                 let valueColor = FsValueColor.OfLoggingText_Raw parts.[1]
                 let transparency =
@@ -1215,8 +1235,19 @@ module _Colors =
         { Icc: Icc
           Color: FsValueColor }
     with 
-        member x.LoggingText = x.Icc.LoggingText + " " + x.Color.LoggingText
-        member x.LoggingText_Raw = x.Icc.LoggingText + " " + x.Color.LoggingText_Raw
+        member x.LoggingText = x.Icc.LoggingText + "#" + x.Color.LoggingText
+        member x.LoggingText_Raw = x.Icc.LoggingText + "#" + x.Color.LoggingText_Raw
+
+
+        static member OfLoggingText_Raw(text: string) =
+            let left = text.LeftOf("#").Value
+            let icc = Icc.OfStreamText left
+            
+            let right = text.RightOf("#")
+            let color = FsValueColor.OfLoggingText_Raw right.Value
+
+            { Icc = icc 
+              Color = color }
 
         member x.IsEqualTo(y, valueEqualOptions) =
             x.Icc = y.Icc
@@ -1235,17 +1266,23 @@ module _Colors =
             { Icc = icc
               Color = getAlterColor (icc.ColorSpace) (List.ofSeq (color.GetColorValue())) }
 
+
     [<RequireQualifiedAccess>]
     type AlternativeFsColor =
         | Separation of FsSeparation
         | IccBased of FsIccBased
         | ValueColor of FsValueColor
     with 
+
         member x.AlterColor =
             match x with 
             | AlternativeFsColor.ValueColor v -> v
             | AlternativeFsColor.IccBased v ->   v.Color
             | AlternativeFsColor.Separation v -> v.Color
+
+        member x.IsWhite() = x.AlterColor.IsWhite()
+
+        member x.IsBlack() = x.AlterColor.IsBlack()
 
         member x.LoggingText =
             match x with 
@@ -1260,7 +1297,7 @@ module _Colors =
             | AlternativeFsColor.Separation v -> v.LoggingText_Raw
 
         static member OfLoggingText_Raw(text: string) =
-            match text.Contains "|" with 
+            match text.Contains "#" with 
             | true -> 
                 FsSeparation.OfLoggingText_Raw text
                 |> AlternativeFsColor.Separation
@@ -1333,12 +1370,32 @@ module _Colors =
                 | AlternativeFsColor.ValueColor y -> x.IsEqualTo(y, valueEqualOptions)
                 | _ -> FALSE
 
+    [<RequireQualifiedAccess>]
+    module AlternativeFsColor =
+        let asSeparation = function 
+            | AlternativeFsColor.Separation v -> Some v
+            | _ -> None
+
 
     [<RequireQualifiedAccess>]
     module AlternativeFsColors =
         let contains (color: AlternativeFsColor) colors =
             let valueEqualOptions = ValueEqualOptions.DefaultValue
             colors |> List.exists (fun color' -> color.IsEqualsTo(color', valueEqualOptions))
+
+
+        let private comparer =
+            { new IEqualityComparer<AlternativeFsColor> with 
+                member __.Equals(x,y) = 
+                    x.IsEqualsTo(y, ValueEqualOptions.DefaultValue)
+    
+                member __.GetHashCode(_) = 0
+            }
+
+        let distinct (colors: AlternativeFsColor list) =
+            colors.Distinct(comparer)
+            
+
 
     [<RequireQualifiedAccess>]
     type FsColor =
@@ -1389,6 +1446,14 @@ module _Colors =
             | FsColor.Separation v -> v.LoggingText
             | FsColor.IccBased v -> v.LoggingText
             | FsColor.ValueColor v -> v.LoggingText
+            | FsColor.PatternColor _ -> "PatternColor"
+            | FsColor.ShadingColor _ -> "ShadingColor"
+
+        member x.LoggingText_Raw =
+            match x with 
+            | FsColor.Separation v -> v.LoggingText_Raw
+            | FsColor.IccBased v -> v.LoggingText_Raw
+            | FsColor.ValueColor v -> v.LoggingText_Raw
             | FsColor.PatternColor _ -> "PatternColor"
             | FsColor.ShadingColor _ -> "ShadingColor"
 

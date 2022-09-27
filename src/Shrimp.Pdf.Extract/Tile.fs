@@ -155,6 +155,9 @@ module _Tile =
         static member ``Filter__BoundIs_InsideOrCross_MM1.5`` =
             PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross Margin.``MM1.5``
             
+        static member Filter__BoundIs_InsideOrCross_MM3 =
+            PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross Margin.MM3
+            
     
         member internal x.Infos__GroupOrFilter_IntoOp(bounds: Rectangle list, infos: RenewableInfo list, ?predicateEx) =
             /// NOTE: BoxWithText.Pick already sort infos
@@ -1089,7 +1092,7 @@ module _Tile =
                 )
             )
 
-
+        /// pick subPage for each page
         static member PickFromPageTilingResult(pageTilingResults: AtLeastOneList<PageTilingResultCount>, picker: PageNumSequence) =
             let pageNumSequence = 
                 ([], pageTilingResults.AsList)
@@ -1106,7 +1109,7 @@ module _Tile =
                     picker.Value
                     |> List.choose (fun n -> List.tryItem (n.PageNumValue - 1) m)
                 )
-                |> EmptablePageNumSequence.Create
+                |> PageNumSequence.Create
 
             Reuses.SequencePages(pageNumSequence)
             |> Flow.Reuse

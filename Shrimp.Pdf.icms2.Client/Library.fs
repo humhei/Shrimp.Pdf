@@ -105,21 +105,6 @@ module Client =
 
     type AlternativeFsColor 
     with 
-        member x.IsWhite() =
-            match x.AlterColor with 
-            | FsValueColor.Gray (EqualTo FsGray.WHITE) -> true
-            | FsValueColor.Cmyk (EqualTo FsDeviceCmyk.WHITE) -> true
-            | FsValueColor.Rgb (EqualTo FsDeviceRgb.WHITE) -> true
-            | FsValueColor.Lab (EqualTo FsLab.WHITE) -> true
-            | _ -> false
-
-        member x.IsBlack() =
-            match x.AlterColor with 
-            | FsValueColor.Gray (EqualTo FsGray.BLACK) -> true
-            | FsValueColor.Cmyk (EqualTo FsDeviceCmyk.BLACK) -> true
-            | FsValueColor.Rgb (EqualTo FsDeviceRgb.BLACK) -> true
-            | FsValueColor.Lab (EqualTo FsLab.BLACK) -> true
-            | _ -> false
 
         static member DefaultIcc (cmsColor: AlternativeFsColor) =
             match cmsColor with 

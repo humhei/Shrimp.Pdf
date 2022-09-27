@@ -109,6 +109,12 @@ module _Types =
                 |> List.map(fun i -> texts.[i])
             )
 
+        member x.TryItems(indexes: int list) =
+            x.MapTexts (fun texts ->
+                indexes
+                |> List.choose(fun i -> List.tryItem i texts)
+            )
+
         member x.SplitBySpace() =
             x.MapTexts (fun texts ->
                 texts

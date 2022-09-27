@@ -169,13 +169,16 @@ module _Extract =
                 let infos = element.Infos
                 let writeInfos(infos: RenewableInfo list) =
                 
+
                     infos
-                    |> List.groupBy(fun m -> m.ClippingPathInfos.XObjectClippingBoxState.Serializable)
+                    |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.XObjectClippingBoxState.Serializable)
                     |> List.iter(fun (xobjectRect, infos) ->
+                        let infos = infos.AsList
                         let writeInfos() =
                             infos
-                            |> List.groupBy(fun m -> m.ClippingPathInfos.ClippingPathInfoState)
+                            |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.ClippingPathInfoState)
                             |> List.iter(fun (clippingPathInfo, infos) ->   
+                                let infos = infos.AsList
                                 let writeInfos() =
                                     for info in infos do
                                         info.CopyToDocument(writer, writerPage.GetResources(), readerPage).ApplyCtm_WriteToCanvas(writerCanvas)
