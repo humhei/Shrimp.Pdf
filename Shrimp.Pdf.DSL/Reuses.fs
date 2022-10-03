@@ -314,6 +314,7 @@ module _Reuses =
                         canvas.AddXObject(xobject, affineTransform)
                         |> ignore
 
+
                         [
                             PageBoxKind.MediaBox
                             PageBoxKind.CropBox
