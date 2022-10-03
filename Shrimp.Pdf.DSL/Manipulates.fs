@@ -75,19 +75,21 @@ module Manipulates =
                             pdfCanvas.SaveState() |> ignore
                             rowNumber_row_middleLine__zippedList
                             |> List.iter(fun (rowNumber, row, middleLine) ->
+                                let y = 
+                                    let preSpaces_Total = 
+                                        vspaces.[0..rowNumber.Value-2]
+                                        |> List.sum
+
+                                    let preHeights_Total =
+                                        rows.[0..rowNumber.Value-2]
+                                        |> List.sumBy(fun m -> m.Height)
+
+                                    let nextSpace = vspaces.[rowNumber.Value-1]
+
+                                    pageBox.GetTopF() - (preSpaces_Total + nextSpace / 2. + row.Height + sheetMargin.Top + preHeights_Total)
+
+
                                 let line = 
-                                    let y = 
-                                        let preSpaces_Total = 
-                                            vspaces.[0..rowNumber.Value-2]
-                                            |> List.sum
-
-                                        let preHeights_Total =
-                                            rows.[0..rowNumber.Value-2]
-                                            |> List.sumBy(fun m -> m.Height)
-
-                                        let nextSpace = vspaces.[rowNumber.Value-1]
-
-                                        pageBox.GetTopF() - (preSpaces_Total + nextSpace / 2. + row.Height + sheetMargin.Top + preHeights_Total)
 
                                     let xStart = 
                                         pageBox.GetXF() 
@@ -99,6 +101,35 @@ module Manipulates =
 
                                     { Start = Point(xStart, y)
                                       End = Point(xEnd, y)}
+
+                                let addEdgeSolidPath() =
+                                    match middleLine.EdgeSolidLine with 
+                                    | None -> ()
+                                    | Some edgeSolidLine ->
+                                        let left = 
+                                            let xStart = pageBox.GetXF() + edgeSolidLine.Start_ToEdge
+
+                                            let xEnd = xStart + edgeSolidLine.Length
+
+                                            { Start = Point(xStart, y)
+                                              End = Point(xEnd, y)}
+
+                                        let right = 
+                                            let xStart = pageBox.GetRightF() - edgeSolidLine.Start_ToEdge
+                                            let xEnd = xStart - edgeSolidLine.Length
+                                            { Start = Point(xStart, y)
+                                              End = Point(xEnd, y)}
+
+                                        pdfCanvas
+                                        |> PdfCanvas.addLine left (fun args -> 
+                                            { middleLine.Properties with DashPattern = DashPattern.Empty }
+                                        )
+                                        |> PdfCanvas.addLine right (fun args -> 
+                                            { middleLine.Properties with DashPattern = DashPattern.Empty }
+                                        )
+                                        |> ignore
+
+                                addEdgeSolidPath()
 
                                 pdfCanvas
                                 |> PdfCanvas.addLine line (fun args -> middleLine.Properties)
@@ -158,19 +189,21 @@ module Manipulates =
                             pdfCanvas.SaveState() |> ignore
                             colNumber_col_middleLine__zippedList
                             |> List.iter(fun (colNumber, col, middleLine) ->
+                                let x = 
+                                    let preSpaces_Total = 
+                                        hspaces.[0..colNumber.Value-2]
+                                        |> List.sum
+
+                                    let preWidthss_Total =
+                                        cells.[0..colNumber.Value-2]
+                                        |> List.sumBy(fun m -> m.Size.Width)
+
+                                    let nextSpace = hspaces.[colNumber.Value-1]
+
+                                    pageBox.GetXF() + (preSpaces_Total + nextSpace / 2. + col.Size.Width + sheetMargin.Left + preWidthss_Total)
+
+
                                 let line = 
-                                    let x = 
-                                        let preSpaces_Total = 
-                                            hspaces.[0..colNumber.Value-2]
-                                            |> List.sum
-
-                                        let preWidthss_Total =
-                                            cells.[0..colNumber.Value-2]
-                                            |> List.sumBy(fun m -> m.Size.Width)
-
-                                        let nextSpace = hspaces.[colNumber.Value-1]
-
-                                        pageBox.GetXF() + (preSpaces_Total + nextSpace / 2. + col.Size.Width + sheetMargin.Left + preWidthss_Total)
 
                                     let yStart = 
                                         pageBox.GetTopF() 
@@ -182,6 +215,33 @@ module Manipulates =
 
                                     { Start = Point(x, yStart)
                                       End = Point(x, yEnd)}
+
+                                let addEdgeSolidPath() =
+                                    match middleLine.EdgeSolidLine with 
+                                    | None -> ()
+                                    | Some edgeSolidLine ->
+                                        let top = 
+                                            let yStart = pageBox.GetTopF() - edgeSolidLine.Start_ToEdge
+                                            let yEnd = yStart - edgeSolidLine.Length
+                                            { Start = Point(x, yStart)
+                                              End = Point(x, yEnd) }
+
+                                        let bottom = 
+                                            let yStart = pageBox.GetBottomF() + edgeSolidLine.Start_ToEdge
+                                            let yEnd = yStart + edgeSolidLine.Length
+                                            { Start = Point(x, yStart)
+                                              End = Point(x, yEnd) }
+
+                                        pdfCanvas
+                                        |> PdfCanvas.addLine top (fun args -> 
+                                            { middleLine.Properties with DashPattern = DashPattern.Empty }
+                                        )
+                                        |> PdfCanvas.addLine bottom (fun args -> 
+                                            { middleLine.Properties with DashPattern = DashPattern.Empty }
+                                        )
+                                        |> ignore
+
+                                addEdgeSolidPath()
 
                                 pdfCanvas
                                 |> PdfCanvas.addLine line (fun args -> middleLine.Properties)

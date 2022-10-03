@@ -293,7 +293,7 @@ let extractTests =
             |> runTest "datas/extract/extract vectors16.pdf" 
             |> ignore
 
-        ftestCase "extract vectors tests17" <| fun _ -> 
+        testCase "extract vectors tests17" <| fun _ -> 
             Flow.Reuse (
                 Reuses.ExtractIM(
                     PageSelector.All,

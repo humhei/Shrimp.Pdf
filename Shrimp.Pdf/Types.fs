@@ -26,6 +26,8 @@ type PageOrientation =
 
 
 
+
+
 type FsSize =
     { Width: float 
       Height: float }
@@ -178,6 +180,11 @@ type FsSize with
 
     member x.AlignDirection(targetSize: iText.Kernel.Geom.Rectangle) = x.OppositeDirection(targetSize)
 
+    member x.Orientation =
+        match x with 
+        | FsSize.Landscape -> PageOrientation.Landscape
+        | FsSize.Uniform -> PageOrientation.Landscape
+        | FsSize.Portrait -> PageOrientation.Portrait
 
 type FsPageSize [<JsonConstructor>] (size: FsSize, pageOrientation) =
     inherit POCOBase<FsSize * PageOrientation>(size, pageOrientation)

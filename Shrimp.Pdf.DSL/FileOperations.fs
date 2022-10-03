@@ -309,6 +309,11 @@ type PdfRunner =
                 PdfFile args.TargetDocumentPath
             | None -> input
 
+    static member mergeDocumentsTo targetPdfPath (inputs: PdfFile al1List) =
+        PdfRunner.MergeDocuments(
+            inputs,
+            fun args -> { args with TargetDocumentPath = targetPdfPath; Override = true }
+        )
 
 
 

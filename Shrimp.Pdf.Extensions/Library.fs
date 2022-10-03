@@ -271,6 +271,20 @@ module iText =
             let x,y = point.x, point.y
             x < rect.GetXF() || x > rect.GetRightF() || y < rect.GetYF() || y > rect.GetTopF()
 
+    type PageEdge with 
+        member x.Left = 
+            x.LeftBottom.setHeight(YEffort.Bottom, fun m -> m + x.LeftMiddle.GetHeightF() + x.LeftTop.GetHeightF())
+
+        member x.Right = 
+            x.RightBottom.setHeight(YEffort.Bottom, fun m -> m + x.LeftMiddle.GetHeightF() + x.LeftTop.GetHeightF())
+
+        member x.Bottom = 
+            x.LeftBottom.setWidth(XEffort.Left, fun m -> m + x.BottomMiddle.GetWidthF() + x.RightBottom.GetWidthF())
+
+        member x.Top = 
+            x.LeftTop.setWidth(XEffort.Left, fun m -> m + x.BottomMiddle.GetWidthF() + x.RightBottom.GetWidthF())
+
+
     [<RequireQualifiedAccess>]
     module StraightLine =
         /// http://www.navision-blog.de/blog/2008/12/02/calculate-the-intersection-of-two-lines-in-fsharp-2d/
@@ -1540,21 +1554,9 @@ module iText =
 
 
 
-
-            
-    type PdfPage with
-        member x.SetPageBoxToPage(targetPdfPage: PdfPage) =
-            x
-                .SetCropBox(targetPdfPage.GetCropBox())
-                .SetMediaBox(targetPdfPage.GetMediaBox())
-                .SetArtBox(targetPdfPage.GetArtBox())
-                .SetBleedBox(targetPdfPage.GetBleedBox())
-                .SetTrimBox(targetPdfPage.GetTrimBox())
-            
-
-
-        member x.GetPageEdge (innerBox: Rectangle, pageBoxKind) =
-            let pageBox = x.GetPageBox(pageBoxKind)
+    type Rectangle with 
+        member x.GetPageEdge (innerBox: Rectangle) =
+            let pageBox = x
 
             if innerBox.IsInsideOf(pageBox) 
             then 
@@ -1624,6 +1626,22 @@ module iText =
                   BottomMiddle = bottomMiddle }
 
             else failwithf "innerBox %O is not inside pageBox %O" innerBox pageBox
+            
+    type PdfPage with
+        member x.SetPageBoxToPage(targetPdfPage: PdfPage) =
+            x
+                .SetCropBox(targetPdfPage.GetCropBox())
+                .SetMediaBox(targetPdfPage.GetMediaBox())
+                .SetArtBox(targetPdfPage.GetArtBox())
+                .SetBleedBox(targetPdfPage.GetBleedBox())
+                .SetTrimBox(targetPdfPage.GetTrimBox())
+            
+
+
+        member x.GetPageEdge (innerBox: Rectangle, pageBoxKind) =
+            let pageBox: Rectangle = x.GetPageBox(pageBoxKind)
+            pageBox.GetPageEdge(innerBox)
+        
 
 
         member this.GetActualBox() = 

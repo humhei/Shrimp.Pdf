@@ -180,14 +180,21 @@ let reuseTests =
             ModifyPage.AddSpaceMiddleLines(RowOrColumn.Row,fun (pageNumber, rowNumber) ->
                 match pageNumber.Value, rowNumber.Value with 
                 | 1, 1  
-                | 1, 2 -> Some (SpaceMiddleLine.DashLine()) 
+                | 1, 2 -> Some (SpaceMiddleLine.DashLine(
+                    edgeSolidLine = SpaceMiddleLine_EdgeSolidLine.DefaultValue,
+                    edgeLength_PercentToMargin = 0
+                    
+                )) 
                 | _ -> None
             )
             <+>
             ModifyPage.AddSpaceMiddleLines(RowOrColumn.Column, fun (pageNumber, rowNumber) ->
                 match pageNumber.Value, rowNumber.Value with 
                 | 1, 1  
-                | 1, 2 -> Some (SpaceMiddleLine.DashLine()) 
+                | 1, 2 -> Some (SpaceMiddleLine.DashLine(
+                    edgeSolidLine = SpaceMiddleLine_EdgeSolidLine.DefaultValue,
+                    edgeLength_PercentToMargin = 0
+                )) 
                 | _ -> None
             )
         )
@@ -597,6 +604,24 @@ let reuseTests =
             Reuses.Resize(PageSelector.All, PageBoxKind.ActualBox , { Width = mm 105.8; Height = mm 155. })
         )
         |> runTest "datas/reuse/resize pageSize to 7x4cm by trimbox.pdf" 
+        |> ignore
+
+    ftestCase "resize pageSize to 5x3.8cm by trimbox" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.ClearDirtyInfos(keepOriginPageBoxes = true)
+            <+>
+            Reuses.Resize(PageSelector.All, PageBoxKind.TrimBox , { Width = mm 50.; Height = mm 50. })
+        )
+        |> runTest "datas/reuse/resize pageSize to 5x3.8cm by trimbox.pdf" 
+        |> ignore
+
+    testCase "resize pageSize to 5x3.8cm by trimbox2" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.ClearDirtyInfos(keepOriginPageBoxes = true)
+            <+>
+            Reuses.Resize(PageSelector.All, PageBoxKind.TrimBox , { Width = mm 50.; Height = mm 50. })
+        )
+        |> runTest "datas/reuse/resize pageSize to 5x3.8cm by trimbox2.pdf" 
         |> ignore
 
     testCase "resize pageSize to 29.7×21cm uniform tests" <| fun _ -> 

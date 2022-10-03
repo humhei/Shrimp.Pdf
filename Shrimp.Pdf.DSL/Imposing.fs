@@ -315,14 +315,24 @@ module Imposing =
         | R180WhenColNumIsEven 
         | R180WhenRowNumIsEven 
 
+    type SpaceMiddleLine_EdgeSolidLine =
+        { Start_ToEdge: float 
+          Length: float }
+    with    
+        static member DefaultValue = 
+            { Start_ToEdge = mm 0.8
+              Length   = mm 2.0 }
+
     type SpaceMiddleLine =
         { Properties: PdfCanvasAddLineArguments 
-          EdgeLength_PercentToMargin: float }
+          EdgeLength_PercentToMargin: float
+          EdgeSolidLine: option<SpaceMiddleLine_EdgeSolidLine> }
     with 
-        static member DashLine(?dashValue, ?edgeLength_PercentToMargin) =
+        static member DashLine(?dashValue, ?edgeLength_PercentToMargin, ?edgeSolidLine) =
             { Properties =
                 PdfCanvasAddLineArguments.DashLine(?value = dashValue)
               EdgeLength_PercentToMargin = defaultArg edgeLength_PercentToMargin 0.7
+              EdgeSolidLine = edgeSolidLine
             }
 
         member x.SetProps(props) =
@@ -340,6 +350,11 @@ module Imposing =
         static member Zero =
             { Space = 0. 
               MiddleLine = None }
+
+        member x.SetMiddleLine(middleLine) =
+            { x with 
+                MiddleLine = Some middleLine
+            }
 
         member x.TrySetMiddleLineProps(props) =
             { x with 
@@ -391,9 +406,16 @@ module Imposing =
             |> List.map(fun m -> m.TrySetMiddleLineProps(props))
             |> Spaces
 
+        member x.SetMiddleLine(middleLine) =
+            v
+            |> List.map(fun m -> m.SetMiddleLine(middleLine))
+            |> Spaces
+
         static member Zero = Spaces (Space.Zero)
 
         static member MiddleDashLine(value, ?dashValue) = Spaces(Space.MiddleDashLine(value, ?dashValue = dashValue))
+
+
 
 
     type _ImposingArguments =
