@@ -1171,7 +1171,21 @@ module iText =
                 image.GetImageCtm()
                 |> AffineTransformRecord.ofMatrix
 
-            Rectangle.create ctm.TranslateX ctm.TranslateY ctm.ScaleX ctm.ScaleY
+            let x, width =
+                match ctm.ScaleX with 
+                | BiggerOrEqual 0 -> ctm.TranslateX, ctm.ScaleX
+                | SmallerThan 0 -> 
+                    ctm.TranslateX + ctm.ScaleX, abs ctm.ScaleX
+                | _ -> failwith "Invalid token"
+
+            let y, height =
+                match ctm.ScaleY with 
+                | BiggerOrEqual 0 -> ctm.TranslateY, ctm.ScaleY
+                | SmallerThan 0 -> 
+                    ctm.TranslateY + ctm.ScaleY, abs ctm.ScaleY
+                | _ -> failwith "Invalid token"
+
+            Rectangle.create x y width height
 
 
 
