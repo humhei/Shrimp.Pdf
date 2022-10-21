@@ -50,7 +50,11 @@ with
         let scale = min scaleX scaleY
         x.MapValue(fun m -> m * scale)
 
-
+[<AutoOpen>]
+module _FsSizeExtensions =
+    type Rectangle with 
+        member x.GetArea(position, size) =
+            x.GetArea(position, size.Width, size.Height)
 
 [<CustomEquality; NoComparison>]
 type RoundedSize = private RoundedSize of FsSize

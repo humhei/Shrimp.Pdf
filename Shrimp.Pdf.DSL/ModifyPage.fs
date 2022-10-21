@@ -157,14 +157,20 @@ type PageModifier =
         let selectionGrouper = defaultArg selectionGrouper SelectionGrouper.DefaultValue
 
         fun (args: PageModifingArguments<_>) infos ->
+            let infos = 
+                infos
+                |> List.ofSeq
+                |> List.choose IIntegratedRenderInfo.asITextRenderInfo
+                |> List.map(fun m -> m, IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m)
+                |> List.distinctBy_explictly<_, _>(fun (m, bound) ->
+                    Rectangle.equalableValue bound
+                )
+
+            let infos = 
+                infos
+                |> selectionGrouper.GroupBy_Bottom(snd) 
+
             infos
-            |> List.ofSeq
-            |> List.choose IIntegratedRenderInfo.asITextRenderInfo
-            |> List.map(fun m -> m, IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m)
-            |> List.distinctBy_explictly<_, _>(fun (m, bound) ->
-                Rectangle.equalableValue bound
-            )
-            |> selectionGrouper.GroupBy_Bottom(snd)
             |> Seq.choose(fun (_, infos) ->
                 let text = 
                     infos
@@ -386,13 +392,13 @@ module ModifyPageOperators =
                     match parameters with 
                     | None ->
                         [
-                            "pageSelctor" => pageSelector.ToString()
+                            "pageSelector" => pageSelector.ToString()
                             "selector" => selector.ToString()
                         ]
                     | Some parameters ->
                         (
                             [
-                                "pageSelctor" => pageSelector.ToString()
+                                "pageSelector" => pageSelector.ToString()
                                 "selector" => selector.ToString()
                             ]
                             @ parameters

@@ -403,7 +403,7 @@ module _Renewable =
 
     type RenewableImageInfo =
         { Image: ImageRenderInfo
-          CurrentDocumentImage: Xobject.PdfImageXObject option
+          CurrentDocumentImage: CurrentDocumentImage option
           ClippingPathInfos: ClippingPathInfos
           ExtGState: FsExtGState option
           OriginInfo: IntegratedImageRenderInfo }
@@ -422,10 +422,24 @@ module _Renewable =
                     | None -> ()
                     | Some extGState -> PdfCanvas.setExtGState extGState pdfCanvas |> ignore
 
+                    match currentDocumentImage with 
+                    | CurrentDocumentImage.XObject currentDocumentImage ->
+                        pdfCanvas
+                        |> PdfCanvas.concatMatrix (x.Image.GetImageCtm())
+                        |> PdfCanvas.addXObject currentDocumentImage AffineTransformRecord.DefaultValue
 
-                    pdfCanvas
-                    |> PdfCanvas.concatMatrix (x.Image.GetImageCtm())
-                    |> PdfCanvas.addXObject currentDocumentImage AffineTransformRecord.DefaultValue
+                    | CurrentDocumentImage.Inline pdfStream ->
+                        let operatorRange =
+                            { Operator = PdfLiteral(EI)
+                              Operands = 
+                                [|
+                                    pdfStream :> PdfObject
+                                    PdfLiteral(EI) :> PdfObject
+                                |]
+                              }
+                        pdfCanvas
+                        |> PdfCanvas.concatMatrix (x.Image.GetImageCtm())
+                        |> PdfCanvas.writeOperatorRange operatorRange
                 )
                 |> ignore
 
@@ -488,3 +502,16 @@ module _Renewable =
                 info.ApplyCtm_WriteToCanvas(canvas)
 
 
+    [<RequireQualifiedAccess>]
+    module RenewableInfo =
+        let asText = function
+            | RenewableInfo.Text v -> Some v
+            | _ -> None
+
+        let asImage = function
+            | RenewableInfo.Image v -> Some v
+            | _ -> None
+
+        let asPath = function
+            | RenewableInfo.Path v -> Some v
+            | _ -> None

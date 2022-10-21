@@ -6,8 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="datas\BigData\" />
-    <Folder Include="datas\real samples\" />
     <None Include="datas\**\*.pdf">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

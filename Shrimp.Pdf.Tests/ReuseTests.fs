@@ -547,16 +547,23 @@ let reuseTests =
 
     testCase "move pagebox to origin tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.ClearDirtyInfos()
+            Reuses.ClearDirtyInfos(keepOriginPageBoxes = true)
         )
         |> runTest "datas/reuse/move pagebox to origin.pdf" 
         |> ignore
 
     testCase "move pagebox to origin tests2" <| fun _ -> 
         Flow.Reuse (
-            Reuses.ClearDirtyInfos()
+            Reuses.ClearDirtyInfos(keepOriginPageBoxes = true)
         )
         |> runTest "datas/reuse/move pagebox to origin2.pdf" 
+        |> ignore
+
+    testCase "move pagebox to origin tests3" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.ClearDirtyInfos(keepOriginPageBoxes = true)
+        )
+        |> runTest "datas/reuse/move pagebox to origin3.pdf" 
         |> ignore
 
     testCase "clear dirty infos" <| fun _ -> 
@@ -606,7 +613,7 @@ let reuseTests =
         |> runTest "datas/reuse/resize pageSize to 7x4cm by trimbox.pdf" 
         |> ignore
 
-    ftestCase "resize pageSize to 5x3.8cm by trimbox" <| fun _ -> 
+    testCase "resize pageSize to 5x3.8cm by trimbox" <| fun _ -> 
         Flow.Reuse (
             Reuses.ClearDirtyInfos(keepOriginPageBoxes = true)
             <+>

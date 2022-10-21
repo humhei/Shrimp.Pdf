@@ -101,6 +101,10 @@ type ReaderDocument (reader: string) =
     interface System.IDisposable with 
         member x.Dispose() = x.Close()
 
+[<RequireQualifiedAccess>]
+type CurrentDocumentImage =
+    | Inline of PdfStream 
+    | XObject of Xobject.PdfImageXObject
 
 
 type private PdfDocumentCache private 
@@ -187,11 +191,17 @@ type private PdfDocumentCache private
         )
 
     member internal x.GetOrCreateImage_FromOtherDocument(image: ImageRenderInfo) =
-        let image = image.GetImage()
-        let number = hashNumberOfPdfIndirectReference <| image.GetPdfObject().GetIndirectReference()
-        imageCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
-            image.CopyTo(pdfDocument())
-        )
+        match image.IsInline() with 
+        | true -> 
+            let stream = image.GetImage().GetPdfObject()
+            CurrentDocumentImage.Inline stream 
+        | false ->
+            let image = image.GetImage()
+            let number = hashNumberOfPdfIndirectReference <| image.GetPdfObject().GetIndirectReference()
+            imageCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
+                image.CopyTo(pdfDocument())
+            )
+            |> CurrentDocumentImage.XObject
 
     member internal x.GetOrCreatePatternColor_FromOtherDocument(otherDocumentPage: PdfPage, patternColor: PatternColor) =
             match patternColor.GetColorSpace() with 

@@ -20,7 +20,9 @@ open iText.Kernel.Pdf
 open Shrimp.Pdf.Constants.Operators
 open System.Collections.Concurrent
 
-
+[<AutoOpen>]
+module private _Utils =
+    let showTextOperators = [Tj; TJ; "'"; "''"]
 
 type RenderInfoStoppedException(info: IIntegratedRenderInfoIM) =
     inherit System.Exception()
@@ -192,7 +194,7 @@ type SelectorModiferToken =
 
 
 module internal Listeners =
-
+    
     type CurrentRenderInfoStatus =
         | Skiped = 0
         | Selected = 1
@@ -511,98 +513,101 @@ module internal Listeners =
                             :> IIntegratedRenderInfoIM
 
                         | :? ImageRenderInfo as imageRenderInfo ->
-                            { ClippingPathInfos = 
-                                { XObjectClippingBoxState = currentXObjectClippingBox
-                                  ClippingPathInfoState = currentClippingPathInfo }
-                              ImageRenderInfo = imageRenderInfo
-                              FillOpacity = this.FillOpacity
-                              StrokeOpacity = this.StrokeOpacity
-                              LazyImageData = 
-                                lazy 
-                                    let rgbIndexedColorSpace =
-                                        let image = 
-                                            imageRenderInfo
-                                                .GetImage()
+                            let imageInfo =
+                                { ClippingPathInfos = 
+                                    { XObjectClippingBoxState = currentXObjectClippingBox
+                                      ClippingPathInfoState = currentClippingPathInfo }
+                                  ImageRenderInfo = imageRenderInfo
+                                  FillOpacity = this.FillOpacity
+                                  StrokeOpacity = this.StrokeOpacity
+                                  LazyImageData = 
+                                    lazy 
+                                        let rgbIndexedColorSpace =
+                                            let image = 
+                                                imageRenderInfo
+                                                    .GetImage()
 
-                                        let bitsPerComponent = 
-                                            image
-                                                .GetPdfObject()
-                                                .GetAsNumber(PdfName.BitsPerComponent)
-                                                .IntValue()
+                                            let bitsPerComponent = 
+                                                image
+                                                    .GetPdfObject()
+                                                    .GetAsNumber(PdfName.BitsPerComponent)
+                                                    .IntValue()
 
-                                        let imageType =
-                                            image.IdentifyImageType()
+                                            let imageType =
+                                                image.IdentifyImageType()
 
-                                        let colorSpace = image.GetPdfObject().GetAsArray(PdfName.ColorSpace)
+                                            let colorSpace = image.GetPdfObject().GetAsArray(PdfName.ColorSpace)
 
-                                        match bitsPerComponent, imageType with 
-                                        | 2, _ -> 
-                                            match colorSpace.Contains(PdfName.Indexed) && colorSpace.Contains(PdfName.DeviceRGB) with 
-                                            | true -> Some { ImageXObject = image; ImageType = imageType }
+                                            match bitsPerComponent, imageType with 
+                                            | 2, _ -> 
+                                                match colorSpace.Contains(PdfName.Indexed) && colorSpace.Contains(PdfName.DeviceRGB) with 
+                                                | true -> Some { ImageXObject = image; ImageType = imageType }
                                                 
-                                            | false -> None
-                                        | _ -> None
+                                                | false -> None
+                                            | _ -> None
                                     
-                                    match rgbIndexedColorSpace with 
-                                    | Some rgbIndexedColorSpace -> FsImageData.IndexedRgb rgbIndexedColorSpace
-                                    | None -> 
-                                        (ImageDataFactory.Create(imageRenderInfo.GetImage().GetImageBytes()))
-                                        |> FsImageData.ImageData
+                                        match rgbIndexedColorSpace with 
+                                        | Some rgbIndexedColorSpace -> FsImageData.IndexedRgb rgbIndexedColorSpace
+                                        | None -> 
+                                            (ImageDataFactory.Create(imageRenderInfo.GetImage().GetImageBytes()))
+                                            |> FsImageData.ImageData
 
-                              LazyColorSpace = 
-                                lazy 
-                                    let fromPdfName name =
-                                        match name with 
-                                        | EqualTo PdfName.DeviceRGB -> ColorSpace.Rgb
-                                        | EqualTo PdfName.DeviceCMYK -> ColorSpace.Cmyk
-                                        | EqualTo PdfName.DeviceGray -> ColorSpace.Gray
-                                        | EqualTo PdfName.Lab -> ColorSpace.Lab
-                                        | _ -> failwithf "Cannot get colorspace from pdfName %O" (name.ToString())
+                                  LazyColorSpace = 
+                                    lazy 
+                                        let fromPdfName name =
+                                            match name with 
+                                            | EqualTo PdfName.DeviceRGB -> ColorSpace.Rgb
+                                            | EqualTo PdfName.DeviceCMYK -> ColorSpace.Cmyk
+                                            | EqualTo PdfName.DeviceGray -> ColorSpace.Gray
+                                            | EqualTo PdfName.Lab -> ColorSpace.Lab
+                                            | _ -> failwithf "Cannot get colorspace from pdfName %O" (name.ToString())
                                     
-                                    let pdfObject = imageRenderInfo.GetImage().GetPdfObject()
-                                    let colorSpace = pdfObject.Get(PdfName.ColorSpace)
-                                    match colorSpace with 
-                                    | null -> 
-                                        match  pdfObject.Get(PdfName.ImageMask) with 
-                                        | null -> failwithf "Not implemented, Cannot get colorSpace from %A" pdfObject
-                                        | _ -> Some ImageColorSpaceData.ImageMask
-                                    | colorSpace ->
-                                        let decode = pdfObject.Get(PdfName.Decode) |> Option.ofObj |> Option.map (fun m -> m :?> PdfArray)
-                                        imageColorSpaceCache.GetOrAdd(colorSpace, valueFactory = (fun colorSpace ->
-                                            match colorSpace with 
-                                            | :? PdfArray as array ->
-                                                match array.Get(0) with 
-                                                | :? PdfName as name ->
-                                                    match name with 
-                                                    | EqualTo PdfName.Indexed ->
-                                                        let colorSpace = 
-                                                            match array.Get(1) with 
-                                                            | :? PdfName as name -> fromPdfName name
-                                                            | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
-                                                        let indexedTable = 
-                                                            match array.Get(3) with 
-                                                            | :? PdfStream as pdfStream -> pdfStream.GetBytes()
-                                                            | :? PdfString as pdfString -> pdfString.GetValueBytes()
+                                        let pdfObject = imageRenderInfo.GetImage().GetPdfObject()
+                                        let colorSpace = pdfObject.Get(PdfName.ColorSpace)
+                                        match colorSpace with 
+                                        | null -> 
+                                            match  pdfObject.Get(PdfName.ImageMask) with 
+                                            | null -> failwithf "Not implemented, Cannot get colorSpace from %A" pdfObject
+                                            | _ -> Some ImageColorSpaceData.ImageMask
+                                        | colorSpace ->
+                                            let decode = pdfObject.Get(PdfName.Decode) |> Option.ofObj |> Option.map (fun m -> m :?> PdfArray)
+                                            imageColorSpaceCache.GetOrAdd(colorSpace, valueFactory = (fun colorSpace ->
+                                                match colorSpace with 
+                                                | :? PdfArray as array ->
+                                                    match array.Get(0) with 
+                                                    | :? PdfName as name ->
+                                                        match name with 
+                                                        | EqualTo PdfName.Indexed ->
+                                                            let colorSpace = 
+                                                                match array.Get(1) with 
+                                                                | :? PdfName as name -> fromPdfName name
+                                                                | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
+                                                            let indexedTable = 
+                                                                match array.Get(3) with 
+                                                                | :? PdfStream as pdfStream -> pdfStream.GetBytes()
+                                                                | :? PdfString as pdfString -> pdfString.GetValueBytes()
 
-                                                        { ColorSpace = colorSpace; IndexTable = Some indexedTable; Decode = decode }
-                                                        |> ImageColorSpaceData.Indexable
-                                                        |> Some
-                                                    | EqualTo PdfName.ICCBased -> None
+                                                            { ColorSpace = colorSpace; IndexTable = Some indexedTable; Decode = decode }
+                                                            |> ImageColorSpaceData.Indexable
+                                                            |> Some
+                                                        | EqualTo PdfName.ICCBased -> None
                                                     
+                                                        | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
                                                     | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
-                                                | _ -> failwithf "Invalid token, current colorspace pdfArray are %A" array
 
-                                            | :? PdfName as name -> 
-                                                { ColorSpace = fromPdfName name; IndexTable = None; Decode = decode  }
-                                                |> ImageColorSpaceData.Indexable
-                                                |> Some
-                                            | _ -> failwithf "Invalid token, current color space is %A" colorSpace 
-                                        ))
+                                                | :? PdfName as name -> 
+                                                    { ColorSpace = fromPdfName name; IndexTable = None; Decode = decode  }
+                                                    |> ImageColorSpaceData.Indexable
+                                                    |> Some
+                                                | _ -> failwithf "Invalid token, current color space is %A" colorSpace 
+                                            ))
 
                                             
                                 
-                              }
-                            :> IIntegratedRenderInfoIM
+                                  }
+
+                            imageInfo :> IIntegratedRenderInfoIM
+
 
                         |_ -> failwith "Not implemented"
 
@@ -879,7 +884,7 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
         match operatorName with 
         | EQ q -> processor.Listener.SaveGS(processor.GetGraphicsState())
         | EQ Q -> processor.Listener.RestoreGS()
-        | ContainsBy [Tj; TJ; "'"; "''"] -> 
+        | ContainsBy showTextOperators -> 
             processor.Listener.BeginShowText()
         | _ -> ()
 
@@ -915,7 +920,7 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
         match operatorName with 
         | EQ gs -> processor.Listener.ProcessGraphicsStateResource(processor.GetGraphicsState())
         | EQ sh -> processor.PaintShading_InClippingArea(operands.[0] :?> PdfName)
-        | ContainsBy [Tj; TJ; "'"; "''"] -> 
+        | ContainsBy showTextOperators -> 
             processor.Listener.EndShoeText({Operator = operator; Operands = ResizeArray operands})
 
         | ContainsBy [m; v; c; y; l; h; re] -> 
@@ -978,7 +983,7 @@ module NonInitialClippingPathPdfDocumentContentParser =
         | _ ->
             let infos = 
                 RenderInfoSelector.checkNonImageSelectorExists [renderInfoSelector]
-                let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled"}, renderInfoSelector]
+                let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled" }, renderInfoSelector]
                 let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
                 parser.ProcessContent(pageNum, listener).ParsedRenderInfos
                 |> Seq.map(fun m -> m :?> IIntegratedRenderInfo)
@@ -992,7 +997,7 @@ module NonInitialClippingPathPdfDocumentContentParser =
         match et with 
         | [] -> [] :> seq<IIntegratedRenderInfoIM>
         | _ ->
-            let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled"}, renderInfoSelector]
+            let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled" }, renderInfoSelector]
             let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
             parser.ProcessContent(pageNum, listener).ParsedRenderInfos
         
@@ -1002,7 +1007,7 @@ module NonInitialClippingPathPdfDocumentContentParser =
         match et with 
         | [] -> [] :> seq<IIntegratedRenderInfoIM> |>StoppableParsedRenderInfoIMs.NonStopped
         | _ ->
-            let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled"}, renderInfoSelector]
+            let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled" }, renderInfoSelector]
             let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
             try
                 parser.ProcessContent(pageNum, listener).ParsedRenderInfos

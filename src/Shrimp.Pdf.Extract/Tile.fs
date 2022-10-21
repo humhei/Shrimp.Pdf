@@ -76,7 +76,7 @@ module _Tile =
     type internal ExpandedRenewableInfo(info: RenewableInfo) =
         member x.Info = info
 
-    type internal ExpandedRenewableInfos(info: RenewableInfo) =
+    type internal ExpandedRenewableInfos(info: RenewableInfo, splitTextToWords: bool) =
         let infos =
             match info with 
             | RenewableInfo.Image _
@@ -86,15 +86,20 @@ module _Tile =
                 match Seq.length textInfo.OriginInfo.ConcatedTextInfos with 
                 | 0 
                 | 1 -> [info]
-                | _ ->
-                    textInfo.OriginInfo.ConcatedTextInfos
-                    |> List.ofSeq
-                    |> List.mapi(fun i m -> 
-                        m.Renewable(
-                            isWord = true
+                | _ -> 
+                    match splitTextToWords with 
+                    | true ->
+                        textInfo.OriginInfo.ConcatedTextInfos
+                        |> List.ofSeq
+                        |> List.mapi(fun i m -> 
+                            m.Renewable(
+                                isWord = true
+                            )
                         )
-                    )
-                    |> List.map RenewableInfo.Text
+                        |> List.map RenewableInfo.Text
+
+                    | false -> [info]
+
             |> List.map ExpandedRenewableInfo
 
         member x.Infos = infos
@@ -116,10 +121,21 @@ module _Tile =
     [<RequireQualifiedAccess>]
     type PageTilingRenewInfosSplitter =
         | Filter__BoundIs_InsideOrCross of Margin
-        | Groupby_CenterPointIsInside
-        | Groupby_DenseBoundIsInside of Margin
+        | Groupby_CenterPointIsInside of splitTextToWords: bool
+        | Groupby_DenseBoundIsInside of splitTextToWords:bool * Margin
     with    
-        
+        member internal x.SplitTextToWords =
+            match x with 
+            | Filter__BoundIs_InsideOrCross _ -> false
+            | Groupby_CenterPointIsInside b -> b
+            | Groupby_DenseBoundIsInside (b, _) -> b
+
+        member x.SetSplitTextToWords(b) =
+            match x with 
+            | Filter__BoundIs_InsideOrCross _ -> x
+            | Groupby_CenterPointIsInside _ -> PageTilingRenewInfosSplitter.Groupby_CenterPointIsInside(b)
+            | Groupby_DenseBoundIsInside (_, margin) -> PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside(b, margin)
+
         member internal x.BoundGettingStrokeOptions =
             match x with 
             | PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside _ ->
@@ -143,13 +159,13 @@ module _Tile =
                 IIntegratedRenderInfoIM.getBound x.BoundGettingStrokeOptions
     
         static member ``Groupby_DenseBoundIsInside_MM1.5`` =
-            PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside Margin.``MM1.5``
+            PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside (true, Margin.``MM1.5``)
     
         static member Groupby_DenseBoundIsInside_MM0 =
-            PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside Margin.Zero
+            PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside (true, Margin.Zero)
     
         static member Groupby_DenseBoundIsInside_MM3 =
-            PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside Margin.MM3
+            PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside (true, Margin.MM3)
     
 
         static member ``Filter__BoundIs_InsideOrCross_MM1.5`` =
@@ -175,7 +191,7 @@ module _Tile =
 
             let infos =
                 infos
-                |> List.map ExpandedRenewableInfos
+                |> List.map (fun m -> ExpandedRenewableInfos(m, x.SplitTextToWords))
                 |> List.collect(fun m -> m.Infos)
                 |> List.map(fun m -> BoundCachableInfo(m, fun info -> 
                     (x.GetInfoBound() info.Info.OriginInfo)
@@ -277,7 +293,7 @@ module _Tile =
                         Some (bound.ApplyMargin -margin, infos |> List.map (fun m -> m.Info.Info))
                 )
     
-            | PageTilingRenewInfosSplitter.Groupby_CenterPointIsInside ->
+            | PageTilingRenewInfosSplitter.Groupby_CenterPointIsInside _  ->
                 loop_groupBy 
                     (fun indexedBound infoBound ->
                         infoBound.IsCenterPointInsideOf (indexedBound.Bound)
@@ -286,7 +302,7 @@ module _Tile =
                     infos
 
      
-            | PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside margin ->
+            | PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside (_, margin) ->
                 let bounds =
                     bounds
                     |> List.map (fun m -> m.ApplyMargin margin)
@@ -827,6 +843,7 @@ module _Tile =
                 | [] -> failwithf "Cannot tiling to any results by selector %A" selector
                 | _ -> ()
 
+
                 let layouts =
                     boundGroups
                     |> List.map(fun m ->
@@ -838,6 +855,10 @@ module _Tile =
                     boundGroups
                     |> List.collect(fun m -> m.Value)
 
+                match boundGroups with 
+                | [] -> failwithf "Cannot tiling to any results by selector %A" selector
+                | _ -> ()
+
                 let boundGroups =
                     match distincter with 
                     | None -> boundGroups
@@ -847,6 +868,7 @@ module _Tile =
                             boundGroups
                             |> List.distinctBy_explictly<_, IComparable>(fun m -> m.Distincter)
                             |> filter
+
                 
                 
                 let r = 

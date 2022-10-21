@@ -53,6 +53,7 @@ let imageTests =
             |> runTest "datas/image/convert rgb image to gray.pdf" 
             |> ignore
 
+
         ptestCase "convert index rgb image to gray" <| fun _ -> 
             let flow = ModifyIM.ConvertImagesToDeviceGray()
 
@@ -81,6 +82,25 @@ let imageTests =
                 flow
             )
             |> runTest "datas/image/convert rgb image mask to gray.pdf" 
+            |> ignore
+
+        testCase "convert inline rgb image mask to gray" <| fun _ -> 
+            let flow =
+                Modify.Create_RecordIM(
+                    PageSelector.All,
+                    selectorAndModifiersList = [
+                        { SelectorAndModifiersRecordIM.Name = "convert rgb image mask to gray" 
+                          Selector = Selector.ImageX(fun _ _ -> true)
+                          Modifiers = [
+                            ModifierIM.ConvertImageToGray()
+                          ]}
+                    ]
+                    )
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/convert inline rgb image mask to gray.pdf" 
             |> ignore
 
         testCase "add image border" <| fun _ -> 
@@ -224,6 +244,40 @@ let imageTests =
                 flow
             )
             |> runTest "datas/image/convert all objects to gray6.pdf" 
+            |> ignore
+
+        testCase "convert all objects to gray7" <| fun _ -> 
+            let flow = 
+                ModifyIM.ConvertAllObjectsToDeviceGray(
+                    Selector.All(
+                        InfoIM.BoundIs(
+                            RelativePosition.Inbox,
+                            AreaGettingOptions.PageBox(PageBoxKind.ActualBox)))
+                    )
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/convert all objects to gray7.pdf" 
+            |> ignore
+
+        testCase "convert all objects to gray8" <| fun _ -> 
+            //let textInfos =
+            //    PdfRunner.ReadTextInfos_Record(PdfFile @"datas/image/convert all objects to gray8.pdf" )
+            let flow = 
+                ModifyIM.ConvertAllObjectsToDeviceGray(
+                    Selector.All(fun _ _ -> true)
+                        //InfoIM.BoundIs(
+                        //    RelativePosition.Inbox,
+                        //    AreaGettingOptions.PageBox(PageBoxKind.ActualBox)))
+                    )
+
+            Flow.Manipulate(
+                flow
+            )
+            |> runTest "datas/image/convert all objects to gray8.pdf" 
+            |> fun m ->
+                failwithf ""
             |> ignore
 
         testCase "set image maximun dpi to 150" <| fun _ -> 

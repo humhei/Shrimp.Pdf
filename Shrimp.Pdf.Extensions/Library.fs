@@ -259,8 +259,24 @@ module iText =
 
             new Point (x, y)
 
+
         member rect.LeftBottom = rect.GetPoint(Position.LeftBottom(0., 0.))
 
+        member rect.GetArea(position: Position, width, height) =
+            let startPoint = rect.GetPoint(position)
+            let x = 
+                match position with 
+                | Position.Left _ -> startPoint.GetX()
+                | Position.XCenter _ -> startPoint.GetX() - width / 2.
+                | Position.Right _ -> startPoint.GetX() - width
+
+            let y = 
+                match position with 
+                | Position.Bottom _ -> startPoint.GetY()
+                | Position.YCenter _ -> startPoint.GetY() - height / 2.
+                | Position.Top _ -> startPoint.GetY() - height
+            
+            new Rectangle(float32 x, float32 y, float32 width, float32 height)
 
     and Point with
         member point.IsInsideOf (rect: Rectangle) =

@@ -96,21 +96,13 @@ module _Extract =
         
         let loggingPageCountInterval = loggingPageCountInterval.Value
 
-        let logInfo (text) =
-            match configuration.LoggerLevel with 
-            | LoggerLevel.Info ->
-                match pageNumber = 1 with 
-                | true -> Logger.info (text())
-                | false -> 
+        let logInfo (text) = 
+            let logger: PageLogger =
+                { LoggerLevel = configuration.LoggerLevel 
+                  LoggingPageCountInterval = loggingPageCountInterval }
 
-                    match loggingPageCountInterval with 
-                    | BiggerThan 1 & interval -> 
-                        match pageNumber % interval with 
-                        | 0 -> Logger.info (text())
-                        | _ -> ()
-                    | _ -> ()
-
-            | LoggerLevel.Slient -> ()
+            logger.Log(text)
+       
 
 
         let infos =
@@ -118,6 +110,7 @@ module _Extract =
                 Selector.toRenderInfoSelector args selector
 
             NonInitialClippingPathPdfDocumentContentParser.parseIM pageNumber selector parser
+
 
         let infos = 
             infos
@@ -145,6 +138,7 @@ module _Extract =
         logInfo(fun () ->
             sprintf "extracting page %d, found infos %d in %O" pageNumber infos.Length stopWatch.Elapsed
         )
+
 
         stopWatch.Restart()
 

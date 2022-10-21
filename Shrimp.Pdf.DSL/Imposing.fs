@@ -376,16 +376,30 @@ module Imposing =
                 
               }
 
-    type Spaces [<JsonConstructor>] (v) =
-        inherit POCOBaseV<Space list>(v)
+    type Spaces [<JsonConstructor>] private (v) =
+        inherit POCOBaseV<Space al1List>(v)
+        let v0 = v.AsList
 
-        member x.Value = v
+        member x.AsAl1List = v
+
+        member x.Value = v0
 
         member x.Take(count: int) =
+            let __checkCountValid = ``Int>=1``.Create count 
+
             x.Value
             |> List.replicate count
             |> List.concat
             |> List.take count
+
+        new (spaces: Space list) =
+            let spaces =
+                match spaces with 
+                | [] -> [Space.Zero]
+                | _ -> spaces
+                |> AtLeastOneList.Create
+
+            Spaces(spaces)
 
         new (value: float) =
             Spaces 
@@ -402,12 +416,12 @@ module Imposing =
         new (space: Space) = Spaces [space]
 
         member x.TrySetMiddleLineProps(props) =
-            v
+            v0
             |> List.map(fun m -> m.TrySetMiddleLineProps(props))
             |> Spaces
 
         member x.SetMiddleLine(middleLine) =
-            v
+            v0
             |> List.map(fun m -> m.SetMiddleLine(middleLine))
             |> Spaces
 

@@ -62,23 +62,34 @@ module _SelectionGrouper =
         | None
         | Plane of tolerance: float 
     with    
-        /// (SelectionSorter.Plane (mm 3., Direction.Horizontal))
+        /// (SelectionGrouper.Plane (tolerance.Value))
         static member DefaultValue =
             (SelectionGrouper.Plane (tolerance.Value))
 
 
-        member grouper.GroupBy_Bottom(frect: 'info -> iText.Kernel.Geom.Rectangle) (infos: 'info seq) = 
-            infos
-            |> Seq.map(fun m ->
-                let rect = frect m
-                rect, m
-            )
-            |> Seq.groupBy(fun (m, _) -> m.GetBottomF() |> NearbyPX)   
-            |> Seq.map(fun (a, b) ->
-                a.Value, b |> Seq.sortBy(fun (rect, info) -> rect.GetLeft()) |> Seq.map snd
-            )
+        member grouper.GroupBy(frect: 'info -> iText.Kernel.Geom.Rectangle, ?position: Position) = 
+            let position = defaultArg position (Position.BottomMiddle(0, 0))
 
-    
+            fun (infos: #seq<'info> )  ->
+                infos
+                |> List.ofSeq
+                |> List.map(fun m ->
+                    let rect = frect m
+                    rect, m
+                )
+                |> List.groupBy(fun (m, _) -> m.GetPoint(position).y |> NearbyPX)   
+                |> List.map(fun (a, b) ->
+                    let infos = 
+                        b 
+                        |> Seq.sortBy(fun (rect, info) -> rect.GetLeft()) 
+                        |> Seq.map snd
+
+                    a.Value, infos
+                )
+                |> Seq.sortBy (fun (bottom, _) -> -bottom)
+
+        member grouper.GroupBy_Bottom(frect: 'info -> iText.Kernel.Geom.Rectangle) (infos: _ seq) = 
+            grouper.GroupBy(frect, Position.BottomMiddle (0, 0)) (List.ofSeq infos)
           
 type RectangleWithUserState<'UserState> =
     { UserState: 'UserState
@@ -339,6 +350,10 @@ type Info_BoundIs_Args [<JsonConstructor>] (relativePosition: RelativePosition, 
     member private x.BoundGettingStrokeOptionsOP = boundGettingStrokeOptionsOp
 
 
+
+
+
+                
 
 type TextInfo =
     static member FPrasec(parser: Parser<_, _>) =

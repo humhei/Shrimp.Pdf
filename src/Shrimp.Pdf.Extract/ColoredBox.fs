@@ -171,7 +171,7 @@ module _Template_ColoredBoxes =
             let textInfos =
                 textInfos
                 |> List.map (fun textInfo ->
-                    let bound = IAbstractRenderInfo.getBound (BoundGettingStrokeOptions.WithoutStrokeWidth) textInfo
+                    let bound = IAbstractRenderInfo.getDenseBound (BoundGettingStrokeOptions.WithoutStrokeWidth) textInfo
                     {|
                         Text = textInfo.Text()
                         Bound = bound

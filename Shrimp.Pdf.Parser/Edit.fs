@@ -277,6 +277,38 @@ with
     member internal x.AllActionsLength =
         x.Actions.Length + x.SuffixActions.Length
 
+    member internal x.UseCanvas (canvas0: #PdfCanvas) (operatorRange: OperatorRange) action =
+            match operatorRange.Operator.Text() with 
+            | "'" -> 
+                let canvas = canvas0 :> PdfCanvas
+                canvas.NewlineText()
+                |> ignore
+
+                let partOperatorRange =
+                    { operatorRange with Operator = PdfLiteral(Tj) }
+
+                PdfCanvas.useCanvas canvas0 (action partOperatorRange) 
+
+            | "\"" ->
+                let canvas = canvas0 :> PdfCanvas
+                let wordSpacing = operatorRange.Operands.[0] :?> PdfNumber
+                let characterSpacing = operatorRange.Operands.[1] :?> PdfNumber
+                canvas
+                    .SetWordSpacing(wordSpacing.FloatValue())
+                    .SetCharacterSpacing(characterSpacing.FloatValue())
+                    .NewlineText()
+                    |> ignore
+
+                let partOperatorRange =
+                    { Operator = PdfLiteral(Tj)
+                      Operands =
+                        [|operatorRange.Operands.[2]|]
+                      }
+
+                PdfCanvas.useCanvas canvas0 (action partOperatorRange) 
+
+            | _ -> PdfCanvas.useCanvas canvas0 (action operatorRange)
+
     member x.AddActions(actions) =
         { x with Actions = x.Actions @ actions}
 
@@ -366,7 +398,15 @@ with
                 | None -> PdfCanvas.writeOperatorRange originCloseOperatorRange canvas
                 | Some text -> 
                     //PdfCanvas.writeOperatorRange originCloseOperatorRange canvas
-                    PdfCanvas.showText(text) canvas
+                    match originCloseOperatorRange.Operator.Text() with 
+                    | EQ TJ -> PdfCanvas.showText(text) canvas 
+                    | EQ Tj -> PdfCanvas.showText(text) canvas 
+                    | EQ "'" -> canvas.NewlineShowText(text)
+                    | EQ "\"" -> 
+                        let wordSpacing = originCloseOperatorRange.Operands.[0] :?> PdfNumber
+                        let characterSpacing = originCloseOperatorRange.Operands.[1] :?> PdfNumber
+                        canvas.NewlineShowText(wordSpacing.FloatValue(), characterSpacing.FloatValue(), text)
+                    | text -> failwithf "Invalid token, %s is not an valid text close operator" text
 
             | CloseOperatorUnion.Path close ->
                 let newOperatorName = close.Apply(originCloseOperatorRange.Operator.Text())
@@ -461,6 +501,10 @@ type _SelectionModifierFixmentArguments =
 
 type private Modifier = _SelectionModifierFixmentArguments -> ModifierPdfCanvasActions
 
+type private PathOrTextEnum =
+    | Path = 0
+    | Text = 1
+
 type internal ModifierPdfCanvas(contentStream, resources, document) =
     inherit CanvasGraphicsStateSettablePdfCanvas(contentStream, resources, document)
 
@@ -502,28 +546,30 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
     let pdfCanvasStack = new Stack<ModifierPdfCanvas>()
     let resourcesStack = new Stack<PdfResources>()
 
-    let (|Path|_|) operatorName =
-        match renderPath with 
-        | true ->
-            match operatorName with 
-            | ContainsBy [f; F; ``f*``; S; s; B; ``B*``; b; ``b*``] -> Some ()
-            | _ -> None
 
-        | false -> None
-
-    let (|Text|_|) operatorName =
-        match renderText with 
-        | true -> 
-            match operatorName with 
-            | ContainsBy [Tj; TJ] -> Some ()
-            | _ -> None
-
-        | false -> None
 
     let (|PathOrText|_|) operatorName =
+        let (|Path|_|) operatorName =
+            match renderPath with 
+            | true ->
+                match operatorName with 
+                | ContainsBy [f; F; ``f*``; S; s; B; ``B*``; b; ``b*``] -> Some ()
+                | _ -> None
+
+            | false -> None
+
+        let (|Text|_|) operatorName =
+            match renderText with 
+            | true -> 
+                match operatorName with 
+                | ContainsBy showTextOperators -> Some ()
+                | _ -> None
+
+            | false -> None
+
         match operatorName with 
-        | Path _ -> Some ()
-        | Text _ -> Some ()
+        | Path _ -> Some IntegratedRenderInfoTag.Path
+        | Text _ -> Some IntegratedRenderInfoTag.Text
         | _ -> None
 
     let (|Form|Image|Others|) pdfName = 
@@ -540,7 +586,35 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
         let currentPdfCanvas = pdfCanvasStack.Peek()
         let operatorName = operatorRange.Operator.Text()
 
+        let writeImage() =  
+            match eventListener.CurrentRenderInfoStatus with 
+            | CurrentRenderInfoStatus.Skiped -> 
+                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                |> ignore
+
+            | CurrentRenderInfoStatus.Selected ->
+                let currentGS = this.GetGraphicsState()
+                currentPdfCanvas.SetCanvasGraphicsState(currentGS)
+                let modifierPdfCanvasActions =
+                    match eventListener.CurrentRenderInfoToken.Value with 
+                    | [token] ->
+                        let fix = snd selectorModifierMapping.[token]
+                        fix { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
+                    | _ -> 
+                        let keys = eventListener.CurrentRenderInfoToken.Value
+                        failwithf "Multiple modifiers %A are not supported  when image is selectable" keys
+
+
+                PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
+                    (canvas, modifierPdfCanvasActions.Actions)
+                    ||> List.fold(fun canvas action ->
+                        action canvas 
+                    )
+                    |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
+                )
+
         match operatorName with 
+        | EI -> writeImage()
         | Do ->
             
             let resources = resourcesStack.Peek()
@@ -572,40 +646,14 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                 |> ignore
                 this.Listener.RestoreGS_XObject()
 
-            | Image ->  
-                match eventListener.CurrentRenderInfoStatus with 
-                | CurrentRenderInfoStatus.Skiped -> 
-                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                    |> ignore
-
-                | CurrentRenderInfoStatus.Selected ->
-                    let currentGS = this.GetGraphicsState()
-                    currentPdfCanvas.SetCanvasGraphicsState(currentGS)
-                    let modifierPdfCanvasActions =
-                        match eventListener.CurrentRenderInfoToken.Value with 
-                        | [token] ->
-                            let fix = snd selectorModifierMapping.[token]
-                            fix { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
-                        | _ -> 
-                            let keys = eventListener.CurrentRenderInfoToken.Value
-                            failwithf "Multiple modifiers %A are not supported  when image is selectable" keys
-
-
-                    PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
-                        (canvas, modifierPdfCanvasActions.Actions)
-                        ||> List.fold(fun canvas action ->
-                            action canvas 
-                        )
-                        |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
-                    )
-
+            | Image -> writeImage()
             | Others ->
 
                 PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
                 |> ignore
 
 
-        | PathOrText ->
+        | PathOrText tag ->
             match eventListener.CurrentRenderInfoStatus with 
             | CurrentRenderInfoStatus.Skiped -> 
                 PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
@@ -626,12 +674,6 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                     let currentGS = this.GetGraphicsState()
                     currentPdfCanvas.SetCanvasGraphicsState(currentGS)
 
-                    let tag =
-                        match operatorName with 
-                        | Path -> IntegratedRenderInfoTag.Path
-                        | Text -> IntegratedRenderInfoTag.Text
-                        | _ -> failwith "Invalid token"
-
                     let modifierPdfCanvasActions =
                         eventListener.CurrentRenderInfoToken.Value
                         |> List.map(fun token -> 
@@ -640,7 +682,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                         )
                         |> ModifierPdfCanvasActions.ConcatOrKeep tag
 
-                    PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
+                    modifierPdfCanvasActions.UseCanvas (currentPdfCanvas :> PdfCanvas) operatorRange (fun operatorRange canvas ->
                         (canvas, modifierPdfCanvasActions.Actions)
                         ||> List.fold(fun canvas action ->
                             action canvas 
@@ -652,7 +694,13 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                     //    match tag with 
                     //    | IntegratedRenderInfoTag.Text ->
                     //        match modifierPdfCanvasActions.AllActionsLength with 
-                    //        | 0 -> true
+                    //        | 0 -> 
+                    //            match modifierPdfCanvasActions.Close with 
+                    //            | CloseOperatorUnion.Text textClose ->
+                    //                match textClose.Fill, textClose.Stroke with 
+                    //                | CloseOperator.Keep, CloseOperator.Keep -> true
+                    //                | _ -> false
+                    //            | _ -> failwith "Invalid token"
                     //        | _ -> false
                     //    | _ -> false
 
@@ -696,8 +744,6 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
             resourcesStack.Push(resources)
 
             base.ProcessContent(bytes, resources)
-
-            let pdfCanvas = pdfCanvasStack.Pop()
             resourcesStack.Pop()|> ignore
             //let stream = stream.Clone() :?> PdfStream
             stream.SetData(pdfCanvas.GetContentStream().GetBytes()) |> ignore

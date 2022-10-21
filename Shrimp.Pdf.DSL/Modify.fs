@@ -884,6 +884,17 @@ type Modifier =
             pasteObjectSize
         )
 
+    static member DecodeText(): Modifier<'userState> =
+        fun (args: _SelectionModifierFixmentArguments<'userState>) ->
+            match args.Tag with 
+            | IntegratedRenderInfoTag.Path ->
+                ModifierPdfCanvasActions.Keep(args.Tag)
+
+            | IntegratedRenderInfoTag.Text ->
+                let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
+                let text = ITextRenderInfo.getText info
+                ModifierPdfCanvasActions.CreateCloseOperator(args.Tag, text = text)
+
     static member SetFontAndSize(font, size: float, ?alignment: XEffort) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
             let alignment = defaultArg alignment XEffort.Left
@@ -1344,27 +1355,67 @@ module ModifyOperators =
         | PageNumberEveryWorker of int
         | Sync
 
+    type PageLogger =
+        { LoggerLevel: LoggerLevel 
+          LoggingPageCountInterval: int }
+    with 
+        member x.Log(text) =
+            fun pageNumber ->
+                match x.LoggerLevel with 
+                | LoggerLevel.Info ->
+                    match pageNumber = 1 with 
+                    | true -> Logger.info (text())
+                    | false -> 
+
+                        match x.LoggingPageCountInterval with 
+                        | BiggerThan 1 & interval -> 
+                            match pageNumber % interval with 
+                            | 0 -> Logger.info (text())
+                            | _ -> ()
+                        | _ -> ()
+
+                | LoggerLevel.Slient -> ()
+
     [<RequireQualifiedAccess>]
     module IntegratedDocument =
         type private Modifier = _SelectionModifierFixmentArguments -> ModifierPdfCanvasActions
         
-        let private modifyCommon (pageSelector: PageSelector) (selectorModifierPageInfosValidationMappingFactory) modify (document: IntegratedDocument) =
+        let private modifyCommon (pageSelector: PageSelector) (pageLogger: PageLogger option) (selectorModifierPageInfosValidationMappingFactory) modify (document: IntegratedDocument) =
             let selectedPageNumbers = document.Value.GetPageNumbers(pageSelector) 
             let totalNumberOfPages = document.Value.GetNumberOfPages()
-            for i = 1 to totalNumberOfPages do
-                if List.contains i selectedPageNumbers then
-                    let page = document.Value.GetPage(i)
-                    let selectorModifierMapping: Map<_, _> = selectorModifierPageInfosValidationMappingFactory (PageNumber i, page)
+            for pageNumber = 1 to totalNumberOfPages do
+                if List.contains pageNumber selectedPageNumbers then
+                    let page = document.Value.GetPage(pageNumber)
+                    let selectorModifierMapping: Map<SelectorModiferToken, _> = selectorModifierPageInfosValidationMappingFactory (PageNumber pageNumber, page)
                     for pair in selectorModifierMapping do
-                        let renderInfoSelector, modifier, pageInfosValidation = pair.Value
-                        pageInfosValidation (PageNumber i) (modify (Map.ofList[pair.Key, (renderInfoSelector, modifier)]) page)
-    
+                        match pageLogger with 
+                        | None -> 
+                            let renderInfoSelector, modifier, pageInfosValidation = pair.Value
+                            pageInfosValidation (PageNumber pageNumber) (modify (Map.ofList[pair.Key, (renderInfoSelector, modifier)]) page)
+                        | Some pageLogger -> 
+                            let stopWatch = System.Diagnostics.Stopwatch.StartNew()
+                            let renderInfoSelector, modifier, pageInfosValidation = pair.Value
+                            let r = pageInfosValidation (PageNumber pageNumber) (modify (Map.ofList[pair.Key, (renderInfoSelector, modifier)]) page)
+                            stopWatch.Stop()
+                            let names =
+                                selectorModifierMapping
+                                |> Map.toList
+                                |> List.map(fun (m, _) -> m.Name)
+                                |> String.concat "; "
 
-        let modify (pageSelector: PageSelector) (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfo seq -> unit)>) (document: IntegratedDocument) =
-            modifyCommon pageSelector selectorModifierPageInfosValidationMappingFactory PdfPage.modify document
+                            pageLogger.Log(fun () ->
+                                sprintf "run %s %d in %O" names pageNumber stopWatch.Elapsed
+                            ) pageNumber
 
-        let modifyIM (pageSelector: PageSelector) (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfoIM seq -> unit)>) (document: IntegratedDocument) =
-            modifyCommon pageSelector selectorModifierPageInfosValidationMappingFactory PdfPage.modifyIM document
+                            r
+
+
+
+        let modify (pageSelector: PageSelector) pageLogger (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfo seq -> unit)>) (document: IntegratedDocument) =
+            modifyCommon pageSelector pageLogger selectorModifierPageInfosValidationMappingFactory PdfPage.modify document
+
+        let modifyIM (pageSelector: PageSelector) pageLogger (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfoIM seq -> unit)>) (document: IntegratedDocument) =
+            modifyCommon pageSelector pageLogger selectorModifierPageInfosValidationMappingFactory PdfPage.modifyIM document
             
 
 
@@ -1422,7 +1473,7 @@ module ModifyOperators =
 
 
     /// async may doesn't make any sense for cpu bound computation?
-    let private modifyIM (modifyingAsyncWorker, pageSelector, (selectorAndModifiersList: list<SelectorAndModifiersIM<'userState>>)) =
+    let private modifyIM (modifyingAsyncWorker, pageSelector, loggingPageCountInterval, (selectorAndModifiersList: list<SelectorAndModifiersIM<'userState>>)) =
         let names = 
             selectorAndModifiersList
             |> List.map (fun selectorAndModifier -> selectorAndModifier.Name)
@@ -1433,6 +1484,10 @@ module ModifyOperators =
             fun (totalNumberOfPages) (transformPageNum: PageNumber -> PageNumber) (flowModel: FlowModel<_>) (document: IntegratedDocument) ->
                 IntegratedDocument.modifyIM
                     pageSelector 
+                    (loggingPageCountInterval |> Option.map(fun loggingPageCountInterval ->
+                        { LoggingPageCountInterval = loggingPageCountInterval 
+                          LoggerLevel = flowModel.Configuration.LoggerLevel }
+                    ))
                     (
                         fun (pageNum, pdfPage) ->
                             selectorAndModifiersList 
@@ -1458,14 +1513,14 @@ module ModifyOperators =
                 match modifier.Parameters with 
                 | None ->
                     [
-                        "pageSelctor" => pageSelector.ToString()
+                        "pageSelector" => pageSelector.ToString()
                         "selector" => modifier.Selector.ToString()
                     ]
 
                 | Some parameters ->
                     (
                         [
-                            "pageSelctor" => pageSelector.ToString()
+                            "pageSelector" => pageSelector.ToString()
                             "selector" => modifier.Selector.ToString()
                         ]
                         @ parameters
@@ -1482,52 +1537,52 @@ module ModifyOperators =
         ||>> ignore
         
     /// async may doesn't make any sense for cpu bound computation?
-    let private modify (modifyingAsyncWorker, pageSelector, (selectorAndModifiersList: list<SelectorAndModifiers<'userState>>)) =
-        modifyIM (modifyingAsyncWorker, pageSelector, selectorAndModifiersList |> List.map (fun m -> m.ToIM()))
+    let private modify (modifyingAsyncWorker, pageSelector, loggingPageCountInterval, (selectorAndModifiersList: list<SelectorAndModifiers<'userState>>)) =
+        modifyIM (modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList |> List.map (fun m -> m.ToIM()))
 
 
     type Modify =
-        static member Create(pageSelector, selectorAndModifiersList: SelectorAndModifiers<'userState> list, ?modifyingAsyncWorker) =
+        static member Create(pageSelector, selectorAndModifiersList: SelectorAndModifiers<'userState> list, ?modifyingAsyncWorker, ?loggingPageCountInterval) =
             let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
 
-            modify(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
+            modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
-        static member CreateIM(pageSelector, selectorAndModifiersList: SelectorAndModifiersIM<'userState> list, ?modifyingAsyncWorker) =
+        static member CreateIM(pageSelector, selectorAndModifiersList: SelectorAndModifiersIM<'userState> list, ?modifyingAsyncWorker, ?loggingPageCountInterval) =
             let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
 
-            modifyIM(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
+            modifyIM(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
 
-        static member Create (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecord<'userState> list, ?modifyingAsyncWorker) =
+        static member Create (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecord<'userState> list, ?modifyingAsyncWorker, ?loggingPageCountInterval) =
             let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
             let selectorAndModifiersList =
                 selectorAndModifiersList
                 |> List.map (fun m ->
                     SelectorAndModifiers(m.Name, m.Selector, m.Modifiers)
                 )
-            modify(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
+            modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
-        static member Create_Record (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecord<'userState> list, ?modifyingAsyncWorker) =
-            Modify.Create(pageSelector, selectorAndModifiersList, ?modifyingAsyncWorker = modifyingAsyncWorker)
+        static member Create_Record (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecord<'userState> list, ?modifyingAsyncWorker, ?loggingPageCountInterval) =
+            Modify.Create(pageSelector, selectorAndModifiersList, ?modifyingAsyncWorker = modifyingAsyncWorker, ?loggingPageCountInterval = loggingPageCountInterval)
 
-        static member Create_RecordIM (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecordIM<'userState> list, ?modifyingAsyncWorker) =
+        static member Create_RecordIM (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecordIM<'userState> list, ?modifyingAsyncWorker, ?loggingPageCountInterval) =
             let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
             let selectorAndModifiersList =
                 selectorAndModifiersList
                 |> List.map (fun m ->
                     SelectorAndModifiersIM(m.Name, m.Selector, m.Modifiers)
                 )
-            modifyIM(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
+            modifyIM(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
 
-        static member Create_RecordEx (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecordEx<'userState> list, ?modifyingAsyncWorker) =
+        static member Create_RecordEx (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecordEx<'userState> list, ?modifyingAsyncWorker, ?loggingPageCountInterval) =
             let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
             let selectorAndModifiersList =
                 selectorAndModifiersList
                 |> List.map (fun m ->
                     SelectorAndModifiers(m.Name, m.Selector, m.Modifiers, m.Parameters, m.PageInfosValidation)
                 )
-            modify(modifyingAsyncWorker, pageSelector, selectorAndModifiersList)
+            modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
 type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?info_BoundIs_Args, ?textPattern) =
     inherit POCOBaseEquatable<string option * float option * FsColor option * Info_BoundIs_Args option * TextMatchingPattern option>(fontName, fontSize, fillColor, info_BoundIs_Args, textPattern)
@@ -1594,16 +1649,34 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
             &&
             match info_BoundIs_Args with 
             | Some args2 ->
-                let args2 = args2 
+                let args2 = args2
                 Info.DenseBoundIs(
                     args2.RelativePosition,
                     args2.AreaGettingOptions,
                     args2.BoundGettingStrokeOptions
                 ) args textInfo
+
             | None -> true
 
         )
 
+[<RequireQualifiedAccess>]
+type FontAndSizeQueryUnion =
+    | Value of FontAndSizeQuery
+    | AND of FontAndSizeQueryUnion list
+    | OR of FontAndSizeQueryUnion list
+with 
+    member x.AsSelector() =
+        match x with 
+        | FontAndSizeQueryUnion.Value v -> v.AsSelector()
+        | FontAndSizeQueryUnion.AND vs ->
+            vs
+            |> List.map(fun v -> v.AsSelector())
+            |> Selector.AND
+        | FontAndSizeQueryUnion.OR vs ->
+            vs
+            |> List.map(fun v -> v.AsSelector())
+            |> Selector.OR
 
 type NewFontAndSize with 
     member x.AsModifier(): Modifier<_> =
@@ -1685,6 +1758,25 @@ type Modify =
                         Modifier.AddVarnish(varnish, width)
                     ]
                 )
+            ]
+        )
+
+    static member AddBoundToTexts(?selector, ?canvasAddRectangleArgs) =
+        let canvasAddRectangleArgs =
+            match canvasAddRectangleArgs with 
+            | None -> fun (args: PdfCanvasAddRectangleArguments) -> 
+                { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor(PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
+            | Some args -> args
+                
+        Modify.Create(
+            PageSelector.All,
+            [
+                { Name = "add bound to texts"
+                  Selector = Text(defaultArg selector (fun _ _ -> true)) 
+                  Modifiers = [
+                    Modifier.AddRectangleToBound(canvasAddRectangleArgs)
+                  ]
+                }
             ]
         )
 
@@ -1869,7 +1961,23 @@ type Modify =
             nameAndParameters = nameAndParameters
         )
 
-    static member MapFontAndSizeF(fOldFontAndSize: PageModifingArguments<_> -> FontAndSizeQuery, newFontAndSize: NewFontAndSize) =
+    static member DecodeText() =
+        Modify.Create_RecordEx(
+            PageSelector.All,
+            selectorAndModifiersList = [
+                { Name = "DecodeTexts"
+                  Selector = Selector.Text(fun _ _ -> true)
+                  Modifiers = 
+                    [
+                        Modifier.DecodeText()
+                    ]
+                  PageInfosValidation = PageInfosValidation.ignore
+                  Parameters = []
+                }
+            ]
+        )
+
+    static member MapFontAndSizeF(fOldFontAndSize: PageModifingArguments<_> -> FontAndSizeQueryUnion, newFontAndSize: NewFontAndSize) =
         Modify.Create_RecordEx(
             PageSelector.All,
             selectorAndModifiersList = [
@@ -1885,6 +1993,12 @@ type Modify =
                      "newFontAndSize" => newFontAndSize.ToString() ]
                 }
             ]
+        )
+
+    static member MapFontAndSizeF(fOldFontAndSize: PageModifingArguments<_> -> FontAndSizeQuery, newFontAndSize: NewFontAndSize) =
+        Modify.MapFontAndSizeF(
+            fOldFontAndSize = (fun args ->fOldFontAndSize args |> FontAndSizeQueryUnion.Value),
+            newFontAndSize = newFontAndSize
         )
 
     static member MapFontAndSize(oldFontAndSize: FontAndSizeQuery, newFontAndSize: NewFontAndSize) =

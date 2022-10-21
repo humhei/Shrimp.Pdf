@@ -2,6 +2,7 @@
 
 open Shrimp.Pdf.Extensions
 open System.Collections.Generic
+open iText.IO.Source
 
 #nowarn "0104"
 open iText.Kernel.Geom
@@ -25,16 +26,48 @@ module _OperatorRangeExtensions =
         let writeOperatorRange (operatorRange: OperatorRange) (pdfCanvas: PdfCanvas) =
             let outputStream = pdfCanvas.GetContentStream().GetOutputStream()
             let operands = operatorRange.Operands
-            for i = 0 to operands.Count - 1 do
-                let operand = operands.[i]
-                if i = operands.Count - 1 then 
-                    outputStream.Write(operand).WriteNewLine()
-                    |> ignore
-                else 
-                    outputStream.Write(operand).WriteSpace()
-                    |> ignore
+            match operatorRange.Operator.Text() with 
+            | EI -> 
+                let stream = operands.[0] :?> PdfStream
+                let __BI =
+                    outputStream.WriteString(BI).WriteNewLine() |> ignore
+                    let dict = stream :> PdfDictionary
+                    for pair in dict.EntrySet() do  
+                        outputStream.Write(pair.Key)
+                            .WriteSpace()
+                            .Write(pair.Value)
+                            .WriteNewLine()
+                        |> ignore
+
+                let __ID = 
+                    outputStream.WriteString(ID).WriteNewLine() |> ignore
+
+                    use memoryStream = new System.IO.MemoryStream()
+
+                    let bytes = 
+                        //outputStream.GetOutputStream().Flush();
+                        let bytes = (stream.GetOutputStream().GetOutputStream() :?> ByteArrayOutputStream).ToArray()
+                        bytes
+
+                    outputStream.WriteBytes(bytes).WriteNewLine()
+
+
+                outputStream.WriteString(EI).WriteNewLine()
+                |> ignore
+
+                pdfCanvas
+
+            | _ ->
+                for i = 0 to operands.Count - 1 do
+                    let operand = operands.[i]
+                    if i = operands.Count - 1 then 
+                        outputStream.Write(operand).WriteNewLine()
+                        |> ignore
+                    else 
+                        outputStream.Write(operand).WriteSpace()
+                        |> ignore
     
-            pdfCanvas
+                pdfCanvas
 
 [<AutoOpen>]
 module IntegratedInfos =
@@ -112,6 +145,7 @@ module IntegratedInfos =
           DenseBound: FsRectangle
           EndTextState: EndTextState }
             
+
 
     [<Struct; System.Diagnostics.DebuggerDisplay("IntegratedTextRenderInfo: {RecordValue}")>]
     type IntegratedTextRenderInfo =
@@ -267,7 +301,6 @@ module IntegratedInfos =
           LazyColorSpace: Lazy<ImageColorSpaceData option> 
           FillOpacity: float32 option
           StrokeOpacity: float32 option
-
         }
 
     with 

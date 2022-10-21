@@ -413,7 +413,7 @@ let extractTests =
             |> runTest "datas/extract/extract objects11.pdf" 
             |> ignore
 
-        ftestCase "extract objects tests12" <| fun _ -> 
+        testCase "extract objects tests12" <| fun _ -> 
             //let m = FsValueColor.OfLoggingText_Raw "CMYK 0.0 96.5 100.0 0.09"
             //let m = FsSeparation.OfLoggingText_Raw "All#CMYK 99 99 99 99"
             //let m = FsSeparation.OfLoggingText_Raw "All#CMYK 100.0 100.0 100.0 100.0"
@@ -426,6 +426,32 @@ let extractTests =
             |> runTest "datas/extract/extract objects12.pdf" 
             |> ignore
 
+        testCase "extract objects tests13" <| fun _ -> 
+            //let m = FsValueColor.OfLoggingText_Raw "CMYK 0.0 96.5 100.0 0.09"
+            //let m = FsSeparation.OfLoggingText_Raw "All#CMYK 99 99 99 99"
+            //let m = FsSeparation.OfLoggingText_Raw "All#CMYK 100.0 100.0 100.0 100.0"
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects13.pdf" 
+            |> ignore
+
+        testCase "extract objects tests14" <| fun _ -> 
+            //let m = FsValueColor.OfLoggingText_Raw "CMYK 0.0 96.5 100.0 0.09"
+            //let m = FsSeparation.OfLoggingText_Raw "All#CMYK 99 99 99 99"
+            //let m = FsSeparation.OfLoggingText_Raw "All#CMYK 100.0 100.0 100.0 100.0"
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects14.pdf" 
+            |> ignore
+
 
     ]
 
@@ -435,7 +461,7 @@ let extractTests =
 
 
         testCase "tile pages and NUP for big data" <| fun _ -> 
-            let colNum = 5 
+            let colNum = 5   
             let rowNum = 8
             Flows.TilePages (
                 TileTableIndexer.Create (colNum = colNum, rowNum = rowNum),
@@ -627,7 +653,9 @@ let extractTests =
                         )
                     ),
                 pageTilingRenewOptions = 
-                    (PageTilingRenewOptions.VisibleInfosInActualBox(PageTilingRenewInfosSplitter.``Groupby_DenseBoundIsInside_MM1.5``)),
+                    (PageTilingRenewOptions.VisibleInfosInActualBox(
+                        PageTilingRenewInfosSplitter.``Groupby_DenseBoundIsInside_MM1.5``.SetSplitTextToWords(false)
+                    )),
                 
                 borderKeepingPageSelector = NullablePageSelector.All,
 
@@ -635,7 +663,8 @@ let extractTests =
                     (SamplePageExtractingOptions.FirstPageFirstSelector (PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
             )
 
-            |> runTest "datas/extract/tile pages by selector6.pdf" 
+            //|> runTest "datas/extract/tile pages by selector6.pdf" 
+            |> runTest @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\TEDI\包装\22-10-7\健乐\返单款\.extract\.shrimp.pdf\2729400699_barcode.withTemplate\1_AddBackgroundOrForeground.pdf"
             |> ignore
 
         testCase "tile pages by selector tests7" <| fun _ -> 
@@ -705,6 +734,33 @@ let extractTests =
                     (SamplePageExtractingOptions.FirstPageMultipleSelectors (pageNumbers,PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
             )
             |> runTest "datas/extract/tile pages and NUP by selector2.pdf" 
+            |> fun m -> failwith ""
+            |> ignore
+
+        testCase "tile pages and NUP by selector3" <| fun _ -> 
+            let pageNumbers =
+                [1; 10]
+                |> List.map PageNumber
+                |> AtLeastTwoList.Create 
+
+            Flows.TilePagesAndNUp(
+                 Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBoxWithOffset (PageBoxKind.ActualBox, Margin.Create(mm 0.3)))),
+                 textPicker =( 
+                    { TagColor = Some Colors.PdfExtractorTagColor
+                      TransformTextPickers = 
+                        (fun args bound infos ->
+                            let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                            coloredBoxWithTextInfos :> System.IComparable
+                        )
+                    }
+                ),
+                pageTilingRenewInfosSplitter = PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0,
+                transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound)
+                //samplePageExtractingOptions = 
+
+                //    (SamplePageExtractingOptions.FirstPageMultipleSelectors (pageNumbers,PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
+            )
+            |> runTest "datas/extract/tile pages and NUP by selector3.pdf" 
             |> fun m -> failwith ""
             |> ignore
 

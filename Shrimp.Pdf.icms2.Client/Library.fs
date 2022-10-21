@@ -238,6 +238,7 @@ module Client =
             | Some v -> predicate v
             | None -> false
 
+
     type Info = 
         static member ColorIsCmsWhite(fillOrStrokeOptions, ?predicateCompose, ?labIcc, ?intent, ?inputIcc) =
             Info.ColorIs(fillOrStrokeOptions, FsColor.predicateByAlternativeFsColor <| AlternativeFsColor.IsCmsWhite(?labIcc = labIcc, ?predicateCompose = predicateCompose, ?intent = intent, ?inputIcc = inputIcc))
@@ -307,20 +308,21 @@ module Client =
                 )
 
 
-        static member ConvertColorsTo(outputIcc: Icc, ?fillOrStrokeModifyingOptions, ?predicate: AlternativeFsColor -> bool, ?intent, ?inputIcc) =
+        static member ConvertColorsTo(outputIcc: Icc, ?fillOrStrokeModifyingOptions, ?predicate: AlternativeFsColor -> bool, ?intent, ?inputIcc): Modifier<_> =
             let predicate = defaultArg predicate (fun _ -> true)
-            Modifier.ReplaceAlternativeColor(
-                ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
-                picker =
-                    fun cmsColor -> 
-                    if predicate cmsColor 
-                    then 
-                        let newColor = 
-                            cmsColor.ConvertToAsync(outputIcc, ?intent = intent, ?inputIcc = inputIcc)
-                            |> Async.RunSynchronously
-                        Some (FsValueColor.ToItextColor newColor)
-                    else None
-            )
+            fun args ->
+                Modifier.ReplaceAlternativeColor(
+                    ?fillOrStrokeModifyingOptions = fillOrStrokeModifyingOptions,
+                    picker =
+                        fun cmsColor -> 
+                        if predicate cmsColor 
+                        then 
+                            let newColor = 
+                                cmsColor.ConvertToAsync(outputIcc, ?intent = intent, ?inputIcc = inputIcc)
+                                |> Async.RunSynchronously
+                            Some (FsValueColor.ToItextColor newColor)
+                        else None
+                ) args
 
 
 

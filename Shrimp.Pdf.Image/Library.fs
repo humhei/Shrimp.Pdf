@@ -172,7 +172,6 @@ module _ModifierIM =
     type ModifierIM =
         static member ConvertImageColorSpace(inputIcc: Icc option, outputIcc: Icc, intent): ModifierIM<'userState> =
             fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
-                
 
                 match args.CurrentRenderInfoIM with 
                 | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->   
@@ -526,7 +525,7 @@ module _ModifierIM =
                     }
                 ])
 
-        static member ConvertAllObjectsToDeviceGray(?selector, ?pageSelector) =
+        static member ConvertAllObjectsToDeviceGray(?selector, ?pageSelector, ?loggingPageCountInterval) =
             Modify.Create_RecordIM(
                 defaultArg pageSelector PageSelector.All,
                 selectorAndModifiersList = [
@@ -536,10 +535,12 @@ module _ModifierIM =
                         ModifierIM.ConvertAllObjectsToDeviceGray()
                       ]
                     }
-                ])
+                ],
+                ?loggingPageCountInterval = loggingPageCountInterval
+            )
 
     type Flows with
-        static member Overly_Clip_ConvertAllObjectsToGray(clippingPathSelector, area: Overly_Clip_ManipulateArea, ?excludingSelector, ?keepCompoundPath) =
+        static member Overly_Clip_ConvertAllObjectsToGray(clippingPathSelector, area: Overly_Clip_ManipulateArea, ?excludingSelector, ?keepCompoundPath, ?loggingPageCountInterval) =
             Flows.Overly_Clip_Manipulate
                 (clippingPathSelector,
                  area = area,
@@ -553,7 +554,8 @@ module _ModifierIM =
                             ]
                             |> Some
                         | None -> None
-                    )
+                    ),
+                    ?loggingPageCountInterval = loggingPageCountInterval
                 ),
                 ?excludingSelector = excludingSelector,
                 ?keepCompoundPath = keepCompoundPath

@@ -252,6 +252,8 @@ module Core =
     type ServerMsg =
         | CalcColor of inputIcc: Icc * inputValues: float32 []  * outputIcc: Icc * indent: Intent
         | ConvertImageColorSpace of inputIcc: Icc * storage: IndexableBitmapColorValuesStorage * outputIcc: Icc * indent: Intent
+    with 
+        interface ServerMsgLoggerLevel.IDebugServerMsg
 
     type private AssemblyFinder = AssemblyFinder
 

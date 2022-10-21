@@ -355,16 +355,18 @@ module _PrefixReuses =
                         let newPage = splitDocument.Writer.AddNewPage(PageSize(Rectangle.create 0. 0. width height))
                         let canvas = new PdfCanvas(newPage)
 
-                        let setPageBox (pageBoxKind) pdfPage =
-                            let originPageBox = page.GetPageBox(pageBoxKind)
-                            let x = originPageBox.GetXF() - actualBox.GetXF()
-                            let y = originPageBox.GetYF() - actualBox.GetYF()
-                            let rect = Rectangle.create x y (originPageBox.GetWidthF()) (originPageBox.GetHeightF())
-                            PdfPage.setPageBox pageBoxKind rect pdfPage
+
 
                         let newPage =
                             match keepOriginPageBoxes with 
                             | true ->
+                                let setPageBox (pageBoxKind) pdfPage =
+                                    let originPageBox = page.GetPageBox(pageBoxKind)
+                                    let x = originPageBox.GetXF() - actualBox.GetXF()
+                                    let y = originPageBox.GetYF() - actualBox.GetYF()
+                                    let rect = Rectangle.create x y (originPageBox.GetWidthF()) (originPageBox.GetHeightF())
+                                    PdfPage.setPageBox pageBoxKind rect pdfPage
+
                                 newPage
                                 |> setPageBox PageBoxKind.ArtBox
                                 |> setPageBox PageBoxKind.BleedBox
@@ -546,7 +548,7 @@ module _PrefixReuses =
                                         PageBoxKind.TrimBox
                                     ] |> List.iter (fun pageBoxKind ->
                                         let pageBox = page.GetPageBox(pageBoxKind)
-                            
+                                        
                                         let newPageBox = 
                                             affineTransform.Transform(pageBox)
         

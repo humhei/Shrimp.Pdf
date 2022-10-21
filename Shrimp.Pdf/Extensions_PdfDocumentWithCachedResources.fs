@@ -251,7 +251,7 @@ module PdfDocumentWithCachedResources =
         let restoreState (canvas: PdfCanvas) =
             canvas.SaveState()
 
-        let addRectangle (rect: Rectangle) (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
+        let addRectangles (rects: Rectangle list) (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
             let args = mapping PdfCanvasAddRectangleArguments.DefaultValue
             let close =
                 match args.FillColor, args.StrokeColor with 
@@ -270,8 +270,17 @@ module PdfDocumentWithCachedResources =
             |> PdfCanvas.SetStrokeColor args.StrokeColor
             |> PdfCanvas.SetFillColor args.FillColor
             |> PdfCanvas.setLineWidth args.LineWidth
-            |> PdfCanvas.rectangle rect
+            |> fun canvas ->
+                for rect in rects do 
+                    PdfCanvas.rectangle rect canvas
+                    |> ignore
+
+                canvas
+
             |> close
+
+        let addRectangle (rect: Rectangle) (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
+            addRectangles [rect] mapping canvas
 
     type Canvas with 
         member internal x.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =

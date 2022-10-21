@@ -9,6 +9,7 @@ open iText.Layout
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
 open iText.Kernel.Pdf.Canvas.Parser.Data
+open Shrimp.Pdf.Extract
 open Shrimp.Pdf.icms2
 open Shrimp.FSharp.Plus
 open Shrimp.Pdf.RegisterableFonts
@@ -578,38 +579,14 @@ let manipulateTests =
 
     testCase "add bound to text" <| fun _ -> 
         Flow.Manipulate (
-            Modify.Create(
-                PageSelector.All,
-                [
-                    { Name = "add bound to text"
-                      Selector = Text(fun _ _ -> true) 
-                      Modifiers = [
-                        Modifier.AddRectangleToBound(fun args -> 
-                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor (PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
-                        )
-                      ]
-                    }
-                ]
-            )
+            Modify.AddBoundToTexts()
         )
         |> runTest "datas/manipulate/add bound to text.pdf" 
         |> ignore
 
     testCase "add bound to text3" <| fun _ -> 
         Flow.Manipulate (
-            Modify.Create(
-                PageSelector.All,
-                [
-                    { Name = "add bound to text"
-                      Selector = Text(fun _ _ -> true) 
-                      Modifiers = [
-                        Modifier.AddRectangleToBound(fun args -> 
-                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor (PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
-                        )
-                      ]
-                    }
-                ]
-            )
+            Modify.AddBoundToTexts()
         )
         |> runTest "datas/manipulate/add bound to text3.pdf" 
         |> ignore
@@ -639,19 +616,7 @@ let manipulateTests =
         )
         <+>
         Flow.Manipulate (
-            Modify.Create(
-                PageSelector.All,
-                [
-                    { Name = "add bound to text"
-                      Selector = Text(fun _ _ -> true) 
-                      Modifiers = [
-                        Modifier.AddRectangleToBound(fun args -> 
-                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor(PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
-                        )
-                      ]
-                    }
-                ]
-            )
+            Modify.AddBoundToTexts()
         )
         |> runTest "datas/manipulate/add bound to text2.pdf" 
         |> ignore
@@ -662,19 +627,7 @@ let manipulateTests =
         )
         <+>
         Flow.Manipulate (
-            Modify.Create(
-                PageSelector.All,
-                [
-                    { Name = "add bound to text5"
-                      Selector = Text(fun _ _ -> true) 
-                      Modifiers = [
-                        Modifier.AddRectangleToBound(fun args -> 
-                            { args with StrokeColor = NullablePdfCanvasColor.OfPdfCanvasColor(PdfCanvasColor.OfITextColor DeviceCmyk.MAGENTA)}
-                        )
-                      ]
-                    }
-                ]
-            )
+            Modify.AddBoundToTexts()
         )
         |> runTest "datas/manipulate/add bound to text6.pdf" 
         |> ignore
@@ -685,10 +638,49 @@ let manipulateTests =
         )
         <+>
         Flow.Manipulate (
+            Modify.AddBoundToTexts()
+        )
+        |> runTest "datas/manipulate/add bound to text7.pdf" 
+        |> ignore
+
+    testCase "add bound to text8" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.AddBoundToTexts()
+        )
+        |> runTest "datas/manipulate/add bound to text8.pdf" 
+        |> ignore
+
+    ftestCase "decode text" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.DecodeText() 
+        )
+        |> runTest "datas/manipulate/decode text.pdf" 
+        |> ignore
+
+    testCase "add bound to text9" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.AddBoundToTexts()
+        )
+        |> runTest "datas/manipulate/add bound to text9.pdf" 
+        |> ignore
+
+    testCase "add bound to text10" <| fun _ -> 
+        Flow.Reuse(
+            Reuses.ClearDirtyInfos()
+        )
+        <+>
+        Flow.Reuse (
+            Reuses.ExtractIM(
+                PageSelector.All,
+                Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+            )
+        )
+        <+>
+        Flow.Manipulate (
             Modify.Create(
                 PageSelector.All,
                 [
-                    { Name = "add bound to text5"
+                    { Name = "add bound to text8"
                       Selector = Text(fun _ _ -> true) 
                       Modifiers = [
                         Modifier.AddRectangleToBound(fun args -> 
@@ -699,7 +691,7 @@ let manipulateTests =
                 ]
             )
         )
-        |> runTest "datas/manipulate/add bound to text7.pdf" 
+        |> runTest "datas/manipulate/add bound to text10.pdf" 
         |> ignore
 
     testCase "add bound to vertical text" <| fun _ -> 
@@ -1478,6 +1470,18 @@ let manipulateTests =
             failwith ""
 
         |> ignore
+
+    testCase "split textLine to words5" <| fun _ -> 
+        let flow =
+            Modify.SplitTextLineToWords()
+
+        Flow.Manipulate(
+            flow
+        )
+        |> runTest "datas/manipulate/split textLine to words5.pdf" 
+        //|> runTest @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\123.pdf"
+        |> ignore
+
 
     testCase "map font for horizontal line" <| fun _ -> 
 
