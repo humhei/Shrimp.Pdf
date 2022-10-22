@@ -7,6 +7,7 @@ open iText.Kernel.Geom
 open iText.Kernel.Colors
 open iText.Kernel.Exceptions
 open iText.Kernel.Pdf.Colorspace
+open System.Linq
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf.Canvas.Parser
 open iText.Kernel.Pdf.Canvas.Parser.Listener
@@ -324,19 +325,106 @@ module internal Listeners =
             let textInfo = 
                 match concatedTextInfos.Count with 
                 | 0 -> None
-                | 1 -> Some concatedTextInfos.[0]
+                | 1 -> 
+                    let textInfo = concatedTextInfos.[0]
+                    match textInfo.TextRenderInfo.GetText().Trim() with 
+                    | "" -> None
+                    | _ -> Some concatedTextInfos.[0]
                 | _ ->
                     let lastInfo = 
-                        let previous =
-                            concatedTextInfos
-                            |> List.ofSeq
-                            |> List.map(fun m -> 
-                                { m with EndTextState = EndTextState.No }
-                            )
+
+                        let typedConcatedTextInfo = 
+
+                            let concatedTextInfos = 
+                                concatedTextInfos
+                                |> List.ofSeq
+
+                            let head = concatedTextInfos.Head.TextRenderInfo
+                            let followed = 
+                                let array =
+                                    (operatorRange.Operands.[0] :?> PdfArray)
+                                    |> List.ofSeq
+
+                                let spaces = 
+                                    array
+                                    |> List.indexed
+                                    |> List.choose(fun (i, m) -> 
+                                        match m.IsNumber() with 
+                                        | true -> Some (i, (m :?> PdfNumber).DoubleValue())
+                                        | false -> None
+                                    )
+
+                                    
+
+                                let tail = concatedTextInfos.Tail
+                                match tail.Length = spaces.Length with 
+                                | true -> 
+                                    (spaces, tail)
+                                    ||> List.map2 (fun (_, space) textInfo ->
+                                        { Space = Some space
+                                          TextInfo = textInfo.TextRenderInfo }
+                                    )
+
+                                | false -> 
+                                    failwithf "Not implemented when spaces %A length  <> concatedTextInfos tail length %A" spaces tail.Length
+                                    
+                                    //match tail.Length = spaces.Length + 1 with 
+                                    //| true -> 
+                                    //    let spaces =
+                                    //        spaces
+                                    //        |> List.map snd
+                                    //        |> List.map Some
+
+
+                                    //    (spaces @ [None], tail)
+                                    //    ||> List.map2 (fun (space) textInfo ->
+                                    //        { Space = space
+                                    //          TextInfo = textInfo.TextRenderInfo }
+                                    //    )
+
+                                    //| false ->
+                                    //    failwithf "Not implemented when spaces %A length  <> concatedTextInfos tail length %A" spaces tail.Length
+                                        
+                                        //let textIndexes = 
+                                        //    array
+                                        //    |> List.indexed
+                                        //    |> List.choose(fun (i, m) -> 
+                                        //        match m.IsNumber() with 
+                                        //        | true -> None 
+                                        //        | false -> Some (i)
+                                        //    )
+
+                                        //(textIndexes, tail)
+                                        //||> List.map2 (fun i textInfo ->
+                                        //    { Space = 
+                                        //        spaces
+                                        //        |> List.map(fun space)
+                                        //      TextInfo = textInfo.TextRenderInfo }
+                                        //)
+
+
+                                //concatedTextInfos.Tail
+                                //|> List.indexed
+                                //|> List.map(fun (i, textInfo) ->
+                                //    { Space = 
+                                //        spaces
+                                //        |> List.tryPick(fun (m, space) -> 
+                                //            match i+1 = m with 
+                                //            | true -> Some space
+                                //            | false -> None
+                                //        )
+
+                                //      TextInfo = textInfo.TextRenderInfo }
+                                //)
+
+                            { HeadWordInfo = head
+                              FollowedWordInfos = followed
+                            }
+
 
 
                         { concatedTextInfos.[concatedTextInfos.Count-1] with 
-                            ConcatedTextInfos = previous
+                            ConcatedTextInfo = typedConcatedTextInfo
                             EndTextState = EndTextState.Yes
                         }
                     Some lastInfo
@@ -380,7 +468,7 @@ module internal Listeners =
             concatedTextInfos <- new ResizeArray<_>()
             isShowingText <- false
 
-        member internal this.ConcatedTextInfos = concatedTextInfos :> seq<IntegratedTextRenderInfo>
+        member internal this.ConcatedTextInfo = concatedTextInfos :> seq<IntegratedTextRenderInfo>
 
         member this.CurrentRenderInfo = currentRenderInfo.Value
 
@@ -505,7 +593,7 @@ module internal Listeners =
                                   ClippingPathInfoState = currentClippingPathInfo }
                               TextRenderInfo = textRenderInfo
                               EndTextState = EndTextState.Undified
-                              ConcatedTextInfos = []
+                              ConcatedTextInfo = { HeadWordInfo = textRenderInfo; FollowedWordInfos = [] }
                               OperatorRange = None
                               FillOpacity = this.FillOpacity
                               StrokeOpacity = this.StrokeOpacity
@@ -616,11 +704,16 @@ module internal Listeners =
                     | true, IntegratedRenderInfoTagIM.Text ->
                         let renderInfo = renderInfo :?> IntegratedTextRenderInfo
 
-                        match renderInfo.TextRenderInfo.GetText().Trim() with 
-                        | "" -> ()
-                        | _ -> 
-                            renderInfo.TextRenderInfo.PreserveGraphicsState()
-                            concatedTextInfos.Add(renderInfo)
+                        renderInfo.TextRenderInfo.PreserveGraphicsState()
+                        concatedTextInfos.Add(renderInfo)
+
+                        //match renderInfo.TextRenderInfo.GetText()(*.Trim()*) with 
+                        //| "" -> ()
+                        //    //renderInfo.TextRenderInfo.PreserveGraphicsState()
+                        //    //concatedTextInfos.Add(renderInfo)
+                        //| _ -> 
+                        //    renderInfo.TextRenderInfo.PreserveGraphicsState()
+                        //    concatedTextInfos.Add(renderInfo)
 
                     | false, IntegratedRenderInfoTagIM.Text -> ()
                     | true, _ -> failwith "Invalid token"
@@ -890,6 +983,9 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
 
         if operatorName <> Do then 
             try 
+                //match operatorName with 
+                //| EQ TJ -> () 
+                //| _ -> ()
                 this.OriginalOperator.Invoke(processor, operator, operands)
             with ex ->
                 if ex.Message = "Dictionary doesn't have supported font data." 

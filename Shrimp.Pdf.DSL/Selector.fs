@@ -356,18 +356,18 @@ type Info_BoundIs_Args [<JsonConstructor>] (relativePosition: RelativePosition, 
                 
 
 type TextInfo =
-    static member FPrasec(parser: Parser<_, _>) =
+    static member FPrasec(parser: Parser<_, _>, ?wordSep) =
         fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
-            match FParsec.CharParsers.run parser (ITextRenderInfo.getText info) with 
+            match FParsec.CharParsers.run parser (ITextRenderInfo.getConcatedText wordSep info) with 
             | Success _ -> true
             | Failure _ -> false
 
 
-    static member TextContainsIC(text: string) =
+    static member TextContainsIC(text: string, ?wordSep) =
         fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
-            (ITextRenderInfo.getText info).Contains(text, true)
+            (ITextRenderInfo.getConcatedText wordSep info).Contains(text, true)
 
-    static member FontNameIs(fontName) =
+    static member FontNameIs(fontName) = 
         fun (args: PageModifingArguments<_>) (info: #ITextRenderInfo) ->
             ITextRenderInfo.fontNameIs fontName info
         

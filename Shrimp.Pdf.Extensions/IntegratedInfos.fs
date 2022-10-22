@@ -135,7 +135,7 @@ module IntegratedInfos =
  
 
     type TextInfoRecord =
-        { Text: string 
+        { PdfConcatedText: PdfConcatedText
           FontSize: float 
           TextRotation: Rotation
           FillColor: iText.Kernel.Colors.Color 
@@ -144,20 +144,41 @@ module IntegratedInfos =
           Bound: FsRectangle
           DenseBound: FsRectangle
           EndTextState: EndTextState }
-            
-
+    with 
+        member x.Text = x.PdfConcatedText.ConcatedText()
 
     [<Struct; System.Diagnostics.DebuggerDisplay("IntegratedTextRenderInfo: {RecordValue}")>]
     type IntegratedTextRenderInfo =
         { TextRenderInfo: TextRenderInfo 
           ClippingPathInfos: ClippingPathInfos
           EndTextState: EndTextState
-          ConcatedTextInfos: IntegratedTextRenderInfo seq
+          ConcatedTextInfo: ConcatedTextInfo
           OperatorRange: OperatorRange option
           FillOpacity: float32 option
           StrokeOpacity: float32 option }
 
     with 
+        member x.SplitToWords() =
+            match x.EndTextState with 
+            | EndTextState.No
+            | EndTextState.Undified -> [x]
+            | EndTextState.Yes ->
+                let clippingPathInfos = x.ClippingPathInfos
+                let strokeOpacity = x.StrokeOpacity
+                let fillOpacity = x.FillOpacity
+                x.ConcatedTextInfo.AsList
+                |> List.map(fun textInfo ->
+                    {   
+                        TextRenderInfo = textInfo
+                        EndTextState = EndTextState.No
+                        OperatorRange = None
+                        ConcatedTextInfo = {HeadWordInfo = textInfo; FollowedWordInfos = []}
+                        ClippingPathInfos = clippingPathInfos
+                        StrokeOpacity = strokeOpacity
+                        FillOpacity = fillOpacity
+                    }
+                )
+
         member x.GetAppliedExtGState() =
             let exState = CanvasGraphicsState.getExtGState (x.TextRenderInfo.GetGraphicsState())
 
@@ -165,21 +186,28 @@ module IntegratedInfos =
                 exState
                     .SetFillOpacity(defaultArg x.FillOpacity 1.0f)
                     .SetStrokeOpacity(defaultArg x.FillOpacity 1.0f)
-            
+        
             exState
 
-        member integratedInfo.Text() =
+        member integratedInfo.ConcatedText(?wordSep) =
             let renderInfo = integratedInfo.TextRenderInfo
             match integratedInfo.EndTextState with 
             | EndTextState.Yes -> 
-                integratedInfo.ConcatedTextInfos
-                |> Seq.map(fun m -> m.TextRenderInfo.GetText())
-                |> String.concat ""
+                integratedInfo.ConcatedTextInfo.ConcatedText(?wordSep = wordSep)
             | EndTextState.No
             | EndTextState.Undified -> renderInfo.GetText()
 
+        member integratedInfo.PdfConcatedText() =
+            let renderInfo = integratedInfo.TextRenderInfo
+            match integratedInfo.EndTextState with 
+            | EndTextState.Yes -> 
+                integratedInfo.ConcatedTextInfo.PdfConcatedText()
+            | EndTextState.No
+            | EndTextState.Undified -> 
+                { HeadWord = renderInfo.GetText() 
+                  FollowedWords = [] }
 
-        
+    
         member x.IsShow_EndTextState = 
             match x.EndTextState with 
             | EndTextState.Undified 
@@ -188,7 +216,7 @@ module IntegratedInfos =
 
         member integratedInfo.RecordValue =
             let renderInfo = integratedInfo.TextRenderInfo
-            { Text = integratedInfo.Text()
+            { PdfConcatedText = integratedInfo.PdfConcatedText()
               FontSize = ITextRenderInfo.getActualFontSize integratedInfo
               FontName = ITextRenderInfo.getFontName integratedInfo
               TextRotation = ITextRenderInfo.getTextRotation integratedInfo
@@ -212,9 +240,7 @@ module IntegratedInfos =
 
             member x.EndTextState = x.EndTextState
 
-            member x.ConcatedTextInfos =
-                x.ConcatedTextInfos
-                |> Seq.map(fun m -> m.TextRenderInfo)
+            member x.ConcatedTextInfo = x.ConcatedTextInfo
 
 
         interface IAbstractRenderInfo with 
@@ -223,7 +249,7 @@ module IntegratedInfos =
         interface IIntegratedRenderInfoIM with 
             member x.TagIM = IntegratedRenderInfoTagIM.Text
             member x.ClippingPathInfos = x.ClippingPathInfos
-            
+        
         interface IIntegratedRenderInfo with 
             member x.Tag = IntegratedRenderInfoTag.Text
             member x.ClippingPathInfos = x.ClippingPathInfos
@@ -480,5 +506,8 @@ module _IntegratedInfosExtensions =
 
     [<RequireQualifiedAccess>]
     module ITextRenderInfo =
-        let getText (info: ITextRenderInfo) =
-            (info :?> IntegratedTextRenderInfo).Text()
+        let getConcatedText wordSep (info: ITextRenderInfo) =
+            (info :?> IntegratedTextRenderInfo).ConcatedText(?wordSep = wordSep)
+
+        let getPdfConcatedText (info: ITextRenderInfo) =
+            (info :?> IntegratedTextRenderInfo).PdfConcatedText()

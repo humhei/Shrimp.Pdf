@@ -289,6 +289,11 @@ module _Renewable =
                 OriginInfo = x
             }
 
+    [<RequireQualifiedAccess>]
+    type RenewableTextInfoKind =
+        | Word of string
+        | ConcatedText of OperatorRange
+
     type RenewableTextInfo =
          { FillColor: iText.Kernel.Colors.Color 
            StrokeColor: iText.Kernel.Colors.Color
@@ -296,7 +301,7 @@ module _Renewable =
            StrokeShading: option<PdfName * Matrix> 
            LineWidth: float32
            DashPattern: DashPattern
-           Text: string
+           Kind: RenewableTextInfoKind
            RawFontSize: float32
            Font: PdfFont
            ExtGState: FsExtGState option
@@ -306,10 +311,8 @@ module _Renewable =
            TextLeading: float32
            TextRenderingMode: int
            HeaderTextRenderInfo: TextRenderInfo
-           OperatorRange: OperatorRange option
            ClippingPathInfos: ClippingPathInfos
            OriginInfo: IntegratedTextRenderInfo
-           IsWord: bool
      
            }
      with 
@@ -340,9 +343,9 @@ module _Renewable =
                 |> PdfCanvas.setFontAndSize(x.Font, x.RawFontSize)
                 |> PdfCanvas.setTextMatrix textMatrix
                 |> (fun canvas ->
-                    match x.IsWord with 
-                    | false -> PdfCanvas.writeOperatorRange x.OperatorRange.Value canvas
-                    | true -> PdfCanvas.showText x.Text canvas
+                    match x.Kind with 
+                    | RenewableTextInfoKind.ConcatedText operatorRange -> PdfCanvas.writeOperatorRange operatorRange canvas
+                    | RenewableTextInfoKind.Word text -> PdfCanvas.showText text canvas
                 )
                 |> PdfCanvas.endText
             )
@@ -361,7 +364,6 @@ module _Renewable =
 
     type IntegratedTextRenderInfo with 
         member x.Renewable(?isWord): RenewableTextInfo =
-            let isWord = defaultArg isWord false
             let renderInfo = x.TextRenderInfo
             let gs = renderInfo.GetGraphicsState()
 
@@ -372,7 +374,11 @@ module _Renewable =
 
             { FillColor = x.TextRenderInfo.GetFillColor()
               StrokeColor = x.TextRenderInfo.GetStrokeColor()
-              Text = x.Text()
+              Kind = 
+                match defaultArg isWord false with 
+                | false -> RenewableTextInfoKind.ConcatedText(x.OperatorRange.Value)
+                | true ->
+                    RenewableTextInfoKind.Word(x.TextRenderInfo.GetText())
               FontName = ITextRenderInfo.getFontName x
               RawFontSize = renderInfo.GetFontSize()
               Font = renderInfo.GetFont()
@@ -385,19 +391,14 @@ module _Renewable =
               DashPattern = CanvasGraphicsState.getDashPattern (gs)
               HeaderTextRenderInfo = 
                 match x.EndTextState with 
-                | EndTextState.Yes -> x.ConcatedTextInfos |> Seq.head |> fun m -> m.TextRenderInfo
+                | EndTextState.Yes -> x.ConcatedTextInfo.HeadWordInfo
                 | EndTextState.Undified -> x.TextRenderInfo
                 | EndTextState.No -> x.TextRenderInfo
 
-              OperatorRange = 
-                match isWord with 
-                | true -> None 
-                | false -> Some x.OperatorRange.Value
               ClippingPathInfos = x.ClippingPathInfos
               FillShading = None
               StrokeShading = None
               OriginInfo = x
-              IsWord = isWord
             }
 
 

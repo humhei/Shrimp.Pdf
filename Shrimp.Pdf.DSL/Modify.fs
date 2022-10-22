@@ -892,7 +892,7 @@ type Modifier =
 
             | IntegratedRenderInfoTag.Text ->
                 let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
-                let text = ITextRenderInfo.getText info
+                let text = ITextRenderInfo.getPdfConcatedText info
                 ModifierPdfCanvasActions.CreateCloseOperator(args.Tag, text = text)
 
     static member SetFontAndSize(font, size: float, ?alignment: XEffort) : Modifier<'userState> =
@@ -905,13 +905,20 @@ type Modifier =
             | IntegratedRenderInfoTag.Text ->
                 let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
                 let transformedFontSize = ITextRenderInfo.toTransformedFontSize size info 
-                let text = ITextRenderInfo.getText info
+                let text = ITextRenderInfo.getPdfConcatedText info
                 let difference() =
                     let originWidth = ITextRenderInfo.getWidth info
-                    let currentWidth =
-                        let widthUnits = PdfFont.calcLineWidthUnits text font
-                        List.max widthUnits * size
-                    currentWidth - originWidth
+                    let newWidth =
+                        text.SplitToLines()
+                        |> List.map(fun text ->
+                            let widthUnits = 
+                                let text = text.ConcatedText()
+                                PdfFont.calcLineWidthUnits text font
+                            List.max widthUnits * size
+                        )
+                        |> List.max
+
+                    newWidth - originWidth
 
                 let originTransform() = 
                     info.TextRenderInfo.GetTextMatrix()
@@ -1584,8 +1591,8 @@ module ModifyOperators =
                 )
             modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
-type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?info_BoundIs_Args, ?textPattern) =
-    inherit POCOBaseEquatable<string option * float option * FsColor option * Info_BoundIs_Args option * TextMatchingPattern option>(fontName, fontSize, fillColor, info_BoundIs_Args, textPattern)
+type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?info_BoundIs_Args, ?textPattern, ?wordSep) =
+    inherit POCOBaseEquatable<string option * float option * FsColor option * Info_BoundIs_Args option * TextMatchingPattern option * string option>(fontName, fontSize, fillColor, info_BoundIs_Args, textPattern, wordSep)
 
     [<JsonProperty>]
     member x.FontName = fontName
@@ -1631,7 +1638,7 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
         Selector.Text(fun args textInfo ->
             match textPattern with 
             | Some textPattern -> 
-                let text = ITextRenderInfo.getText textInfo
+                let text = ITextRenderInfo.getConcatedText wordSep textInfo
                 textPattern.Predicate text
             | None -> true
             &&
@@ -2039,8 +2046,7 @@ type Modify =
 
                         | DocumentFontName.Valid _ ->
                             let textInfos = 
-                                currentInfo.ConcatedTextInfos
-                                |> List.ofSeq
+                                currentInfo.SplitToWords()
 
                             let lastTextInfo =
                                 match textInfos with
@@ -2064,7 +2070,7 @@ type Modify =
                                         | 0 -> 
                                             [
                                                 PdfCanvas.setTextMatrix matrix
-                                                PdfCanvas.showText(ITextRenderInfo.getText textInfo)
+                                                PdfCanvas.showText(ITextRenderInfo.getConcatedText None textInfo)
                                             ]
                                         | EqualTo lastIndex -> 
                                             [
@@ -2073,7 +2079,7 @@ type Modify =
                                         | _ ->
                                             [
                                                 PdfCanvas.setTextMatrix matrix
-                                                PdfCanvas.showText(ITextRenderInfo.getText textInfo)
+                                                PdfCanvas.showText(ITextRenderInfo.getConcatedText None textInfo)
                                             ]
                                     )
                                     |> List.concat
@@ -2084,7 +2090,7 @@ type Modify =
                                 match textInfos with 
                                 | []
                                 | [ _ ] -> CloseOperatorUnion.Keep(args.CurrentRenderInfo.Tag)
-                                | _ -> CloseOperatorUnion.CreateText(text = lastTextInfo.GetText())
+                                | _ -> CloseOperatorUnion.CreateText(text = (lastTextInfo.GetText() |> PdfConcatedText.Create) )
                             }
                         )
                   ]

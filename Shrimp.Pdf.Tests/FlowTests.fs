@@ -25,7 +25,7 @@ let flowTests =
         Flows.FilterPages(
             PageFilter(
                 InfosSelector.Text
-                    (TextInfos.ExistsText_In_OneLine(fun text -> text = "36 -> 41"))
+                    (TextInfos.ExistsText_In_OneLine(fun text -> text = "36->41"))
             )
         )
         |> runTest "datas/flows/filterPages_infos.pdf" 

@@ -66,10 +66,9 @@ module iText =
 
         /// px/pt
         let calcLineWidthUnits (text: string) (font: PdfFont) =
-            let linesOfText = text.Split([|"\r\n"; "\n"|], StringSplitOptions.None)
+            let linesOfText = text.SplitToLines()
 
             linesOfText 
-            |> List.ofArray
             |> List.map (fun line ->
                 let line = font.CreateGlyphLine(line)
                 let unit =
@@ -86,7 +85,7 @@ module iText =
         let private verticalMaxSizeWhenParagraphedHeightIs height (text: string) font =
             let heightUnit = calcLineHeightUnit font
             let baseFontSize = height / heightUnit
-            let linesOfText = text.Split([|"\r\n"; "\n"|], StringSplitOptions.None)
+            let linesOfText = text.SplitToLines()
 
             baseFontSize / float linesOfText.Length 
 
@@ -1096,8 +1095,7 @@ module iText =
                 
             | EndTextState.Yes ->
                 let bounds = 
-                    info.ConcatedTextInfos
-                    |> List.ofSeq
+                    info.ConcatedTextInfo.AsList
                     |> List.map(TextRenderInfo.getBound boundGettingStrokeOptions)
 
                 {| ConcatedBounds = bounds
@@ -1112,8 +1110,7 @@ module iText =
             | EndTextState.No 
             | EndTextState.Undified -> TextRenderInfo.getBound boundGettingStrokeOptions info.Value
             | EndTextState.Yes ->
-                info.ConcatedTextInfos
-                |> List.ofSeq
+                info.ConcatedTextInfo.AsList
                 |> List.map(TextRenderInfo.getBound boundGettingStrokeOptions)
                 |> AtLeastOneList.Create
                 |> Rectangle.ofRectangles

@@ -650,11 +650,18 @@ let manipulateTests =
         |> runTest "datas/manipulate/add bound to text8.pdf" 
         |> ignore
 
-    ftestCase "decode text" <| fun _ -> 
+    testCase "decode text" <| fun _ -> 
         Flow.Manipulate (
             Modify.DecodeText() 
         )
         |> runTest "datas/manipulate/decode text.pdf" 
+        |> ignore
+
+    testCase "decode text2" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.DecodeText() 
+        )
+        |> runTest "datas/manipulate/decode text2.pdf" 
         |> ignore
 
     testCase "add bound to text9" <| fun _ -> 
@@ -1466,9 +1473,6 @@ let manipulateTests =
         )
         |> runTest "datas/manipulate/split textLine to words4.pdf" 
         //|> runTest @"D:\VsCode\Workspace\Shrimp.Pdf\Shrimp.Pdf.Tests\datas\123.pdf"
-        |> fun a -> 
-            failwith ""
-
         |> ignore
 
     testCase "split textLine to words5" <| fun _ -> 

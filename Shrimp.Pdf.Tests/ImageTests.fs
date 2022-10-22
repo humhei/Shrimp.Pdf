@@ -20,8 +20,6 @@ open Shrimp.Pdf.ImageConverter
 open Shrimp.Pdf.Image
 let imageTests = 
     testList "ImageTests" <| [
-    
-
 
         testCase "convert pdf to jpeg" <| fun _ -> 
             let pdfFile =
@@ -276,8 +274,6 @@ let imageTests =
                 flow
             )
             |> runTest "datas/image/convert all objects to gray8.pdf" 
-            |> fun m ->
-                failwithf ""
             |> ignore
 
         testCase "set image maximun dpi to 150" <| fun _ -> 

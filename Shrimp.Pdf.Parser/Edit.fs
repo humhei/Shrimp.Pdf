@@ -6,6 +6,7 @@ open iText.IO.Image
 open iText.Kernel.Pdf
 open iText.Kernel.Pdf.Xobject
 open iText.Kernel.Pdf.Canvas
+open iText.Kernel.Exceptions
 open Shrimp.Pdf.Extensions
 open System.Collections.Generic
 open FParsec.CharParsers
@@ -112,7 +113,7 @@ with
 type TextCloseOperator =
     { Fill: CloseOperator
       Stroke: CloseOperator
-      Text: string option }
+      Text: PdfConcatedText option }
 with 
     static member Keep =
         { Fill = CloseOperator.Keep 
@@ -285,7 +286,10 @@ with
                 |> ignore
 
                 let partOperatorRange =
-                    { operatorRange with Operator = PdfLiteral(Tj) }
+                    { operatorRange with 
+                        Operator = PdfLiteral(Tj)
+                        Operands = [|operatorRange.Operands.[0]; PdfLiteral(Tj)|]
+                    }
 
                 PdfCanvas.useCanvas canvas0 (action partOperatorRange) 
 
@@ -302,7 +306,7 @@ with
                 let partOperatorRange =
                     { Operator = PdfLiteral(Tj)
                       Operands =
-                        [|operatorRange.Operands.[2]|]
+                        [|operatorRange.Operands.[2]; PdfLiteral(Tj)|]
                       }
 
                 PdfCanvas.useCanvas canvas0 (action partOperatorRange) 
@@ -397,16 +401,56 @@ with
                 match close.Text with 
                 | None -> PdfCanvas.writeOperatorRange originCloseOperatorRange canvas
                 | Some text -> 
-                    //PdfCanvas.writeOperatorRange originCloseOperatorRange canvas
-                    match originCloseOperatorRange.Operator.Text() with 
-                    | EQ TJ -> PdfCanvas.showText(text) canvas 
-                    | EQ Tj -> PdfCanvas.showText(text) canvas 
-                    | EQ "'" -> canvas.NewlineShowText(text)
-                    | EQ "\"" -> 
-                        let wordSpacing = originCloseOperatorRange.Operands.[0] :?> PdfNumber
-                        let characterSpacing = originCloseOperatorRange.Operands.[1] :?> PdfNumber
-                        canvas.NewlineShowText(wordSpacing.FloatValue(), characterSpacing.FloatValue(), text)
-                    | text -> failwithf "Invalid token, %s is not an valid text close operator" text
+                    match text.FollowedWords with 
+                    | [] -> PdfCanvas.showText(text.HeadWord) canvas
+                    | followedTexts ->
+                        let document = canvas.GetDocument()
+                        let currentGs = canvas.GetGraphicsState()
+                        let contentStream = canvas.GetContentStream()
+                        document.CheckIsoConformance(currentGs, IsoKey.FONT_GLYPHS, null, contentStream)
+                        match currentGs.GetFont() with 
+                        | null -> 
+                            let ex = 
+                                (KernelExceptionMessageConstant.FONT_AND_SIZE_MUST_BE_SET_BEFORE_WRITING_ANY_TEXT, currentGs)
+                                |> PdfException
+                            raise ex 
+
+                        | font -> 
+                            let outputStream = contentStream.GetOutputStream()
+
+                            let writeString (text: string) =
+                                outputStream.WriteString(text) |> ignore
+                                
+                            let writeSpace() =
+                                outputStream.WriteSpace() |> ignore
+                                
+
+                            writeString "["
+                            font.WriteText(text.HeadWord, outputStream)
+                            writeSpace()
+
+                            followedTexts
+                            |> List.iteri(fun i followedText ->
+                                match followedText.Space with 
+                                | Some space -> 
+                                    outputStream
+                                        .WriteFloat(float32 space)
+                                        .WriteSpace()
+                                        |> ignore
+
+                                    font.WriteText(followedText.Text, outputStream)
+
+                                | None -> font.WriteText(followedText.Text, outputStream)
+
+                                match i = followedTexts.Length - 1 with 
+                                | true -> 
+                                    writeString("]")
+                                    writeString(TJ)
+                                    outputStream.WriteNewLine() |> ignore
+                                | false -> writeSpace()
+                            )
+
+                            canvas
 
             | CloseOperatorUnion.Path close ->
                 let newOperatorName = close.Apply(originCloseOperatorRange.Operator.Text())
@@ -501,9 +545,6 @@ type _SelectionModifierFixmentArguments =
 
 type private Modifier = _SelectionModifierFixmentArguments -> ModifierPdfCanvasActions
 
-type private PathOrTextEnum =
-    | Path = 0
-    | Text = 1
 
 type internal ModifierPdfCanvas(contentStream, resources, document) =
     inherit CanvasGraphicsStateSettablePdfCanvas(contentStream, resources, document)

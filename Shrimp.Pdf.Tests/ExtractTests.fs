@@ -54,7 +54,6 @@ let extractTests =
             )
             |> runTest "datas/extract/group into.pdf" 
             |> ignore
-            failwith ""
 
     ]
 
@@ -547,7 +546,7 @@ let extractTests =
                                     let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
                                     textInfoBound.IsCenterPointInsideOf(bound.Bound)
                                 )
-                                |> List.map(fun m -> m.Text())
+                                |> List.map(fun m -> m.PdfConcatedText())
 
                             texts :> System.IComparable
                         )
@@ -647,7 +646,7 @@ let extractTests =
                                     let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
                                     textInfoBound.IsCenterPointInsideOf(bound.Bound)
                                 )
-                                |> List.map(fun m -> m.Text())
+                                |> List.map(fun m -> m.PdfConcatedText())
 
                             texts :> System.IComparable
                         )
@@ -734,7 +733,6 @@ let extractTests =
                     (SamplePageExtractingOptions.FirstPageMultipleSelectors (pageNumbers,PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
             )
             |> runTest "datas/extract/tile pages and NUP by selector2.pdf" 
-            |> fun m -> failwith ""
             |> ignore
 
         testCase "tile pages and NUP by selector3" <| fun _ -> 
@@ -761,7 +759,6 @@ let extractTests =
                 //    (SamplePageExtractingOptions.FirstPageMultipleSelectors (pageNumbers,PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
             )
             |> runTest "datas/extract/tile pages and NUP by selector3.pdf" 
-            |> fun m -> failwith ""
             |> ignore
 
         testCase "tile pages by selector tests8" <| fun _ -> 
@@ -778,7 +775,7 @@ let extractTests =
                                     let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
                                     textInfoBound.IsCenterPointInsideOf(bound.Bound)
                                 )
-                                |> List.map(fun m -> m.Text())
+                                |> List.map(fun m -> m.PdfConcatedText())
 
                             texts :> System.IComparable
                         )

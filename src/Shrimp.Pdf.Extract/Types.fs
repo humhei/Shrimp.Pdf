@@ -3,6 +3,7 @@ namespace Shrimp.Pdf.Extract
 open Akka.Configuration
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
 open Shrimp.FSharp.Plus
+open Shrimp.Pdf
 
 [<AutoOpen>]
 module internal Config =
@@ -21,51 +22,51 @@ module internal Config =
 
 [<AutoOpen>]
 module _Types =
-    type TextTransform = internal TextTransform of string list * delimiter: string
+    type TextTransform = 
+        { Texts: PdfConcatedText list 
+          Delimiter: string 
+          WordSep: string }
     with 
-        static member Singlton(text: string) =
-            TextTransform([text], "")
     
-        static member Empty =
-            TextTransform([], "")
-    
-        static member Create(texts: string list, ?delimiter) =
-            TextTransform(texts, defaultArg delimiter "")
+        static member Create(texts: PdfConcatedText list, ?delimiter, ?wordSep) =
+            let delimiter = defaultArg delimiter ""
+            let wordSep = defaultArg wordSep delimiter
+            { 
+                Texts = texts
+                Delimiter = delimiter
+                WordSep = wordSep
+            }
             
-        member private x.Texts =
-            let (TextTransform (texts, delimiter)) = x
-            texts
+        static member Empty = TextTransform.Create []
+
+        static member Singlton(text) =
+            TextTransform.Create [text]
 
         member private x.MapText(fText) =
-            let newTexts = 
-                x.Texts
-                |> List.map fText
-            TextTransform(newTexts, x.Delimiter)
+            { x with 
+                Texts = x.Texts |> List.map fText
+            }
+         
     
         //member private x.ReplaceGreaterThanSignToBar() =
         //    x.MapText(fun (m: string) -> m.Replace(">", "-"))
 
     
-        member private x.FileName =
-            let (TextTransform (texts, delimiter)) = x
-            texts
-            |> String.concat delimiter
+        member x.OriginText = 
+            x.Texts
+            |> List.map(fun m -> m.ConcatedText(x.WordSep))
+            |> String.concat x.Delimiter
+
+        //member x.Text = x.FileName.FileName
+
+        member x.FileName =
+            x.OriginText
             |> ValidFileName.Create
     
-    
-        member x.Text = x.FileName.FileName
 
-        member x.OriginText = x.FileName.OriginFileName
-
-    
-        member x.Delimiter =
-            let (TextTransform (texts, delimiter)) = x
-            delimiter
     
         member private x.MapTexts(fTexts) =
-            let newTexts = fTexts x.Texts
-            TextTransform(newTexts, x.Delimiter)
-    
+            { x with Texts = fTexts x.Texts }
 
 
         member x.Parity() =
@@ -83,7 +84,7 @@ module _Types =
 
         member private x.MapDelimiter(fDelimiter) =
             let newDelimiter = fDelimiter x.Delimiter
-            TextTransform(x.Texts, newDelimiter)
+            { x with Delimiter = newDelimiter }
     
     
         member x.Regex(pattern, ?name) =
@@ -96,7 +97,7 @@ module _Types =
                     match x.OriginText with 
                     | ParseRegex.NamedHeadF (pattern, name) v -> v
     
-            TextTransform ([v], x.Delimiter)
+            TextTransform.Create ([PdfConcatedText.Create v], x.Delimiter)
 
 
 
@@ -119,7 +120,11 @@ module _Types =
             x.MapTexts (fun texts ->
                 texts
                 |> List.collect(fun text -> 
-                    text.Split([|' '|], System.StringSplitOptions.RemoveEmptyEntries) |> List.ofArray)
+                    text.ConcatedText(x.WordSep).Split([|' '|], System.StringSplitOptions.RemoveEmptyEntries) 
+                    |> List.ofArray
+                    |> List.map PdfConcatedText.Create
+
+                )
             )
 
     

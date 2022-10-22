@@ -116,33 +116,33 @@ module _InfosSelector =
                     failwithf "Found multiple texts %A in %A by picker %A" rs records picker
 
 
-        static member PickText(picker: string -> string option): TextInfosPicker<_> = 
+        static member PickText(picker: string -> string option, ?wordSep): TextInfosPicker<_> = 
             fun (args: PageModifingArguments<_>) infos ->
                 let infos =
                     infos
                     |> Seq.map (fun (m: IntegratedTextRenderInfo) -> m :> IIntegratedRenderInfo)
 
-                PageModifier.PickTexts(picker) args infos
+                PageModifier.PickTexts(picker, ?wordSep = wordSep) args infos
 
                 
-        static member PickText_In_OneLine(picker: string -> string option, ?delimiter: string, ?selectionGrouper: SelectionGrouper): TextInfosPicker<_> = 
+        static member PickText_In_OneLine(picker: string -> string option, ?sep: string, ?wordSep, ?selectionGrouper: SelectionGrouper): TextInfosPicker<_> = 
             fun (args: PageModifingArguments<_>) infos ->
                 let infos =
                     infos
                     |> Seq.map (fun (m: IntegratedTextRenderInfo) -> m :> IIntegratedRenderInfo)
 
-                PageModifier.PickTexts_In_OneLine(picker, ?delimiter = delimiter, ?selectionGrouper = selectionGrouper) args infos
+                PageModifier.PickTexts_In_OneLine(picker, ?sep = sep, ?wordSep = wordSep, ?selectionGrouper = selectionGrouper) args infos
 
 
-        static member ExistsText_In_OneLine(predicate: string -> bool, ?delimiter: string, ?selectionGrouper: SelectionGrouper) =
+        static member ExistsText_In_OneLine(predicate: string -> bool, ?sep: string, ?wordSep, ?selectionGrouper: SelectionGrouper) =
             fun picker ->
-                TextInfos.PickText_In_OneLine(picker, ?delimiter = delimiter, ?selectionGrouper = selectionGrouper) 
+                TextInfos.PickText_In_OneLine(picker, ?sep = sep, ?wordSep = wordSep, ?selectionGrouper = selectionGrouper) 
             |> pickerToExists predicate
 
 
-        static member ExistsText(predicate: string -> bool) =
+        static member ExistsText(predicate: string -> bool, ?wordSep) =
             fun (picker: string -> string option) ->
-                TextInfos.PickText(picker) 
+                TextInfos.PickText(picker, ?wordSep = wordSep) 
             |> pickerToExists predicate
 
         static member ExistsText(predicate: IntegratedTextRenderInfo -> bool) =

@@ -83,22 +83,20 @@ module _Tile =
             | RenewableInfo.Path _ -> [info]
                     
             | RenewableInfo.Text textInfo ->
-                match Seq.length textInfo.OriginInfo.ConcatedTextInfos with 
-                | 0 
-                | 1 -> [info]
-                | _ -> 
-                    match splitTextToWords with 
-                    | true ->
-                        textInfo.OriginInfo.ConcatedTextInfos
-                        |> List.ofSeq
+                match splitTextToWords with 
+                | false -> [info]
+                | true ->
+                    match textInfo.OriginInfo.SplitToWords() with 
+                    | []
+                    | [_] -> [info]
+                    | infos ->
+                        infos
                         |> List.mapi(fun i m -> 
                             m.Renewable(
                                 isWord = true
                             )
                         )
                         |> List.map RenewableInfo.Text
-
-                    | false -> [info]
 
             |> List.map ExpandedRenewableInfo
 
@@ -329,7 +327,11 @@ module _Tile =
     with 
         static member DefaultValue = PageTilingRenewOptions.UsingOriginPdfPage
     
-    
+        member internal x.SplitTextToWords = 
+            match x with 
+            | UsingOriginPdfPage _ -> false
+            | VisibleInfosInActualBox v -> v.SplitTextToWords
+
     type PageTilingResultCount = private PageTilingResultCount of int
     with 
         member x.Value = 
@@ -793,13 +795,13 @@ module _Tile =
                                             |> List.ofSeq
 
                                         let infos = 
-                                            infos
-                                            |> List.choose IIntegratedRenderInfo.asITextRenderInfo
-                                            |> List.collect(fun m -> 
-                                                match Seq.length m.ConcatedTextInfos with 
-                                                | 0
-                                                | 1 -> [m]
-                                                | _ -> List.ofSeq m.ConcatedTextInfos)
+                                            let infos = 
+                                                infos
+                                                |> List.choose IIntegratedRenderInfo.asITextRenderInfo
+                                            
+                                            match pageTilingRenewOptions.SplitTextToWords with 
+                                            | false -> infos
+                                            | true -> infos |> List.collect(fun m -> m.SplitToWords())
 
                                         let groupedInfos =
                                             infos

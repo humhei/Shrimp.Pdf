@@ -495,12 +495,95 @@ module ExtensionTypes =
         | No = 1
         | Yes = 2
 
+    type FollowedWord =
+        { Space: float option 
+          Text: string }
+
+    type PdfConcatedText =
+        { HeadWord: string
+          FollowedWords: FollowedWord list }
+    with 
+        member x.AsList = x.HeadWord :: List.map(fun m -> m.Text) x.FollowedWords
+
+        member x.ConcatedText(?wordSep) =
+            x.AsList
+            |> String.concat (defaultArg wordSep "")
+
+        member x.TotalSpace =
+            x.FollowedWords
+            |> List.choose(fun m -> m.Space)
+            |> List.sum
+
+        member private x.AsFollowedTexts() =
+            { Space = None; Text = x.HeadWord } :: x.FollowedWords
+
+        static member (+) (a: PdfConcatedText, b: PdfConcatedText) =
+            { HeadWord = a.HeadWord 
+              FollowedWords = a.FollowedWords @ b.AsFollowedTexts()
+            }
+
+        member x.SplitToLines() =
+            let words = x.AsFollowedTexts()
+            
+            let rec loop accum (words: FollowedWord list) =
+                match words with 
+                | [] -> List.rev accum
+                | word :: t ->
+                    let index = 
+                        words
+                        |> List.tryFindIndex(fun m -> m.Text.SplitToLines().Length > 1)
+
+                    match index with 
+                    | None -> loop ({ HeadWord = word.Text; FollowedWords = t } :: accum) []
+                    | Some index ->
+                        let left, right = List.splitAt index words 
+                        let rightOne = right.[0]
+                        let rightOneLines = rightOne.Text.SplitToLines()
+                        let item  =
+                            { HeadWord = word.Text 
+                              FollowedWords = left @ [{Space = rightOne.Space; Text = rightOneLines.[0]}] }
+
+                        let rightOneOtherText = 
+                            { Space = None;
+                              Text = rightOneLines.[1..] |> String.concat "\r\n" }
+
+                        loop (item :: accum) (rightOneOtherText :: right.[1..])
+
+            loop [] words
+
+        static member Create(text, ?followedTexts) =
+            { HeadWord = text 
+              FollowedWords = defaultArg followedTexts [] }
+
+    [<Struct>]
+    type FollowedWordInfo =
+        { Space: float option 
+          TextInfo: TextRenderInfo }
+
+    [<Struct>]
+    type ConcatedTextInfo =
+        { HeadWordInfo: TextRenderInfo
+          FollowedWordInfos: FollowedWordInfo list }
+    with 
+        member x.AsList = x.HeadWordInfo :: List.map(fun m -> m.TextInfo) x.FollowedWordInfos
+
+        member x.ConcatedText(?wordSep) =
+            x.AsList
+            |> List.map(fun m -> m.GetText())
+            |> String.concat (defaultArg wordSep "")
+
+        member x.PdfConcatedText() =
+            { HeadWord = x.HeadWordInfo.GetText() 
+              FollowedWords = 
+                x.FollowedWordInfos
+                |> List.map(fun m -> {Space = m.Space; Text = m.TextInfo.GetText()})
+            }
 
     type ITextRenderInfo =
         inherit IAbstractRenderInfo
         abstract member Value: TextRenderInfo
         abstract member EndTextState: EndTextState
-        abstract member ConcatedTextInfos: TextRenderInfo seq
+        abstract member ConcatedTextInfo: ConcatedTextInfo
 
     type IImageRenderInfo =
         inherit IAbstractRenderInfoIM

@@ -174,14 +174,14 @@
     <Reference Include="Reactive.Streams, Version=1.0.2.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Reactive.Streams.1.0.2\lib\net45\Reactive.Streams.dll</HintPath>
     </Reference>
-    <Reference Include="Shrimp.Akkling.Cluster.Intergraction, Version=0.2.61.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Shrimp.Akkling.Cluster.Intergraction.0.2.61\lib\netstandard2.0\Shrimp.Akkling.Cluster.Intergraction.dll</HintPath>
+    <Reference Include="Shrimp.Akkling.Cluster.Intergraction, Version=0.2.62.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Shrimp.Akkling.Cluster.Intergraction.0.2.62\lib\netstandard2.0\Shrimp.Akkling.Cluster.Intergraction.dll</HintPath>
     </Reference>
-    <Reference Include="Shrimp.FSharp.Plus, Version=1.1.438.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Shrimp.FSharp.Plus.1.1.438\lib\net462\Shrimp.FSharp.Plus.dll</HintPath>
+    <Reference Include="Shrimp.FSharp.Plus, Version=1.1.449.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Shrimp.FSharp.Plus.1.1.449\lib\net462\Shrimp.FSharp.Plus.dll</HintPath>
     </Reference>
-    <Reference Include="Shrimp.FSharp.Plus.CSharp, Version=1.1.438.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Shrimp.FSharp.Plus.CSharp.1.1.438\lib\netstandard2.0\Shrimp.FSharp.Plus.CSharp.dll</HintPath>
+    <Reference Include="Shrimp.FSharp.Plus.CSharp, Version=1.1.449.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Shrimp.FSharp.Plus.CSharp.1.1.449\lib\netstandard2.0\Shrimp.FSharp.Plus.CSharp.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.AppContext, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">

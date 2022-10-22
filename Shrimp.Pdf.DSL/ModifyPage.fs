@@ -134,13 +134,13 @@ type PageModifier =
     //        picker info.RecordValue
     //    )
 
-    static member PickTexts(picker: string -> _ option) : PageModifier<_, _> =
+    static member PickTexts(picker: string -> _ option, ?wordSep) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             infos
             |> List.ofSeq
             |> List.choose IIntegratedRenderInfo.asITextRenderInfo
             |> List.choose (fun renderInfo ->
-                let text = ITextRenderInfo.getText renderInfo
+                let text = ITextRenderInfo.getConcatedText wordSep renderInfo
                 picker text
             )
 
@@ -152,8 +152,9 @@ type PageModifier =
             | Failure (msg, _ , _) -> None
         )
 
-    static member PickTexts_In_OneLine(picker: string -> _ option, ?delimiter: string, ?selectionGrouper: SelectionGrouper) : PageModifier<_, _> =
-        let delimiter = defaultArg delimiter ""
+    static member PickTexts_In_OneLine(picker: string -> _ option, ?sep: string, ?wordSep, ?selectionGrouper: SelectionGrouper) : PageModifier<_, _> =
+        let sep = defaultArg sep ""
+        let wordSep = defaultArg wordSep sep
         let selectionGrouper = defaultArg selectionGrouper SelectionGrouper.DefaultValue
 
         fun (args: PageModifingArguments<_>) infos ->
@@ -175,8 +176,8 @@ type PageModifier =
                 let text = 
                     infos
                     |> Seq.map fst
-                    |> Seq.map (ITextRenderInfo.getText)
-                    |> String.concat delimiter
+                    |> Seq.map (ITextRenderInfo.getConcatedText (Some wordSep))
+                    |> String.concat sep
                 picker text
             )
             |> List.ofSeq

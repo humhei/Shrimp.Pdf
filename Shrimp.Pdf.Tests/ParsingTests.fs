@@ -83,7 +83,7 @@ let parsingTests =
     testCase "extract concated text" <| fun _ -> 
         let path = Path.getFullName "datas/parsing/extract concated text.pdf"
         let texts = PdfRunner.ReadTextInfos(PdfFile path)
-        match texts.[0].[0].Text() with 
+        match texts.[0].[0].ConcatedText() with 
         | "EXPEDITEUR:" -> pass()
         | _ -> fail()
 
