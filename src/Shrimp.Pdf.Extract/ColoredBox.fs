@@ -164,7 +164,7 @@ module _Template_ColoredBoxes =
             |> List.choose id
 
     type BoxWithText =
-        { Text: PdfConcatedText list
+        { Text: PdfConcatedTexts
           Box: Rectangle }
     with 
         static member Pick(pathBound: Rectangle, textInfos: IntegratedTextRenderInfo list, ?allowEmptyInsideBox: bool) =
@@ -173,7 +173,7 @@ module _Template_ColoredBoxes =
                 |> List.map (fun textInfo ->
                     let bound = IAbstractRenderInfo.getDenseBound (BoundGettingStrokeOptions.WithoutStrokeWidth) textInfo
                     {|
-                        Text = textInfo.PdfConcatedText()
+                        Text = textInfo.PdfConcatedWord()
                         Bound = bound
                         FsBound = bound.FsRectangle()
                         Rotation = ITextRenderInfo.getTextRotation textInfo
@@ -226,12 +226,12 @@ module _Template_ColoredBoxes =
 
                     //failwithf "multiple textInfos %A were found inside pathBound %A" texts (pathBound)
 
-            { Text = textInfos |> List.map (fun m -> m.Text)
+            { Text = textInfos |> List.map (fun m -> m.Text) |> PdfConcatedTexts.Words
               Box = pathBound  }
 
 
     type ColoredBoxWithTexts =
-        { Text: TextTransform
+        { Text: PdfConcatedTexts
           Bound: IndexedBound
           ExtractorIndex: int
           PageNumber: PageNumber
@@ -288,8 +288,8 @@ module _Template_ColoredBoxes =
                     { ColoredBoxWithTexts.Color = color 
                       Text = 
                         textInfos
-                        |> List.map(fun m -> m.PdfConcatedText())
-                        |> TextTransform.Create
+                        |> List.map(fun m -> m.PdfConcatedWord())
+                        |> PdfConcatedTexts.Words
 
                       Bound = bound
                       PageNumber = pageNumber

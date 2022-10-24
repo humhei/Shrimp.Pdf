@@ -66,13 +66,18 @@ module InfosSelector =
 [<AutoOpen>]
 module _InfosSelector =
 
-    type TextInfosPicker<'userState, 'result> = PageModifingArguments<'userState> -> seq<IntegratedTextRenderInfo> -> 'result 
-    type TextInfosPicker<'userState> = TextInfosPicker<'userState, string list>
+    let private (>>>>) fResult mapping = 
+        fun (a: 'a) (b: 'b) -> 
+            let r: 'result = fResult a b 
+            mapping r
 
-    let private pickerToExists predicate (textInfosPicker: (_ -> _ option) -> TextInfosPicker<_>) =
+    type TextInfosPicker<'userState, 'result> = PageModifingArguments<'userState> -> seq<IntegratedTextRenderInfo> -> 'result 
+    type TextInfosPicker<'userState> = TextInfosPicker<'userState, PdfConcatedTexts>
+
+    let private pickerToExists predicate (textInfosPicker: (_ -> _ option) -> TextInfosPicker<_, _>) =
         let picker (text: _) =
             match predicate text with 
-            | true -> Some ""
+            | true -> Some (Unchecked.defaultof<_>)
             | false -> None
 
         fun args infos ->
@@ -85,22 +90,22 @@ module _InfosSelector =
 
     type TextInfos = 
 
-        static member PickText(picker: IntegratedTextRenderInfo -> _ option): TextInfosPicker<_, _> = 
+        static member PickTextInfo(picker: IntegratedTextRenderInfo -> _ option): TextInfosPicker<_, _> = 
             fun (args: PageModifingArguments<_>) infos ->
                 let infos =
                     infos
                     |> Seq.map (fun (m: IntegratedTextRenderInfo) -> m :> IIntegratedRenderInfo)
 
-                PageModifier.PickTexts(picker) args infos
+                PageModifier.PickTextInfo(picker) args infos
 
-        static member PickExactlyOneText(picker: IntegratedTextRenderInfo -> _ option): TextInfosPicker<_, _> = 
+        static member PickTextInfo_ExactlyOne(picker: IntegratedTextRenderInfo -> _ option): TextInfosPicker<_, _> = 
             fun (args: PageModifingArguments<_>) textInfos ->
 
                 let infos =
                     textInfos
                     |> Seq.map (fun (m: IntegratedTextRenderInfo) -> m :> IIntegratedRenderInfo)
 
-                let r = PageModifier.PickTexts(picker) args infos
+                let r = PageModifier.PickTextInfo(picker) args infos
                 match r with 
                 | [r] -> r
                 | [] -> 
@@ -116,36 +121,44 @@ module _InfosSelector =
                     failwithf "Found multiple texts %A in %A by picker %A" rs records picker
 
 
-        static member PickText(picker: string -> string option, ?wordSep): TextInfosPicker<_> = 
+        static member PickWord(picker: PdfConcatedWord -> PdfConcatedWord option): TextInfosPicker<_> = 
             fun (args: PageModifingArguments<_>) infos ->
                 let infos =
                     infos
                     |> Seq.map (fun (m: IntegratedTextRenderInfo) -> m :> IIntegratedRenderInfo)
 
-                PageModifier.PickTexts(picker, ?wordSep = wordSep) args infos
+                let r = 
+                    PageModifier.PickTextInfo(fun renderInfo->
+                        let text = ITextRenderInfo.getPdfConcatedText renderInfo
+                        picker text
+                    ) args infos
+
+                r
+                |> PdfConcatedTexts.Words
 
                 
-        static member PickText_In_OneLine(picker: string -> string option, ?sep: string, ?wordSep, ?selectionGrouper: SelectionGrouper): TextInfosPicker<_> = 
+        static member PickLine(picker: PdfConcatedLine -> PdfConcatedLine option, ?selectionGrouper: SelectionGrouper): TextInfosPicker<_> = 
             fun (args: PageModifingArguments<_>) infos ->
                 let infos =
                     infos
                     |> Seq.map (fun (m: IntegratedTextRenderInfo) -> m :> IIntegratedRenderInfo)
 
-                PageModifier.PickTexts_In_OneLine(picker, ?sep = sep, ?wordSep = wordSep, ?selectionGrouper = selectionGrouper) args infos
+                PageModifier.PickLine(picker, ?selectionGrouper = selectionGrouper) args infos
+                |> PdfConcatedTexts.Lines
 
 
-        static member ExistsText_In_OneLine(predicate: string -> bool, ?sep: string, ?wordSep, ?selectionGrouper: SelectionGrouper) =
+        static member ExistsLine(predicate: PdfConcatedLine -> bool, ?selectionGrouper: SelectionGrouper) =
             fun picker ->
-                TextInfos.PickText_In_OneLine(picker, ?sep = sep, ?wordSep = wordSep, ?selectionGrouper = selectionGrouper) 
+                TextInfos.PickLine(picker, ?selectionGrouper = selectionGrouper) >>>> fun a -> a.AsList
             |> pickerToExists predicate
 
 
-        static member ExistsText(predicate: string -> bool, ?wordSep) =
-            fun (picker: string -> string option) ->
-                TextInfos.PickText(picker, ?wordSep = wordSep) 
+        static member ExistsWord(predicate: PdfConcatedWord -> bool) =
+            fun picker ->
+                TextInfos.PickWord(picker) >>>> fun a -> a.AsList
             |> pickerToExists predicate
 
-        static member ExistsText(predicate: IntegratedTextRenderInfo -> bool) =
-            fun (picker: IntegratedTextRenderInfo -> string option) ->
-                TextInfos.PickText(picker) 
+        static member ExistsTextInfo(predicate: IntegratedTextRenderInfo -> bool) =
+            fun (picker: IntegratedTextRenderInfo -> _) ->
+                TextInfos.PickTextInfo(picker) 
             |> pickerToExists predicate

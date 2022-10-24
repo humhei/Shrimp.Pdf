@@ -17,6 +17,8 @@ open Shrimp.Pdf
 type DataTableParsingFormat =
     { ColNum: int }
 
+
+
 type ColoredText =
     { Text: string 
       Color: PdfCanvasColor }
@@ -119,7 +121,7 @@ type PageModifier =
             |> Colors.distinct
             |> List.ofSeq
 
-    static member PickTexts(picker: IntegratedTextRenderInfo -> _ option) : PageModifier<_, _> =
+    static member PickTextInfo(picker: IntegratedTextRenderInfo -> _ option) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             infos
             |> List.ofSeq
@@ -134,27 +136,29 @@ type PageModifier =
     //        picker info.RecordValue
     //    )
 
-    static member PickTexts(picker: string -> _ option, ?wordSep) : PageModifier<_, _> =
+    static member PickWord(picker: PdfConcatedWord -> _ option) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             infos
             |> List.ofSeq
             |> List.choose IIntegratedRenderInfo.asITextRenderInfo
             |> List.choose (fun renderInfo ->
-                let text = ITextRenderInfo.getConcatedText wordSep renderInfo
+                let text = ITextRenderInfo.getPdfConcatedText renderInfo
                 picker text
             )
 
 
-    static member PickTexts(picker: Parser<_, _>) : PageModifier<_, _> =
-        PageModifier.PickTexts(fun text ->
-            match FParsec.CharParsers.run picker text with 
-            | Success (result, _ ,_ )-> Some result
-            | Failure (msg, _ , _) -> None
+    static member PickText(picker: Parser<_, _>, ?wordSep) : PageModifier<_, _> =
+        PageModifier.PickWord(
+            picker = (
+                fun (text: PdfConcatedWord) ->
+                    match FParsec.CharParsers.run picker (text.ConcatedText(?wordSep = wordSep)) with 
+                    | Success (result, _ ,_ )-> Some result
+                    | Failure (msg, _ , _) -> None
+            )
         )
 
-    static member PickTexts_In_OneLine(picker: string -> _ option, ?sep: string, ?wordSep, ?selectionGrouper: SelectionGrouper) : PageModifier<_, _> =
-        let sep = defaultArg sep ""
-        let wordSep = defaultArg wordSep sep
+
+    static member PickLine(picker: PdfConcatedLine -> _ option, ?selectionGrouper: SelectionGrouper) : PageModifier<_, _> =
         let selectionGrouper = defaultArg selectionGrouper SelectionGrouper.DefaultValue
 
         fun (args: PageModifingArguments<_>) infos ->
@@ -175,9 +179,10 @@ type PageModifier =
             |> Seq.choose(fun (_, infos) ->
                 let text = 
                     infos
-                    |> Seq.map fst
-                    |> Seq.map (ITextRenderInfo.getConcatedText (Some wordSep))
-                    |> String.concat sep
+                    |> List.ofSeq
+                    |> List.map fst
+                    |> List.map (ITextRenderInfo.getPdfConcatedText)
+                    |> PdfConcatedLine
                 picker text
             )
             |> List.ofSeq

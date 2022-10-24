@@ -397,7 +397,7 @@ module Client =
             let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
 
             let nameAndParameters = 
-                { Name = "ConvertColorTo"
+                { NameAndParameters.Name = "ConvertColorTo"
                   Parameters =
                     [
                         "outputIcc" => outputIcc.ToString()
@@ -428,7 +428,7 @@ module Client =
             let options = defaultArg options Modify_ConvertColorsToDeviceGray_Options.DefaultValue
 
             let nameAndParameters = 
-                { Name = "ConvertColorToDeviceGray"
+                { NameAndParameters.Name = "ConvertColorToDeviceGray"
                   Parameters =
                     [
                         "options" => options.ToString()
@@ -460,7 +460,7 @@ module Client =
             let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
             let labIcc = defaultArg labIcc defaultLabIcc.Value
             let nameAndParameters = 
-                { Name = sprintf "Sepecific color %s Or White" specificColor.LoggingText
+                { NameAndParameters.Name = sprintf "Sepecific color %s Or White" specificColor.LoggingText
                   Parameters =
                     [
                         "options" => options.ToString()
@@ -490,7 +490,7 @@ module Client =
             let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
             let labIcc = defaultArg labIcc defaultLabIcc.Value
             let nameAndParameters = 
-                { Name = "BlackOrWhite"
+                { NameAndParameters.Name = "BlackOrWhite"
                   Parameters =
                     [
                         "options" => options.ToString()
@@ -518,7 +518,7 @@ module Client =
             let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
             let labIcc = defaultArg labIcc defaultLabIcc.Value
             let nameAndParameters = 
-                { Name = "BlackOrWhite_Negative_Film"
+                { NameAndParameters.Name = "BlackOrWhite_Negative_Film"
                   Parameters =
                     [
                         "options" => options.ToString()

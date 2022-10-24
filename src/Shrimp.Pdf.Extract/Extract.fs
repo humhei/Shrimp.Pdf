@@ -137,7 +137,7 @@ module _Extract =
         stopWatch.Stop()
         logInfo(fun () ->
             sprintf "extracting page %d, found infos %d in %O" pageNumber infos.Length stopWatch.Elapsed
-        )
+        ) pageNumber
 
 
         stopWatch.Restart()
@@ -396,7 +396,7 @@ module _Extract =
         stopWatch.Stop()
         logInfo(fun () ->
             sprintf "writedAreaInfos in %O" stopWatch.Elapsed
-        )
+        ) pageNumber
 
         splittedInfos
 

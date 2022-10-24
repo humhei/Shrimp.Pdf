@@ -546,7 +546,7 @@ let extractTests =
                                     let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
                                     textInfoBound.IsCenterPointInsideOf(bound.Bound)
                                 )
-                                |> List.map(fun m -> m.PdfConcatedText())
+                                |> List.map(fun m -> m.PdfConcatedWord())
 
                             texts :> System.IComparable
                         )
@@ -646,7 +646,7 @@ let extractTests =
                                     let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
                                     textInfoBound.IsCenterPointInsideOf(bound.Bound)
                                 )
-                                |> List.map(fun m -> m.PdfConcatedText())
+                                |> List.map(fun m -> m.PdfConcatedWord())
 
                             texts :> System.IComparable
                         )
@@ -775,7 +775,7 @@ let extractTests =
                                     let textInfoBound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
                                     textInfoBound.IsCenterPointInsideOf(bound.Bound)
                                 )
-                                |> List.map(fun m -> m.PdfConcatedText())
+                                |> List.map(fun m -> m.PdfConcatedWord())
 
                             texts :> System.IComparable
                         )

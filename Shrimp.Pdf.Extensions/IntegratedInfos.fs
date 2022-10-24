@@ -135,7 +135,7 @@ module IntegratedInfos =
  
 
     type TextInfoRecord =
-        { PdfConcatedText: PdfConcatedText
+        { PdfConcatedWord: PdfConcatedWord
           FontSize: float 
           TextRotation: Rotation
           FillColor: iText.Kernel.Colors.Color 
@@ -145,7 +145,7 @@ module IntegratedInfos =
           DenseBound: FsRectangle
           EndTextState: EndTextState }
     with 
-        member x.Text = x.PdfConcatedText.ConcatedText()
+        member x.Text = x.PdfConcatedWord.ConcatedText()
 
     [<Struct; System.Diagnostics.DebuggerDisplay("IntegratedTextRenderInfo: {RecordValue}")>]
     type IntegratedTextRenderInfo =
@@ -197,11 +197,11 @@ module IntegratedInfos =
             | EndTextState.No
             | EndTextState.Undified -> renderInfo.GetText()
 
-        member integratedInfo.PdfConcatedText() =
+        member integratedInfo.PdfConcatedWord() =
             let renderInfo = integratedInfo.TextRenderInfo
             match integratedInfo.EndTextState with 
             | EndTextState.Yes -> 
-                integratedInfo.ConcatedTextInfo.PdfConcatedText()
+                integratedInfo.ConcatedTextInfo.PdfConcatedWord()
             | EndTextState.No
             | EndTextState.Undified -> 
                 { HeadWord = renderInfo.GetText() 
@@ -216,7 +216,7 @@ module IntegratedInfos =
 
         member integratedInfo.RecordValue =
             let renderInfo = integratedInfo.TextRenderInfo
-            { PdfConcatedText = integratedInfo.PdfConcatedText()
+            { PdfConcatedWord = integratedInfo.PdfConcatedWord()
               FontSize = ITextRenderInfo.getActualFontSize integratedInfo
               FontName = ITextRenderInfo.getFontName integratedInfo
               TextRotation = ITextRenderInfo.getTextRotation integratedInfo
@@ -510,4 +510,4 @@ module _IntegratedInfosExtensions =
             (info :?> IntegratedTextRenderInfo).ConcatedText(?wordSep = wordSep)
 
         let getPdfConcatedText (info: ITextRenderInfo) =
-            (info :?> IntegratedTextRenderInfo).PdfConcatedText()
+            (info :?> IntegratedTextRenderInfo).PdfConcatedWord()

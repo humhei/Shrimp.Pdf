@@ -10,6 +10,7 @@ open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open iText.Kernel.Pdf
 open Shrimp.FSharp.Plus
+open Shrimp.FSharp.Plus.Text
 open Shrimp.FSharp.Plus.Math
 
 
@@ -499,7 +500,23 @@ module ExtensionTypes =
         { Space: float option 
           Text: string }
 
-    type PdfConcatedText =
+    type PdfTextConcater =
+        { WordSep: string 
+          TextPartSep: string }
+    with 
+        static member Create(?sep, ?wordSep) =
+            let sep = defaultArg sep ""
+            let wordSep = defaultArg wordSep sep
+
+            { WordSep = wordSep 
+              TextPartSep = sep }
+
+        static member DefaultValue =  PdfTextConcater.Create()
+
+
+
+
+    type PdfConcatedWord =
         { HeadWord: string
           FollowedWords: FollowedWord list }
     with 
@@ -509,6 +526,12 @@ module ExtensionTypes =
             x.AsList
             |> String.concat (defaultArg wordSep "")
 
+        member x.Contains(text: string, ?ignoreCase) =
+            x.ConcatedText().Contains(text, defaultArg ignoreCase true)
+
+        member x.ContainsAll(text: string list, ?ignoreCase) =
+            x.ConcatedText().ContainsAll(text, defaultArg ignoreCase true)
+
         member x.TotalSpace =
             x.FollowedWords
             |> List.choose(fun m -> m.Space)
@@ -517,12 +540,24 @@ module ExtensionTypes =
         member private x.AsFollowedTexts() =
             { Space = None; Text = x.HeadWord } :: x.FollowedWords
 
-        static member (+) (a: PdfConcatedText, b: PdfConcatedText) =
+        static member (+) (a: PdfConcatedWord, b: PdfConcatedWord) =
             { HeadWord = a.HeadWord 
               FollowedWords = a.FollowedWords @ b.AsFollowedTexts()
             }
 
-        member x.SplitToLines() =
+        static member Concat(words: PdfConcatedWord al1List) = 
+            let head = words.Head
+            let tail = words.Tail
+            {
+                HeadWord = head.HeadWord
+                FollowedWords = 
+                    head.FollowedWords @ (
+                        tail
+                        |> List.collect(fun m -> m.AsFollowedTexts())
+                    )
+            }
+
+        member x.SplitByLine() =
             let words = x.AsFollowedTexts()
             
             let rec loop accum (words: FollowedWord list) =
@@ -555,6 +590,118 @@ module ExtensionTypes =
             { HeadWord = text 
               FollowedWords = defaultArg followedTexts [] }
 
+    type PdfConcatedLine = PdfConcatedLine of PdfConcatedWord list
+    with 
+        member x.Words =
+            let (PdfConcatedLine v) = x
+            v
+
+        member x.ConcatedText(?sep: PdfTextConcater) =
+            let sep = defaultArg sep PdfTextConcater.DefaultValue
+            let (PdfConcatedLine v) = x
+            v
+            |> List.map(fun m -> m.ConcatedText(wordSep = sep.WordSep))
+            |> String.concat sep.TextPartSep
+    
+        member x.Contains(text: string, ?ignoreCase) =
+            x.ConcatedText().Contains(text, defaultArg ignoreCase true)
+
+        member x.ContainsAll(text: string list, ?ignoreCase) =
+            x.ConcatedText().ContainsAll(text, defaultArg ignoreCase true)
+
+    [<RequireQualifiedAccess>]
+    type PdfConcatedTextUnion =
+        | Line of PdfConcatedLine
+        | Word of PdfConcatedWord
+    with 
+        member x.ConcatedText(?sep) =
+            match x with 
+            | Line v -> v.ConcatedText(?sep = sep)
+            | Word v ->
+                let sep = defaultArg sep PdfTextConcater.DefaultValue
+                v.ConcatedText(sep.WordSep)
+
+        member x.Contains(text: string, ?ignoreCase) =
+            x.ConcatedText().Contains(text, defaultArg ignoreCase true)
+
+        member x.ContainsAll(text: string list, ?ignoreCase) =
+            x.ConcatedText().ContainsAll(text, defaultArg ignoreCase true)
+
+    [<RequireQualifiedAccess>]
+    type PdfConcatedTexts = 
+        | Lines of PdfConcatedLine list
+        | Words of PdfConcatedWord list
+    with 
+        member x.AsList= 
+            match x with 
+            | Lines v -> v |> List.map PdfConcatedTextUnion.Line
+            | Words v -> v |> List.map PdfConcatedTextUnion.Word
+
+        member x.IsEmpty =
+            x.AsList
+            |> List.forall(fun m ->
+                m.ConcatedText().Trim() = ""
+            )
+
+        member private x.MapTexts(exprs: TextsTransformExprs) =
+            let mapWords (v: PdfConcatedWord list) =
+                let texts = 
+                    v
+                    |> List.collect(fun m -> m.AsList)
+                    |> exprs.Apply
+                match texts with 
+                | [] -> []
+                | _ ->
+                    let head = texts.Head
+                    let tail = texts.Tail
+                    { HeadWord = head  
+                      FollowedWords = 
+                        tail
+                        |> List.map(fun m ->
+                            { Space = None 
+                              Text = m }
+                        )
+                      }
+                    |> List.singleton
+
+            match x with 
+            | Words v ->
+                mapWords v
+                |> Words
+               
+            | Lines v ->
+                v
+                |> List.map(fun line ->
+                   mapWords line.Words
+                   |> PdfConcatedLine
+                )
+                |> Lines
+                
+
+
+        member x.ConcatedText(?sep, ?exprs) =
+            let x = 
+                match exprs with 
+                | None 
+                | Some (EqualTo TextsTransformExprs.Keep) -> x
+                | Some exprs -> x.MapTexts(exprs)
+
+            match x with 
+            | Lines v ->
+                v
+                |> List.map(fun m -> m.ConcatedText(?sep = sep))
+                |> String.concat "\n"
+          
+            | Words v ->
+                let sep = defaultArg sep PdfTextConcater.DefaultValue
+
+                v
+                |> List.map(fun m -> m.ConcatedText(sep.WordSep))
+                |> String.concat sep.TextPartSep
+
+
+
+
     [<Struct>]
     type FollowedWordInfo =
         { Space: float option 
@@ -572,7 +719,7 @@ module ExtensionTypes =
             |> List.map(fun m -> m.GetText())
             |> String.concat (defaultArg wordSep "")
 
-        member x.PdfConcatedText() =
+        member x.PdfConcatedWord() =
             { HeadWord = x.HeadWordInfo.GetText() 
               FollowedWords = 
                 x.FollowedWordInfos

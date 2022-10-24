@@ -113,7 +113,7 @@ with
 type TextCloseOperator =
     { Fill: CloseOperator
       Stroke: CloseOperator
-      Text: PdfConcatedText option }
+      Text: PdfConcatedWord option }
 with 
     static member Keep =
         { Fill = CloseOperator.Keep 

@@ -909,7 +909,7 @@ type Modifier =
                 let difference() =
                     let originWidth = ITextRenderInfo.getWidth info
                     let newWidth =
-                        text.SplitToLines()
+                        text.SplitByLine()
                         |> List.map(fun text ->
                             let widthUnits = 
                                 let text = text.ConcatedText()
@@ -1592,7 +1592,7 @@ module ModifyOperators =
             modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
 type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?info_BoundIs_Args, ?textPattern, ?wordSep) =
-    inherit POCOBaseEquatable<string option * float option * FsColor option * Info_BoundIs_Args option * TextMatchingPattern option * string option>(fontName, fontSize, fillColor, info_BoundIs_Args, textPattern, wordSep)
+    inherit POCOBaseEquatable<string option * float option * FsColor option * Info_BoundIs_Args option * TextSelector option * string option>(fontName, fontSize, fillColor, info_BoundIs_Args, textPattern, wordSep)
 
     [<JsonProperty>]
     member x.FontName = fontName
@@ -1867,7 +1867,7 @@ type Modify =
             
         let options = defaultArg options Modify_ReplaceColors_Options.DefaultValue
         let nameAndParameters =
-            { Name = "ReplaceColors"
+            { NameAndParameters.Name = "ReplaceColors"
               Parameters = 
                 ["originColors" => originColors.ToString() 
                  "targetColor" => targetColor.ToString() 
@@ -2090,7 +2090,7 @@ type Modify =
                                 match textInfos with 
                                 | []
                                 | [ _ ] -> CloseOperatorUnion.Keep(args.CurrentRenderInfo.Tag)
-                                | _ -> CloseOperatorUnion.CreateText(text = (lastTextInfo.GetText() |> PdfConcatedText.Create) )
+                                | _ -> CloseOperatorUnion.CreateText(text = (lastTextInfo.GetText() |> PdfConcatedWord.Create) )
                             }
                         )
                   ]
