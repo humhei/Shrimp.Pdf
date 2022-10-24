@@ -316,7 +316,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/remove R255B255.pdf" 
         |> ignore
 
-    testCase "remove specfic separation colors" <| fun _ -> 
+    ftestCase "remove specfic separation colors" <| fun _ -> 
 
         let colors = 
             [
@@ -341,6 +341,32 @@ let manipulateTests =
             ) 
         )
         |> runTest "datas/manipulate/remove specfic separation colors.pdf" 
+        |> ignore
+
+    testCase "remove specfic separation colors2" <| fun _ -> 
+
+        let colors = 
+            [
+                //{ Name = "CuttingLine_BLUE" 
+                //  BaseColor = FsValueColor.RGB_BLUE
+                //  Transparency = 1. }
+                FsSeparation.Create("PageNumber", DeviceRgb(200, 0, 56))
+            ]
+            |> List.map PdfCanvasColor.Separation
+
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "remove specfic separation colors"
+                      Selector = 
+                        PathOrText(Info.ColorIsOneOf (FillOrStrokeOptions.FillOrStroke, colors))
+                      Modifiers = [Modifier.CancelFillAndStroke()]
+                    }
+                ]
+            ) 
+        )
+        |> runTest "datas/manipulate/remove specfic separation colors2.pdf" 
         |> ignore
 
     testCase "open fill color" <| fun _ -> 
@@ -1495,7 +1521,7 @@ let manipulateTests =
             Manipulate.Factory(fun flowModel doc ->
                 doc.Value.CacheDocumentFonts()
                 Modify.MapFontAndSize(
-                    FontAndSizeQuery(textPattern = Text.TextMatchingPattern.EqualTo (StringIC "30")) =>
+                    FontAndSizeQuery(textPattern = TextSelector.EqualTo ("30")) =>
                     NewFontAndSize(FsPdfFontFactory.CreateDocumentFont(FontNames.``Tahoma-Bold``), fontSize = 12., alignment = XEffort.Middle)
                 )
             )

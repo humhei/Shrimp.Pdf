@@ -1023,6 +1023,7 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
             processor.Listener.AddPathOperatorRange({ Operator = operator; Operands = ResizeArray(operands)})
         | _ -> ()
 
+        
         invokeOperatorRange()
 
     interface IContentOperator with 

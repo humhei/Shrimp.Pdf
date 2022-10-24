@@ -785,6 +785,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
             resourcesStack.Push(resources)
 
             base.ProcessContent(bytes, resources)
+            let pdfCanvas = pdfCanvasStack.Pop()
             resourcesStack.Pop()|> ignore
             //let stream = stream.Clone() :?> PdfStream
             stream.SetData(pdfCanvas.GetContentStream().GetBytes()) |> ignore

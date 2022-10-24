@@ -505,8 +505,12 @@ module ExtensionTypes =
           TextPartSep: string }
     with 
         static member Create(?sep, ?wordSep) =
-            let sep = defaultArg sep ""
-            let wordSep = defaultArg wordSep sep
+            let sep, wordSep = 
+                match sep, wordSep with 
+                | Some sep, Some wordSep -> sep, wordSep
+                | Some sep, None -> sep, sep
+                | None, Some wordSep -> wordSep, wordSep
+                | None, None -> "", ""
 
             { WordSep = wordSep 
               TextPartSep = sep }
@@ -514,7 +518,7 @@ module ExtensionTypes =
         static member DefaultValue =  PdfTextConcater.Create()
 
 
-
+        
 
     type PdfConcatedWord =
         { HeadWord: string
@@ -526,11 +530,11 @@ module ExtensionTypes =
             x.AsList
             |> String.concat (defaultArg wordSep "")
 
-        member x.Contains(text: string, ?ignoreCase) =
-            x.ConcatedText().Contains(text, defaultArg ignoreCase true)
+        member x.Contains(text: string, ?ignoreCase, ?wordSep) =
+            x.ConcatedText(?wordSep = wordSep).Contains(text, defaultArg ignoreCase true)
 
-        member x.ContainsAll(text: string list, ?ignoreCase) =
-            x.ConcatedText().ContainsAll(text, defaultArg ignoreCase true)
+        member x.ContainsAll(text: string list, ?ignoreCase, ?wordSep) =
+            x.ConcatedText(?wordSep = wordSep).ContainsAll(text, defaultArg ignoreCase true)
 
         member x.TotalSpace =
             x.FollowedWords
@@ -603,11 +607,11 @@ module ExtensionTypes =
             |> List.map(fun m -> m.ConcatedText(wordSep = sep.WordSep))
             |> String.concat sep.TextPartSep
     
-        member x.Contains(text: string, ?ignoreCase) =
-            x.ConcatedText().Contains(text, defaultArg ignoreCase true)
+        member x.Contains(text: string, ?ignoreCase, ?sep) =
+            x.ConcatedText(?sep = sep).Contains(text, defaultArg ignoreCase true)
 
-        member x.ContainsAll(text: string list, ?ignoreCase) =
-            x.ConcatedText().ContainsAll(text, defaultArg ignoreCase true)
+        member x.ContainsAll(text: string list, ?ignoreCase, ?sep) =
+            x.ConcatedText(?sep = sep).ContainsAll(text, defaultArg ignoreCase true)
 
     [<RequireQualifiedAccess>]
     type PdfConcatedTextUnion =
@@ -621,11 +625,11 @@ module ExtensionTypes =
                 let sep = defaultArg sep PdfTextConcater.DefaultValue
                 v.ConcatedText(sep.WordSep)
 
-        member x.Contains(text: string, ?ignoreCase) =
-            x.ConcatedText().Contains(text, defaultArg ignoreCase true)
+        member x.Contains(text: string, ?ignoreCase, ?sep) =
+            x.ConcatedText(?sep = sep).Contains(text, defaultArg ignoreCase true)
 
-        member x.ContainsAll(text: string list, ?ignoreCase) =
-            x.ConcatedText().ContainsAll(text, defaultArg ignoreCase true)
+        member x.ContainsAll(text: string list, ?ignoreCase, ?sep) =
+            x.ConcatedText(?sep = sep).ContainsAll(text, defaultArg ignoreCase true)
 
     [<RequireQualifiedAccess>]
     type PdfConcatedTexts = 

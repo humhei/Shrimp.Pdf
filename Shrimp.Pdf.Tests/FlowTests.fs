@@ -25,7 +25,7 @@ let flowTests =
         Flows.FilterPages(
             PageFilter(
                 InfosSelector.Text
-                    (TextInfos.PredicateLine(fun text -> text.ConcatedText() = "36->41"))
+                    (TextInfos.ExistsLine(fun text -> text.ConcatedText() = "36->41"))
             )
         )
         |> runTest "datas/flows/filterPages_infos.pdf" 
@@ -35,7 +35,7 @@ let flowTests =
         Flows.FilterPages(
             PageFilter(
                 InfosSelector.Text(fun args infos ->
-                    (TextInfos.PredicateLine(fun text -> text.ConcatedText().Contains "EXPE")) args infos
+                    (TextInfos.ExistsLine(fun text -> text.Contains "EXPE")) args infos
                 )
             )
         )
