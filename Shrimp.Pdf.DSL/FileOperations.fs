@@ -87,8 +87,15 @@ module FileOperations =
     let mergeDocuments (f) =
         let args = f DocumentMergingArguments.DefalutValue
 
-        fun (flowModels: _ list) ->
-            if flowModels.Length < 2 then failwithf "Cannot mergeDocuments when input page count %A < 2" flowModels.Length
+        fun (flowModels: FlowModel<_> list) ->
+            if flowModels.Length < 2 
+            then 
+                let files = 
+                    flowModels
+                    |> List.map(fun m -> m.File)
+
+                failwithf "Cannot mergeDocuments when input document %A count %A < 2" files flowModels.Length
+
             let config = flowModels.Head.Configuration
             Directory.ensure (Path.getDirectory args.TargetDocumentPath)
             if File.exists args.TargetDocumentPath && not args.Override then failwithf "target file %s already exists" args.TargetDocumentPath
@@ -104,6 +111,20 @@ module FileOperations =
 
         |> FileOperation
 
+    /// flowModels.Length < 2  -> Keep
+    ///
+    /// flowModels.Length >= 2 -> Merge
+    let mergeDocuments_or_keep (f) =
+
+        fun (flowModels: FlowModel<_> list) ->
+            if flowModels.Length < 2 
+            then 
+                flowModels
+                |> List.map(fun flowModel -> flowModel.MapUserState List.singleton)
+            else
+                (mergeDocuments f).Value flowModels
+
+        |> FileOperation
 
 
     let splitDocumentBySequences(fSequenceTargets: TotalNumberOfPages -> DocumentSplitSequenceTarget list, isOverride) =
@@ -297,6 +318,7 @@ type PdfRunner =
         |> List.exactlyOne
         |> fun m -> m.PdfFile
 
+    /// Will copy to target if inputs'length is 1
     static member MergeDocuments (inputs: PdfFile al1List, ?fArgs, ?config) =
         match inputs with 
         | AtLeastOneList.Many inputs -> PdfRunner.MergeDocuments(inputs, ?fArgs = fArgs, ?config = config)

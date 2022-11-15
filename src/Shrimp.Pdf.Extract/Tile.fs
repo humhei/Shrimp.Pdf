@@ -763,14 +763,13 @@ module _Tile =
                                     |> Rectangle.removeInboxes
 
                                 sorter.SortToLists (rects)
-                                |> List.map(
-                                    List.mapi (fun i bound ->
+
+                            let bounds = 
+                                List.concat boundLists
+                                |> List.mapi (fun i bound ->
                                         { Index = i
                                           Bound = bound }
                                     )
-                                )
-
-                            let bounds = List.concat boundLists
 
                             let boundGroups =
                                 match distincter with 

@@ -55,6 +55,11 @@ let manipulateTests =
         let path = "datas/manipulate/read shading colors2.pdf" 
         let colors = PdfRunner.ReadColors(PdfFile path)
         ()
+
+    testCase "read shading colors3" <| fun _ ->  
+        let path = "datas/manipulate/read shading colors3.pdf" 
+        let colors = PdfRunner.ReadColors(PdfFile path)
+        ()
         
     ptestCase "read complex infos" <| fun _ ->  
         let path = "datas/manipulate/read complex infos.pdf" 
@@ -316,7 +321,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/remove R255B255.pdf" 
         |> ignore
 
-    ftestCase "remove specfic separation colors" <| fun _ -> 
+    testCase "remove specfic separation colors" <| fun _ -> 
 
         let colors = 
             [

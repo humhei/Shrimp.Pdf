@@ -532,7 +532,7 @@ let extractTests =
             |> runTest "datas/extract/tile pages by selector.pdf" 
             |> ignore
 
-        testCase "tile pages by selector tests2" <| fun _ -> 
+        ftestCase "tile pages by selector tests2" <| fun _ -> 
             Flows.TilePages
                 (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
                 distincterOrTextPicker = 
@@ -560,7 +560,7 @@ let extractTests =
                     (SamplePageExtractingOptions.FirstPageFirstSelector (PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
             )
 
-            |> runTest "datas/extract/tile pages by selector2.pdf" 
+            |> runTest @"datas/extract/tile pages by selector2.pdf"
             |> ignore
 
         testCase "tile pages by selector tests3" <| fun _ -> 

@@ -162,6 +162,9 @@ module FsSize =
 
     let A4 = { Width = mm 210.; Height = mm 297. }
 
+    /// { Width = mm 148; Height = mm 210. }
+    let A5_INT = { Width = mm 148; Height = mm 210. }
+
 
     let MAXIMUN = 
         { Width = mm Shrimp.Pdf.Constants.MAXIMUM_MM_WIDTH

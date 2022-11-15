@@ -264,10 +264,11 @@ let imageTests =
             //    PdfRunner.ReadTextInfos_Record(PdfFile @"datas/image/convert all objects to gray8.pdf" )
             let flow = 
                 ModifyIM.ConvertAllObjectsToDeviceGray(
-                    Selector.All(fun _ _ -> true)
-                        //InfoIM.BoundIs(
-                        //    RelativePosition.Inbox,
-                        //    AreaGettingOptions.PageBox(PageBoxKind.ActualBox)))
+                    //Selector.All(fun _ _ -> true)
+                    Selector.All(
+                        InfoIM.BoundIs(
+                            RelativePosition.Inbox,
+                            AreaGettingOptions.PageBox(PageBoxKind.ActualBox)))
                     )
 
             Flow.Manipulate(

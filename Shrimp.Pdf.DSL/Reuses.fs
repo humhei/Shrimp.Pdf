@@ -1223,7 +1223,10 @@ module _Reuses =
 
         
 
-        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground, ?pageSelector) =
+        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground, ?xEffect, ?yEffect, ?pageSelector) =
+            let xEffect = defaultArg xEffect XEffort.Middle
+            let yEffect = defaultArg yEffect YEffort.Middle
+
             let pageSelector = defaultArg pageSelector PageSelector.All
             (fun flowModel (doc: SplitDocument) ->
 
@@ -1258,8 +1261,24 @@ module _Reuses =
                         let writerPage = doc.Writer.AddNewPage(pageSize)
                         writerPage.SetPageBoxToPage(readerPage) |> ignore
                         let pdfCanvas = new PdfCanvas(writerPage)
-                        let bk_x = readerPageBox.GetX() - backgroundPageBox.GetX() 
-                        let bk_y = readerPageBox.GetY() - backgroundPageBox.GetY() 
+                        let bk_x = 
+                            let baseX =  readerPageBox.GetX() - backgroundPageBox.GetX() 
+                            let lengthDiff = readerPageBox.GetWidth() - backgroundPageBox.GetWidth()
+                            match xEffect with 
+                            | XEffort.Left -> baseX
+                            | XEffort.Middle ->
+                                baseX + lengthDiff / 2.f
+                            | XEffort.Right -> baseX + lengthDiff
+
+                        let bk_y = 
+                            let baseY = readerPageBox.GetY() - backgroundPageBox.GetY() 
+                            let lengthDiff = readerPageBox.GetHeight() - backgroundPageBox.GetHeight()
+                            match yEffect with 
+                            | YEffort.Bottom -> baseY
+                            | YEffort.Middle ->
+                                baseY + lengthDiff / 2.f
+                            | YEffort.Top -> baseY + lengthDiff
+
 
                         match choice with 
                         | BackgroundOrForeground.Background ->
@@ -1291,6 +1310,8 @@ module _Reuses =
                     "pageSelector" => pageSelector.ToString()
                     "backgroundFile" => backgroundFile.ToString()
                     "layer" => choice.ToString()
+                    "xEffect" => xEffect.ToString()
+                    "yEffect" => yEffect.ToString()
                 ]
 
         static member private AddBackgroundOrForeground(backgroundOrForeground: BackgroundOrForeground, pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?pageSelector) =
@@ -1355,15 +1376,15 @@ module _Reuses =
         static member AddBackground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?pageSelector) =
             Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Background, pageBoxKind, rectOptions, ?margin = margin, ?pageSelector = pageSelector)
 
-        static member AddForeground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?pageSelector) =
+        static member AddForeground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?xEffect, ?yEffect, ?pageSelector) =
             Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Foreground, pageBoxKind, rectOptions, ?margin = margin, ?pageSelector = pageSelector)
 
 
-        static member AddBackground (backgroundFile: PdfFile, ?pageSelector) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background, ?pageSelector = pageSelector)
+        static member AddBackground (backgroundFile: PdfFile, ?xEffect, ?yEffect, ?pageSelector) =
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background, ?xEffect = xEffect, ?yEffect = yEffect, ?pageSelector = pageSelector)
 
-        static member AddForeground (foregroundFile: PdfFile, ?pageSelector) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create foregroundFile, BackgroundOrForeground.Foreground, ?pageSelector = pageSelector)
+        static member AddForeground (foregroundFile: PdfFile, ?xEffect, ?yEffect, ?pageSelector) =
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create foregroundFile, BackgroundOrForeground.Foreground, ?xEffect = xEffect, ?yEffect = yEffect, ?pageSelector = pageSelector)
 
 
 
@@ -1397,6 +1418,10 @@ module _Reuses =
                 | [ sheet ] -> RegularImposingSheet<_>.Create sheet
                 | sheets -> failwithf "PreImpose_Repeated_One should generate one imposing sheet, but here is %d" sheets.Length
 
+
+        static member SelectPages(pdfFile, pageSelector, ?backupPdfPath) =
+            Reuses.SelectPages(pageSelector)
+            |> PdfRunner.Reuse(pdfFile, ?backupPdfPath = backupPdfPath)
 
         /// default useBleed: false
         static member OneColumn(?backupPdfPath, ?margin, ?useBleed, ?spaces, ?isForce) =

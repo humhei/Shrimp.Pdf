@@ -501,6 +501,22 @@ module ModifyPageOperators =
                 fInfos args infos
             )
 
+        static member ReadTotalPageNumber(pdfFile: PdfFile, ?inShadowMode) =
+            let pdfFile = 
+                match defaultArg inShadowMode true with 
+                | true ->
+                    let ext = Path.GetFileName pdfFile.Path
+                    let tmpPath = System.IO.Path.GetTempFileName() |> Path.changeExtension ext
+                    System.IO.File.Copy(pdfFile.Path, tmpPath, true)
+                    PdfFile tmpPath
+
+                | false -> pdfFile
+
+
+            use document = new ReaderDocument(pdfFile.Path)
+            let document = document.Reader
+            document.GetNumberOfPages()
+
         static member ReadInfos(pdfFile: PdfFile, selector, fInfos, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadInfosCommon(
                 NonInitialClippingPathPdfDocumentContentParser.parse,
