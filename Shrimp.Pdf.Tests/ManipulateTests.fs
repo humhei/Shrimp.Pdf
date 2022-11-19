@@ -198,6 +198,17 @@ let manipulateTests =
         |> runTest "datas/manipulate/make clipping path from blue strokes.pdf" 
         |> ignore
 
+    testCase "make clipping path from blue strokes by minimum area" <| fun _ ->    
+
+        Flow.Manipulate (
+            Modify.CreateClippingPath(
+                Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation),
+                condition = ClippingCondition.ClipIfPathCountSmallerOrEqualThan 2
+            )
+        )
+        |> runTest "datas/manipulate/make clipping path from blue strokes by minimum area.pdf" 
+        |> ignore
+
     testCase "make clipping path from blue strokes and keep" <| fun _ -> 
         Flow.Manipulate (
             Modify.CreateClippingPath(Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation), keepCompoundPath = true)

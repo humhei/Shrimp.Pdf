@@ -532,7 +532,7 @@ let extractTests =
             |> runTest "datas/extract/tile pages by selector.pdf" 
             |> ignore
 
-        ftestCase "tile pages by selector tests2" <| fun _ -> 
+        testCase "tile pages by selector tests2" <| fun _ -> 
             Flows.TilePages
                 (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
                 distincterOrTextPicker = 

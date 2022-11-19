@@ -9,6 +9,9 @@
     <None Include="datas\**\*.pdf">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+      <None Include="datas\image\*.jpg">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
     <EmbeddedResource Remove="datas\compose\**" />
     <None Remove="datas\compose\**" />    
     <Compile Include="FunctionTests.fs" />

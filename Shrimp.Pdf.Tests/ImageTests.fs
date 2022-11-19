@@ -32,6 +32,22 @@ let imageTests =
 
             ()
 
+        ftestCase "convert jpg to pdf" <| fun _ -> 
+            let jpgFile =
+                @"datas/image/convert jpg to pdf.jpg" 
+                |> JpgFile
+
+            let targetPath =
+                jpgFile.Path
+                |> Path.changeExtension ".pdf"
+                |> PdfPath
+
+            let pdfFile = 
+                ImageConverter.ConvertImageToPdf(jpgFile.Path, targetPath, mm 50., PageOrientation.Landscape)
+
+            pass()
+            failwith ""
+
         testCase "change blending mode" <| fun _ -> 
             let flow = ModifyIM.ChangeImageBlendMode(BlendMode.Multiply)
 
