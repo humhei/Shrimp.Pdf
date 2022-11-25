@@ -1189,7 +1189,7 @@ module ExtensionTypes =
 
         let getRadians rotation = 
             let angle = getAngle rotation
-            (System.Math.PI / 180.) * angle
+            (System.Math.PI / 180.) * -angle
             
 
 

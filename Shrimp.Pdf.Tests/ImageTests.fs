@@ -32,7 +32,7 @@ let imageTests =
 
             ()
 
-        ftestCase "convert jpg to pdf" <| fun _ -> 
+        testCase "convert jpg to pdf" <| fun _ -> 
             let jpgFile =
                 @"datas/image/convert jpg to pdf.jpg" 
                 |> JpgFile
@@ -43,7 +43,7 @@ let imageTests =
                 |> PdfPath
 
             let pdfFile = 
-                ImageConverter.ConvertImageToPdf(jpgFile.Path, targetPath, mm 50., PageOrientation.Landscape)
+                ImageConverter.ConvertImageToPdf(jpgFile.Path, targetPath, ResizingTargetLength.Length (mm 50.), PageOrientation.Landscape)
 
             pass()
             failwith ""

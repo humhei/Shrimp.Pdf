@@ -1090,7 +1090,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/add text to position.pdf" 
         |> ignore
 
-    testCase "add text to position with font rotation" <| fun _ -> 
+    ftestCase "add text to position with font rotation" <| fun _ -> 
         let x = 
             List.replicate 55 "5"
             |> String.concat ""
@@ -1113,8 +1113,8 @@ let manipulateTests =
                           | FsSize.Landscape ->
                               { textAddingArgs with 
                                   PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
-                                  FontRotation = Rotation.Clockwise
-                                  Position = Position.RightMiddle(mm 0., mm 0.)}
+                                  FontRotation = Rotation.Counterclockwise
+                                  Position = Position.LeftTop(mm 0., mm -20.)}
 
                           | FsSize.Portrait ->
                             { textAddingArgs with 

@@ -126,15 +126,15 @@ module PdfDocumentWithCachedResources =
                 | Rotation.Counterclockwise ->
                     match args.Position with 
                     | Position.YCenter (x, y) ->  TextAlignment.CENTER
-                    | Position.Top (x, y) ->      TextAlignment.LEFT
-                    | Position.Bottom (x, y) ->   TextAlignment.RIGHT
+                    | Position.Top (x, y) ->      TextAlignment.RIGHT
+                    | Position.Bottom (x, y) ->   TextAlignment.LEFT
 
 
                 | Rotation.Clockwise ->
                     match args.Position with 
                     | Position.YCenter (x, y) ->  TextAlignment.CENTER
-                    | Position.Top (x, y) ->      TextAlignment.RIGHT
-                    | Position.Bottom (x, y) ->   TextAlignment.LEFT
+                    | Position.Top (x, y) ->      TextAlignment.LEFT
+                    | Position.Bottom (x, y) ->   TextAlignment.RIGHT
 
         member args.GetCalculatedVerticalTextAlignment() =
             match args.VerticalTextAlignment with 
@@ -156,15 +156,15 @@ module PdfDocumentWithCachedResources =
                 | Rotation.Counterclockwise ->
                     match args.Position with 
                     | Position.XCenter (x, y) -> VerticalAlignment.MIDDLE
-                    | Position.Left (x, y) ->    VerticalAlignment.BOTTOM
-                    | Position.Right (x, y) ->   VerticalAlignment.TOP
+                    | Position.Left (x, y) ->    VerticalAlignment.TOP
+                    | Position.Right (x, y) ->   VerticalAlignment.BOTTOM
 
                     
                 | Rotation.Clockwise ->
                     match args.Position with 
                     | Position.XCenter (x, y) -> VerticalAlignment.MIDDLE
-                    | Position.Left (x, y) ->    VerticalAlignment.TOP
-                    | Position.Right (x, y) ->   VerticalAlignment.BOTTOM
+                    | Position.Left (x, y) ->    VerticalAlignment.BOTTOM
+                    | Position.Right (x, y) ->   VerticalAlignment.TOP
 
 
     type PdfCanvas with 
