@@ -273,7 +273,7 @@ module _SampledPdfFile =
                     let path =
                         match entityOptions with 
                         | NewEntityPdfFileOptions.FileName fileName ->
-                            let dir = Path.GetTempFileName()
+                            let dir = Path.GetTempFileNameEx()
                             Directory.ensure dir
                             dir </> fileName
                             |> PdfPath 
@@ -292,14 +292,14 @@ module _SampledPdfFile =
                 let targetPdfPath (entityOrSample: EntityOrSample) = 
                     match newEntityPdfFileOptions with 
                     | None -> 
-                        Path.GetTempFileName() |> Path.changeExtension ".pdf"
+                        Path.GetTempFileNameEx() |> Path.changeExtension ".pdf"
                         |> PdfPath
 
                     | Some entityOptions ->
                         match entityOptions with 
                         | NewEntityPdfFileOptions.FullPath pdfPath -> pdfPath
                         | NewEntityPdfFileOptions.FileName fileName ->
-                            let dir = Path.GetTempFileName()
+                            let dir = Path.GetTempFileNameEx()
                             Directory.ensure dir
                             dir </> fileName
                             |> PdfPath

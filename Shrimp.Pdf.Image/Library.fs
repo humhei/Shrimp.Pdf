@@ -127,7 +127,7 @@ module _ModifierIM =
 
                     | None -> indexTable
 
-                let rawFile = System.IO.Path.ChangeExtension(Path.GetTempFileName(), ".raw")
+                let rawFile = System.IO.Path.ChangeExtension(Path.GetTempFileNameEx(), ".raw")
                 File.WriteAllBytes(rawFile, bytes)
                 (size, RawFile rawFile)
                 |> IndexableBitmapColorValuesStorage.Indexed
@@ -208,7 +208,7 @@ module _ModifierIM =
                                         match inputIcc.ColorSpace, imageRenderInfo.ImageData.GetOriginalType() with 
                                         | ColorSpace.Cmyk, ImageType.JPEG ->
                                             let rawFile =
-                                                let rawPath = Path.GetTempFileName() |> Path.changeExtension ".raw"
+                                                let rawPath = Path.GetTempFileNameEx() |> Path.changeExtension ".raw"
                                                 let bytes = imageRenderInfo.ImageData.GetData()
                                                 File.writeBytes (rawPath) bytes
                                                 RawFile rawPath

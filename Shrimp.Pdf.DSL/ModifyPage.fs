@@ -472,7 +472,7 @@ module ModifyPageOperators =
                 match defaultArg inShadowMode true with 
                 | true ->
                     let ext = Path.GetFileName pdfFile.Path
-                    let tmpPath = System.IO.Path.GetTempFileName() |> Path.changeExtension ext
+                    let tmpPath = System.IO.Path.GetTempFileNameEx() |> Path.changeExtension ext
                     System.IO.File.Copy(pdfFile.Path, tmpPath, true)
                     PdfFile tmpPath
 
@@ -506,7 +506,7 @@ module ModifyPageOperators =
                 match defaultArg inShadowMode true with 
                 | true ->
                     let ext = Path.GetFileName pdfFile.Path
-                    let tmpPath = System.IO.Path.GetTempFileName() |> Path.changeExtension ext
+                    let tmpPath = System.IO.Path.GetTempFileNameEx() |> Path.changeExtension ext
                     System.IO.File.Copy(pdfFile.Path, tmpPath, true)
                     PdfFile tmpPath
 

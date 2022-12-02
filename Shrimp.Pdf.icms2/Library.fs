@@ -105,7 +105,7 @@ module Core =
 
 
         member x.ToStorage() =
-            let rawFile = System.IO.Path.ChangeExtension(Path.GetTempFileName(), ".raw")
+            let rawFile = System.IO.Path.ChangeExtension(Path.GetTempFileNameEx(), ".raw")
             File.WriteAllBytes(rawFile, x.Values)
             { File = RawFile rawFile 
               Stride = x.Stride

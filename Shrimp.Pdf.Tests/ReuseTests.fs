@@ -108,9 +108,9 @@ let reuseTests =
         |> ignore
 
     ftestCase "preimpose" <| fun _ -> 
-        //let p = 
-        //    [1..10]
-        //    |> List.map(fun _ -> System.IO.Path.GetTempFileName())
+        let p = 
+            [1..100]
+            |> List.map(fun _ -> System.IO.Path.GetTempFileNameEx())
         let r = 
             [
                 1..10

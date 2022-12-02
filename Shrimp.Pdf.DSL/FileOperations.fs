@@ -34,11 +34,11 @@ type DocumentMergingArguments =
     { TargetDocumentPath: string 
       Override: bool }
 with 
-    ///TargetDocumentPath = Path.GetTempFileName() |> Path.changeExtension ".pdf"
+    ///TargetDocumentPath = Path.GetTempFileNameEx() |> Path.changeExtension ".pdf"
     ///
     ///Override = false 
     static member DefalutValue =
-        { TargetDocumentPath = Path.GetTempFileName() |> Path.changeExtension ".pdf"
+        { TargetDocumentPath = Path.GetTempFileNameEx() |> Path.changeExtension ".pdf"
           Override = false }
 
 type DocumentSplitSequenceTarget =

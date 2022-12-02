@@ -1402,8 +1402,8 @@ module _Reuses =
 
             let splitDocument = 
                 let tmpPath = 
-                    emptyPdf.Value
-                    |> Path.changeExtension ".preimpose.pdf"
+                    Path.GetTempFileNameEx()
+                    |> Path.changeExtension ".pdf"
                 SplitDocument.Create(emptyPdf.Value, tmpPath)
 
             splitDocument.Open()
