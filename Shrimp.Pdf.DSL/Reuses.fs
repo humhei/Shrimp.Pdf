@@ -1394,29 +1394,27 @@ module _Reuses =
                 PdfRunner.OneFileFlow(pdfFile, ?backupPdfPath = backupPdfPath) (Flow.Reuse reuse)
 
         static member PreImpose_Repeated_One(baseFArgs: _ImposingArguments) =
-            let preImposeFlow =
-                Reuses.Impose_Raw
-                    ((fun _ ->
-                        let args = (baseFArgs)
+            let args = 
+                ImposingArguments.Create(fun _ ->
+                    { baseFArgs with
+                          IsRepeated = true }
+                )
 
-                        { args with
-                              IsRepeated = true }
-                    ),
-                    offsetLists = None,
-                    draw = false )
-                |> Flow.Reuse
+            let splitDocument = 
+                let tmpPath = 
+                    emptyPdf.Value
+                    |> Path.changeExtension ".preimpose.pdf"
+                SplitDocument.Create(emptyPdf.Value, tmpPath)
 
+            splitDocument.Open()
+            let imposingDocument = new ImposingDocument(splitDocument, args)
+            imposingDocument.Build()
+            splitDocument.Reader.Close()
+            splitDocument.Writer.Close()
 
-            runWithBackup
-                (Path.GetTempFileName()
-                 |> Path.changeExtension ".pdf")
-                emptyPdf.Value
-                preImposeFlow
-            |> List.exactlyOne
-            |> fun flowModel -> 
-                match flowModel.UserState.GetSheets() with 
-                | [ sheet ] -> RegularImposingSheet<_>.Create sheet
-                | sheets -> failwithf "PreImpose_Repeated_One should generate one imposing sheet, but here is %d" sheets.Length
+            match imposingDocument.GetSheets() with 
+            | [ sheet ] -> RegularImposingSheet<_>.Create sheet
+            | sheets -> failwithf "PreImpose_Repeated_One should generate one imposing sheet, but here is %d" sheets.Length
 
 
         static member SelectPages(pdfFile, pageSelector, ?backupPdfPath) =

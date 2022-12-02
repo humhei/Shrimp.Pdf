@@ -107,21 +107,30 @@ let reuseTests =
         |> runTest "datas/reuse/impose for heavy data.pdf" 
         |> ignore
 
-    testCase "preimpose" <| fun _ -> 
+    ftestCase "preimpose" <| fun _ -> 
+        //let p = 
+        //    [1..10]
+        //    |> List.map(fun _ -> System.IO.Path.GetTempFileName())
         let r = 
-            PdfRunner.PreImpose_Repeated_One
-                {_ImposingArguments.DefaultValue 
-                    with ColNums = [0]
-                         RowNum = 0
-                         Background = Background.Size (FsSize.A4)
-                         Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(6.))
+            [
+                1..10
+            ]
+            |> List.map(fun _ ->
+                PdfRunner.PreImpose_Repeated_One
+                    {_ImposingArguments.DefaultValue 
+                        with ColNums = [0]
+                             RowNum = 0
+                             Background = Background.Size (FsSize.A4)
+                             Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(6.))
 
-                         DesiredSizeOp  = 
-                            (FsSize.landscape {Width = mm 210.; Height = mm 297.})
-                            |> Some
-                    }
+                             DesiredSizeOp  = 
+                                (FsSize.landscape {Width = mm 210.; Height = mm 297.})
+                                |> Some
+                        }
+            )
 
-        let k = r.ImposingSheet.GetTableBound(FsPoint.Zero)
+
+        let k = r.[0].ImposingSheet.GetTableBound(FsPoint.Zero)
         ()
 
 
