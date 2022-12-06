@@ -1090,7 +1090,25 @@ let manipulateTests =
         |> runTest "datas/manipulate/add text to position.pdf" 
         |> ignore
 
-    ftestCase "add text to position with font rotation" <| fun _ -> 
+
+    testCase "read texts2" <| fun _ ->
+
+        let pdfFile = PdfFile @"datas/manipulate/read texts2.pdf"
+
+        let infos = PdfRunner.ReadTextInfos_Record(pdfFile)
+
+        ()
+
+    ftestCase "read texts" <| fun _ ->
+
+        let pdfFile = PdfFile @"datas/manipulate/read texts.pdf"
+
+        let infos = PdfRunner.ReadTextInfos_Record(pdfFile)
+
+        ()
+
+
+    testCase "add text to position with font rotation" <| fun _ -> 
         let x = 
             List.replicate 55 "5"
             |> String.concat ""

@@ -357,16 +357,43 @@ module internal Listeners =
                                     
 
                                 let tail = concatedTextInfos.Tail
-                                match tail.Length = spaces.Length with 
-                                | true -> 
-                                    (spaces, tail)
-                                    ||> List.map2 (fun (_, space) textInfo ->
-                                        { Space = Some space
-                                          TextInfo = textInfo.TextRenderInfo }
-                                    )
 
-                                | false -> 
-                                    failwithf "Not implemented when spaces %A length  <> concatedTextInfos tail length %A" spaces tail.Length
+                                let spaces = 
+                                    if tail.Length = spaces.Length
+                                    then spaces
+                                    elif tail.Length = spaces.Length-1
+                                    then List.take tail.Length spaces
+                                    else 
+                                        let texts = 
+                                            concatedTextInfos
+                                            |> List.map(fun m -> m.ConcatedText())
+                                            |> String.concat ""
+
+                                        failwithf "%s Not implemented when spaces %A length  <> concatedTextInfos tail length %A" texts spaces tail.Length
+                                
+                                
+                                (spaces, tail)
+                                ||> List.map2 (fun (_, space) textInfo ->
+                                    { Space = Some space
+                                      TextInfo = textInfo.TextRenderInfo }
+                                )
+
+                                //if tail.Length = spaces.Length
+                                //   || tail.Length = spaces.Length - 1
+                                //then 
+                                //    (spaces, tail)
+                                //    ||> List.map2 (fun (_, space) textInfo ->
+                                //        { Space = Some space
+                                //          TextInfo = textInfo.TextRenderInfo }
+                                //    )
+
+                                //else
+                                //    let texts = 
+                                //        concatedTextInfos
+                                //        |> List.map(fun m -> m.ConcatedText())
+                                //        |> String.concat ""
+
+                                //    failwithf "%s Not implemented when spaces %A length  <> concatedTextInfos tail length %A" texts spaces tail.Length
                                     
                                     //match tail.Length = spaces.Length + 1 with 
                                     //| true -> 

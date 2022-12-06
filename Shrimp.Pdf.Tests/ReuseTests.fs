@@ -107,7 +107,7 @@ let reuseTests =
         |> runTest "datas/reuse/impose for heavy data.pdf" 
         |> ignore
 
-    ftestCase "preimpose" <| fun _ -> 
+    testCase "preimpose" <| fun _ -> 
         let p = 
             [1..100]
             |> List.map(fun _ -> System.IO.Path.GetTempFileNameEx())
