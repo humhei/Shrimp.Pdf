@@ -464,6 +464,14 @@ module ModifyPageOperators =
                 ?parameters = parameters
             )
 
+        static member RemoveLayer(layerName: string) =
+            Manipulate(fun flowModel document ->
+                for page in document.Value.GetPages() do
+                    PdfPage.removeLayer layerName page
+                    |> ignore
+            )
+
+
 
     type PdfRunner with 
     

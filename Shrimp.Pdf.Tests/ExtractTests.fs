@@ -452,6 +452,19 @@ let extractTests =
             |> ignore
 
 
+        testCase "extract objects tests15" <| fun _ -> 
+            //let m = FsValueColor.OfLoggingText_Raw "CMYK 0.0 96.5 100.0 0.09"
+            //let m = FsSeparation.OfLoggingText_Raw "All#CMYK 99 99 99 99"
+            //let m = FsSeparation.OfLoggingText_Raw "All#CMYK 100.0 100.0 100.0 100.0"
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects15.pdf" 
+            |> ignore
+
     ]
 
 

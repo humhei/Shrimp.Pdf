@@ -555,7 +555,7 @@ type internal ModifierPdfCanvas(contentStream, resources, document) =
         base.Rectangle(rect)
 
 
-and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * Modifier>, document: PdfDocument) =
+and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * Modifier>, removingLayer: string option, document: PdfDocument) =
     inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(Map.map (fun _ -> fst) selectorModifierMapping))
     
     let eventTypes = 
@@ -587,7 +587,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
     let pdfCanvasStack = new Stack<ModifierPdfCanvas>()
     let resourcesStack = new Stack<PdfResources>()
 
-
+    let mutable isRemovingLayer = false
 
     let (|PathOrText|_|) operatorName =
         let (|Path|_|) operatorName =
@@ -654,120 +654,161 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                     |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
                 )
 
-        match operatorName with 
-        | EI -> writeImage()
-        | Do ->
+        match isRemovingLayer with 
+        | false ->
+
+            match operatorName with 
+            | EI -> writeImage()
+            | Do ->
             
-            let resources = resourcesStack.Peek()
-            let name = operatorRange.Operands.[0] :?> PdfName
-            let container = resources.GetResource(PdfName.XObject)
-            let xobjectStream = 
-                let pdfStream = (container.Get(name) :?> PdfStream)
-                pdfStream
-            let subType = xobjectStream.GetAsName(PdfName.Subtype)
-            match subType with 
-            | Form ->
-                this.Listener.SaveGS_XObject(this.GetGraphicsState())
-                let xobjectStream = xobjectStream.Clone() :?> PdfStream
-                let xobjectResources = 
-                    let subResources = xobjectStream.GetAsDictionary(PdfName.Resources)
-                    match subResources with 
-                    | null -> resources
-                    | _ -> PdfResources subResources
+                let resources = resourcesStack.Peek()
+                let name = operatorRange.Operands.[0] :?> PdfName
+                let container = resources.GetResource(PdfName.XObject)
+                let xobjectStream = 
+                    let pdfStream = (container.Get(name) :?> PdfStream)
+                    pdfStream
+                let subType = xobjectStream.GetAsName(PdfName.Subtype)
+                match subType with 
+                | Form ->
+                    this.Listener.SaveGS_XObject(this.GetGraphicsState())
+                    let xobjectStream = xobjectStream.Clone() :?> PdfStream
+                    let xobjectResources = 
+                        let subResources = xobjectStream.GetAsDictionary(PdfName.Resources)
+                        match subResources with 
+                        | null -> resources
+                        | _ -> PdfResources subResources
 
 
-                let fixedStream: PdfStream = this.EditContent(xobjectResources, xobjectStream)
-                let name = resources.AddForm(fixedStream)
-                container.Put(name, fixedStream) |> ignore
-                let operatorRange =
-                    { Operator = operatorRange.Operator 
-                      Operands = [| name :> PdfObject; PdfLiteral("Do") :> PdfObject |] }
+                    let fixedStream: PdfStream = this.EditContent(xobjectResources, xobjectStream)
+                    let name = resources.AddForm(fixedStream)
+                    container.Put(name, fixedStream) |> ignore
+                    let operatorRange =
+                        { Operator = operatorRange.Operator 
+                          Operands = [| name :> PdfObject; PdfLiteral("Do") :> PdfObject |] }
 
-                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                |> ignore
-                this.Listener.RestoreGS_XObject()
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
+                    this.Listener.RestoreGS_XObject()
 
-            | Image -> writeImage()
-            | Others ->
+                | Image -> writeImage()
+                | Others ->
 
-                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                |> ignore
-
-
-        | PathOrText tag ->
-            match eventListener.CurrentRenderInfoStatus with 
-            | CurrentRenderInfoStatus.Skiped -> 
-                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                |> ignore
-
-            | CurrentRenderInfoStatus.Selected ->
-                let isShading = 
-                    match eventListener.CurrentRenderInfo with 
-                    | IIntegratedRenderInfoIM.Path (pathRenderInfo) -> pathRenderInfo.IsShading
-                    | _ ->false
-
-                match isShading with 
-                | true -> 
                     PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
                     |> ignore
 
-                | false ->
-                    let currentGS = this.GetGraphicsState()
-                    currentPdfCanvas.SetCanvasGraphicsState(currentGS)
 
-                    let modifierPdfCanvasActions =
-                        eventListener.CurrentRenderInfoToken.Value
-                        |> List.map(fun token -> 
-                            let fix = snd selectorModifierMapping.[token]
-                            fix { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
+            | PathOrText tag ->
+                match eventListener.CurrentRenderInfoStatus with 
+                | CurrentRenderInfoStatus.Skiped -> 
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
+
+                | CurrentRenderInfoStatus.Selected ->
+                    let isShading = 
+                        match eventListener.CurrentRenderInfo with 
+                        | IIntegratedRenderInfoIM.Path (pathRenderInfo) -> pathRenderInfo.IsShading
+                        | _ ->false
+
+                    match isShading with 
+                    | true -> 
+                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                        |> ignore
+
+                    | false ->
+                        let currentGS = this.GetGraphicsState()
+                        currentPdfCanvas.SetCanvasGraphicsState(currentGS)
+
+                        let modifierPdfCanvasActions =
+                            eventListener.CurrentRenderInfoToken.Value
+                            |> List.map(fun token -> 
+                                let fix = snd selectorModifierMapping.[token]
+                                fix { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
+                            )
+                            |> ModifierPdfCanvasActions.ConcatOrKeep tag
+
+                        modifierPdfCanvasActions.UseCanvas (currentPdfCanvas :> PdfCanvas) operatorRange (fun operatorRange canvas ->
+                            (canvas, modifierPdfCanvasActions.Actions)
+                            ||> List.fold(fun canvas action ->
+                                action canvas 
+                            )
+                            |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
                         )
-                        |> ModifierPdfCanvasActions.ConcatOrKeep tag
 
-                    modifierPdfCanvasActions.UseCanvas (currentPdfCanvas :> PdfCanvas) operatorRange (fun operatorRange canvas ->
-                        (canvas, modifierPdfCanvasActions.Actions)
-                        ||> List.fold(fun canvas action ->
-                            action canvas 
-                        )
-                        |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
-                    )
+                        //let onlyWriteClose = 
+                        //    match tag with 
+                        //    | IntegratedRenderInfoTag.Text ->
+                        //        match modifierPdfCanvasActions.AllActionsLength with 
+                        //        | 0 -> 
+                        //            match modifierPdfCanvasActions.Close with 
+                        //            | CloseOperatorUnion.Text textClose ->
+                        //                match textClose.Fill, textClose.Stroke with 
+                        //                | CloseOperator.Keep, CloseOperator.Keep -> true
+                        //                | _ -> false
+                        //            | _ -> failwith "Invalid token"
+                        //        | _ -> false
+                        //    | _ -> false
 
-                    //let onlyWriteClose = 
-                    //    match tag with 
-                    //    | IntegratedRenderInfoTag.Text ->
-                    //        match modifierPdfCanvasActions.AllActionsLength with 
-                    //        | 0 -> 
-                    //            match modifierPdfCanvasActions.Close with 
-                    //            | CloseOperatorUnion.Text textClose ->
-                    //                match textClose.Fill, textClose.Stroke with 
-                    //                | CloseOperator.Keep, CloseOperator.Keep -> true
-                    //                | _ -> false
-                    //            | _ -> failwith "Invalid token"
-                    //        | _ -> false
-                    //    | _ -> false
+                        //match onlyWriteClose with 
+                        //| true -> 
+                        //    (currentPdfCanvas :> PdfCanvas)
+                        //    |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
+                        //    |> ignore
 
-                    //match onlyWriteClose with 
-                    //| true -> 
-                    //    (currentPdfCanvas :> PdfCanvas)
-                    //    |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
-                    //    |> ignore
-
-                    //| false ->
-                    //    PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
-                    //        (canvas, modifierPdfCanvasActions.Actions)
-                    //        ||> List.fold(fun canvas action ->
-                    //            action canvas 
-                    //        )
-                    //        |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
-                    //    )
+                        //| false ->
+                        //    PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
+                        //        (canvas, modifierPdfCanvasActions.Actions)
+                        //        ||> List.fold(fun canvas action ->
+                        //            action canvas 
+                        //        )
+                        //        |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
+                        //    )
 
 
 
-            | _ -> failwith "Invalid token"
+                | _ -> failwith "Invalid token"
 
-        | _ ->
-            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-            |> ignore
+            | _ ->
+                match removingLayer with 
+                | None ->
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
 
+                | Some layerName ->
+                    match operatorName with 
+                    | BDC -> 
+                        match operatorRange.Operands.Item(0) with 
+                        | :? PdfName as name1 ->
+                            match name1 with 
+                            | EqualTo PdfName.OC -> 
+                                let resources = resourcesStack.Peek()
+                                let name2 = operatorRange.Operands.Item(1) :?> PdfName
+
+                                let layerDict = resources.GetProperties(name2) :?> PdfDictionary
+                                let layerName2 = layerDict.Get(PdfName.Name) :?> PdfString
+                                match layerName2.ToString() with 
+                                | EqualTo layerName -> 
+                                    isRemovingLayer <- true
+                                | _ ->
+                                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                                    |> ignore
+
+                            | _ -> 
+                                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                                |> ignore
+
+                        | _ ->
+                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                            |> ignore
+
+
+                    | _ -> 
+                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                        |> ignore
+
+        | true -> 
+            match operatorName with 
+            | EMC -> isRemovingLayer <- false
+            | _ -> ()
 
     member internal x.ParsedRenderInfos = eventListener.ParsedRenderInfos
 
@@ -809,9 +850,9 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
 [<RequireQualifiedAccess>]
 module PdfPage =
-    let modifyIM (selectorModifierMapping) (page: PdfPage) =
+    let private modifyIM_EX (selectorModifierMapping) removingLayerName (page: PdfPage) =
         let document = page.GetDocument()
-        let editor = new PdfCanvasEditor(selectorModifierMapping, document)
+        let editor = new PdfCanvasEditor(selectorModifierMapping, removingLayerName, document)
         let pageContents = page.GetPdfObject().Get(PdfName.Contents).Clone()
 
         match pageContents with 
@@ -826,6 +867,12 @@ module PdfPage =
             |> ignore
 
             editor.ParsedRenderInfos
+
+    let removeLayer layerName (page: PdfPage) =
+        modifyIM_EX Map.empty (Some layerName) page
+
+    let modifyIM (selectorModifierMapping) (page: PdfPage) =
+        modifyIM_EX selectorModifierMapping None page
 
     let modify (selectorModifierMapping) (page: PdfPage) =
         let renderInfos = 

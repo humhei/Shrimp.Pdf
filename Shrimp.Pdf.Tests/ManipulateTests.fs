@@ -45,6 +45,22 @@ module PageInfos =
 
 let manipulateTests =
   testList "Manipulates Tests" [
+    testCase "remove layer contents" <| fun _ ->  
+
+        Flow.Manipulate (
+            ModifyPage.RemoveLayer("Layer2")
+        )
+        |> runTest "datas/manipulate/remove layer contents.pdf" 
+        |> ignore
+
+    testCase "remove layer contents2" <| fun _ ->  
+
+        Flow.Manipulate (
+            ModifyPage.RemoveLayer("Layer2")
+        )
+        |> runTest "datas/manipulate/remove layer contents2.pdf" 
+        |> ignore
+
 
     testCase "read shading colors" <| fun _ ->  
         let path = "datas/manipulate/read shading colors.pdf" 
@@ -199,6 +215,9 @@ let manipulateTests =
         |> ignore
 
     testCase "make clipping path from blue strokes by minimum area" <| fun _ ->    
+        let pdfPath = 
+            @"D:\Users\Jia\Documents\MyData\Docs\2017\新纪元\Lolly Tree\.btw\新纪元 新纪元 22-12-13\吊牌反面.productImage\.shrimp.pdf\吊牌反面.down.productImage\0_SequencePages.pdf"
+        
 
         Flow.Manipulate (
             Modify.CreateClippingPath(
@@ -206,7 +225,8 @@ let manipulateTests =
                 condition = ClippingCondition.ClipIfPathCountSmallerOrEqualThan 2
             )
         )
-        |> runTest "datas/manipulate/make clipping path from blue strokes by minimum area.pdf" 
+        |> runTest pdfPath
+        //|> runTest "datas/manipulate/make clipping path from blue strokes by minimum area.pdf" 
         |> ignore
 
     testCase "make clipping path from blue strokes and keep" <| fun _ -> 
@@ -1099,7 +1119,7 @@ let manipulateTests =
 
         ()
 
-    ftestCase "read texts" <| fun _ ->
+    testCase "read texts" <| fun _ ->
 
         let pdfFile = PdfFile @"datas/manipulate/read texts.pdf"
 

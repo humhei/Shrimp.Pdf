@@ -17,6 +17,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Text.fs" />
     <Compile Include="AssemblyInfo.fs" />
     <EmbeddedResource Include="reference.conf">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>

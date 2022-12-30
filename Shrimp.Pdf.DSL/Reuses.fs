@@ -1,6 +1,7 @@
 ﻿namespace Shrimp.Pdf
 
 open System.Collections.Generic
+open iText.Kernel.Pdf.Layer
 
 #nowarn "0104"
 open Imposing
@@ -1223,7 +1224,7 @@ module _Reuses =
 
         
 
-        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground, ?xEffect, ?yEffect, ?pageSelector) =
+        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground, ?xEffect, ?yEffect, ?pageSelector, ?layerName: string) =
             let xEffect = defaultArg xEffect XEffort.Middle
             let yEffect = defaultArg yEffect YEffort.Middle
 
@@ -1279,20 +1280,43 @@ module _Reuses =
                                 baseY + lengthDiff / 2.f
                             | YEffort.Top -> baseY + lengthDiff
 
+                        match layerName with 
+                        | None ->
+                            match choice with 
+                            | BackgroundOrForeground.Background ->
+                                pdfCanvas
+                                    .AddXObjectAbs(backgroundXObject, bk_x , bk_y)
+                                    .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                                |> ignore
 
-                        match choice with 
-                        | BackgroundOrForeground.Background ->
-                            pdfCanvas
-                                .AddXObjectAbs(backgroundXObject, bk_x , bk_y)
-                                .AddXObjectAbs(readerXObject, 0.f, 0.f)
-                            |> ignore
+                            | BackgroundOrForeground.Foreground -> 
+                                pdfCanvas
+                                    .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                                    .AddXObjectAbs(backgroundXObject, bk_x, bk_y)
 
-                        | BackgroundOrForeground.Foreground -> 
-                            pdfCanvas
-                                .AddXObjectAbs(readerXObject, 0.f, 0.f)
-                                .AddXObjectAbs(backgroundXObject, bk_x, bk_y)
+                                |> ignore
 
-                            |> ignore
+                        | Some layerName ->
+                            let layer = new PdfLayer(layerName, doc.Writer)
+
+                            match choice with 
+                            | BackgroundOrForeground.Background ->
+                                pdfCanvas
+                                    .BeginLayer(layer)
+                                    .AddXObjectAbs(backgroundXObject, bk_x , bk_y)
+                                    .EndLayer()
+                                    .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                                |> ignore
+
+                            | BackgroundOrForeground.Foreground -> 
+                                pdfCanvas
+                                    .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                                    .BeginLayer(layer)
+                                    .AddXObjectAbs(backgroundXObject, bk_x, bk_y)
+                                    .EndLayer()
+
+                                |> ignore
+
                     | false ->
                         let page = readerPage.CopyTo(doc.Writer)
                         doc.Writer.AddPage(page)
@@ -1380,11 +1404,11 @@ module _Reuses =
             Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Foreground, pageBoxKind, rectOptions, ?margin = margin, ?pageSelector = pageSelector)
 
 
-        static member AddBackground (backgroundFile: PdfFile, ?xEffect, ?yEffect, ?pageSelector) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background, ?xEffect = xEffect, ?yEffect = yEffect, ?pageSelector = pageSelector)
+        static member AddBackground (backgroundFile: PdfFile, ?xEffect, ?yEffect, ?pageSelector, ?layerName) =
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background, ?xEffect = xEffect, ?yEffect = yEffect, ?pageSelector = pageSelector, ?layerName = layerName)
 
-        static member AddForeground (foregroundFile: PdfFile, ?xEffect, ?yEffect, ?pageSelector) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create foregroundFile, BackgroundOrForeground.Foreground, ?xEffect = xEffect, ?yEffect = yEffect, ?pageSelector = pageSelector)
+        static member AddForeground (foregroundFile: PdfFile, ?xEffect, ?yEffect, ?pageSelector, ?layerName) =
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create foregroundFile, BackgroundOrForeground.Foreground, ?xEffect = xEffect, ?yEffect = yEffect, ?pageSelector = pageSelector, ?layerName = layerName)
 
 
 

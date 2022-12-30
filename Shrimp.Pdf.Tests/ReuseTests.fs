@@ -49,6 +49,19 @@ let reuseTests =
         |> runTest "datas/reuse/add background2.pdf" 
         |> ignore
 
+    ftestCase "add background as layer" <| fun _ -> 
+        //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
+        //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
+        //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
+        //let a = m
+
+
+        Flow.Reuse (
+            Reuses.AddForeground(PdfFile @"datas/reuse/add background as layer.background.pdf", xEffect = XEffort.Middle, yEffect = YEffort.Middle, layerName = "Shadow")
+        )
+        |> runTest "datas/reuse/add background as layer.pdf" 
+        |> ignore
+
     testCase "add foreground tests" <| fun _ -> 
         Flow.Reuse (
             Reuses.AddForeground(PdfFile @"datas/reuse/backgroundFile.pdf")

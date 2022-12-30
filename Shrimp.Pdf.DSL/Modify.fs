@@ -754,11 +754,16 @@ type ClippingCondition =
     | ClipIfPathCountSmallerOrEqualThan of int
     | Always
 with 
-    member x.IsClippable(infos: 'info list) =
+    member x.IsClippable(infos: Path list) =
         match x with 
         | ClippingCondition.Always -> true
         | ClippingCondition.ClipIfPathCountSmallerOrEqualThan count ->
-            infos.Length <= count
+            let infosLength =
+                infos
+                |> List.sumBy(fun m -> 
+                    m.GetSubpaths().Count
+                )
+            infosLength <= count
 
 [<RequireQualifiedAccess>]
 type private CompoundCreatingOptions =
@@ -2139,6 +2144,8 @@ type Modify =
             ]
         )
 
+
+
     static member ChangeStyle(selector, targetStyle) =
         Modify.ChangeStyleF(selector, fun _ -> targetStyle)
         |> Manipulate.rename
@@ -2147,6 +2154,9 @@ type Modify =
                 "selector" =>    selector.ToString()
                 "targetStyle" => targetStyle.ToString()
               ]
+
+
+
 
 
     static member OpenFill(selector, ?fillColor) =
@@ -2234,7 +2244,8 @@ type Modify =
                         let pageNumbers =
                             infoLists
                             |> List.indexed
-                            |> List.choose(fun (i, infos) ->
+                            |> List.choose(fun (i, infos: RenewablePathInfo list) ->
+                                let infos = infos |> List.map(fun m -> m.Path)
                                 match condition.IsClippable infos with 
                                 | true -> Some (i+1)
                                 | false -> None
@@ -2255,13 +2266,16 @@ type Modify =
                     Modify.ReadCompoundPath(selector)
             )
             <+>
-            (Manipulate.Func (fun (infos) ->
+            (Manipulate.Func (fun (infos: RenewablePathInfo list list) ->
                 let isClippable =
                     match options with 
                     | CompoundCreatingOptions.ClippingPathAndCancel condition 
                     | CompoundCreatingOptions.ClippingPathAndKeep condition ->
                         infos
-                        |> List.exists(fun m -> condition.IsClippable m)
+                        |> List.exists(fun m -> 
+                            let infos = m |> List.map(fun m -> m.Path)
+                            condition.IsClippable infos
+                        )
 
                     | CompoundCreatingOptions.CompoundPath -> 
                         let length = infos |> List.sumBy(fun m -> m.Length)

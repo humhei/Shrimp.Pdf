@@ -885,6 +885,12 @@ module ExtensionTypes =
               Right = right 
               Bottom = bottom }
 
+        static member CreateOp(?left, ?top, ?right, ?bottom) =
+            { Left   = defaultArg left   0. 
+              Top    = defaultArg top    0. 
+              Right  = defaultArg right  0. 
+              Bottom = defaultArg bottom 0. }
+
         static member Create(values: float list) =
             match values with 
             | [ left; top; right; bottom ] ->

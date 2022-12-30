@@ -3,6 +3,7 @@ namespace Shrimp.Pdf.Parser
 
 open iText.Kernel.Geom
 
+#nowarn "3536"
 #nowarn "0104"
 open iText.Kernel.Colors
 open iText.Kernel.Exceptions
