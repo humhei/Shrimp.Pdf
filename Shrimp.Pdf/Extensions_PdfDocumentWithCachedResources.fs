@@ -94,6 +94,8 @@ module PdfDocumentWithCachedResources =
           FontRotation: Rotation 
           Position: Position
           HorizontalTextAlignment: TextAlignment option 
+          StrokeWidth: float option
+          ClipContents: bool
           VerticalTextAlignment: VerticalAlignment option }
 
     with 
@@ -104,6 +106,8 @@ module PdfDocumentWithCachedResources =
               FontRotation = Rotation.None
               Position = Position.LeftTop (0., 0.)
               HorizontalTextAlignment = None 
+              StrokeWidth = None
+              ClipContents = false
               VerticalTextAlignment = None }
 
         member args.GetCalculatedHorizontalTextAlignment() =
@@ -218,6 +222,19 @@ module PdfDocumentWithCachedResources =
         let setTextMatrix (matrix: Matrix) (canvas: PdfCanvas) =
             let transform = AffineTransform.ofMatrix matrix
             canvas.SetTextMatrix(transform)
+
+        let setTextRise (textRise) (canvas: PdfCanvas) =
+            canvas.SetTextRise(textRise)
+
+        let setWordSpacing (wordSpacing) (canvas: PdfCanvas) =
+            canvas.SetWordSpacing(wordSpacing)
+
+        let setCharSpacing (charSpacing) (canvas: PdfCanvas) =
+            canvas.SetCharacterSpacing(charSpacing)
+
+
+        let setHorizontalScaling (scale) (canvas: PdfCanvas) =
+            canvas.SetHorizontalScaling(scale)
 
         let setTextLeading (leading: float32) (canvas: PdfCanvas) =
             canvas.SetLeading(leading)
@@ -341,20 +358,45 @@ module PdfDocumentWithCachedResources =
 
                 let fontSize = canvas.CalcFontSize(text, args)
 
+                let rootArea = canvas.GetRootArea()
                 let point =
-                    let rootArea = canvas.GetRootArea()
                     rootArea.GetPoint(position)
 
                 let horizonal = args.GetCalculatedHorizontalTextAlignment()
 
                 let vertical = args.GetCalculatedVerticalTextAlignment()
 
+                let clipped = args.ClipContents
+                match clipped with 
+                | true -> 
+                    canvas.GetPdfCanvas()
+                        .SaveState()
+                        .Rectangle(rootArea)
+                        .EoClip()
+                        .EndPath()
+                        |> ignore
+
+                | false -> ()
+
                 let canvas =
+                    let canvas =
+                        match args.StrokeWidth with 
+                        | None -> canvas
+                        | Some strokeWidth ->
+                            canvas
+                                .SetTextRenderingMode(TextRenderingMode.FILL_STROKE)
+                                .SetStrokeWidth(float32 strokeWidth)
+                                .SetStrokeColor(fontColor)
                     canvas
                         .SetFont(pdfFont)
                         .SetFontColor(fontColor)
                         .SetFontSize(float32 fontSize)
                         .ShowTextAligned(text, float32 point.x, float32 point.y, Nullable(horizonal), Nullable(vertical), float32 (Rotation.getRadians fontRotation) )
+                        
+
+                match clipped with 
+                | true -> canvas.GetPdfCanvas().RestoreState() |> ignore
+                | false -> ()
 
                 canvas
 

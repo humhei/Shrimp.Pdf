@@ -101,7 +101,7 @@ module _Extract =
                 { LoggerLevel = configuration.LoggerLevel 
                   LoggingPageCountInterval = loggingPageCountInterval }
 
-            logger.Log(text)
+            logger.Log(text, alwaysPrintingConsole_If_Info = true)
        
 
 
@@ -136,7 +136,7 @@ module _Extract =
 
         stopWatch.Stop()
         logInfo(fun () ->
-            sprintf "extracting page %d, found infos %d in %O" pageNumber infos.Length stopWatch.Elapsed
+            sprintf "    extracting page %d/%d, found infos %d in %O" pageNumber args.TotalNumberOfPages infos.Length stopWatch.Elapsed
         ) pageNumber
 
 
@@ -304,10 +304,11 @@ module _Extract =
                             .ConcatMatrix(AffineTransform.ofRecord transform_scale)
                             |> ignore
 
+                        writeInfos(infoChoices.Infos)
+
                         if keepBorder
                         then writeInfos(infoChoices.TagInfos)
 
-                        writeInfos(infoChoices.Infos)
                         writerCanvas
                     )
 
@@ -395,7 +396,7 @@ module _Extract =
 
         stopWatch.Stop()
         logInfo(fun () ->
-            sprintf "writedAreaInfos in %O" stopWatch.Elapsed
+            sprintf "    writedAreaInfos in %O" stopWatch.Elapsed
         ) pageNumber
 
         splittedInfos

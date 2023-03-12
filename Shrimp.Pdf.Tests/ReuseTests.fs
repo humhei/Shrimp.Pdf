@@ -24,32 +24,28 @@ let reuseTests =
   testList "Reuse Tests" [
     
     testCase "add background tests" <| fun _ -> 
-        //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
-        //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
-        //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
-        //let a = m
-
-
         Flow.Reuse (
             Reuses.AddBackground(PdfFile @"datas/reuse/backgroundFile.pdf")
         )
         |> runTest "datas/reuse/add background.pdf" 
         |> ignore
 
+    testCase "assignToLayer" <| fun _ -> 
+
+        Flow.Reuse (
+            Reuses.AssignToLayer("MyLayer")
+        )
+        |> runTest "datas/reuse/assignToLayer.pdf" 
+        |> ignore
+
     testCase "add background tests2" <| fun _ -> 
-        //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
-        //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
-        //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
-        //let a = m
-
-
         Flow.Reuse (
             Reuses.AddBackground(PdfFile @"datas/reuse/backgroundFile2.pdf", xEffect = XEffort.Right, yEffect = YEffort.Top)
         )
         |> runTest "datas/reuse/add background2.pdf" 
         |> ignore
 
-    ftestCase "add background as layer" <| fun _ -> 
+    testCase "add background as layer" <| fun _ -> 
         //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
         //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
         //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
@@ -57,7 +53,7 @@ let reuseTests =
 
 
         Flow.Reuse (
-            Reuses.AddForeground(PdfFile @"datas/reuse/add background as layer.background.pdf", xEffect = XEffort.Middle, yEffect = YEffort.Middle, layerName = "Shadow")
+            Reuses.AddForeground(PdfFile @"datas/reuse/add background as layer.background.pdf", xEffect = XEffort.Middle, yEffect = YEffort.Middle, layerName = {CurrentLayerName = "Origin"; BackgroundLayerName = "Background"})
         )
         |> runTest "datas/reuse/add background as layer.pdf" 
         |> ignore

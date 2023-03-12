@@ -42,7 +42,12 @@ module ExtensionTypes =
                         | EqualTo PdfName.DeviceRGB  -> PdfDeviceCs.Rgb() :> PdfColorSpace
 
                     | :? PdfArray as array ->
-                        PdfSpecialCs.NChannel(array) :> PdfColorSpace
+                        match array.GetAsName(0) with 
+                        | EqualTo PdfName.Separation ->
+                            PdfSpecialCs.Separation(array) :> PdfColorSpace
+
+                        | _ ->
+                            PdfSpecialCs.NChannel(array) :> PdfColorSpace
 
                 new PdfShadingColor(shading, colorSpace, ctm)
 

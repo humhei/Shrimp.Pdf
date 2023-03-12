@@ -107,6 +107,9 @@ module _Reuses =
           RowIndex: int 
           PageNum: int }
 
+    type BackgroundAddingLayerNames =
+        { CurrentLayerName: string 
+          BackgroundLayerName: string }
 
     type Reuses with
 
@@ -1224,7 +1227,7 @@ module _Reuses =
 
         
 
-        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground, ?xEffect, ?yEffect, ?pageSelector, ?layerName: string) =
+        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground, ?xEffect, ?yEffect, ?pageSelector, ?layerName: BackgroundAddingLayerNames) =
             let xEffect = defaultArg xEffect XEffort.Middle
             let yEffect = defaultArg yEffect YEffort.Middle
 
@@ -1297,24 +1300,33 @@ module _Reuses =
                                 |> ignore
 
                         | Some layerName ->
-                            let layer = new PdfLayer(layerName, doc.Writer)
+                            let bklayer = new PdfLayer(layerName.BackgroundLayerName, doc.Writer)
+                            let addBackground (pdfCanvas: PdfCanvas) =
+                                pdfCanvas
+                                    .BeginLayer(bklayer)
+                                    .AddXObjectAbs(backgroundXObject, bk_x , bk_y)
+                                    .EndLayer()
+
+                            let readerLayer = new PdfLayer(layerName.CurrentLayerName, doc.Writer)
+
+                            let addReader (pdfCanvas: PdfCanvas) =
+                                pdfCanvas
+                                    .BeginLayer(readerLayer)
+                                    .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                                    .EndLayer()
+
 
                             match choice with 
                             | BackgroundOrForeground.Background ->
                                 pdfCanvas
-                                    .BeginLayer(layer)
-                                    .AddXObjectAbs(backgroundXObject, bk_x , bk_y)
-                                    .EndLayer()
-                                    .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                                |> addBackground
+                                |> addReader
                                 |> ignore
 
                             | BackgroundOrForeground.Foreground -> 
                                 pdfCanvas
-                                    .AddXObjectAbs(readerXObject, 0.f, 0.f)
-                                    .BeginLayer(layer)
-                                    .AddXObjectAbs(backgroundXObject, bk_x, bk_y)
-                                    .EndLayer()
-
+                                |> addReader
+                                |> addBackground
                                 |> ignore
 
                     | false ->
@@ -1410,6 +1422,39 @@ module _Reuses =
         static member AddForeground (foregroundFile: PdfFile, ?xEffect, ?yEffect, ?pageSelector, ?layerName) =
             Reuses.AddBackgroundOrForeground(BackgroundFile.Create foregroundFile, BackgroundOrForeground.Foreground, ?xEffect = xEffect, ?yEffect = yEffect, ?pageSelector = pageSelector, ?layerName = layerName)
 
+        static member AssignToLayer (layerName) =
+            (fun flowModel (doc: SplitDocument) ->
+                let reader = doc.Reader
+                let layer = new PdfLayer(layerName, doc.Writer)
+                PdfDocument.getPages reader
+                |> List.mapi (fun i readerPage ->
+
+                    let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
+
+                    let pageSize = 
+                        readerPage.GetActualBox()
+                        |> PageSize
+
+                    let writerPage = doc.Writer.AddNewPage(pageSize)
+                    writerPage.SetPageBoxToPage(readerPage) |> ignore
+                    let pdfCanvas = new PdfCanvas(writerPage)
+
+                    pdfCanvas
+                        .BeginLayer(layer)
+                        .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                        .EndLayer()
+
+                    |> ignore
+
+
+
+                ) |> ignore
+            )
+            |> reuse 
+                "AssignToLayer"
+                [
+                    "layerName" => layerName
+                ]
 
 
     type PdfRunner with 

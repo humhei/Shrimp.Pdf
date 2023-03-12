@@ -116,6 +116,7 @@ module _TransformForEach =
                             Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
                         
                         let infos = 
+                            logExtractingFile pdfPageNumber flowModel
                             extractVisibleRenewableInfosToWriter 
                                 flowModel.Configuration
                                 args

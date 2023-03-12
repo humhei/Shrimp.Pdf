@@ -11,6 +11,7 @@ open Shrimp.Pdf.Extensions
 #nowarn "0104"
 open Shrimp.FSharp.Plus
 open System.IO
+open Fake.IO
 open Shrimp.Pdf.ImageConverter.Core
 open Shrimp.Pdf.ImageConverter.Core.Cluster
 open Akkling
@@ -98,3 +99,47 @@ module _ImageConverter =
                     |> PdfRunner.Reuse(pdfFile)
 
                 | false -> pdfFile
+
+        static member ConvertPdfToPixedPdf(inputFile: PdfFile, targetPath: PdfPath, ?dpi) =
+            let jpegFiles =
+                ImageConverter.ConvertPdfToJpeg(inputFile, ?dpi = dpi)
+                |> Async.RunSynchronously
+
+            let document = new PdfDocument(new PdfReader(inputFile.Path))
+
+            let totalNumberOfPage = document.GetNumberOfPages()
+            let convert(targetPaths: _ list) =
+                document.GetPages()
+                |> List.mapi(fun i m -> 
+                    let targetPath = targetPaths.[i]
+                    let jpegFile  = jpegFiles.[i]
+                    let actualBox = m.GetActualBox()
+
+                    let targetLength = ResizingTargetLength.Horizontal (actualBox.GetWidthF())
+                    ImageConverter.ConvertImageToPdf(jpegFile.Path, targetPath, targetLength)
+                )
+
+            match totalNumberOfPage with 
+            | 1 ->
+                convert([targetPath])
+                |> List.exactlyOne
+
+            | _ ->
+                let targetPaths =
+                    jpegFiles
+                    |> List.mapi(fun i m -> 
+                        m.Path 
+                        |> Path.changeExtension ".pixel.pdf"
+                        |> PdfPath
+                    )
+
+                let pdfFiles = convert(targetPaths)
+                
+
+                PdfRunner.MergeDocuments(AtLeastOneList.Create pdfFiles, fun args ->
+                    { args with Override = true; TargetDocumentPath = targetPath.Path}
+                )
+
+
+
+

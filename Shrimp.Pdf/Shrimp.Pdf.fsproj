@@ -59,6 +59,8 @@
     <None Include="Resources\Fonts\思源黑体\NotoSansHans-Regular.otf" />
     <None Include="Resources\Fonts\思源黑体\NotoSansHans-Thin-Windows.otf" />
     <None Include="Resources\Fonts\思源黑体\数英免责申明.txt" />
+    <None Include="Resources\Fonts\宋体.ttc">
+    </None>
     <None Include="Resources\Fonts\黑体.ttf" />
 
     <None Include="Resources\Colors\*.pdf">
@@ -90,6 +92,8 @@
     <Compile Include="Flow\Flow.fs" />
 
   </ItemGroup>
+
+  <ItemGroup />
 
   <ItemGroup>
     <PackageReference Include="Fake.Core.Environment" Version="5.16.1" />

@@ -102,7 +102,7 @@ let extractTests =
                     textPicker = (
                         { TagColor = Some Colors.PdfExtractorTagColor
                           TransformTextPickers = (fun args bound infos ->
-                              let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                              let coloredBoxWithTextInfos = ColoredBoxWithNumberAndText.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
                               coloredBoxWithTextInfos :> System.IComparable
                           )}
                     )
@@ -304,7 +304,29 @@ let extractTests =
             |> runTest "datas/extract/extract vectors17.pdf" 
             |> ignore
 
+        testCase "extract vectors tests18" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(fun args info -> 
+                        true
+                    )
+                )
+            )
+            |> runTest "datas/extract/extract vectors18.pdf" 
+            |> ignore
 
+        testCase "extract vectors tests19" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(fun args info -> 
+                        true
+                    )
+                )
+            )
+            |> runTest "datas/extract/extract vectors19.pdf" 
+            |> ignore
 
         testCase "extract object tests" <| fun _ -> 
             Flow.Reuse (
@@ -589,7 +611,7 @@ let extractTests =
                     { TagColor = Some Colors.PdfExtractorTagColor
                       TransformTextPickers = 
                         (fun args bound infos ->
-                            let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                            let coloredBoxWithTextInfos = ColoredBoxWithNumberAndText.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
                             coloredBoxWithTextInfos :> System.IComparable
                         )
                     }
@@ -630,7 +652,7 @@ let extractTests =
                    { TagColor = Some Colors.PdfExtractorTagColor
                      TransformTextPickers = 
                        (fun args bound infos ->
-                           let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                           let coloredBoxWithTextInfos = ColoredBoxWithNumberAndText.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
                            coloredBoxWithTextInfos :> System.IComparable
                        )
                    }
@@ -705,7 +727,7 @@ let extractTests =
                     { TagColor = Some Colors.PdfExtractorTagColor
                       TransformTextPickers = 
                         (fun args bound infos ->
-                            let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                            let coloredBoxWithTextInfos = ColoredBoxWithNumberAndText.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
                             coloredBoxWithTextInfos :> System.IComparable
                         )
                     }
@@ -734,7 +756,7 @@ let extractTests =
                     { TagColor = Some Colors.PdfExtractorTagColor
                       TransformTextPickers = 
                         (fun args bound infos ->
-                            let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                            let coloredBoxWithTextInfos = ColoredBoxWithNumberAndText.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
                             coloredBoxWithTextInfos :> System.IComparable
                         )
                     }
@@ -760,7 +782,7 @@ let extractTests =
                     { TagColor = Some Colors.PdfExtractorTagColor
                       TransformTextPickers = 
                         (fun args bound infos ->
-                            let coloredBoxWithTextInfos = ColoredBoxWithTexts.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                            let coloredBoxWithTextInfos = ColoredBoxWithNumberAndText.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
                             coloredBoxWithTextInfos :> System.IComparable
                         )
                     }
@@ -772,6 +794,32 @@ let extractTests =
                 //    (SamplePageExtractingOptions.FirstPageMultipleSelectors (pageNumbers,PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
             )
             |> runTest "datas/extract/tile pages and NUP by selector3.pdf" 
+            |> ignore
+
+        testCase "tile pages and NUP by selector4" <| fun _ -> 
+            let pageNumbers =
+                [1; 10]
+                |> List.map PageNumber
+                |> AtLeastTwoList.Create 
+
+            Flows.TilePagesAndNUp(
+                 Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBoxWithOffset (PageBoxKind.ActualBox, Margin.Create(mm 0.3)))),
+                 textPicker =( 
+                    { TagColor = Some Colors.PdfExtractorTagColor
+                      TransformTextPickers = 
+                        (fun args bound infos ->
+                            let coloredBoxWithTextInfos = ColoredBoxWithNumberAndText.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                            coloredBoxWithTextInfos :> System.IComparable
+                        )
+                    }
+                ),
+                pageTilingRenewInfosSplitter = PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0,
+                transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound)
+                //samplePageExtractingOptions = 
+
+                //    (SamplePageExtractingOptions.FirstPageMultipleSelectors (pageNumbers,PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
+            )
+            |> runTest "datas/extract/tile pages and NUP by selector4.pdf" 
             |> ignore
 
         testCase "tile pages by selector tests8" <| fun _ -> 
@@ -805,6 +853,8 @@ let extractTests =
 
             |> runTest "datas/extract/tile pages by selector8.pdf" 
             |> ignore
+
+
 
     ]
 

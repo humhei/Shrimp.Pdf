@@ -245,6 +245,8 @@ with
                 | false -> None
             )
 
+
+
 [<RequireQualifiedAccess>]
 type CloseStyle = 
     | Close
@@ -761,8 +763,17 @@ with
             let infosLength =
                 infos
                 |> List.sumBy(fun m -> 
-                    m.GetSubpaths().Count
+                    let mutable count = 0
+                    for subPath in m.GetSubpaths() do
+                        match subPath.GetSegments().Count with 
+                        | 0 -> ()
+                        | _ -> count <- count + 1
+
+                    count
                 )
+
+            //let infosLength = infos.Length
+
             infosLength <= count
 
 [<RequireQualifiedAccess>]
@@ -1374,18 +1385,24 @@ module ModifyOperators =
         { LoggerLevel: LoggerLevel 
           LoggingPageCountInterval: int }
     with 
-        member x.Log(text) =
+        member x.Log(text, ?alwaysPrintingConsole_If_Info) =
             fun pageNumber ->
                 match x.LoggerLevel with 
                 | LoggerLevel.Info ->
+                    let alwaysPrintingConsole_If_Info = defaultArg alwaysPrintingConsole_If_Info false
+                    let logInfo text =
+                        match alwaysPrintingConsole_If_Info with 
+                        | true -> Logger.info_alwaysPrintingInConsole (text)
+                        | false -> Logger.info (text)
+
                     match pageNumber = 1 with 
-                    | true -> Logger.info (text())
+                    | true -> logInfo (text())
                     | false -> 
 
                         match x.LoggingPageCountInterval with 
                         | BiggerThan 1 & interval -> 
                             match pageNumber % interval with 
-                            | 0 -> Logger.info (text())
+                            | 0 -> logInfo (text())
                             | _ -> ()
                         | _ -> ()
 

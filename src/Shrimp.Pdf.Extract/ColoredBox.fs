@@ -163,8 +163,40 @@ module _Template_ColoredBoxes =
             x.Infos__GroupOrFilter_IntoOp(bounds, infos, fBound)
             |> List.choose id
 
+
+    [<RequireQualifiedAccess>]
+    module private TextInfos =
+        let sortByRotation fBound fRotation textInfos =
+            let rotations = 
+                textInfos
+                |> List.map(fun m -> fRotation m)
+                |> List.distinct
+ 
+            match rotations with 
+            | [rotation] ->
+                let textInfos = 
+                    textInfos
+                    |> List.sortBy(fun textInfo ->
+                        let bound: Rectangle = fBound textInfo
+                        match rotation with 
+                        | Rotation.None -> NearbyPX(-bound.GetYF()), NearbyPX(bound.GetXF())
+                        | Rotation.R180 -> 
+                            NearbyPX(-bound.GetYF()), NearbyPX(-bound.GetXF())
+
+                        | Rotation.Counterclockwise ->
+                            NearbyPX(bound.GetXF()), NearbyPX(bound.GetYF())
+
+                        | Rotation.Clockwise ->
+                            NearbyPX(bound.GetXF()), NearbyPX(-bound.GetYF())
+                    )
+                textInfos
+            | _ ->
+                textInfos
+
+
     type BoxWithText =
-        { Text: PdfConcatedTexts
+        { /// contents inside box
+          Text: PdfConcatedTexts
           Box: Rectangle }
     with 
         static member Pick(pathBound: Rectangle, textInfos: IntegratedTextRenderInfo list, ?allowEmptyInsideBox: bool) =
@@ -197,58 +229,73 @@ module _Template_ColoredBoxes =
                     | true -> []
                     | false -> failwithf "No textInfo was found inside pathBound %A\nAvaiableTexts:\n%A" (pathBound.FsRectangle()) textInfos
                 | textInfos -> 
-                    let rotations = 
-                        textInfos
-                        |> List.map(fun m -> m.Rotation)
-                        |> List.distinct
-
-                    match rotations with 
-                    | [rotation] ->
-                        let textInfos = 
-                            textInfos
-                            |> List.sortBy(fun textInfo ->
-                                let bound = textInfo.Bound
-                                match rotation with 
-                                | Rotation.None -> NearbyPX(-bound.GetYF()), NearbyPX(bound.GetXF())
-                                | Rotation.R180 -> 
-                                    NearbyPX(-bound.GetYF()), NearbyPX(-bound.GetXF())
-
-                                | Rotation.Counterclockwise ->
-                                    NearbyPX(bound.GetXF()), NearbyPX(bound.GetYF())
-
-                                | Rotation.Clockwise ->
-                                    NearbyPX(bound.GetXF()), NearbyPX(-bound.GetYF())
-                            )
-
-                        textInfos
-                    | _ ->
-                        textInfos
+                    TextInfos.sortByRotation (fun m -> m.Bound) (fun m -> m.Rotation) textInfos
 
                     //failwithf "multiple textInfos %A were found inside pathBound %A" texts (pathBound)
 
             { Text = textInfos |> List.map (fun m -> m.Text) |> PdfConcatedTexts.Words
               Box = pathBound  }
 
+        
+    [<RequireQualifiedAccess>]
+    type TextPosition =
+        | InsideBox
+        | BothInsideAndOutsideBox
 
-    type ColoredBoxWithTexts =
-        { Text: PdfConcatedTexts
-          Bound: IndexedBound
-          ExtractorIndex: int
+    type ColoredBoxFontAppearance =
+        { FontName: FsFontName option 
+          Size: float
+          Color: FsColor
+          StrokeWidth: float option }
+
+    with 
+        static member internal Read(textInfos: IntegratedTextRenderInfo list) =
+            let fill = 
+                textInfos
+                |> List.tryFind(ITextRenderInfo.hasFill)
+
+            match fill with 
+            | None -> None
+            | Some fill ->
+
+                let stroke = 
+                    textInfos
+                    |> List.tryFind(ITextRenderInfo.hasStroke)
+
+                let fontName =
+                    fill.TextRenderInfo.GetFont().GetFontProgram().GetFontNames()
+                    |> FsFontName.TryCreate
+                let border =
+                    match stroke with 
+                    | Some v ->
+                        v.TextRenderInfo.GetGraphicsState().GetLineWidth()
+                        |> float
+                        |> Some
+                    | _ -> None 
+
+                { Color = fill.TextRenderInfo.GetFillColor() |> FsColor.OfItextColor
+                  Size = ITextRenderInfo.getActualFontSize fill 
+                  FontName = fontName
+                  StrokeWidth = border
+                }
+                |> Some
+
+    type ColoredBoxWithText =
+        { 
+          /// contents inside bound
+          Text: PdfConcatedTexts
+          Bound: SerializableIndexedBound
+          /// Only exists when ColoredBoxWithText.Pick(extractingIndex = true)
+          FontAppearance: ColoredBoxFontAppearance option
+          ExtractorIndex: int option
           PageNumber: PageNumber
           Color: FsColor }
     with 
-        member x.Box = x.Bound.Bound
+        member x.Box = x.Bound.Bound.AsRectangle
 
-        //member x.LoggingText =
-        //    x.IndexTextInfo.Text() + "(" + (
-        //        x.TextInfos
-        //        |> List.map(fun m -> m.Text())
-        //        |> String.concat " "
-        //    ) + ")"
+        static member Pick(pageNumber, color: FsColor, infos: IIntegratedRenderInfo list, ?extractingIndex, ?specificIndexColor) =
+            let extractingIndex = defaultArg extractingIndex false
 
-        member private x.FsRectangle = FsRectangle.OfRectangle x.Box
-
-        static member Pick(pageNumber, color: FsColor, infos: IIntegratedRenderInfo list) =
             let bounds =
                 infos
                 |> List.choose IIntegratedRenderInfo.asIPathRenderInfo
@@ -280,23 +327,370 @@ module _Template_ColoredBoxes =
             |> List.map(fun groupedBound ->
                 match groupedBound with 
                 | Some (bound, textInfos) ->
-                    let indexedTextInfos, textInfos =
-                        textInfos
-                        |> List.partition(
-                            IAbstractRenderInfo.FsColorIs(FillOrStrokeOptions.Fill, color)
-                        )
-                    { ColoredBoxWithTexts.Color = color 
+
+                    let textInfos, index =
+                        match extractingIndex with 
+                        | false -> textInfos, None
+                        | true  -> 
+                            let color =
+                                match specificIndexColor with 
+                                | None -> color
+                                | Some color -> color 
+                            let indexedTextInfos, textInfos =
+                                textInfos
+                                |> List.partition(
+                                    IAbstractRenderInfo.FsColorIs(FillOrStrokeOptions.Fill, color)
+                                )
+                            let index = 
+                                match extractingIndex with 
+                                | false -> None
+                                | true ->
+                                    match indexedTextInfos with 
+                                    | [] -> None 
+                                    | _ -> 
+                                        indexedTextInfos 
+                                        |> List.exactlyOne 
+                                        |> fun m -> m.ConcatedText() 
+                                        |> System.Int32.Parse
+                                        |> Some
+
+                            textInfos, index
+
+                    let fonts = 
+                        match extractingIndex with 
+                        | true -> ColoredBoxFontAppearance.Read textInfos
+                        | false -> None
+
+                    { ColoredBoxWithText.Color = color 
                       Text = 
                         textInfos
+                        |> TextInfos.sortByRotation (fun _ -> bound.Bound) (ITextRenderInfo.getTextRotation)
                         |> List.map(fun m -> m.PdfConcatedWord())
                         |> PdfConcatedTexts.Words
 
-                      Bound = bound
+                      FontAppearance = fonts
+                      Bound = bound.Serializable
                       PageNumber = pageNumber
-                      ExtractorIndex = indexedTextInfos |> List.exactlyOne |> fun m -> m.ConcatedText() |> System.Int32.Parse }
+                      ExtractorIndex = index
+                      }
                     |> Some
                 | None -> None
             )
             |> List.choose id
             |> List.sortBy(fun m -> m.ExtractorIndex)
             |> AtLeastOneList.TryCreate
+
+        member private x.FsRectangle = x.Bound.Bound
+
+
+    type ColoredBoxWithNumberAndText = 
+        { 
+          /// contents inside bound
+          Text: PdfConcatedTexts
+          Bound: SerializableIndexedBound
+          FontAppearance: ColoredBoxFontAppearance option
+          ExtractorIndex: int
+          PageNumber: PageNumber
+          Color: FsColor }
+    with 
+        member x.Number  =x.ExtractorIndex
+
+        member x.Box = x.Bound.Bound.AsRectangle
+
+        static member Pick(pageNumber, color: FsColor, infos: IIntegratedRenderInfo list, ?specificIndexColor) =
+            let x =     
+                ColoredBoxWithText.Pick(
+                    pageNumber,
+                    color,
+                    infos,
+                    extractingIndex = true,
+                    ?specificIndexColor = specificIndexColor
+                )
+            x
+            |> Option.map (AtLeastOneList.map(fun m ->
+            
+                { Text = m.Text 
+                  Bound = m.Bound
+                  FontAppearance = m.FontAppearance
+                  ExtractorIndex = 
+                    match m.ExtractorIndex with 
+                    | Some v -> v
+                    | None -> failwithf "Cannot find Index Text in %A" (m)
+                  PageNumber = m.PageNumber
+                  Color = m.Color}
+            ))
+
+    
+
+
+    type _OutsidesAndInsides<'OutSide, 'Inside> = 
+        { 
+            Outsides: 'OutSide list
+            Insides:  'Inside  list
+        }
+
+    /// No contents
+    type ColoredBoxWithNumber =
+        { 
+          Bound: SerializableIndexedBound
+          ExtractorIndex: int
+          PageNumber: PageNumber
+          Color: FsColor }
+
+
+        member x.Number = x.ExtractorIndex
+
+        member x.Box = x.Bound.Bound.AsRectangle
+
+
+
+
+        static member Pick(pageNumber, color, infos_insides) =
+            ColoredBoxWithNumberAndText.Pick(pageNumber, color, infos_insides)
+            |> Option.map (AtLeastOneList.map(fun m ->
+                { Bound = m.Bound
+                  Color  = m.Color
+                  ExtractorIndex = m.ExtractorIndex
+                  PageNumber = m.PageNumber}
+                
+            ))
+
+        
+        static member Selector(color: FsColor, textPosition, ?specificIndexColor) =
+            let colors =
+                [
+                    color
+                    match specificIndexColor with 
+                    | Some color -> color
+                    | None -> ()
+                ]
+
+            PathOrText(
+                fun args info ->
+                    let textPositionPredicate = 
+                        match textPosition with 
+                        | TextPosition.InsideBox ->
+                            Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox) args info
+                        | TextPosition.BothInsideAndOutsideBox -> true
+
+                    textPositionPredicate
+                    && Info.ColorIsOneOf(FillOrStrokeOptions.FillOrStroke, colors) args info
+            )
+
+        static member private Flow_Read_PageModifier(color: FsColor, textPosition) =
+            (fun args infos ->  
+                let pageBox = args.Page.GetActualBox()
+                let infos_insides, infos_outsides =
+                    infos
+                    |> List.ofSeq
+                    |> List.partition(fun info ->
+                        let bound = 
+                            IAbstractRenderInfo.getBound 
+                                BoundGettingStrokeOptions.WithoutStrokeWidth
+                                info
+                        bound.IsInsideOf(pageBox)
+                    )
+
+
+                let insides = 
+                    ColoredBoxWithNumber.Pick(PageNumber args.PageNum, color, infos_insides)
+                    |> AtLeastOneList.optionToList
+
+                let outSides =
+                    match textPosition with 
+                    | TextPosition.InsideBox _ -> None
+                    | TextPosition.BothInsideAndOutsideBox _ -> 
+                        ColoredBoxWithNumber.Pick(PageNumber args.PageNum, color, infos_outsides)
+                    |> AtLeastOneList.optionToList
+
+                {
+                    Insides = insides
+                    Outsides = outSides
+                }
+
+            )
+
+        static member Flow_Read(color: FsColor, textPosition) =
+            let flow =
+                ModifyPage.Create(
+                    "read ColoredBoxWithNumber",
+                    PageSelector.All,
+                    ColoredBoxWithNumber.Selector(color, textPosition),
+                    ColoredBoxWithNumber.Flow_Read_PageModifier(color, textPosition)
+                )
+
+            flow
+
+
+    type ColoredBoxWithNumberAndTextFactory =
+        static member Selector(boxesFactory: PageNumber -> ColoredBoxWithNumber al1List, textPosition: TextPosition, specificTextColor: FsColor option) =
+            Text(
+                fun args info ->
+                    let boxes = (args.PageNum) |> PageNumber |> boxesFactory
+                    let exceptColors =
+                        boxes.AsList
+                        |> List.map (fun m -> m.Color)
+                        |> FsColors.distinct
+                        |> List.ofSeq
+
+                    let textPositionPredicate = 
+                        match textPosition with 
+                        | TextPosition.InsideBox ->
+                            Info.DenseBoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox) args info
+                        | TextPosition.BothInsideAndOutsideBox -> true
+
+                    let b =
+                        textPositionPredicate
+                        && (match specificTextColor with 
+                            | Some color -> Info.FillColorIs color args info
+                            | None -> true
+                            )
+                        && Info.FillColorIsNotOneOf(exceptColors) args info
+
+                    if not textPositionPredicate then ()
+
+                    match b with 
+                    | true -> b
+                    | false -> b
+
+            )
+
+        static member Flow_ReadTextsByOrder_PageModifier(boxesFactory: PageNumber -> ColoredBoxWithNumber al1List, textPosition: TextPosition, allowEmptyInsideBox, specificTextColor: FsColor option, filterInfos) =
+            (fun args infos ->
+                let textInfos = 
+                    let infos = 
+                        match filterInfos with 
+                        | true -> 
+                            let predicate =
+                                ColoredBoxWithNumberAndTextFactory.Selector(boxesFactory, textPosition, specificTextColor)
+                                |> Selector.toRenderInfoSelector args
+                                |> RenderInfoSelector.toRenderInfoPredication
+
+                            infos
+                            |> List.ofSeq 
+                            |> List.filter predicate
+
+                        | false ->
+                            infos
+                            |> List.ofSeq
+
+                    infos
+                    |> List.choose(IIntegratedRenderInfo.asITextRenderInfo)
+                    |> List.filter (fun m -> 
+                        m.ConcatedText().Trim() <> ""
+                    )
+
+
+                let boxes = 
+                    (args.PageNum) |> PageNumber |> boxesFactory
+                    |> AtLeastOneList.sortBy_explictly<_, _>(fun m -> m.Number)
+
+                let groupedInfos =
+                    PageInfosSplitter.Groupby_CenterPointIsInside.Infos__GroupOrFilter_IntoOp(
+                        (boxes.AsList |> List.map(fun m -> m.Box)),
+                        textInfos,
+                        (fun info ->
+                            IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth info
+                            |> Some
+                            |> TargetPageBox
+                        )
+                    )
+
+
+
+                boxes.AsList
+                |> List.mapi (fun i box ->
+                    let (textInfos) =
+                        groupedInfos.[i]
+                        |> Option.map snd
+                        |> Option.defaultValue []
+
+                    let fonts = ColoredBoxFontAppearance.Read textInfos
+
+
+                    let m = BoxWithText.Pick(box.Box, textInfos, allowEmptyInsideBox = allowEmptyInsideBox)
+                    let m: ColoredBoxWithNumberAndText =
+                        { ExtractorIndex = box.Number 
+                          Text = 
+                            match allowEmptyInsideBox with 
+                            | true -> m.Text
+                            | false ->
+                                failwithf "Cannot Extract any text in ColoredBoxWithNumber %A" box
+
+                          FontAppearance = fonts
+                          PageNumber = PageNumber args.PageNum
+                          Bound = { IndexedBound.Index = i; Bound = m.Box }.Serializable
+                          Color = box.Color }
+
+                    m
+                )
+                |> AtLeastOneList.Create
+            )
+
+        static member Flow_ReadTextsByOrder(boxesFactory: PageNumber -> ColoredBoxWithNumber al1List, textPosition: TextPosition, allowEmptyInsideBox, specificTextColor: FsColor option) =
+
+            let flow =
+                ModifyPage.Create(
+                    "ReadTexts by Ordered ColoredBoxWithNumber",
+                    PageSelector.All,
+                    ColoredBoxWithNumberAndTextFactory.Selector(boxesFactory, textPosition, specificTextColor),
+                    ColoredBoxWithNumberAndTextFactory.Flow_ReadTextsByOrder_PageModifier(boxesFactory, textPosition, allowEmptyInsideBox, specificTextColor, false)
+                )
+
+            flow
+
+        static member Flow_Read(color, textPosition: TextPosition, specificTextColor: FsColor option) =
+            
+            let pos = textPosition
+            Manipulate.Factory(fun flowModel document ->
+                ColoredBoxWithNumber.Flow_Read(color, pos)
+                <+>
+                Manipulate.Func(fun colorBoxLists ->
+                    let coloredBoxWithNumberLists =
+                        colorBoxLists
+                        |> List.map(fun (m: _OutsidesAndInsides<ColoredBoxWithNumber, ColoredBoxWithNumber>) ->
+                            let coloredBoxWithNumbers = 
+                                let insides =
+                                    m.Insides
+
+                                let outsides =
+                                    m.Outsides
+
+                                insides @ outsides
+                                |> List.distinctBy(fun m -> m.Number)
+                                |> List.sortBy(fun m -> m.Number)
+
+                            coloredBoxWithNumbers
+                        )
+
+                    let coloredBoxWithTexts = 
+                        let coloredBoxWithNumberLists =
+                            coloredBoxWithNumberLists
+                            |> List.map(AtLeastOneList.Create)
+
+                        let factory (pageNum: PageNumber) =
+                            coloredBoxWithNumberLists.[pageNum.Value-1]
+
+                        ColoredBoxWithNumberAndTextFactory.Flow_ReadTextsByOrder(
+                            factory,
+                            pos,
+                            allowEmptyInsideBox = true,
+                            specificTextColor = specificTextColor
+                        )
+                
+                    coloredBoxWithTexts
+                    ||>> (fun m ->
+                        match m with 
+                        | [] -> failwithf "Cannot read any ColoredBoxWithNumber in %s" flowModel.PdfFile.Path
+                        | v -> AtLeastOneList.Create v
+                    )
+                )
+            )
+
+
+
+
+        static member Read(pdfFile, color, textPosition: TextPosition, specificTextColor: FsColor option) =
+            ColoredBoxWithNumberAndTextFactory.Flow_Read(color, textPosition, specificTextColor)
+            |> Flow.Manipulate
+            |> PdfRunner.OneFileFlow_UserState(pdfFile)

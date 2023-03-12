@@ -426,6 +426,10 @@ module Operators =
     let mm (mm: float) =
         mm / 25.4 * 72.
 
+
+    let CM (cm: float) =
+        mm cm * 10.
+
     let mmZ (mm: float) =
         mm / 25.4 * 72.
         |> ``ufloat>0``

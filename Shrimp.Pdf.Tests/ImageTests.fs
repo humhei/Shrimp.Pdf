@@ -32,6 +32,21 @@ let imageTests =
 
             ()
 
+        testCase "convert pdf to pixed pdf" <| fun _ -> 
+            let pdfFile =
+                @"datas/image/convert image to pixed pdf.pdf" 
+                |> PdfFile
+
+            let targetPath =
+                pdfFile.Path
+                |> Path.changeExtension ".pixel.pdf"
+                |> PdfPath
+
+            let jpegs = 
+                ImageConverter.ConvertPdfToPixedPdf(pdfFile, targetPath)
+
+            ()
+
         testCase "convert jpg to pdf" <| fun _ -> 
             let jpgFile =
                 @"datas/image/convert jpg to pdf.jpg" 

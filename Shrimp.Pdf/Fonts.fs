@@ -1464,6 +1464,13 @@ module RegisterableFonts =
               FontFamily = "黑体"
               File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/黑体.ttf")) }
 
+
+        let Songti =
+            { PdfEncodings = PdfEncodings.IDENTITY_H
+              FontFamily = "宋体"
+              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/宋体.ttc")) }
+
+
     module Adobe =
 
         let AdobeHeitiStd_Regular = 
@@ -1575,3 +1582,7 @@ module RegisterableFonts =
      
 
 
+    let findRigisterableFont (fontName: string) =
+        match fontName with 
+        | String.EqualIC "SimSun" -> Result.Ok CommonFonts.Songti
+        | _ -> Result.Error (sprintf "Cannot find RigisterableFont by %s" fontName)

@@ -323,35 +323,7 @@ module Manipulates =
 
 
 
-        static member TrimToVisible (pageSelector: PageSelector, ?margin: Margin)  =
-            let margin = defaultArg margin (Margin.Create 0.)
-            ModifyPage.Create(
-                "trim to visible",
-                pageSelector,
-                PathOrText (Info.IsVisible()),
-                (fun args renderInfos ->
-                    let bounds = 
-                        renderInfos
-                        |> Seq.choose (IIntegratedRenderInfo.tryGetVisibleBound BoundGettingStrokeOptions.WithStrokeWidth)
-                        |> AtLeastOneList.TryCreate
 
-                    let bound =
-                        bounds
-                        |> Option.map Rectangle.ofRectangles
-
-                    match bound with 
-                    | Some bound ->
-                        args.Page.SetActualBox(bound |> Rectangle.applyMargin margin)
-                        |> ignore
-
-                    | None -> 
-                        failwithf "Cannot trim to visible as all infos are invisible"
-
-                ),
-                parameters = [
-                    "margin" => margin.ToString()
-                ]
-            )  ||>> ignore
 
 
         static member ScaleContentsTo(pageSelector, fRect) =

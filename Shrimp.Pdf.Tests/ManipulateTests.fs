@@ -76,6 +76,12 @@ let manipulateTests =
         let path = "datas/manipulate/read shading colors3.pdf" 
         let colors = PdfRunner.ReadColors(PdfFile path)
         ()
+
+
+    testCase "read shading colors4" <| fun _ ->  
+        let path = "datas/manipulate/read shading colors4.pdf" 
+        let colors = PdfRunner.ReadColors(PdfFile path)
+        ()
         
     ptestCase "read complex infos" <| fun _ ->  
         let path = "datas/manipulate/read complex infos.pdf" 
@@ -212,6 +218,18 @@ let manipulateTests =
             Modify.CreateClippingPath(Info.StrokeColorIs FsColor.RGB_BLUE)
         )
         |> runTest "datas/manipulate/make clipping path from blue strokes.pdf" 
+        |> ignore
+
+    testCase "make clipping path from blue strokes2" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.CreateClippingPath(
+                Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation),
+                keepCompoundPath = true,
+                condition = ClippingCondition.ClipIfPathCountSmallerOrEqualThan 2
+
+            )
+        )
+        |> runTest "datas/manipulate/make clipping path from blue strokes2.pdf" 
         |> ignore
 
     testCase "make clipping path from blue strokes by minimum area" <| fun _ ->    
@@ -562,6 +580,33 @@ let manipulateTests =
             )
         )
         |> runTest "datas/manipulate/change gold to black.pdf" 
+        |> ignore
+
+    testCase "change light blue to separation" <| fun _ ->
+        let lightBlue = 
+            FsDeviceCmyk.OfLoggingText_Raw "CMYK 47.7 4.0 3.3 0.0"
+            |> FsValueColor.Cmyk
+
+        let lightBlue_Sepration: FsSeparation =
+            FsSeparation.Create("样品天蓝色", lightBlue)
+
+        Flow.Manipulate(
+            Modify.ReplaceColors(
+                colorMapping =
+                    ColorMappings(AtLeastOneList.Create [
+                        { OriginColors = 
+                            AtLeastOneList.Create [
+                                AlternativeFsColor.ValueColor lightBlue
+                            ]
+
+                          NewColor = NullablePdfCanvasColor.Separation lightBlue_Sepration
+                          Tolerance = ValueEqualOptionsTolerance.Rough
+                        
+                        }
+                    ])
+            )
+        )
+        |> runTest "datas/manipulate/change light blue to separation.pdf" 
         |> ignore
 
     testCase "change rgb gray to gray" <| fun _ ->
@@ -1056,25 +1101,33 @@ let manipulateTests =
         |> runTest "datas/manipulate/add colored texts to position4.pdf" 
         |> ignore
 
-    testCase "add text to position" <| fun _ -> 
+    ftestCase "add text to position" <| fun _ -> 
+        let longText = 
+            "Arial"
+            |> List.replicate 10
+            |> String.concat " "
+
         Flow.Manipulate (
             ModifyPage.Create
                 ("add text to position",
                   PageSelector.All,
                   Dummy,
                   PageModifier.Batch [
-                    PageModifier.AddText(PageBoxKind.ActualBox, "Arial", fun args ->
+                    PageModifier.AddText(AreaGettingOptions.Specfic(Rectangle.create 0 0 100 100), longText, fun args ->
                       { args with 
                           PdfFontFactory = FsPdfFontFactory.Registerable (Arial.arial Arial.FontWeight.Italic)
                           CanvasFontSize = CanvasFontSize.Numeric 25. 
                           FontColor = PdfCanvasColor.Separation (FsSeparation.Create("帖标",FsValueColor.RGB_BLUE))
                           FontRotation = Rotation.None 
-                          Position = Position.RightTop(0., 0.)}
+                          Position = Position.LeftMiddle(0., 0.)
+                          ClipContents = true
+                        }
                     )
 
                     PageModifier.AddText(PageBoxKind.ActualBox, "你好Separation", fun args ->
                       { args with 
-                          PdfFontFactory = FsPdfFontFactory.Registerable (yaHei FontWeight.Bold)
+                          
+                          PdfFontFactory = FsPdfFontFactory.Registerable (CommonFonts.Songti)
                           CanvasFontSize = CanvasFontSize.Numeric 25. 
                           FontColor = PdfCanvasColor.Separation (FsSeparation.Create("帖标",FsValueColor.RGB_BLUE))
                           FontRotation = Rotation.None 
@@ -1462,7 +1515,14 @@ let manipulateTests =
             Flow.Manipulate(
                 ModifyPage.TrimToVisible (PageSelector.All)
             )
-            |> runTest "datas/manipulate/trim to visible8.pdf" 
+            |> runTest "datas/manipulate/trim to visible9.pdf" 
+            |> ignore
+    
+        testCase "trim to visible test10" <| fun _ -> 
+            Flow.Manipulate(
+                ModifyPage.TrimToVisible (PageSelector.All)
+            )
+            |> runTest "datas/manipulate/trim to visible10.pdf" 
             |> ignore
     ]
 

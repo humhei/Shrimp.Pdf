@@ -68,9 +68,10 @@ type PageModifier =
     static member private AddNew (canvasAreaOptions, canvasActionsBuilder) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             let page = args.Page
+            let rootArea = page.GetArea(canvasAreaOptions)
             let canvas = 
-                let rootArea = page.GetArea(canvasAreaOptions)
                 new Canvas(page, rootArea)
+
 
             let canvasActions = canvasActionsBuilder args
 

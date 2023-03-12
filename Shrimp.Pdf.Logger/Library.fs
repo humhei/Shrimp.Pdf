@@ -34,9 +34,19 @@ module Logger =
         | None -> printfn "ERROR: %s" message
 
     let info (message: string) =
+        
         match configuration.Value with 
         | Some (_) -> 
             logger.Value.Info message
+        | None -> printfn "%s" message
+
+    let info_alwaysPrintingInConsole (message: string) =
+        
+        match configuration.Value with 
+        | Some (_) -> 
+            logger.Value.Info message
+            printfn "%s" message
+
         | None -> printfn "%s" message
 
     let private textRenderModes: HashSet<int> = new HashSet<_>()

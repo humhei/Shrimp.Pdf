@@ -310,6 +310,10 @@ module _Renewable =
            TextMatrix: Matrix
            TextLeading: float32
            TextRenderingMode: int
+           WordSpacing: float32
+           CharSpacing: float32
+           TextRise: float32
+           HorizontalScaling: float32
            HeaderTextRenderInfo: TextRenderInfo
            ClippingPathInfos: ClippingPathInfos
            OriginInfo: IntegratedTextRenderInfo
@@ -340,12 +344,22 @@ module _Renewable =
                 |> PdfCanvas.beginText
                 |> PdfCanvas.setTextRenderingMode x.TextRenderingMode
                 //|> PdfCanvas.setTextLeading x.TextLeading
+                |> PdfCanvas.setHorizontalScaling x.HorizontalScaling
+                |> PdfCanvas.setCharSpacing x.CharSpacing
+                |> PdfCanvas.setWordSpacing x.WordSpacing
                 |> PdfCanvas.setFontAndSize(x.Font, x.RawFontSize)
                 |> PdfCanvas.setTextMatrix textMatrix
                 |> (fun canvas ->
                     match x.Kind with 
                     | RenewableTextInfoKind.ConcatedText operatorRange -> PdfCanvas.writeOperatorRange operatorRange canvas
                     | RenewableTextInfoKind.Word text -> PdfCanvas.showText text canvas
+                    |> ignore
+
+                    match x.HorizontalScaling with 
+                    | 100.f -> canvas
+                    | scale -> canvas.SetHorizontalScaling(scale)
+
+
                 )
                 |> PdfCanvas.endText
             )
@@ -386,6 +400,10 @@ module _Renewable =
               TextMatrix = renderInfo.GetTextMatrix()
               TextLeading = renderInfo.GetLeading()
               TextRenderingMode = renderInfo.GetTextRenderMode()
+              HorizontalScaling = renderInfo.GetHorizontalScaling()
+              WordSpacing = renderInfo.GetWordSpacing()
+              CharSpacing = renderInfo.GetCharSpacing()
+              TextRise = renderInfo.GetRise()
               LineWidth = renderInfo.GetGraphicsState().GetLineWidth()
               ExtGState = extGState
               DashPattern = CanvasGraphicsState.getDashPattern (gs)
@@ -467,6 +485,13 @@ module _Renewable =
         | Text of RenewableTextInfo
         | Image of RenewableImageInfo
     with 
+
+        member private x.Bound =
+            match x with 
+            | Path info ->  info.OriginInfo.RecordValue.Bound |> Some
+            | Text info ->  info.OriginInfo.RecordValue.Bound |> Some
+            | Image info -> info.OriginInfo.VisibleBound() |> Option.map FsRectangle.OfRectangle
+
         member x.OriginInfo =
             match x with 
             | RenewableInfo.Path info -> info.OriginInfo :> IIntegratedRenderInfoIM

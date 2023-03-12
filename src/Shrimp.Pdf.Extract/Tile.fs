@@ -3,7 +3,7 @@
 open iText.Kernel.Pdf
 open Shrimp.Pdf.Colors
 open Shrimp.Pdf.Imposing
-
+open System.IO
 #nowarn "0104"
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.Extensions
@@ -416,6 +416,12 @@ module _Tile =
           SamplePdfFile: SamplePdfFile option }
 
 
+    type TiledAndNUpResult =
+        {
+            PageTilingResults: PageTilingResults_TextPicker
+            ImposingDocument: ImposingDocument
+            TiledPdfFile: PdfFile
+        }
 
 
     type PageTilingResults = 
@@ -509,7 +515,20 @@ module _Tile =
     //                Rectangle.getTile tileIndexer tileTable actualBox
     //                |> FsRectangle.OfRectangle
     //            )
+    let internal logExtractingFile pageNumber (flowModel: FlowModel<_>) =
+        match pageNumber with 
+        | 1 -> 
+            let logInfo (text) = 
+                let configuration = flowModel.Configuration
+                let logger: PageLogger =
+                    { LoggerLevel = configuration.LoggerLevel 
+                      LoggingPageCountInterval = loggingPageCountInterval.Value }
 
+                logger.Log(text, alwaysPrintingConsole_If_Info = true)
+
+            logInfo 
+                (fun () -> sprintf "Extracting %s" (Path.GetFileNameWithoutExtension flowModel.File)) 1
+        | _ -> ()
 
     type Flows with 
         static member TilePages (areaTables: AreaTable list, ?sorter: SelectionSorter, ?pageTilingRenewOptions: PageTilingRenewOptions) =
@@ -526,6 +545,8 @@ module _Tile =
                     match areaTables.Length = totalNumberOfPages with 
                     | true -> ()
                     | false -> failwithf "totalNumberOfPages %d <> areaTables's Length %d" totalNumberOfPages areaTables.Length
+
+
 
                 for pageNumber = 1 to totalNumberOfPages do
                     let readerPage = reader.GetPage(pageNumber)
@@ -565,6 +586,8 @@ module _Tile =
 
                             let selector =
                                 Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+
+                            logExtractingFile pageNumber flowModel
 
                             extractVisibleRenewableInfosToWriter 
                                 flowModel.Configuration
@@ -653,6 +676,8 @@ module _Tile =
 
                         let selector =
                             Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+
+                        logExtractingFile pageNumber flowModel
 
                         extractVisibleRenewableInfosToWriter 
                             flowModel.Configuration
@@ -908,6 +933,8 @@ module _Tile =
                                     Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
                             
                                 let infos =
+                                    logExtractingFile pdfPageNumber flowModel
+
                                     extractVisibleRenewableInfosToWriter 
                                         flowModel.Configuration
                                         args
@@ -1096,23 +1123,34 @@ module _Tile =
                 ||>> (fun m -> m.ToTextPicker_OR_Fail())
             )
             <++>
-            Flow.Reuse(
-                Reuse.Func(fun (r: PageTilingResults_TextPicker) ->
-                    match r.Layouts with 
-                    | PageTilingLayoutResults.DistinctedOne r -> 
-                        Reuses.Impose(fun args ->
-                            { args with 
-                                ColNums = r.ColNums
-                                RowNum = r.RowNum
-                                Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.MM6)
-                                Cropmark = Some Cropmark.defaultValue
-                                Background = Background.Size FsSize.MAXIMUN
-                            }
-                            |> (defaultArg fArgs id)
-                        )
+            Flow.Factory(fun flowModel ->
+                Flow.Reuse(
+                    Reuse.Func(fun (r: PageTilingResults_TextPicker) ->
+                        match r.Layouts with 
+                        | PageTilingLayoutResults.DistinctedOne r -> 
+                            Reuses.Impose(fun args ->
+                                { args with 
+                                    ColNums = r.ColNums
+                                    RowNum = r.RowNum
+                                    Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.MM6)
+                                    Cropmark = Some Cropmark.defaultValue
+                                    Background = Background.Size FsSize.MAXIMUN
+                                }
+                                |> (defaultArg fArgs id)
+                            )
 
-                    | _ -> failwith "Not implemented"
+                        | _ -> failwith "Not implemented"
+                    )
                 )
+                ||>> (fun imposingDocument -> imposingDocument, flowModel.PdfFile
+                )
+            )
+            ||>> (fun (pageTilingResults, (imposingDocument, tiledPdfFile)) ->
+                {
+                    PageTilingResults = pageTilingResults
+                    ImposingDocument = imposingDocument
+                    TiledPdfFile = tiledPdfFile
+                }
             )
 
         /// pick subPage for each page

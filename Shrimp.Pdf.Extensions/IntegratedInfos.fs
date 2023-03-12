@@ -487,6 +487,12 @@ module IntegratedInfos =
             | Vector vector -> IAbstractRenderInfo.getBound boundGettingStrokeOptions vector |> Some
             | Pixel info -> info.VisibleBound()
 
+        let tryGetVisibleBound boundGettingStrokeOptions (info) =
+            match info with 
+            | Vector vector -> 
+                IIntegratedRenderInfo.tryGetVisibleBound boundGettingStrokeOptions vector
+            | Pixel info -> info.VisibleBound()
+            
 
         let isVisible (info: IIntegratedRenderInfoIM) =
             match info with 

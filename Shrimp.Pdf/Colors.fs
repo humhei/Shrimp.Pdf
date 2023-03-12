@@ -78,13 +78,13 @@ module _Colors =
 
         static member DefaultValue =
             { Rgb  =  ToleranceColorValue 0.0025 
-              Cmyk = ToleranceColorValue 0.01
-              Lab  = ToleranceColorValue 0.01
+              Cmyk = ToleranceColorValue 0.0025
+              Lab  = ToleranceColorValue 0.1
               Gray = ToleranceColorValue 0.0025 }
 
         static member Rough =
             { Rgb  =  ToleranceColorValue 0.01
-              Cmyk = ToleranceColorValue  1.0
+              Cmyk = ToleranceColorValue  0.01
               Lab  = ToleranceColorValue  1.0
               Gray = ToleranceColorValue  0.01 }
             
@@ -349,6 +349,7 @@ module _Colors =
         static member RED =  { C = 0.0f; M = 1.0f; Y = 1.0f; K = 0.0f }
         static member GREEN =  { C = 1.0f; M = 0.0f; Y = 1.0f; K = 0.0f }
 
+        /// Range100
         member x.LoggingText_Raw =
             let x = x.Range100
             let colorName = sprintf "%.1f %.1f %.1f %.1f" (x.C) x.M x.Y x.K
@@ -383,7 +384,7 @@ module _Colors =
             | None -> x.LoggingText_Raw
 
             
-
+        /// Range100
         static member OfLoggingText_Raw(text) = 
             let parser = 
                 pstringCI "CMYK " >>. (sepBy1 pfloat spaces1) .>> eof
