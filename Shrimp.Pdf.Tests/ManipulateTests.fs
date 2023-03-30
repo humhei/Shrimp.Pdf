@@ -1101,7 +1101,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/add colored texts to position4.pdf" 
         |> ignore
 
-    ftestCase "add text to position" <| fun _ -> 
+    testCase "add text to position" <| fun _ -> 
         let longText = 
             "Arial"
             |> List.replicate 10

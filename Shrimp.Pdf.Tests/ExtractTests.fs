@@ -822,6 +822,32 @@ let extractTests =
             |> runTest "datas/extract/tile pages and NUP by selector4.pdf" 
             |> ignore
 
+        ftestCase "tile pages and NUP by selector5" <| fun _ -> 
+            let pageNumbers =
+                [1; 10]
+                |> List.map PageNumber
+                |> AtLeastTwoList.Create 
+
+            Flows.TilePagesAndNUp(
+                 Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBoxWithOffset (PageBoxKind.ActualBox, Margin.Create(mm 0.3)))),
+                 textPicker =( 
+                    { TagColor = Some Colors.PdfExtractorTagColor
+                      TransformTextPickers = 
+                        (fun args bound infos ->
+                            let coloredBoxWithTextInfos = ColoredBoxWithNumberAndText.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                            coloredBoxWithTextInfos :> System.IComparable
+                        )
+                    }
+                ),
+                pageTilingRenewInfosSplitter = PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0,
+                transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound)
+                //samplePageExtractingOptions = 
+
+                //    (SamplePageExtractingOptions.FirstPageMultipleSelectors (pageNumbers,PdfPath @"C:\Users\Jia\Desktop\mySample.pdf"))
+            )
+            |> runTest "datas/extract/tile pages and NUP by selector5.pdf" 
+            |> ignore
+
         testCase "tile pages by selector tests8" <| fun _ -> 
             Flows.TilePages
                 (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
