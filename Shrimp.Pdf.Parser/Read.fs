@@ -1018,7 +1018,7 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
             with ex ->
                 if ex.Message = "Dictionary doesn't have supported font data." 
                 then
-                    Logger.warning (sprintf "Skip checking MM font %A" operator)
+                    PdfLogger.warning (sprintf "Skip checking MM font %A" operator)
                     let size = (operands.[1]) :?> PdfNumber
                     let size = size.FloatValue()
                     processor.GetGraphicsState().SetFontSize(size)

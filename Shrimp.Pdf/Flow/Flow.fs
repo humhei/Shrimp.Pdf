@@ -111,7 +111,7 @@ module rec _FlowMutualTypes =
 
                         let flowModel = { flowModel with FlowName = Some flowName0; OperatedFlowNames = flowName0 :: flowModel.OperatedFlowNames }
 
-                        Logger.TryInfoWithFlowModel(index, flowModel, fun _ ->
+                        PdfLogger.TryInfoWithFlowModel(index, flowModel, fun _ ->
                             let flowModels = Flow<_, _>.Run([flowModel], flow)
 
                             flowModel.TryBackupFile(index)
@@ -452,18 +452,18 @@ module Operators =
                 )
 
             match config.LoggerLevel with 
-            | LoggerLevel.Info ->
+            | PdfLoggerLevel.Info ->
                 let filesListText =
                     flowModels 
                     |> List.map (fun m -> m.File)
                     |> String.concat "\n"
 
-                Logger.infoWithStopWatch(sprintf "RUN: %s" filesListText) (fun _ ->
+                PdfLogger.infoWithStopWatch(sprintf "RUN: %s" filesListText) (fun _ ->
                     Flow<_, _>.Run(flowModels, flow)
                     |> List.map InternalFlowModel.toFlowModel
                 )
 
-            | LoggerLevel.Slient ->
+            | PdfLoggerLevel.Slient ->
                 Flow<_, _>.Run(flowModels, flow)
                 |> List.map InternalFlowModel.toFlowModel
 

@@ -12,7 +12,7 @@ open System.Collections.Generic
 open FParsec.CharParsers
 open FParsec
 open iText.Kernel.Pdf.Canvas.Parser
-open iText.Layout
+open iText.Layout 
 open Shrimp.Pdf
 open Listeners
 open System.Threading
@@ -166,7 +166,7 @@ with
             | CloseOperator.Close, CloseOperator.Close -> TextRenderingMode.INVISIBLE
                 
         | _ -> 
-            Logger.unSupportedTextRenderMode textRenderingMode
+            PdfLogger.unSupportedTextRenderMode textRenderingMode
             textRenderingMode
     
 [<RequireQualifiedAccess>]

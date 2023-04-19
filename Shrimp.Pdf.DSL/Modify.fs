@@ -1382,18 +1382,18 @@ module ModifyOperators =
         | Sync
 
     type PageLogger =
-        { LoggerLevel: LoggerLevel 
+        { LoggerLevel: PdfLoggerLevel 
           LoggingPageCountInterval: int }
     with 
         member x.Log(text, ?alwaysPrintingConsole_If_Info) =
             fun pageNumber ->
                 match x.LoggerLevel with 
-                | LoggerLevel.Info ->
+                | PdfLoggerLevel.Info ->
                     let alwaysPrintingConsole_If_Info = defaultArg alwaysPrintingConsole_If_Info false
                     let logInfo text =
                         match alwaysPrintingConsole_If_Info with 
-                        | true -> Logger.info_alwaysPrintingInConsole (text)
-                        | false -> Logger.info (text)
+                        | true -> PdfLogger.info_alwaysPrintingInConsole (text)
+                        | false -> PdfLogger.info (text)
 
                     match pageNumber = 1 with 
                     | true -> logInfo (text())
@@ -1406,7 +1406,7 @@ module ModifyOperators =
                             | _ -> ()
                         | _ -> ()
 
-                | LoggerLevel.Slient -> ()
+                | PdfLoggerLevel.Slient -> ()
 
     [<RequireQualifiedAccess>]
     module IntegratedDocument =

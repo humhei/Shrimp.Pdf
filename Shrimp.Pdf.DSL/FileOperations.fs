@@ -200,8 +200,8 @@ module FileOperations =
                     |> String.concat "\n"
 
                 match flowModel.Configuration.LoggerLevel with 
-                | LoggerLevel.Info -> Logger.info (sprintf "SPLIT document %s to %s" flowModel.File newFiles) 
-                | LoggerLevel.Slient -> ()
+                | PdfLoggerLevel.Info -> PdfLogger.info (sprintf "SPLIT document %s to %s" flowModel.File newFiles) 
+                | PdfLoggerLevel.Slient -> ()
 
                 reader.Close()
                 newModels
@@ -290,8 +290,8 @@ module FileOperations =
                     )
                     |> String.concat "\n"
                 match flowModel.Configuration.LoggerLevel with 
-                | LoggerLevel.Info -> Logger.info (sprintf "SPLIT document %s to %s" flowModel.File newFiles) 
-                | LoggerLevel.Slient -> ()
+                | PdfLoggerLevel.Info -> PdfLogger.info (sprintf "SPLIT document %s to %s" flowModel.File newFiles) 
+                | PdfLoggerLevel.Slient -> ()
                 reader.Close()
                 newModels
         )

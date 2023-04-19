@@ -58,9 +58,9 @@ module internal rec ManipulateOrReuse =
         let mapTo userState (flowModel: FlowModel<_>) =
             mapM (fun _ -> userState) flowModel
 
-    type Logger with
+    type PdfLogger with
         static member TryInfoWithFlowModel (flowNameIndex, flowModel: FlowModel<_>, f) =
-            Logger.TryInfoWithFlowModel(
+            PdfLogger.TryInfoWithFlowModel(
                 flowNameIndex,
                 flowModel.ToInternalFlowModel(),
                 f = f
@@ -236,7 +236,7 @@ module internal rec ManipulateOrReuse =
                     let flowModel2 =
                         { flowModel with FlowName = Some flowName0; OperatedFlowNames = flowName0 :: flowModel.OperatedFlowNames }
 
-                    Logger.TryInfoWithFlowModel(index, flowModel2, fun _ ->
+                    PdfLogger.TryInfoWithFlowModel(index, flowModel2, fun _ ->
                         let newFlowModel = loop flowModel2 flow
                         flowModel2
                             .ToInternalFlowModel()

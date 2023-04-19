@@ -1585,4 +1585,5 @@ module RegisterableFonts =
     let findRigisterableFont (fontName: string) =
         match fontName with 
         | String.EqualIC "SimSun" -> Result.Ok CommonFonts.Songti
+        | String.EqualIC "ArialMT" -> Result.Ok (Arial.arial (Arial.FontWeight.Regular))
         | _ -> Result.Error (sprintf "Cannot find RigisterableFont by %s" fontName)

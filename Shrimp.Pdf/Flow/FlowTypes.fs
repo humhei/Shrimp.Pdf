@@ -11,9 +11,9 @@ type NameAndParameters =
 
 
 type Configuration =
-    { LoggerLevel: LoggerLevel }
+    { LoggerLevel: PdfLoggerLevel }
 with 
-    static member DefaultValue = { LoggerLevel = LoggerLevel.Info }
+    static member DefaultValue = { LoggerLevel = PdfLoggerLevel.Info }
 
 type FlowModel<'userState> =
     { PdfFile: PdfFile 
@@ -244,12 +244,12 @@ type InternalFlowModelWrapper<'userState> internal (internalFlowModel: InternalF
 
 [<AutoOpen>]
 module internal Logger_FlowModel =
-    type Logger =
+    type PdfLogger =
         static member TryInfoWithFlowModel (flowNameIndex, flowModel: InternalFlowModel<_>, f) =
             match flowModel.FlowName with 
             | Some flowName ->
                 match flowModel.LoggerLevel with 
-                | LoggerLevel.Info ->
+                | PdfLoggerLevel.Info ->
                     match flowName.FlowNameKind.NameAndParameters with 
                     | Some (name, parameters) ->
                         let indentsCount = flowName.RelativeDirectoryNames.Length
@@ -289,7 +289,7 @@ module internal Logger_FlowModel =
                             let message = sprintf "\n%sEND %s" indentText name
                             sprintf "%s in %O \n" message elapsed
 
-                        let (result, message) = Logger.infoWithStopWatchAndReturnFinalMessage (beginMessage) endMessage f
+                        let (result, message) = PdfLogger.infoWithStopWatchAndReturnFinalMessage (beginMessage) endMessage f
                     
                         match flowModel.TryGetBackupDirectory() with 
                         | Some directory ->
@@ -305,6 +305,6 @@ module internal Logger_FlowModel =
 
                     | None -> f ()
 
-                | LoggerLevel.Slient -> f ()
+                | PdfLoggerLevel.Slient -> f ()
 
             | None -> f()

@@ -6,3 +6,4 @@ open Resources
 module Marks = 
     let cmyk writer =
         PdfDocument.obtainMarkFromResources "CMYK" writer
+         

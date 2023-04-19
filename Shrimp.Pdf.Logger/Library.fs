@@ -5,12 +5,12 @@ open System.IO
 open System.Collections.Generic
 
 
-type LoggerLevel =
+type PdfLoggerLevel =
     | Slient = 0 
     | Info = 1
 
 [<RequireQualifiedAccess>]
-module Logger =
+module PdfLogger =
 
     let private logger: Lazy<NLog.Logger> = 
         lazy (NLog.LogManager.GetCurrentClassLogger())

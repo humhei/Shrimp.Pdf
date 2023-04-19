@@ -942,7 +942,7 @@ module iText =
             | TextRenderingMode.FILL_STROKE -> true  
             | TextRenderingMode.FILL -> false
             | _ -> 
-                Logger.unSupportedTextRenderMode textRenderMode
+                PdfLogger.unSupportedTextRenderMode textRenderMode
                 false
 
         let getBound (boundGettingStrokeOptions: BoundGettingStrokeOptions) (info: TextRenderInfo) =
@@ -1077,7 +1077,7 @@ module iText =
             | TextRenderingMode.FILL_STROKE -> true
             | TextRenderingMode.STROKE -> false
             | _ -> 
-                Logger.unSupportedTextRenderMode textRenderMode
+                PdfLogger.unSupportedTextRenderMode textRenderMode
                 false
 
         let hasStroke (info: ITextRenderInfo) =             
@@ -1158,7 +1158,7 @@ module iText =
                 ]
 
             | others -> 
-                Logger.unSupportedTextRenderMode others
+                PdfLogger.unSupportedTextRenderMode others
                 []
 
         let getExtGState (info: ITextRenderInfo) : FsExtGState =    
