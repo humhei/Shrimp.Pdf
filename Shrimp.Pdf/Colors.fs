@@ -323,6 +323,19 @@ module _Colors =
             FsLab.OfHex (int pantoneColor)
 
 
+        static member OfPantoneGeneral(pantoneColor: string) =
+            match pantoneColor with 
+            | String.EndsWithIC "C" -> 
+                stringToEnum pantoneColor
+                |> FsLab.OfPantone
+
+            | String.EndsWithIC "TPX" ->
+                stringToEnum pantoneColor
+                |> FsLab.OfTpx
+                
+            | _ -> failwithf "Cannot parse %s to FsLab" pantoneColor
+
+
     /// valueRange: WHITE 0 -> BLACK 1
     type FsDeviceCmyk =
         { C: float32 
@@ -778,6 +791,15 @@ module _Colors =
 
         static member OfTpx(color: TPXColorEnum) =
             let fsValueColor = FsLab.OfTpx color
+    
+            let separationName1 = color.ToString()
+            
+            { BaseColor = FsValueColor.Lab fsValueColor
+              Name = separationName1
+              Transparency = 1. }
+
+        static member OfPantoneGeneral(color: string) =
+            let fsValueColor = FsLab.OfPantoneGeneral color
     
             let separationName1 = color.ToString()
             
@@ -1396,7 +1418,33 @@ module _Colors =
         let distinct (colors: AlternativeFsColor list) =
             colors.Distinct(comparer)
             
+    type FsDeviceNElement =
+        { ColorName: PdfName 
+          ColorValue: float }
+    with 
+        member x.LoggingText = 
+            sprintf "%s#%g" (x.ColorName.ToString()) x.ColorValue
 
+    type FsDeviceN = FsDeviceN of FsDeviceNElement al1List
+    with 
+            
+
+        member x.Elements =
+            let (FsDeviceN v)  = x
+            v
+
+        member x.Values = 
+            x.Elements.AsList
+            |> List.map(fun m -> float32 m.ColorValue)
+            |> List.toArray
+
+        member x.LoggingText =
+            let (FsDeviceN v) = x
+            v.AsList
+            |> List.map(fun m ->
+                m.LoggingText
+            )
+            |> String.concat "; "
 
     [<RequireQualifiedAccess>]
     type FsColor =
@@ -1405,6 +1453,7 @@ module _Colors =
         | ValueColor of FsValueColor
         | PatternColor of PatternColor
         | ShadingColor of PdfShadingColor
+        | DeviceN of PdfSpecialCs.DeviceN * FsDeviceN
     with 
         member x.AsAlternativeFsColor =
             match x with 
@@ -1412,7 +1461,8 @@ module _Colors =
             | FsColor.IccBased v ->   v  |> AlternativeFsColor.IccBased    |> Some
             | FsColor.Separation v -> v  |> AlternativeFsColor.Separation  |> Some
             | FsColor.PatternColor _ 
-            | FsColor.ShadingColor _ -> None
+            | FsColor.ShadingColor _ 
+            | FsColor.DeviceN _ -> None
 
         static member OfAlternativeFsColor color =
             match color with 
@@ -1434,7 +1484,8 @@ module _Colors =
                     | FsColor.IccBased _
                     | FsColor.Separation _  
                     | FsColor.PatternColor _
-                    | FsColor.ShadingColor _ -> None
+                    | FsColor.ShadingColor _ 
+                    | FsColor.DeviceN _ -> None
 
             match value with 
             | Some value -> value.IsInColorSpace(colorSpace)
@@ -1449,6 +1500,7 @@ module _Colors =
             | FsColor.ValueColor v -> v.LoggingText
             | FsColor.PatternColor _ -> "PatternColor"
             | FsColor.ShadingColor _ -> "ShadingColor"
+            | FsColor.DeviceN (_, v) -> v.LoggingText
 
         member x.LoggingText_Raw =
             match x with 
@@ -1457,6 +1509,7 @@ module _Colors =
             | FsColor.ValueColor v -> v.LoggingText_Raw
             | FsColor.PatternColor _ -> "PatternColor"
             | FsColor.ShadingColor _ -> "ShadingColor"
+            | FsColor.DeviceN (_, v) -> v.LoggingText
 
         override x.ToString() = x.GetType().Name + " " + x.LoggingText
 
@@ -1485,6 +1538,11 @@ module _Colors =
             | FsColor.ShadingColor x ->     
                 match y with 
                 | FsColor.ShadingColor y -> x.Equals(y)
+                | _ -> FALSE
+
+            | FsColor.DeviceN (_, x) ->
+                match y with 
+                | FsColor.DeviceN (_, y) -> x.Equals(y)
                 | _ -> FALSE
 
         static member RGB_BLACK = FsValueColor.RGB_BLACK  |> FsColor.ValueColor
@@ -1557,6 +1615,41 @@ module _Colors =
                 | :? PatternColor as patternColor -> FsColor.PatternColor patternColor
                 | :? PdfShadingColor as shadingColor -> 
                     FsColor.ShadingColor shadingColor
+
+                | :? DeviceN as deviceN ->
+                    let colorSpace_deviceN = deviceN.GetColorSpace() :?> PdfSpecialCs.DeviceN
+
+                    let colorSpace = colorSpace_deviceN.GetPdfObject() :?> PdfArray
+                    let colorNames = 
+                        let colorNames = colorSpace.Get(1)
+                        match colorNames with 
+                        | :? PdfArray as colorNames ->
+                            colorNames
+                            |> List.ofSeq
+                            |> List.map(fun m -> m :?> PdfName)
+
+                        | :? PdfName as name -> [name]
+                        | _ -> failwithf "Cannot read deviceN colorNames from %A" colorNames
+
+                        
+
+
+                    let colorValue =
+                        deviceN.GetColorValue() 
+                        |> List.ofArray
+
+                    let numberOfComponents = deviceN.GetNumberOfComponents()
+                    let fsDiviceN =
+                        List.zip3 [1..numberOfComponents] colorNames colorValue
+                        |> List.map(fun (_, colorName, colorValue) ->
+                            { ColorName = colorName 
+                              ColorValue = float colorValue }
+                        )
+                        |> AtLeastOneList.Create
+                        |> FsDeviceN
+                    
+                    FsColor.DeviceN(colorSpace_deviceN, fsDiviceN)
+
 
                 | _ -> 
                     FsValueColor.OfItextColor color
@@ -1825,6 +1918,7 @@ module _Colors =
             | FsColor.PatternColor _ -> failwithf "Currently conversion of pattern to PdfCanvasColor is not supported" 
             | FsColor.ShadingColor _ -> failwithf "Currently conversion of shading color to PdfCanvasColor is not supported" 
             | FsColor.ValueColor color -> PdfCanvasColor.Value color
+            | FsColor.DeviceN (_, color) -> failwithf "Currently conversion of deviceN to PdfCanvasColor is not supported" 
 
         member pdfCanvasColor.IsEqualTo(fsColor: FsColor) =
             match pdfCanvasColor,fsColor with 

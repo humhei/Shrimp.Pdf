@@ -119,6 +119,14 @@ let extractTests =
             |> runTest "datas/extract/extract paths tests.pdf" 
             |> ignore
 
+        ftestCase "extract deviceN tests" <| fun _ -> 
+
+            Flow.Reuse (
+                Reuses.ExtractPaths(PageSelector.All, Info.IsVisible(), keepOriginPage = true)
+            )
+            |> runTest "datas/extract/extract deviceN.pdf" 
+            |> ignore
+
         testCase "extract vectors tests" <| fun _ -> 
             Flow.Reuse (
                 Reuses.ExtractIM(
@@ -822,7 +830,7 @@ let extractTests =
             |> runTest "datas/extract/tile pages and NUP by selector4.pdf" 
             |> ignore
 
-        ftestCase "tile pages and NUP by selector5" <| fun _ -> 
+        testCase "tile pages and NUP by selector5" <| fun _ -> 
             let pageNumbers =
                 [1; 10]
                 |> List.map PageNumber

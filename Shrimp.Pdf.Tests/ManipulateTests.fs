@@ -1723,7 +1723,7 @@ let manipulateTests =
     testCase "test infos" <| fun _ -> 
         let m = FsDeviceRgb.OfLoggingText_Raw @"RGB 81 0 0"
         let pdfFile = 
-            @"D:\VsCode\Workspace\ExcelDnaWidget\QuickImpose.Book\tests\QuickImpose.Book.Tests\folders\LED420 快速指导页 quick start guider（英文）.pdf"
+            @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\AIRSTAR\.btw\旭虹 SW23-AIR03\吊牌2正面.raw\吊牌2正面.up.pdf"
             //@"D:\VsCode\Workspace\Shrimp.Pdf.Enhancement\tests\Shrimp.Pdf.Enhancement.Tests\datas\flows\Tile pages by cropLine3.pdf"
             |> PdfFile
 

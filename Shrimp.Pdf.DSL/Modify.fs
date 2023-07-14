@@ -2203,6 +2203,34 @@ type Modify =
             ]
         )
 
+    static member CancelStroke(selector, ?pageSelector) =
+        Modify.Create_Record(
+            defaultArg pageSelector PageSelector.All,
+            [
+                { SelectorAndModifiersRecord.Name = "CancelStroke"
+                  Selector = selector
+                  Modifiers = 
+                    [
+                        Modifier.CancelStroke()
+                    ]
+                  }
+            ]
+        )
+
+    static member CancelFill(selector, ?pageSelector) =
+        Modify.Create_Record(
+            defaultArg pageSelector PageSelector.All,
+            [
+                { SelectorAndModifiersRecord.Name = "CancelFill"
+                  Selector = selector
+                  Modifiers = 
+                    [
+                        Modifier.CancelFill()
+                    ]
+                  }
+            ]
+        )
+
 
     static member internal ReadCompoundPath(selector) =
         Manipulate.Func(fun userState ->

@@ -113,6 +113,7 @@ type private PdfDocumentCache private
      fontsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfFont>,
      patternColorsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PatternColor>,
      shadingCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfShading>,
+     deviceNCache_hashable_fromOtherDocument : ConcurrentDictionary<FsDeviceN, DeviceN>,
      imageCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfImageXObject>,
      colorsCache: ConcurrentDictionary<ResourceColor, Color>,
      xobjectCache: ConcurrentDictionary<PdfFile, ReaderDocument * PdfFormXObject>,
@@ -142,6 +143,7 @@ type private PdfDocumentCache private
         x.Clear()
         PdfDocumentCache(
             pdfDocument, 
+            new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(), 
@@ -246,6 +248,12 @@ type private PdfDocumentCache private
                     )
 
 
+    member internal x.GetOrCreateDeviceN_FromOtherDocument(otherDocumentPage: PdfPage, colorspace: PdfSpecialCs.DeviceN, color: FsDeviceN) =
+        deviceNCache_hashable_fromOtherDocument.GetOrAdd(color, fun _ ->
+            let pdfObject = colorspace.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false) :?> PdfArray
+            let cs = PdfSpecialCs.DeviceN(pdfObject)
+            DeviceN(cs, color.Values)
+        )
 
 
             
@@ -355,6 +363,7 @@ type private PdfDocumentCache private
              new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
+             new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>())
 
 and PdfDocumentWithCachedResources =
@@ -454,8 +463,14 @@ and PdfDocumentWithCachedResources =
         | FsColor.PatternColor patternColor ->
             x.cache.GetOrCreatePatternColor_FromOtherDocument(otherDocumentPage, patternColor) :> Color
 
-        | FsColor.ShadingColor shadingColor -> otherDocumentColor
+        | FsColor.ShadingColor shadingColor -> 
+            failwithf "Invalid token, this feature was defined in Renew_OtherDocument_PdfShading"
+            //x.cache.GetOrCreateSharding_FromOtherDocument(shadingColor)
+            //otherDocumentColor
             
+        | FsColor.DeviceN (colorspace, deviceN) -> 
+            x.cache.GetOrCreateDeviceN_FromOtherDocument(otherDocumentPage, colorspace, deviceN) :> Color
+
     member x.Renew_OtherDocument_Image(otherDocumentImage: ImageRenderInfo) =
         x.cache.GetOrCreateImage_FromOtherDocument(otherDocumentImage)
 
