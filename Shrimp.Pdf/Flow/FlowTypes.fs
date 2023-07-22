@@ -15,6 +15,8 @@ type Configuration =
 with 
     static member DefaultValue = { LoggerLevel = PdfLoggerLevel.Info }
 
+type PdfConfiguration = Configuration
+
 type FlowModel<'userState> =
     { PdfFile: PdfFile 
       UserState: 'userState

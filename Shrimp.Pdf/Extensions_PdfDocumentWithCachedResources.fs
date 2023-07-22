@@ -96,6 +96,7 @@ module PdfDocumentWithCachedResources =
           HorizontalTextAlignment: TextAlignment option 
           StrokeWidth: float option
           ClipContents: bool
+          FsExtGState: FsExtGState option
           VerticalTextAlignment: VerticalAlignment option }
 
     with 
@@ -108,6 +109,7 @@ module PdfDocumentWithCachedResources =
               HorizontalTextAlignment = None 
               StrokeWidth = None
               ClipContents = false
+              FsExtGState = None
               VerticalTextAlignment = None }
 
         member args.GetCalculatedHorizontalTextAlignment() =
@@ -387,6 +389,14 @@ module PdfDocumentWithCachedResources =
                                 .SetTextRenderingMode(TextRenderingMode.FILL_STROKE)
                                 .SetStrokeWidth(float32 strokeWidth)
                                 .SetStrokeColor(fontColor)
+                    
+                    match args.FsExtGState with 
+                    | None -> ()
+                    | Some extGsState ->
+                        canvas.GetPdfCanvas()
+                        |> PdfCanvas.setExtGState extGsState
+                        |> ignore
+                    
                     canvas
                         .SetFont(pdfFont)
                         .SetFontColor(fontColor)

@@ -119,12 +119,20 @@ let extractTests =
             |> runTest "datas/extract/extract paths tests.pdf" 
             |> ignore
 
-        ftestCase "extract deviceN tests" <| fun _ -> 
-
+        testCase "extract deviceN tests" <| fun _ -> 
+            
             Flow.Reuse (
                 Reuses.ExtractPaths(PageSelector.All, Info.IsVisible(), keepOriginPage = true)
             )
             |> runTest "datas/extract/extract deviceN.pdf" 
+            |> ignore
+
+        ftestCase "extract pdf sharding tests" <| fun _ -> 
+            
+            Flow.Reuse (
+                Reuses.ExtractPaths(PageSelector.All, Info.IsVisible(), keepOriginPage = true)
+            )
+            |> runTest @"datas/extract/extract pdfShading.pdf" 
             |> ignore
 
         testCase "extract vectors tests" <| fun _ -> 

@@ -865,46 +865,40 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
                 | Some clippingBox ->
                     match listener.GetXObjectClippingBox() with 
                     | XObjectClippingBoxState.IntersectedSome rect2 ->  
-                        let a = Rectangle.equalableValue rect2
-                        let b = Rectangle.equalableValue clippingBox
-                        match a = b with 
-                        | true ->
-                            match listener.GetCurrentClippingPathInfo() with 
-                            | ClippingPathInfoState.Init ->
-                                let gs = x.GetGraphicsState()
-                                let clippingPath = gs.GetClippingPath()
+                        match listener.GetCurrentClippingPathInfo() with 
+                        | ClippingPathInfoState.Init ->
+                            let gs = x.GetGraphicsState()
+                            let clippingPath = gs.GetClippingPath()
 
-                                let canvasTag = [||] :> IList<_>
+                            let canvasTag = [||] :> IList<_>
 
-                                let color = new PdfShadingColor(shading, gs.GetCtm())
-                                let gsState = gs
-                                gsState.SetFillColor(color)
+                            let color = new PdfShadingColor(shading, gs.GetCtm())
+                            let gsState = gs
+                            gsState.SetFillColor(color)
+                            let newPathRenderInfo =
+                                PdfShadingPathRenderInfo(color, Stack canvasTag, gsState, clippingPath)
+                            
 
-                                let newPathRenderInfo =
-                                    PdfShadingPathRenderInfo(color, Stack canvasTag, gsState, clippingPath)
-                                
-                                //let operatorRanges =
-                                //    [
-                                //        { Operator = PdfLiteral("re")
-                                //          Operands = [|
-                                //            PdfLiteral("re") :> PdfObject
-                                //            PdfNumber(rect2.GetXF())
-                                //            PdfNumber(rect2.GetYF())
-                                //            PdfNumber(rect2.GetWidthF())
-                                //            PdfNumber(rect2.GetHeightF())
-                                //          |]
-                                //          }
-                                //    ]
+                            //let operatorRanges =
+                            //    [
+                            //        { Operator = PdfLiteral("re")
+                            //          Operands = [|
+                            //            PdfLiteral("re") :> PdfObject
+                            //            PdfNumber(rect2.GetXF())
+                            //            PdfNumber(rect2.GetYF())
+                            //            PdfNumber(rect2.GetWidthF())
+                            //            PdfNumber(rect2.GetHeightF())
+                            //          |]
+                            //          }
+                            //    ]
 
-                                //for operatorRange in operatorRanges do 
-                                //    listener.AddPathOperatorRange operatorRange
+                            //for operatorRange in operatorRanges do 
+                            //    listener.AddPathOperatorRange operatorRange
                 
-                                x.EventOccurred(newPathRenderInfo, EventType.RENDER_PATH)
+                            x.EventOccurred(newPathRenderInfo, EventType.RENDER_PATH)
 
-                            | _ ->
-                                failwith "current RenderingClippingPathInfo should be exists before Paint Shading"
-                         
-                        | false -> failwith "current RenderingClippingPathInfo should be exists before Paint Shading"
+                        | _ ->
+                            failwith "current RenderingClippingPathInfo should be exists before Paint Shading"
 
                     | _ -> failwith "current RenderingClippingPathInfo should be exists before Paint Shading"
 
@@ -950,14 +944,21 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
                 match formObject with 
                 | null -> base.InvokeOperator(operator, operands)
                 | formObject ->
+                    let unTransformedBBox =  PdfFormXObject.getBBox formObject
                     let bbox = 
                         //PdfFormXObject.getBBox formObject
-                        let bbox =  PdfFormXObject.getBBox formObject
                         let ctm = this.GetGraphicsState().GetCtm() |> AffineTransform.ofMatrix
-                        ctm.Transform(bbox)
+                        ctm.Transform(unTransformedBBox)
 
                     let originState = listener.GetXObjectClippingBox()
                     listener.SetXObjectClippingBox(bbox)
+
+                    //let clippingPath = 
+                    //    let path = new Path()
+                    //    path.Rectangle(bbox)
+                    //    path
+
+                    //this.GetGraphicsState().Clip(clippingPath, FillingRule.EVEN_ODD)
                     base.InvokeOperator(operator, operands)
                     listener.SetXObjectClippingBoxState(originState)
 

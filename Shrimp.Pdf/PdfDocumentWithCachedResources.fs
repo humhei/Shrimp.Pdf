@@ -464,9 +464,10 @@ and PdfDocumentWithCachedResources =
             x.cache.GetOrCreatePatternColor_FromOtherDocument(otherDocumentPage, patternColor) :> Color
 
         | FsColor.ShadingColor shadingColor -> 
-            failwithf "Invalid token, this feature was defined in Renew_OtherDocument_PdfShading"
+            //failwithf "Invalid token, this feature was defined in Renew_OtherDocument_PdfShading"
+
             //x.cache.GetOrCreateSharding_FromOtherDocument(shadingColor)
-            //otherDocumentColor
+            otherDocumentColor
             
         | FsColor.DeviceN (colorspace, deviceN) -> 
             x.cache.GetOrCreateDeviceN_FromOtherDocument(otherDocumentPage, colorspace, deviceN) :> Color

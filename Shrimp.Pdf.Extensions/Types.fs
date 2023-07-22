@@ -1223,9 +1223,9 @@ module ExtensionTypes =
     with
         member x.m00 = x.ScaleX
 
-        member x.m01 = x.ShearX
-
         member x.m10 = x.ShearY
+
+        member x.m01 = x.ShearX
 
         member x.m11 = x.ScaleY
 
