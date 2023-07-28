@@ -1197,7 +1197,9 @@ module Imposing =
                   ImposingRow = this }
 
             if newCell.Size.Width > pageSize.Width + tolerance.Value || newCell.Size.Height > pageSize.Height + tolerance.Value
-            then failwithf "desired size %A is exceeded to sheet page size %A" newCell.Size pageSize
+            then 
+                CellSizeExceedPageSizeException(newCell.Size, Margin.Zero, pageSize.Size)
+                |> raise
                   
             let addNewCell_UpdateState() =
                 x <- x + newCell.Size.Width + args.HSpaces.[cells.Count % args.HSpaces.Length]
@@ -1541,6 +1543,11 @@ module Imposing =
 
         member private x.CellsCount = x.GetCellsCount()
 
+    and CellSizeExceedPageSizeException(size: FsSize, margin: Margin, pageSize: FsSize) =
+        inherit System.Exception(
+            sprintf "desired size %A + margin %A is exceeded to sheet page size %A" size margin pageSize
+        )
+
     /// Build() -> Draw()
     and ImposingDocument internal (splitDocument: SplitDocument, imposingArguments: ImposingArguments, allowRedirectCellSize: bool option) =  
         let sheets = new ResizeArray<ImposingSheet>()
@@ -1705,11 +1712,13 @@ module Imposing =
                                 | Result.Ok desiredPageOrientation -> 
                                     desiredPageOrientation, backgroundSize_extented_byMargin
                                 | Result.Error size -> 
-                                    failwithf "desired size %A + margin %A is exceeded to sheet page size %A" size margin backgroundSize
+                                    CellSizeExceedPageSizeException(size, margin, backgroundSize)
+                                    |> raise
 
 
                             | Background.File _ ->
-                                failwithf "desired size %A + margin %A is exceeded to sheet page size %A" size margin backgroundSize
+                                CellSizeExceedPageSizeException(size, margin, backgroundSize)
+                                |> raise
 
                     | _ -> 
                         let pageOrientation =
@@ -1726,7 +1735,8 @@ module Imposing =
                             match (pageOrientation, backgroundSize_extented_byMargin) with 
                             | ValidOrientation -> args.DesiredPageOrientation, backgroundSize_extented_byMargin
                             | InvalidOrientation size ->
-                                failwithf "desired size %A + margin %A is exceeded to sheet page size %A" size margin backgroundSize
+                                CellSizeExceedPageSizeException(size, margin, backgroundSize)
+                                |> raise
                                 
 
 

@@ -127,7 +127,7 @@ let extractTests =
             |> runTest "datas/extract/extract deviceN.pdf" 
             |> ignore
 
-        ftestCase "extract pdf sharding tests" <| fun _ -> 
+        testCase "extract pdf sharding tests" <| fun _ -> 
             
             Flow.Reuse (
                 Reuses.ExtractPaths(PageSelector.All, Info.IsVisible(), keepOriginPage = true)

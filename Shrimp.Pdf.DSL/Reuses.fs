@@ -1227,6 +1227,73 @@ module _Reuses =
 
         
 
+
+
+        static member private AddBackgroundOrForeground(backgroundOrForeground: BackgroundOrForeground, pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?pageSelector) =
+            let pageSelector = defaultArg pageSelector PageSelector.All
+            (fun flowModel (doc: SplitDocument) ->
+                let reader = doc.Reader
+                PdfDocument.getPages reader
+                |> List.mapi (fun i readerPage ->
+                    let selectedPages = reader.GetPageNumbers(pageSelector)
+                    match List.contains (i+1) selectedPages with 
+                    | true ->
+                        let readerPageBox = 
+                            match margin with 
+                            | Some margin ->
+                                readerPage.GetPageBox(pageBoxKind)
+                                |> Rectangle.applyMargin margin
+                            | None -> 
+                                readerPage.GetPageBox(pageBoxKind)
+
+                        let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
+
+                        let pageSize = 
+                            readerPage.GetActualBox()
+                            |> PageSize
+
+                        let writerPage = doc.Writer.AddNewPage(pageSize)
+                        writerPage.SetPageBoxToPage(readerPage) |> ignore
+                        let pdfCanvas = 
+                            match backgroundOrForeground with 
+                            | BackgroundOrForeground.Background ->
+                                new PdfCanvas(writerPage.NewContentStreamBefore(), writerPage.GetResources(), doc.Writer)
+
+                            | BackgroundOrForeground.Foreground ->
+                                new PdfCanvas(writerPage.NewContentStreamAfter(), writerPage.GetResources(), doc.Writer)
+                            
+
+                        PdfCanvas.useCanvas pdfCanvas (
+                            PdfCanvas.addRectangle readerPageBox rectOptions
+                        ) 
+
+                        pdfCanvas
+                            .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                        |> ignore
+
+
+                    | false ->
+                        let page = readerPage.CopyTo(doc.Writer)
+                        doc.Writer.AddPage(page)
+                        |> ignore
+
+                ) |> ignore
+            )
+            |> reuse 
+                "AddBackground"
+                [
+                    "pageSelector" => pageSelector.ToString()
+                    "pageBoxKind" => pageBoxKind.ToString()
+                    "rectOptions" => (rectOptions PdfCanvasAddRectangleArguments.DefaultValue).ToString()
+                    "margin"      => (defaultArg margin Margin.Zero).LoggingText
+                ]
+
+        static member AddBackground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?pageSelector) =
+            Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Background, pageBoxKind, rectOptions, ?margin = margin, ?pageSelector = pageSelector)
+
+        static member AddForeground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?xEffect, ?yEffect, ?pageSelector) =
+            Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Foreground, pageBoxKind, rectOptions, ?margin = margin, ?pageSelector = pageSelector)
+
         static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground, ?xEffect, ?yEffect, ?pageSelector, ?layerName: BackgroundAddingLayerNames) =
             let xEffect = defaultArg xEffect XEffort.Middle
             let yEffect = defaultArg yEffect YEffort.Middle
@@ -1349,72 +1416,6 @@ module _Reuses =
                     "xEffect" => xEffect.ToString()
                     "yEffect" => yEffect.ToString()
                 ]
-
-        static member private AddBackgroundOrForeground(backgroundOrForeground: BackgroundOrForeground, pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?pageSelector) =
-            let pageSelector = defaultArg pageSelector PageSelector.All
-            (fun flowModel (doc: SplitDocument) ->
-                let reader = doc.Reader
-                PdfDocument.getPages reader
-                |> List.mapi (fun i readerPage ->
-                    let selectedPages = reader.GetPageNumbers(pageSelector)
-                    match List.contains (i+1) selectedPages with 
-                    | true ->
-                        let readerPageBox = 
-                            match margin with 
-                            | Some margin ->
-                                readerPage.GetPageBox(pageBoxKind)
-                                |> Rectangle.applyMargin margin
-                            | None -> 
-                                readerPage.GetPageBox(pageBoxKind)
-
-                        let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
-
-                        let pageSize = 
-                            readerPage.GetActualBox()
-                            |> PageSize
-
-                        let writerPage = doc.Writer.AddNewPage(pageSize)
-                        writerPage.SetPageBoxToPage(readerPage) |> ignore
-                        let pdfCanvas = 
-                            match backgroundOrForeground with 
-                            | BackgroundOrForeground.Background ->
-                                new PdfCanvas(writerPage.NewContentStreamBefore(), writerPage.GetResources(), doc.Writer)
-
-                            | BackgroundOrForeground.Foreground ->
-                                new PdfCanvas(writerPage.NewContentStreamAfter(), writerPage.GetResources(), doc.Writer)
-                            
-
-                        PdfCanvas.useCanvas pdfCanvas (
-                            PdfCanvas.addRectangle readerPageBox rectOptions
-                        ) 
-
-                        pdfCanvas
-                            .AddXObjectAbs(readerXObject, 0.f, 0.f)
-                        |> ignore
-
-
-                    | false ->
-                        let page = readerPage.CopyTo(doc.Writer)
-                        doc.Writer.AddPage(page)
-                        |> ignore
-
-                ) |> ignore
-            )
-            |> reuse 
-                "AddBackground"
-                [
-                    "pageSelector" => pageSelector.ToString()
-                    "pageBoxKind" => pageBoxKind.ToString()
-                    "rectOptions" => (rectOptions PdfCanvasAddRectangleArguments.DefaultValue).ToString()
-                    "margin"      => (defaultArg margin Margin.Zero).LoggingText
-                ]
-
-        static member AddBackground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?pageSelector) =
-            Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Background, pageBoxKind, rectOptions, ?margin = margin, ?pageSelector = pageSelector)
-
-        static member AddForeground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?xEffect, ?yEffect, ?pageSelector) =
-            Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Foreground, pageBoxKind, rectOptions, ?margin = margin, ?pageSelector = pageSelector)
-
 
         static member AddBackground (backgroundFile: PdfFile, ?xEffect, ?yEffect, ?pageSelector, ?layerName) =
             Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background, ?xEffect = xEffect, ?yEffect = yEffect, ?pageSelector = pageSelector, ?layerName = layerName)

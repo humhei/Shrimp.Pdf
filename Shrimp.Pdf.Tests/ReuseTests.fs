@@ -39,11 +39,15 @@ let reuseTests =
         |> runTest "datas/reuse/assignToLayer.pdf" 
         |> ignore
 
-    testCase "add background tests2" <| fun _ -> 
+    testCase "add background image tests2" <| fun _ -> 
+        let image = @"datas/reuse/add background image.jpg" 
         Flow.Reuse (
-            Reuses.AddBackground(PdfFile @"datas/reuse/backgroundFile2.pdf", xEffect = XEffort.Right, yEffect = YEffort.Top)
+            Reuses.AddBackgroundImage(
+                BackgroundImageFile (FsFullPath image),
+                shadowColor = NullablePdfCanvasColor.WHITE,
+                layerName = {CurrentLayerName = "Cdr"; BackgroundLayerName = "Jpg"})
         )
-        |> runTest "datas/reuse/add background2.pdf" 
+        |> runTest @"datas/reuse/add background image.pdf" 
         |> ignore
 
     testCase "add background as layer" <| fun _ -> 
@@ -129,12 +133,12 @@ let reuseTests =
                 PdfRunner.PreImpose_Repeated_One
                     {_ImposingArguments.DefaultValue 
                         with ColNums = [0]
-                             RowNum = 0
-                             Background = Background.Size (FsSize.A4)
+                             RowNum = 0 
+                             Background = Background.Size ({Width = mm 273.; Height = mm 193.})
                              Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(6.))
-
+                             DesiredPageOrientation = DesiredPageOrientation.Portrait
                              DesiredSizeOp  = 
-                                (FsSize.landscape {Width = mm 210.; Height = mm 297.})
+                                ({Width = mm 210.; Height = mm 148.})
                                 |> Some
                         }
             )

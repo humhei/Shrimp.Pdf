@@ -6,6 +6,7 @@ open iText.IO.Image
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Geom
 open Shrimp.Pdf
+open Shrimp.Pdf.Colors
 open Shrimp.Pdf.Extensions
 
 #nowarn "0104"
@@ -139,7 +140,3 @@ module _ImageConverter =
                 PdfRunner.MergeDocuments(AtLeastOneList.Create pdfFiles, fun args ->
                     { args with Override = true; TargetDocumentPath = targetPath.Path}
                 )
-
-
-
-

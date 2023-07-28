@@ -49,6 +49,7 @@ let imageTests =
 
         testCase "convert jpg to pdf" <| fun _ -> 
             let jpgFile =
+                //@"datas/reuse/add background image.jpg" 
                 @"datas/image/convert jpg to pdf.jpg" 
                 |> JpgFile
 
@@ -59,6 +60,7 @@ let imageTests =
 
             let pdfFile = 
                 ImageConverter.ConvertImageToPdf(jpgFile.Path, targetPath, ResizingTargetLength.Length (mm 50.), PageOrientation.Landscape)
+                //ImageConverter.ConvertImageToPdf(jpgFile.Path, targetPath)
 
             pass()
             failwith ""

@@ -232,6 +232,18 @@ let manipulateTests =
         |> runTest "datas/manipulate/make clipping path from blue strokes2.pdf" 
         |> ignore
 
+    testCase "make clipping path from blue strokes3" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.CreateClippingPath(
+                Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation),
+                keepCompoundPath = true,
+                condition = ClippingCondition.ClipIfPathCountSmallerOrEqualThan 2
+
+            )
+        )
+        |> runTest "datas/manipulate/make clipping path from blue strokes3.pdf" 
+        |> ignore
+
     testCase "make clipping path from blue strokes by minimum area" <| fun _ ->    
         let pdfPath = 
             @"D:\Users\Jia\Documents\MyData\Docs\2017\新纪元\Lolly Tree\.btw\新纪元 新纪元 22-12-13\吊牌反面.productImage\.shrimp.pdf\吊牌反面.down.productImage\0_SequencePages.pdf"

@@ -1,6 +1,7 @@
 ﻿namespace Shrimp.Pdf.Image
 
 open iText.Kernel.Pdf
+open iText.Kernel.Pdf.Layer
 
 #nowarn "0104"
 open Shrimp.Pdf.DSL
@@ -22,6 +23,8 @@ open iText.IO.Image
 open FSharp.Data
 open System.Collections.Concurrent
 open Shrimp.Pdf.js.shared
+open iText.Kernel.Pdf.Canvas
+open iText.Kernel.Geom
 
 [<AutoOpen>]
 module _ModifierIM =
@@ -579,7 +582,171 @@ module _ModifierIM =
         | Empty of PageNumber
         | NotEmpty of PageNumber
 
+    
+    type BackgroundImageFile = BackgroundImageFile of FsFullPath
+    with 
+        member x.Path =
+            let (BackgroundImageFile v) = x
+            v
+
+    let private reuse name parameters f = Reuse(f = f, flowName = FlowName.Override(name, parameters))
+
+    type Reuses with 
+        
+        static member private AddBackgroundOrForegroundImage(image: BackgroundImageFile, choice: BackgroundOrForeground, ?shadowColor, ?xEffect, ?yEffect, ?pageSelector, ?layerName: BackgroundAddingLayerNames) =
+            let xEffect = defaultArg xEffect XEffort.Middle
+            let yEffect = defaultArg yEffect YEffort.Middle
+            let image = image.Path.Path
+            let addShadowColor pageSize (pdfCanvas: PdfCanvas) =
+                match shadowColor with 
+                | None -> pdfCanvas
+                | Some (pdfFileShadow: NullablePdfCanvasColor) ->
+                    pdfCanvas
+                        .SaveState()
+                        .SetFillColor(pdfFileShadow)
+                        .Rectangle(pageSize)
+                        .Fill()
+                        .RestoreState()
+
+
+            let pageSelector = defaultArg pageSelector PageSelector.All
+            (fun flowModel (doc: SplitDocument) ->
+
+                let reader = doc.Reader
+                let selectedPages = reader.GetPageNumbers(pageSelector)
+                PdfDocument.getPages reader
+                |> List.mapi (fun i readerPage ->
+                    
+                    match List.contains (i+1) selectedPages with 
+                    | true ->
+                        let readerPageBox = readerPage.GetActualBox()
+                        let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
+
+                        let pageSize = 
+                            readerPage.GetActualBox()
+                            |> PageSize
+
+                        let writerPage = doc.Writer.AddNewPage(pageSize)
+                        writerPage.SetPageBoxToPage(readerPage) |> ignore
+                        let pdfCanvas = new PdfCanvas(writerPage)
+                        let image = ImageDataFactory.Create(image)
+
+                        match layerName with 
+                        | None ->
+                            match choice with 
+                            | BackgroundOrForeground.Background ->
+                                pdfCanvas.AddImageFittedIntoRectangle(image, pageSize, asInline = false)
+                                |> ignore
+
+                                pdfCanvas
+                                |> addShadowColor pageSize
+                                |> fun m -> m.AddXObjectAbs(readerXObject, 0.f, 0.f)
+                                |> ignore
+
+                            | BackgroundOrForeground.Foreground -> 
+                                pdfCanvas
+                                    .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                                    .AddImageFittedIntoRectangle(image, pageSize, asInline = false)
+                                |> ignore
+
+                        | Some layerName ->
+                            let bklayer = new PdfLayer(layerName.BackgroundLayerName, doc.Writer)
+
+                            let addBackground (pdfCanvas: PdfCanvas) =
+                                pdfCanvas
+                                    .BeginLayer(bklayer)
+                                    |> fun m -> 
+                                        m.AddImageFittedIntoRectangle(image, pageSize, asInline = false)
+                                        |> ignore
+
+
+
+                                        m.EndLayer()
+
+                            let readerLayer = new PdfLayer(layerName.CurrentLayerName, doc.Writer)
+
+                            let addReader ifAddShadowColor (pdfCanvas: PdfCanvas) =
+                                pdfCanvas
+                                    .BeginLayer(readerLayer)
+                                    |> fun m ->
+                                        
+                                        match ifAddShadowColor with 
+                                        | true ->
+                                            addShadowColor pageSize pdfCanvas
+                                            |> ignore
+                                        | false -> ()
+
+                                        m
+                                            .AddXObjectAbs(readerXObject, 0.f, 0.f)
+                                            .EndLayer()
+
+
+                            match choice with 
+                            | BackgroundOrForeground.Background ->
+                                pdfCanvas
+                                |> addBackground 
+                                |> addReader true
+                                |> ignore
+
+                            | BackgroundOrForeground.Foreground -> 
+                                pdfCanvas
+                                |> addReader false
+                                |> addBackground 
+                                |> ignore
+
+                    | false ->
+                        let page = readerPage.CopyTo(doc.Writer)
+                        doc.Writer.AddPage(page)
+                        |> ignore
+                    )
+                    |> ignore
+
+
+
+            )
+            |> reuse 
+                "AddBackgroundOrForeground"
+                [
+                    "pageSelector" => pageSelector.ToString()
+                    "backgroundFile" => image
+                    "layer" => choice.ToString()
+                    "xEffect" => xEffect.ToString()
+                    "yEffect" => yEffect.ToString()
+                ]
+
+        static member AddBackgroundImage (backgroundFile, ?shadowColor, ?xEffect, ?yEffect, ?pageSelector, ?layerName) =
+            Reuses.AddBackgroundOrForegroundImage(backgroundFile, BackgroundOrForeground.Background, ?shadowColor = shadowColor, ?xEffect = xEffect, ?yEffect = yEffect, ?pageSelector = pageSelector, ?layerName = layerName)
+
+        static member AddForegroundImage (foregroundFile, ?shadowColor, ?xEffect, ?yEffect, ?pageSelector, ?layerName) =
+            Reuses.AddBackgroundOrForegroundImage(foregroundFile, BackgroundOrForeground.Foreground, ?shadowColor = shadowColor, ?xEffect = xEffect, ?yEffect = yEffect, ?pageSelector = pageSelector, ?layerName = layerName)
+
+
+
     type PdfRunner with 
+        static member AddBackgroundImage(pdfFile, backgroundFile, ?shadowColor, ?xEffect, ?yEffect, ?pageSelector, ?layerName, ?backupPdfPath) =
+            Reuses.AddBackgroundImage(
+                backgroundFile,
+                ?shadowColor = shadowColor,
+                ?xEffect = xEffect,
+                ?yEffect = yEffect,
+                ?pageSelector = pageSelector,
+                ?layerName = layerName
+            )    
+            |> PdfRunner.Reuse(pdfFile, ?backupPdfPath = backupPdfPath)
+
+        static member AddForegroundImage(pdfFile, backgroundFile, ?shadowColor, ?xEffect, ?yEffect, ?pageSelector, ?layerName, ?backupPdfPath) =
+            Reuses.AddForegroundImage(
+                backgroundFile,
+                ?shadowColor = shadowColor,
+                ?xEffect = xEffect,
+                ?yEffect = yEffect,
+                ?pageSelector = pageSelector,
+                ?layerName = layerName
+            )    
+            |> PdfRunner.Reuse(pdfFile, ?backupPdfPath = backupPdfPath)
+
+
+
         static member ReadEmptyPages(pdfFile: PdfFile, ignoreColors: FsColor list, ?inShadowMode) =
             let selector =
                 let allTagColors = ignoreColors
