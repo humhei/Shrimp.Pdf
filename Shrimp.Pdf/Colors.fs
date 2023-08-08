@@ -1,11 +1,12 @@
 ﻿namespace Shrimp.Pdf.Colors
 
 open iText.Kernel.Exceptions
+open Shrimp.FSharp.Plus
 
 #nowarn "0104"
 open System.Drawing
 open iText.Kernel.Pdf
-open Shrimp.FSharp.Plus
+open Shrimp.FSharp.Plus.Math
 open Shrimp.Pdf
 open iText.Kernel.Colors
 open System
@@ -161,6 +162,31 @@ module _Colors =
         member x.Gray_Math =
             x.R * 0.2126f + x.G * 0.7152f + x.B * 0.0722f
             |> FsGray
+
+        /// 
+        //member x.ColorValuesPdfArray() =
+        //    let transportBinary = "11111111"
+        //    let toBinary (colorValue255: float32) =
+        //        let colorValue = 
+        //            Math.round0f (float colorValue255)
+        //            |> int
+        //            |> min 255
+        //            |> byte
+
+        //        let binary = transportBinary + Convert.ToString(colorValue, 2)
+        //        let dec = Convert.ToInt32(binary, 2)
+        //        dec
+
+        //    [
+        //        toBinary x.Range255.R
+        //        toBinary x.Range255.G
+        //        toBinary x.Range255.B  
+        //    ]
+        //    |> List.map(PdfNumber)
+        //    |> List.map(fun m -> m :> PdfObject)
+        //    |> ResizeArray
+        //    |> PdfArray
+
 
         static member RED = { R = 1.0f; G = 0.0f; B = 0.0f }
         static member GREEN = { R = 0.0f; G = 1.0f; B = 0.0f }

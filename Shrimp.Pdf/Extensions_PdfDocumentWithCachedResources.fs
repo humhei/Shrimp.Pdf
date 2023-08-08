@@ -212,6 +212,7 @@ module PdfDocumentWithCachedResources =
 
 
 
+
     [<RequireQualifiedAccess>]
     module PdfCanvas =
         let concatMatrix (matrix: Matrix) (canvas: PdfCanvas) =
@@ -301,6 +302,10 @@ module PdfDocumentWithCachedResources =
         let addRectangle (rect: Rectangle) (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
             addRectangles [rect] mapping canvas
 
+    type PdfCanvas with 
+        member x.SetExtGState(fsExtGSState) =
+            PdfCanvas.setExtGState fsExtGSState x
+
     type Canvas with 
         member internal x.GetOrCreateColor(pdfCanvasColor: PdfCanvasColor) =
             x.GetPdfCanvas().GetOrCreateColor(pdfCanvasColor)
@@ -340,6 +345,8 @@ module PdfDocumentWithCachedResources =
 
             fontSize * widthUnit
            
+
+
 
     [<RequireQualifiedAccess>]
     module Canvas =

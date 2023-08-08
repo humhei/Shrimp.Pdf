@@ -39,6 +39,8 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.ImageConverter.S
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.Extract", "src\Shrimp.Pdf.Extract\Shrimp.Pdf.Extract.fsproj", "{97FFEE4D-8D46-425A-8F6C-5DA7EE736DF1}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Shrimp.DtronixPdf", "Shrimp.Pdf.ImageConverter.Server.Lib\Shrimp.DtronixPdf.fsproj", "{968261F4-D704-4A20-9A19-7BA9241BC168}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -376,6 +378,24 @@ Global
 		{97FFEE4D-8D46-425A-8F6C-5DA7EE736DF1}.Release|x64.Build.0 = Release|Any CPU
 		{97FFEE4D-8D46-425A-8F6C-5DA7EE736DF1}.Release|x86.ActiveCfg = Release|Any CPU
 		{97FFEE4D-8D46-425A-8F6C-5DA7EE736DF1}.Release|x86.Build.0 = Release|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.Debug|x64.Build.0 = Debug|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.Debug|x86.Build.0 = Debug|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.MiniBuild|Any CPU.ActiveCfg = Debug|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.MiniBuild|Any CPU.Build.0 = Debug|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.MiniBuild|x64.ActiveCfg = Debug|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.MiniBuild|x64.Build.0 = Debug|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.MiniBuild|x86.ActiveCfg = Debug|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.MiniBuild|x86.Build.0 = Debug|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.Release|Any CPU.Build.0 = Release|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.Release|x64.ActiveCfg = Release|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.Release|x64.Build.0 = Release|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.Release|x86.ActiveCfg = Release|Any CPU
+		{968261F4-D704-4A20-9A19-7BA9241BC168}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

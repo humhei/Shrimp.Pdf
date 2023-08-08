@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Shrimp.Pdf.ImageConverter.Core\Shrimp.Pdf.ImageConverter.Core.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.ImageConverter.Server.Lib\Shrimp.DtronixPdf.fsproj" />
   </ItemGroup>
 
 

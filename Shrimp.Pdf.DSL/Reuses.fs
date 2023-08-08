@@ -2,6 +2,7 @@
 
 open System.Collections.Generic
 open iText.Kernel.Pdf.Layer
+open Shrimp.Pdf.Parser.Helper
 
 #nowarn "0104"
 open Imposing
@@ -107,9 +108,166 @@ module _Reuses =
           RowIndex: int 
           PageNum: int }
 
-    type BackgroundAddingLayerNames =
-        { CurrentLayerName: string 
-          BackgroundLayerName: string }
+
+    type PdfDictionary with 
+        member x.PutDSL(key, value) =
+            x.Put(key, value)
+            |> ignore
+            x
+
+    type AiLayerOptions =
+        { Title: string  
+          Color: FsDeviceRgb 
+          Dimmed: bool 
+          Editable: bool
+          Preview: bool 
+          Printed: bool
+          Visible: bool }
+    with 
+        static member Create(title: string, ?color: FsDeviceRgb, ?dimmed, ?editable, ?preview, ?printed, ?visible) =
+            let dimmed = defaultArg dimmed false
+            let editable = defaultArg editable true
+            let preview   = defaultArg preview true
+            let printed   = defaultArg printed true
+            let visible   = defaultArg visible true
+            let color     = defaultArg color <| FsDeviceRgb.Create(10, 128, 255)
+
+            {
+                Title  = title
+                Color  = color
+                Dimmed = dimmed
+                Editable = editable
+                Preview = preview
+                Printed = printed
+                Visible = visible
+            }
+
+
+    /// Cannot get worked
+    [<System.ObsoleteAttribute("Cannot get worked")>]
+    type AiLayer private (pdfDocument: PdfDocument, dictionary: PdfDictionary, ops: AiLayerOptions) =
+        inherit FsPdfObjectWrapper<PdfDictionary>(dictionary, true)
+
+        member x.Title     =    ops.Title
+        member x.Color     =    ops.Color
+        member x.Dimmed    =    ops.Dimmed
+        member x.Editable  =    ops.Editable
+
+        member x.Preview   =    ops.Preview
+        member x.Printed   =    ops.Printed
+        member x.Visible   =    ops.Visible
+
+        member x.PdfDocument = pdfDocument
+
+        member private x.PutAll() =
+            let colorValues =
+                [|
+                    2570
+                    32896
+                    65535
+                |]
+                |> Array.map (fun m -> PdfNumber m :> PdfObject)
+                |> PdfArray
+
+            x
+                .GetPdfObject()
+                .PutDSL(PdfName.Color, colorValues)
+                .PutDSL(PdfName("Dimmed"), PdfBoolean x.Dimmed)
+                .PutDSL(PdfName("Editable"), PdfBoolean x.Editable)
+                .PutDSL(PdfName("Preview"), PdfBoolean x.Preview)
+                .PutDSL(PdfName("Printed"), PdfBoolean x.Printed)
+                .PutDSL(PdfName("Title"), PdfString x.Title)
+                .PutDSL(PdfName("Visible"), PdfBoolean x.Visible)
+
+
+        interface IPdfOCG with 
+            member x.GetPdfObject() = dictionary
+            member x.GetIndirectReference() = x.GetPdfObject().GetIndirectReference()
+
+        static member Create(pdfDocument: PdfDocument, ops) =
+            let aiLayer = 
+                new AiLayer(
+                    pdfDocument,
+                    new PdfDictionary(),
+                    ops)
+
+
+            aiLayer.MakeIndirect(pdfDocument) |> ignore
+            aiLayer.PutAll() |> ignore
+            aiLayer
+
+
+
+    [<RequireQualifiedAccess>]
+    type LayerUnion =
+        | Pdf of PdfLayer
+        | AI of AiLayer
+
+    let private BDC = iText.IO.Source.ByteUtils.GetIsoBytes("BDC\n")
+    let private EMC = iText.IO.Source.ByteUtils.GetIsoBytes("EMC\n")
+
+    type PdfCanvas with 
+        member x.BeginLayerUnion(layer: LayerUnion) =
+            match layer with 
+            | LayerUnion.AI v ->
+                let name = x.GetResources().AddProperties(v.GetPdfObject());
+                x
+                    .GetContentStream()
+                    .GetOutputStream()
+                    .Write(PdfName("Layer"))
+                    .WriteSpace().Write(name)
+                    .WriteSpace()
+                    .WriteBytes(BDC)
+                    .WriteNewLine
+                |> ignore
+
+                x
+
+            | LayerUnion.Pdf v -> x.BeginLayer(v)
+
+
+        member x.EndLayerUnion(layer: LayerUnion) =
+            match layer with 
+            | LayerUnion.AI v ->
+                x.GetContentStream().GetOutputStream().WriteBytes(EMC).WriteNewLine()
+                |> ignore
+                x
+
+            | _ -> x.EndLayer()
+
+
+    [<RequireQualifiedAccess>]
+    type LayerOptions =
+        | Pdf of string
+        | AI of AiLayerOptions
+    with
+        member x.CreateLayer(doc: PdfDocument) =    
+            match x with 
+            | Pdf layerName -> PdfLayer(layerName, doc) |> LayerUnion.Pdf
+            | AI ops ->        AiLayer.Create(doc, ops) |> LayerUnion.AI
+
+    [<RequireQualifiedAccess>]
+    type BackgroundAddingLayerOptions =
+        | Pdf of currentLayerName: string * backgroundLayerName: string
+        | AI  of currentLayer: AiLayerOptions * backgroundLayer: AiLayerOptions
+    with 
+        static member Create(currentLayerName, backgroundLayerName) =
+            BackgroundAddingLayerOptions.Pdf(currentLayerName, backgroundLayerName)
+
+        member x.CurrentLayer =
+            match x with 
+            | Pdf (v, _) -> LayerOptions.Pdf v
+            | AI  (v, _) -> LayerOptions.AI  v
+
+        member x.BackgroundLayer =
+            match x with 
+            | Pdf (_, v) -> LayerOptions.Pdf v
+            | AI  (_, v) -> LayerOptions.AI  v
+
+
+            
+
+                
 
     type Reuses with
 
@@ -1294,7 +1452,7 @@ module _Reuses =
         static member AddForeground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?xEffect, ?yEffect, ?pageSelector) =
             Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Foreground, pageBoxKind, rectOptions, ?margin = margin, ?pageSelector = pageSelector)
 
-        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground, ?xEffect, ?yEffect, ?pageSelector, ?layerName: BackgroundAddingLayerNames) =
+        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground, ?xEffect, ?yEffect, ?pageSelector, ?layerName: BackgroundAddingLayerOptions) =
             let xEffect = defaultArg xEffect XEffort.Middle
             let yEffect = defaultArg yEffect YEffort.Middle
 
@@ -1367,20 +1525,20 @@ module _Reuses =
                                 |> ignore
 
                         | Some layerName ->
-                            let bklayer = new PdfLayer(layerName.BackgroundLayerName, doc.Writer)
+                            let bklayer = layerName.BackgroundLayer.CreateLayer(doc.Writer)
                             let addBackground (pdfCanvas: PdfCanvas) =
                                 pdfCanvas
-                                    .BeginLayer(bklayer)
+                                    .BeginLayerUnion(bklayer)
                                     .AddXObjectAbs(backgroundXObject, bk_x , bk_y)
-                                    .EndLayer()
+                                    .EndLayerUnion(bklayer)
 
-                            let readerLayer = new PdfLayer(layerName.CurrentLayerName, doc.Writer)
+                            let readerLayer = layerName.CurrentLayer.CreateLayer(doc.Writer)
 
                             let addReader (pdfCanvas: PdfCanvas) =
                                 pdfCanvas
-                                    .BeginLayer(readerLayer)
+                                    .BeginLayerUnion(readerLayer)
                                     .AddXObjectAbs(readerXObject, 0.f, 0.f)
-                                    .EndLayer()
+                                    .EndLayerUnion(readerLayer)
 
 
                             match choice with 

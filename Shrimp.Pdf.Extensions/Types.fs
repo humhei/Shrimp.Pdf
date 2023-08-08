@@ -390,6 +390,8 @@ module ExtensionTypes =
                 { m with Opacity = opacity }
             )
 
+
+
         member x.MapAppereance(f) =
             { x with 
                 Stroke = f x.Stroke
@@ -401,6 +403,11 @@ module ExtensionTypes =
               Fill = ExtGStateAppereance.DefaultValue
               Stroke = ExtGStateAppereance.DefaultValue
               BlendModes = [] }
+
+        static member Fill_Difference(?opacticy) =
+            { FsExtGState.DefaultValue with 
+                BlendModes = [ BlendMode.Difference ]
+            }.SetFillOpacity(defaultArg opacticy 1.0f)
 
         static member StrokeOverprint =
             FsExtGState.DefaultValue.MapStroke(fun m ->

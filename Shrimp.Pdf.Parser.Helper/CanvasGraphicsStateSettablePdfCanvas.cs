@@ -11,6 +11,25 @@ namespace Shrimp.Pdf.Parser.Helper
 {
 
 
+    public abstract class FsPdfObjectWrapper<T> : PdfObjectWrapper<T> where T : PdfObject
+    {
+        private bool isWrappedObjectMustBeIndirect;
+
+        public FsPdfObjectWrapper(T pdfObject, bool isWrappedObjectMustBeIndirect) : base(pdfObject)
+        {
+            this.isWrappedObjectMustBeIndirect = isWrappedObjectMustBeIndirect;
+
+        }
+
+        protected override bool IsWrappedObjectMustBeIndirect()
+        {
+            return isWrappedObjectMustBeIndirect;
+        }
+
+
+
+    }
+
 
     /// <summary>
     /// fsharp has limited internal protected support in release mode?

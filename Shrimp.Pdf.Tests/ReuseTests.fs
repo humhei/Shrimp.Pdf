@@ -42,12 +42,31 @@ let reuseTests =
     testCase "add background image tests2" <| fun _ -> 
         let image = @"datas/reuse/add background image.jpg" 
         Flow.Reuse (
-            Reuses.AddBackgroundImage(
+            Reuses.AddForegroundImage(
                 BackgroundImageFile (FsFullPath image),
                 shadowColor = NullablePdfCanvasColor.WHITE,
-                layerName = {CurrentLayerName = "Cdr"; BackgroundLayerName = "Jpg"})
+                layerName =  BackgroundAddingLayerOptions.Create ("Cdr", "Jpg"),
+                extGSState = FsExtGState.Fill_Difference(1.0f)
+            )
         )
         |> runTest @"datas/reuse/add background image.pdf" 
+        |> ignore
+
+    ftestCase "add background image tests ai rgb" <| fun _ -> 
+        let image = @"datas/reuse/add background image rgb.jpg" 
+        Flow.Reuse (
+            Reuses.AddBackgroundImage(
+                BackgroundImageFile (FsFullPath image),
+                //shadowColor = NullablePdfCanvasColor.WHITE,
+                layerName =  
+                    BackgroundAddingLayerOptions.AI (
+                        currentLayer = AiLayerOptions.Create("Cdr"),
+                        backgroundLayer = AiLayerOptions.Create ("Jpg")
+                    )
+                //extGSState = FsExtGState.Fill_Difference(1.0f)
+            )
+        )
+        |> runTest @"datas/reuse/add background image rgb.pdf" 
         |> ignore
 
     testCase "add background as layer" <| fun _ -> 
@@ -58,7 +77,7 @@ let reuseTests =
 
 
         Flow.Reuse (
-            Reuses.AddForeground(PdfFile @"datas/reuse/add background as layer.background.pdf", xEffect = XEffort.Middle, yEffect = YEffort.Middle, layerName = {CurrentLayerName = "Origin"; BackgroundLayerName = "Background"})
+            Reuses.AddForeground(PdfFile @"datas/reuse/add background as layer.background.pdf", xEffect = XEffort.Middle, yEffect = YEffort.Middle, layerName =  BackgroundAddingLayerOptions.Create ("Origin", "Background"))
         )
         |> runTest "datas/reuse/add background as layer.pdf" 
         |> ignore
