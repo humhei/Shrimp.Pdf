@@ -430,7 +430,10 @@ module Imposing =
         static member MiddleDashLine(value, ?dashValue) = Spaces(Space.MiddleDashLine(value, ?dashValue = dashValue))
 
 
-
+    [<RequireQualifiedAccess>]
+    type BleedDistance = 
+        | UsingActualBox
+        | SpecificValue of float
 
     type _ImposingArguments =
         {
@@ -440,6 +443,7 @@ module Imposing =
             HSpaceExes: Spaces
             VSpaceExes: Spaces
             UseBleed: bool
+            BleedDistance: BleedDistance
             Background: Background
             DesiredPageOrientation: DesiredPageOrientation
             Sheet_PlaceTable: Sheet_PlaceTable
@@ -534,6 +538,7 @@ module Imposing =
             {
                 ColNums = [0]
                 RowNum = 0
+                BleedDistance = BleedDistance.UsingActualBox
                 Cropmark = None
                 HSpaceExes =  Spaces.Zero
                 VSpaceExes = Spaces.Zero
@@ -547,7 +552,7 @@ module Imposing =
                 DesiredPageOrientation = DesiredPageOrientation.Automatic
             }
 
-        static member CommonUsed_NUp(?desiredSize, ?hSpaces, ?vSpaces, ?background, ?colNum, ?rowNum) =
+        static member CommonUsed_NUp(?desiredSize, ?hSpaces, ?vSpaces, ?background, ?colNum, ?rowNum, ?bleedDistance) =
             let colNum = defaultArg colNum 0
 
             let rowNum = defaultArg rowNum 0
@@ -558,6 +563,7 @@ module Imposing =
                 Cropmark = Some Cropmark.defaultValue
                 HSpaceExes =  defaultArg hSpaces Spaces.Zero
                 VSpaceExes = defaultArg vSpaces Spaces.Zero
+                BleedDistance = defaultArg bleedDistance BleedDistance.UsingActualBox
                 UseBleed = true
                 Background = 
                     match background with 
@@ -577,7 +583,7 @@ module Imposing =
                 DesiredPageOrientation = DesiredPageOrientation.Automatic
             }
 
-        static member CommonUsed_Repeated(?desiredSize, ?hSpaces, ?vSpaces, ?background, ?colNum, ?rowNum) =
+        static member CommonUsed_Repeated(?desiredSize, ?hSpaces, ?vSpaces, ?background, ?colNum, ?rowNum, ?bleedDistance) =
             let args = 
                 _ImposingArguments.CommonUsed_NUp(
                     ?desiredSize = desiredSize,
@@ -585,7 +591,8 @@ module Imposing =
                     ?vSpaces = vSpaces,
                     ?background = background,
                     ?colNum = colNum,
-                    ?rowNum = rowNum)
+                    ?rowNum = rowNum,
+                    ?bleedDistance = bleedDistance )
 
             { args with IsRepeated =  true}
 

@@ -730,10 +730,13 @@ module ExtensionTypes =
     with 
         member x.AsList = x.HeadWordInfo :: List.map(fun m -> m.TextInfo) x.FollowedWordInfos
 
+
         member x.ConcatedText(?wordSep) =
             x.AsList
             |> List.map(fun m -> m.GetText())
             |> String.concat (defaultArg wordSep "")
+
+        member private x.ConcatedText_Prop = x.ConcatedText()
 
         member x.PdfConcatedWord() =
             { HeadWord = x.HeadWordInfo.GetText() 

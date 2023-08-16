@@ -1735,12 +1735,12 @@ let manipulateTests =
     testCase "test infos" <| fun _ -> 
         let m = FsDeviceRgb.OfLoggingText_Raw @"RGB 81 0 0"
         let pdfFile = 
-            @"C:\Users\Administrator\Desktop\3.pdf"
+            @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\DARK\包装\23-8-8\F2259 条形码.pdf"
             //@"D:\VsCode\Workspace\Shrimp.Pdf.Enhancement\tests\Shrimp.Pdf.Enhancement.Tests\datas\flows\Tile pages by cropLine3.pdf"
             |> PdfFile
 
 
-        let colors = PdfRunner.ReadColors(pdfFile)
+        let colors = PdfRunner.ReadTextInfos_Record(pdfFile)
 
 
         let a = 1

@@ -883,9 +883,36 @@ module _Reuses =
         static member private Impose(fArgs, offsetLists) =
             let args = (ImposingArguments.Create fArgs)
             let cellRotation = args.Value.CellRotation
+            let setBleedDistance() =
+                match args.Value.UseBleed, args.Value.BleedDistance with 
+                | true, BleedDistance.SpecificValue distance -> 
+                    reuse "SetBleedDistance" ["distance" => distance.ToString()] (fun flowModel document ->
+                        document.Reader.GetPages()
+                        |> List.iter(fun page ->
+                            let newPage = page.CopyTo(document.Writer)
+                            let newPage = document.Writer.AddPage(newPage)
+                            let newPageBox = 
+                                newPage.GetTrimBox()
+                                |> Rectangle.applyMargin (Margin.Create distance)
+
+                            newPage.SetActualBox(newPageBox)
+                            |> ignore
+                        )
+                    )
+
+                | _, _ ->
+                   Reuse.dummy()
+                   ||>> ignore
+
+
+
             match cellRotation with 
-            | CellRotation.None -> Reuses.Impose_Raw(fArgs, offsetLists = offsetLists,  draw = true)
+            | CellRotation.None -> 
+                setBleedDistance()
+                <+>
+                Reuses.Impose_Raw(fArgs, offsetLists = offsetLists,  draw = true)
             | _ ->
+                
                 Reuse.Factory(fun flowModel doc ->
                     let doc = ImposingDocument(doc, args)
                     doc.Build()
@@ -956,6 +983,8 @@ module _Reuses =
                         sequence_applyCellRotation
                         |> PageNumSequence.Create
 
+                    setBleedDistance()
+                    <+>
                     Reuses.SequencePages sequence
                     <+>
                     Reuses.Impose_Raw

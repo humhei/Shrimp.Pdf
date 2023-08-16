@@ -271,6 +271,11 @@ module internal Listeners =
             gsStack.Pop()
             |> ignore
 
+    [<RequireQualifiedAccess>]
+    type private PdfNumberOrPdfString =
+        | PdfNumber of float
+        | PdfString 
+
     [<AllowNullLiteral>]
     /// a type named FilteredEventListener is already defined in itext7
     /// renderInfoSelectorMapping bitwise relation: OR 
@@ -335,7 +340,6 @@ module internal Listeners =
                     let lastInfo = 
 
                         let typedConcatedTextInfo = 
-
                             let concatedTextInfos = 
                                 concatedTextInfos
                                 |> List.ofSeq
@@ -345,105 +349,83 @@ module internal Listeners =
                                 let array =
                                     (operatorRange.Operands.[0] :?> PdfArray)
                                     |> List.ofSeq
-
-                                let spaces = 
-                                    array
-                                    |> List.indexed
-                                    |> List.choose(fun (i, m) -> 
+                                    |> List.map(fun m ->
                                         match m.IsNumber() with 
-                                        | true -> Some (i, (m :?> PdfNumber).DoubleValue())
-                                        | false -> None
+                                        | true -> (m :?> PdfNumber).DoubleValue() |> PdfNumberOrPdfString.PdfNumber
+                                        | false -> PdfNumberOrPdfString.PdfString
                                     )
 
-                                    
+                                let __ensureTextsLengthTheSame =
+                                    let textsLength1 = 
+                                        array
+                                        |> List.filter(fun m ->
+                                            match m with 
+                                            | PdfNumberOrPdfString.PdfString -> true
+                                            | PdfNumberOrPdfString.PdfNumber _ -> false
+                                        )
+                                        |> List.length
 
-                                let tail = concatedTextInfos.Tail
-
-                                let spaces = 
-                                    if tail.Length = spaces.Length
-                                    then spaces
-                                    elif tail.Length = spaces.Length-1
-                                    then List.take tail.Length spaces
-                                    else 
-                                        let texts = 
-                                            concatedTextInfos
-                                            |> List.map(fun m -> m.ConcatedText())
-                                            |> String.concat ""
-
-                                        failwithf "%s Not implemented when spaces %A length  <> concatedTextInfos tail length %A" texts spaces tail.Length
-                                
-                                
-                                (spaces, tail)
-                                ||> List.map2 (fun (_, space) textInfo ->
-                                    { Space = Some space
-                                      TextInfo = textInfo.TextRenderInfo }
-                                )
-
-                                //if tail.Length = spaces.Length
-                                //   || tail.Length = spaces.Length - 1
-                                //then 
-                                //    (spaces, tail)
-                                //    ||> List.map2 (fun (_, space) textInfo ->
-                                //        { Space = Some space
-                                //          TextInfo = textInfo.TextRenderInfo }
-                                //    )
-
-                                //else
-                                //    let texts = 
-                                //        concatedTextInfos
-                                //        |> List.map(fun m -> m.ConcatedText())
-                                //        |> String.concat ""
-
-                                //    failwithf "%s Not implemented when spaces %A length  <> concatedTextInfos tail length %A" texts spaces tail.Length
-                                    
-                                    //match tail.Length = spaces.Length + 1 with 
-                                    //| true -> 
-                                    //    let spaces =
-                                    //        spaces
-                                    //        |> List.map snd
-                                    //        |> List.map Some
+                                    match textsLength1 = concatedTextInfos.Length with 
+                                    | true -> ()
+                                    | false -> failwithf "operatorRange.Operands texts length %d not equal to concatedTextInfos Length %d" textsLength1 concatedTextInfos.Length
 
 
-                                    //    (spaces @ [None], tail)
-                                    //    ||> List.map2 (fun (space) textInfo ->
-                                    //        { Space = space
-                                    //          TextInfo = textInfo.TextRenderInfo }
-                                    //    )
 
-                                    //| false ->
-                                    //    failwithf "Not implemented when spaces %A length  <> concatedTextInfos tail length %A" spaces tail.Length
+                                let index = 
+                                    array
+                                    |> List.findIndex(fun m -> 
+                                        match m with 
+                                        | PdfNumberOrPdfString.PdfNumber _ -> false
+                                        | PdfNumberOrPdfString.PdfString -> true
+                                    )
+
+                                let array = array.[index+1..]
+
+                                let rec loop (accum: _ list) (array: PdfNumberOrPdfString list) =
+                                    match array with 
+                                    | h1 :: h2 :: t ->
+                                        match h1, h2 with 
+                                        | PdfNumberOrPdfString.PdfString, _ ->  
+                                            let info: FollowedWordInfo =
+                                                {
+                                                    Space = None
+                                                    TextInfo = concatedTextInfos.[accum.Length+1].TextRenderInfo
+                                                }
+                                                
+                                            loop (info :: accum) (h2 :: t)
+
+
+                                        | PdfNumberOrPdfString.PdfNumber pdfNumber, PdfNumberOrPdfString.PdfString ->   
+                                            let info: FollowedWordInfo =
+                                                {
+                                                    Space = Some pdfNumber
+                                                    TextInfo = concatedTextInfos.[accum.Length+1].TextRenderInfo
+                                                }
+
+                                            loop (info :: accum) t
+
+                                        | PdfNumberOrPdfString.PdfNumber pdfNumber1, PdfNumberOrPdfString.PdfNumber pdfNumber2 ->
+                                            failwithf "continous pdfNumber exists %A" (pdfNumber1, pdfNumber2)
+
+                                    | [v1] -> 
+                                        match v1 with 
+                                        | PdfNumberOrPdfString.PdfString -> 
+                                            let info: FollowedWordInfo =
+                                                {
+                                                    Space = None
+                                                    TextInfo = concatedTextInfos.[accum.Length+1].TextRenderInfo
+                                                }  
                                         
-                                        //let textIndexes = 
-                                        //    array
-                                        //    |> List.indexed
-                                        //    |> List.choose(fun (i, m) -> 
-                                        //        match m.IsNumber() with 
-                                        //        | true -> None 
-                                        //        | false -> Some (i)
-                                        //    )
+                                            loop (info :: accum) []
+                    
+                                        | PdfNumberOrPdfString.PdfNumber _ ->
+                                            loop accum []
 
-                                        //(textIndexes, tail)
-                                        //||> List.map2 (fun i textInfo ->
-                                        //    { Space = 
-                                        //        spaces
-                                        //        |> List.map(fun space)
-                                        //      TextInfo = textInfo.TextRenderInfo }
-                                        //)
+                                    | [] -> List.rev accum
+
+                                loop [] array
 
 
-                                //concatedTextInfos.Tail
-                                //|> List.indexed
-                                //|> List.map(fun (i, textInfo) ->
-                                //    { Space = 
-                                //        spaces
-                                //        |> List.tryPick(fun (m, space) -> 
-                                //            match i+1 = m with 
-                                //            | true -> Some space
-                                //            | false -> None
-                                //        )
-
-                                //      TextInfo = textInfo.TextRenderInfo }
-                                //)
 
                             { HeadWordInfo = head
                               FollowedWordInfos = followed

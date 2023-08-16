@@ -43,7 +43,7 @@ let reuseTests =
         let image = @"datas/reuse/add background image.jpg" 
         Flow.Reuse (
             Reuses.AddForegroundImage(
-                BackgroundImageFile (FsFullPath image),
+                BackgroundImageFile.Singleton (FsFullPath image),
                 shadowColor = NullablePdfCanvasColor.WHITE,
                 layerName =  BackgroundAddingLayerOptions.Create ("Cdr", "Jpg"),
                 extGSState = FsExtGState.Fill_Difference(1.0f)
@@ -52,11 +52,11 @@ let reuseTests =
         |> runTest @"datas/reuse/add background image.pdf" 
         |> ignore
 
-    ftestCase "add background image tests ai rgb" <| fun _ -> 
+    testCase "add background image tests ai rgb" <| fun _ -> 
         let image = @"datas/reuse/add background image rgb.jpg" 
         Flow.Reuse (
             Reuses.AddBackgroundImage(
-                BackgroundImageFile (FsFullPath image),
+                BackgroundImageFile.Singleton (FsFullPath image),
                 //shadowColor = NullablePdfCanvasColor.WHITE,
                 layerName =  
                     BackgroundAddingLayerOptions.AI (
@@ -167,7 +167,7 @@ let reuseTests =
         ()
 
 
-    testCase "imposing force onePage" <| fun _ -> 
+    ftestCase "imposing force onePage" <| fun _ -> 
 
         Flow.Reuse (
             Reuses.Impose_ForceOnePage
@@ -180,6 +180,7 @@ let reuseTests =
                         IsRepeated = false
                         HSpaceExes = Spaces [mm 0.]
                         VSpaceExes = Spaces [mm 0.]
+                        BleedDistance = BleedDistance.SpecificValue (mm 3)
                         //DesiredPageOrientation = DesiredPageOrientation.Portrait
                         Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable (Margin.Create(mm 6.))
                     }
