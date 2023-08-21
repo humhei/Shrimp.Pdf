@@ -21,6 +21,11 @@ open iText.IO.Image
 
 [<AutoOpen>]
 module iText = 
+    type LineShapingStyle =
+        { JoinStyle: int 
+          CapStyle: int
+          LineWidth: float
+          DashPattern: DashPattern }
 
     [<RequireQualifiedAccess>]
     module PdfDictionary =
@@ -716,21 +721,7 @@ module iText =
     module CanvasGraphicsState =
         let getDashPattern (gs: CanvasGraphicsState) =
             let dashPattern = gs.GetDashPattern()
-            let values = dashPattern |> Array.ofSeq
-            let l = values.Length
-            let dashArray = 
-                values.[0..l-2] 
-                |> Array.collect (fun dashArray -> 
-                    dashArray :?> PdfArray 
-                    |> Array.ofSeq 
-                    |> Array.map (fun dashValue -> 
-                        let number = dashValue :?> PdfNumber
-                        number.GetValue()
-                    ))
-            let phase = (values.[l-1] :?> PdfNumber).GetValue()
-
-            { DashArray = dashArray 
-              Phase = phase }
+            DashPattern.OfPdfArray dashPattern
 
         let getExtGState (gs: CanvasGraphicsState): FsExtGState =
             { OPM = gs.GetOverprintMode() |> enum
@@ -798,7 +789,14 @@ module iText =
         let [<Literal>] FILLANDSTROKE = PathRenderInfo.FILL ||| PathRenderInfo.STROKE
 
 
-            
+        let getLineShapingStyle (info: IPathRenderInfo): LineShapingStyle =
+            let info = info.Value
+            {
+                JoinStyle    = info.GetLineJoinStyle()
+                CapStyle     = info.GetLineCapStyle()
+                LineWidth    = info.GetLineWidth() |> float
+                DashPattern  = info.GetLineDashPattern() |> DashPattern.OfPdfArray
+            }
 
         /// without ctm applied
         let toRawPoints (info: IPathRenderInfo) =
@@ -1513,11 +1511,21 @@ module iText =
         let setStrokeColor (color: Color) (canvas:PdfCanvas) =
             canvas.SetStrokeColor(color)
 
+        let setLineCapStyle (style) (canvas: PdfCanvas) =
+            canvas.SetLineCapStyle(style)
+
         let setLineJoinStyle (style) (canvas: PdfCanvas) =
             canvas.SetLineJoinStyle(style)
 
         let setLineWidth (width: float) (canvas: PdfCanvas) =
             canvas.SetLineWidth(float32 width)
+
+        let setLineShapingStyle (lineStyle: LineShapingStyle) (canvas: PdfCanvas) =
+            canvas
+                .SetLineCapStyle(lineStyle.CapStyle)
+                .SetLineJoinStyle(lineStyle.JoinStyle)
+                .SetLineWidth(float32 lineStyle.LineWidth)
+            |> setDashpattern lineStyle.DashPattern
 
         let setFillColor (color: Color) (canvas:PdfCanvas) =
             canvas.SetFillColor(color)

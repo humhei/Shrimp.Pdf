@@ -167,7 +167,7 @@ let reuseTests =
         ()
 
 
-    ftestCase "imposing force onePage" <| fun _ -> 
+    testCase "imposing force onePage" <| fun _ -> 
 
         Flow.Reuse (
             Reuses.Impose_ForceOnePage

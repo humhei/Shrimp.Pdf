@@ -1363,6 +1363,23 @@ module ExtensionTypes =
 
         static member MM2 = DashPattern.Create(mm 2.)
 
+        static member internal OfPdfArray(dashPattern: PdfArray) =
+            let values = dashPattern |> Array.ofSeq
+            let l = values.Length
+            let dashArray = 
+                values.[0..l-2] 
+                |> Array.collect (fun dashArray -> 
+                    dashArray :?> PdfArray 
+                    |> Array.ofSeq 
+                    |> Array.map (fun dashValue -> 
+                        let number = dashValue :?> PdfNumber
+                        number.GetValue()
+                    ))
+            let phase = (values.[l-1] :?> PdfNumber).GetValue()
+
+            { DashArray = dashArray 
+              Phase = phase }
+
     type PageBoxKind =
         | ArtBox = 0
         | BleedBox = 1

@@ -188,6 +188,9 @@ module _Renewable =
         
 
 
+
+
+
     type RenewablePathInfo =
         { FillColor: iText.Kernel.Colors.Color 
           StrokeColor: iText.Kernel.Colors.Color
@@ -197,7 +200,7 @@ module _Renewable =
           Ctm: Matrix
           Operation: int
           AccumulatedPathOperatorRanges: seq<OperatorRange>
-          LineWidth: float32
+          LineShapingStyle: LineShapingStyle
           DashPattern: DashPattern
           ExtGState: FsExtGState option
           ClippingPathInfos: ClippingPathInfos
@@ -241,7 +244,7 @@ module _Renewable =
                     canvas
                     |> PdfCanvas.setFillColor x.FillColor
                     |> PdfCanvas.setStrokeColor x.StrokeColor
-                    |> PdfCanvas.setLineWidth (float x.LineWidth)
+                    |> PdfCanvas.setLineShapingStyle x.LineShapingStyle
                     |> PdfCanvas.setDashpattern x.DashPattern
                     |> ignore
 
@@ -279,7 +282,7 @@ module _Renewable =
                 Operation = info.GetOperation()
                 Path = info.GetPath()
                 AccumulatedPathOperatorRanges = x.AccumulatedPathOperatorRanges
-                LineWidth = info.GetLineWidth()
+                LineShapingStyle = IPathRenderInfo.getLineShapingStyle x
                 DashPattern = CanvasGraphicsState.getDashPattern gs
                 ClippingPathInfos = x.ClippingPathInfos
                 FillShading = None

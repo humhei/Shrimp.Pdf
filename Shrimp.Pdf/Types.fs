@@ -50,6 +50,10 @@ with
         let scale = min scaleX scaleY
         x.MapValue(fun m -> m * scale)
 
+    member x.MMText =
+        let x = x.MMValues
+        sprintf "%.1fx%.1f" x.Width x.Height
+
 [<AutoOpen>]
 module _FsSizeExtensions =
     type Rectangle with 
