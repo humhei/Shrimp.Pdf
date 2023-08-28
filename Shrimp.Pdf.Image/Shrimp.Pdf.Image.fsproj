@@ -7,6 +7,7 @@
   <ItemGroup>
     <Compile Include="ImageConverter.fs" />
     <Compile Include="Library.fs" />
+    <Compile Include="Modify.fs" />
     <Compile Include="ModifyPage.fs" />
   </ItemGroup>
 

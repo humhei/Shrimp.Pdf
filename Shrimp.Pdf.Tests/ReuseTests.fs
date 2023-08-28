@@ -19,7 +19,7 @@ open iText.Kernel.Pdf.Canvas
 
 type Colors =
     /// 橙色
-    static member PdfExtractorTagColor = FsColor.CreateRGB(247, 147, 30)
+    static member PdfExtractorTagColor = FsColor.CreateRGB(247, 147, 30) 
 
 let reuseTests =
   testList "Reuse Tests" [

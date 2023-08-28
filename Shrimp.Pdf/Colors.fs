@@ -801,7 +801,7 @@ module _Colors =
             }
 
         static member IsEqual(color1: FsSeparation, color2: FsSeparation, valueEqualOptions) =
-            color1.Name = color2.Name
+            color1.Name.EqualIC color2.Name
             && color1.Transparency = color2.Transparency
             && FsValueColor.IsEqual (color1.Color, color2.Color, valueEqualOptions)
 
@@ -1923,6 +1923,7 @@ module _Colors =
             | FsColor.Separation separation -> 
                 separation
                 |> PdfCanvasColor.Separation
+            | FsColor.DeviceN _ -> failwithf "Currently conversion of deviceN color to PdfCanvasColor is not supported" 
             | FsColor.IccBased _ -> failwithf "Currently conversion of icc based color to PdfCanvasColor is not supported" 
             | FsColor.PatternColor _ -> failwithf "Currently conversion of pattern color to PdfCanvasColor is not supported" 
             | FsColor.ShadingColor _ -> failwithf "Currently conversion of shading color to PdfCanvasColor is not supported" 

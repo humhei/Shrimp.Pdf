@@ -25,7 +25,7 @@ open System.Collections.Concurrent
 open Shrimp.Pdf.js.shared
 
 [<AutoOpen>]
-module _ModifyPage  =
+module __Image_ModifyPage  =
     type ModifyPage with
         static member TrimToVisible (pageSelector: PageSelector, ?margin: Margin)  =
             let margin = defaultArg margin (Margin.Create 0.)

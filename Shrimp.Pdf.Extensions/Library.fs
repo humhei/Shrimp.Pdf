@@ -1178,27 +1178,34 @@ module iText =
         let getUnclippedBound (info: IImageRenderInfo) =
             let image = info.Value
 
-            let ctm = 
+            let imageCtm = 
                 image.GetImageCtm()
-                |> AffineTransformRecord.ofMatrix
+                |> AffineTransform.ofMatrix
 
-            let x, width =
-                match ctm.ScaleX with 
-                | BiggerOrEqual 0 -> ctm.TranslateX, ctm.ScaleX
-                | SmallerThan 0 -> 
-                    ctm.TranslateX + ctm.ScaleX, abs ctm.ScaleX
-                | _ -> failwith "Invalid token"
+            imageCtm.Transform(Rectangle.create 0 0 1 1)
+            //let imageCtm = ctm.Concatenate imageCtm
 
-            let y, height =
-                match ctm.ScaleY with 
-                | BiggerOrEqual 0 -> ctm.TranslateY, ctm.ScaleY
-                | SmallerThan 0 -> 
-                    ctm.TranslateY + ctm.ScaleY, abs ctm.ScaleY
-                | _ -> failwith "Invalid token"
+            //let x, width =
+            //    match imageCtm.ScaleX with 
+            //    | BiggerOrEqual 0 -> imageCtm.TranslateX, imageCtm.ScaleX
+            //    | SmallerThan 0 -> 
+            //        imageCtm.TranslateX + imageCtm.ScaleX, abs imageCtm.ScaleX
+            //    | _ -> failwith "Invalid token"
 
-            Rectangle.create x y width height
+            //let y, height =
+            //    match imageCtm.ScaleY with 
+            //    | BiggerOrEqual 0 -> imageCtm.TranslateY, imageCtm.ScaleY
+            //    | SmallerThan 0 -> 
+            //        imageCtm.TranslateY + imageCtm.ScaleY, abs imageCtm.ScaleY
+            //    | _ -> failwith "Invalid token"
 
+            //let rect = Rectangle.create x y width height
+            //let imageCtm = 
+            //    imageCtm
+            //    |> AffineTransformRecord.toAffineTransform
 
+            //let rect2 = FsRectangle.OfRectangle rect
+            //rect 
 
 
 

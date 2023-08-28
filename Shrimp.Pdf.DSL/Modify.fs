@@ -216,6 +216,14 @@ with
 
 type ColorMappings = ColorMappings of ColorMapping al1List
 with 
+    member x.Value =
+        let (ColorMappings v1) = x
+        v1
+
+    member x.AsList =
+        let (ColorMappings v1) = x
+        v1.AsList
+
     member x.Add(newColorMapping) =
         let (ColorMappings colorMapping) = x
         colorMapping.Add [newColorMapping]

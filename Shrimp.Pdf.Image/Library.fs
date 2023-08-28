@@ -91,7 +91,9 @@ module _ModifierIM =
                     let bound = image.VisibleBound()
                     match bound with 
                     | None -> false
-                    | Some bound -> bound.Is_InsideOrCross_Of(pageModifingArgs.Page.GetArea(areaGettingOptions))
+                    | Some bound -> 
+                        let b = bound.Is_InsideOrCross_Of(pageModifingArgs.Page.GetArea(areaGettingOptions))
+                        b
 
 
     let private client  = lazy GetDefaultClusterIcm2Client()

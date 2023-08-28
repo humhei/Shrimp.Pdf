@@ -344,7 +344,7 @@ let extractTests =
             |> runTest "datas/extract/extract vectors19.pdf" 
             |> ignore
 
-        ftestCase "extract vectors tests20" <| fun _ -> 
+        testCase "extract vectors tests20" <| fun _ -> 
             Flow.Reuse (
                 Reuses.ExtractIM(
                     PageSelector.All,
@@ -573,16 +573,6 @@ let extractTests =
             |> runTest "datas/extract/tile pages by colNum and rowNum.pdf" 
             |> ignore
 
-        testCase "tile pages for big data" <| fun _ -> 
-            let tileTable = 
-                TileTableIndexer.Create (
-                    colNum = 2,
-                    rowNum = 5
-                )
-            (Flows.TilePages (tileTable, Direction.Horizontal, pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0))
-            |> runTest "datas/extract/tile pages for big data.pdf" 
-            |> ignore
-
         testCase "tile pages by colNum and rowNum tests2" <| fun _ -> 
             let tileTable = 
                 TileTableIndexer.Create (
@@ -594,6 +584,23 @@ let extractTests =
             (Flows.TilePages (tileTable, Direction.Vertical, pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM3))
             |> runTest "datas/extract/tile pages by colNum and rowNum2.pdf" 
             |> ignore
+
+        ftestCase "tile pages by colNum and rowNum tests3" <| fun _ -> 
+            (Flows.TilePages (tileTable = TileTableIndexer.Create (colNum = 1, rowNum = 1), pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross_MM3))
+            |> runTest "datas/extract/tile pages by colNum and rowNum3.pdf" 
+            |> ignore
+
+        testCase "tile pages for big data" <| fun _ -> 
+            let tileTable = 
+                TileTableIndexer.Create (
+                    colNum = 2,
+                    rowNum = 5
+                )
+            (Flows.TilePages (tileTable, Direction.Horizontal, pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox PageTilingRenewInfosSplitter.Groupby_DenseBoundIsInside_MM0))
+            |> runTest "datas/extract/tile pages for big data.pdf" 
+            |> ignore
+
+
 
         testCase "tile pages by selector tests" <| fun _ -> 
             Flows.TilePages(

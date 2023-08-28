@@ -769,6 +769,13 @@ let manipulateTests =
         |> runTest "datas/manipulate/add bound to text8.pdf" 
         |> ignore
 
+    testCase "add bound to images" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.AddBoundToImages()
+        )
+        |> runTest "datas/manipulate/add bound to images.pdf" 
+        |> ignore
+
     testCase "decode text" <| fun _ -> 
         Flow.Manipulate (
             Modify.DecodeText() 

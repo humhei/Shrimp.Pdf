@@ -113,9 +113,11 @@ module _Extract =
 
 
         let infos = 
+            let infos = 
+                infos
+                |> List.ofSeq
+                |> List.filter(IIntegratedRenderInfoIM.isVisible)
             infos
-            |> List.ofSeq
-            |> List.filter(IIntegratedRenderInfoIM.isVisible)
             |> List.map(fun info ->
                 match info with 
                 | IIntegratedRenderInfoIM.Vector info ->
