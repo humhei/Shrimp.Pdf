@@ -356,6 +356,30 @@ let extractTests =
             |> runTest "datas/extract/extract vectors20.pdf" 
             |> ignore
 
+        testCase "extract vectors tests21" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(fun args info -> 
+                        true
+                    )
+                )
+            )
+            |> runTest "datas/extract/extract vectors21.pdf" 
+            |> ignore
+
+
+        testCase "extract vectors tests22" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(fun args info -> 
+                        true
+                    )
+                )
+            )
+            |> runTest "datas/extract/extract vectors22.pdf" 
+            |> ignore
 
         testCase "extract circle dashline test" <| fun _ -> 
             Flow.Reuse (
@@ -585,7 +609,7 @@ let extractTests =
             |> runTest "datas/extract/tile pages by colNum and rowNum2.pdf" 
             |> ignore
 
-        ftestCase "tile pages by colNum and rowNum tests3" <| fun _ -> 
+        testCase "tile pages by colNum and rowNum tests3" <| fun _ -> 
             (Flows.TilePages (tileTable = TileTableIndexer.Create (colNum = 1, rowNum = 1), pageTilingRenewOptions = PageTilingRenewOptions.VisibleInfosInActualBox PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross_MM3))
             |> runTest "datas/extract/tile pages by colNum and rowNum3.pdf" 
             |> ignore

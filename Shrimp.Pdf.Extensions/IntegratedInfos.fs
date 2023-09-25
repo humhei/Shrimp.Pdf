@@ -13,6 +13,7 @@ open iText.Kernel.Pdf.Xobject
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Font
 open Shrimp.FSharp.Plus
+open Shrimp.FSharp.Plus.Operators
 open iText.IO.Image
 open Shrimp.Pdf.Constants.Operators
 
@@ -94,6 +95,7 @@ module IntegratedInfos =
 
         member x.IsClippingPath = x.PathRenderInfo.IsPathModifiesClippingPath()
 
+        /// Revealed ExtGState
         member x.GetAppliedExtGState() =
             let exState = CanvasGraphicsState.getExtGState (x.PathRenderInfo.GetGraphicsState())
 
@@ -179,6 +181,7 @@ module IntegratedInfos =
                     }
                 )
 
+        /// Revealed ExtGState
         member x.GetAppliedExtGState() =
             let exState = CanvasGraphicsState.getExtGState (x.TextRenderInfo.GetGraphicsState())
 

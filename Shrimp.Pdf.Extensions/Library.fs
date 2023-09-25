@@ -21,11 +21,31 @@ open iText.IO.Image
 
 [<AutoOpen>]
 module iText = 
+    [<RequireQualifiedAccess>]
+    type ActualLineWidth =
+        | Exactly of  rawLineWidth: float * scale: float
+        | Unbalance of rawLineWidth: float * widthX: float * widthY: float
+    with 
+        member x.CalculatedWidth = 
+            match x with 
+            | Exactly (w, s) -> w * s
+            | Unbalance (w, sx, sy) -> w * (min sx sy)
+
+        member x.RawLineWidth =
+            match x with 
+            | Exactly (w, _) 
+            | Unbalance (w, _, _) -> w
+
     type LineShapingStyle =
         { JoinStyle: int 
           CapStyle: int
-          LineWidth: float
+          ActualLineWidth: ActualLineWidth
           DashPattern: DashPattern }
+    with 
+        member x.CalculatedWidth = x.ActualLineWidth.CalculatedWidth
+
+        member x.RawLineWidth = x.ActualLineWidth.RawLineWidth
+
 
     [<RequireQualifiedAccess>]
     module PdfDictionary =
@@ -744,6 +764,31 @@ module iText =
              }
 
 
+        let getActualLineWidth (gs: CanvasGraphicsState) =
+            let lineWidth = gs.GetLineWidth() |> float
+            let actualLineWidth =
+                let matrix = 
+                    gs.GetCtm()
+                    |> AffineTransform.ofMatrix
+
+                let scx = matrix.GetScaleX()
+                let scy = matrix.GetScaleY()
+                match scx @= scy with 
+                | true -> ActualLineWidth.Exactly (lineWidth, (min scx scy))
+                | false -> ActualLineWidth.Unbalance(lineWidth, scx, scy)
+
+            actualLineWidth
+
+
+        let getLineShapingStyle (gs: CanvasGraphicsState): LineShapingStyle =
+            {
+                JoinStyle    = gs.GetLineJoinStyle()
+                CapStyle     = gs.GetLineCapStyle()
+                DashPattern  = gs.GetDashPattern() |> DashPattern.OfPdfArray
+                ActualLineWidth = getActualLineWidth gs
+            }
+
+
     type AbstractRenderInfo with 
         member this.GetFillColor() =
             match this with 
@@ -790,13 +835,8 @@ module iText =
 
 
         let getLineShapingStyle (info: IPathRenderInfo): LineShapingStyle =
-            let info = info.Value
-            {
-                JoinStyle    = info.GetLineJoinStyle()
-                CapStyle     = info.GetLineCapStyle()
-                LineWidth    = info.GetLineWidth() |> float
-                DashPattern  = info.GetLineDashPattern() |> DashPattern.OfPdfArray
-            }
+            info.Value.GetGraphicsState()
+            |> CanvasGraphicsState.getLineShapingStyle
 
         /// without ctm applied
         let toRawPoints (info: IPathRenderInfo) =
@@ -862,6 +902,9 @@ module iText =
         let getLineWidth (info: IPathRenderInfo) = 
             info.Value.GetLineWidth()
 
+        let getActualLineWidth (info: IPathRenderInfo) = 
+            CanvasGraphicsState.getActualLineWidth <| info.Value.GetGraphicsState()
+
         let getExtGState (info: IPathRenderInfo) = 
             info.Value.GetGraphicsState()
             |> CanvasGraphicsState.getExtGState
@@ -923,6 +966,9 @@ module iText =
 
             rect
 
+        let getLineShapingStyle (info: TextRenderInfo): LineShapingStyle =
+            let gs = info.GetGraphicsState()
+            CanvasGraphicsState.getLineShapingStyle gs
 
         let getWidth (info: TextRenderInfo) =
             getBoundWithoutStrokeWidth(info)
@@ -1057,6 +1103,9 @@ module iText =
         let getHeight (info: ITextRenderInfo) =
             info.Value
             |> TextRenderInfo.getHeight
+
+        let getLineShapingStyle (info: ITextRenderInfo): LineShapingStyle =
+            TextRenderInfo.getLineShapingStyle info.Value
 
 
         let getY (info: ITextRenderInfo) =
@@ -1499,7 +1548,17 @@ module iText =
                 ( xObject,
                   AffineTransformRecord.ofAffineTransform affineTransform )
 
-
+        member canvas.SetActualLineWidth (ctm, width: ActualLineWidth) =
+            match width with 
+            | ActualLineWidth.Exactly _ -> canvas.SetLineWidth(float32 width.CalculatedWidth)
+            | ActualLineWidth.Unbalance _ ->
+                let matrix = AffineTransform.ofMatrix ctm
+                canvas
+                    .SaveState()
+                    .ConcatMatrix(matrix)
+                    .SetLineWidth(float32 width.RawLineWidth)
+                    .ConcatMatrix(matrix.Clone().CreateInverse())
+                    .RestoreState()
 
     [<RequireQualifiedAccess>]
     module PdfCanvas = 
@@ -1527,11 +1586,21 @@ module iText =
         let setLineWidth (width: float) (canvas: PdfCanvas) =
             canvas.SetLineWidth(float32 width)
 
+        let setActualLineWidth ctm (width: ActualLineWidth) (canvas: PdfCanvas) =
+            canvas.SetActualLineWidth(ctm, width)
+
         let setLineShapingStyle (lineStyle: LineShapingStyle) (canvas: PdfCanvas) =
             canvas
                 .SetLineCapStyle(lineStyle.CapStyle)
                 .SetLineJoinStyle(lineStyle.JoinStyle)
-                .SetLineWidth(float32 lineStyle.LineWidth)
+                .SetLineWidth(float32 lineStyle.RawLineWidth)
+            |> setDashpattern lineStyle.DashPattern
+
+        let setAppliedLineShapingStyle (ctm: Matrix) (lineStyle: LineShapingStyle) (canvas: PdfCanvas) =
+            canvas
+                .SetLineCapStyle(lineStyle.CapStyle)
+                .SetLineJoinStyle(lineStyle.JoinStyle)
+                .SetActualLineWidth(ctm, lineStyle.ActualLineWidth)
             |> setDashpattern lineStyle.DashPattern
 
         let setFillColor (color: Color) (canvas:PdfCanvas) =

@@ -348,11 +348,16 @@ module _Template_ColoredBoxes =
                                     match indexedTextInfos with 
                                     | [] -> None 
                                     | _ -> 
-                                        indexedTextInfos 
-                                        |> List.exactlyOne 
-                                        |> fun m -> m.ConcatedText() 
-                                        |> System.Int32.Parse
-                                        |> Some
+                                        match indexedTextInfos  with 
+                                        | [v] -> v.ConcatedText() |> System.Int32.Parse |> Some
+                                        | _ ->
+                                            indexedTextInfos 
+                                            |> List.map (fun m -> m.ConcatedText())
+                                            |> List.map (System.Int32.Parse)
+                                            |> List.distinct
+                                            |> List.exactlyOne_DetailFailingText
+                                            |> Some
+
 
                             textInfos, index
 
@@ -393,11 +398,14 @@ module _Template_ColoredBoxes =
           PageNumber: PageNumber
           Color: FsColor }
     with 
+        member private x.ConcatedText =  x.Text.ConcatedText()
+
         member x.Number  =x.ExtractorIndex
 
         member x.Box = x.Bound.Bound.AsRectangle
 
         static member Pick(pageNumber, color: FsColor, infos: IIntegratedRenderInfo list, ?specificIndexColor) =
+
             let x =     
                 ColoredBoxWithText.Pick(
                     pageNumber,

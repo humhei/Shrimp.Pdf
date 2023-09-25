@@ -226,6 +226,10 @@ module _Renewable =
                         |> List.exactlyOne_DetailFailingText
                     let outputStream = canvas.GetContentStream().GetOutputStream()
 
+                    match x.ExtGState with 
+                    | None -> ()
+                    | Some extGState -> PdfCanvas.setExtGState extGState canvas |> ignore
+
                     canvas.ConcatMatrix(AffineTransform.ofMatrix ctm) |> ignore
 
                     outputStream.WriteString(BX).Write(shading).WriteSpace().WriteString(sh).WriteSpace().WriteString(EX).WriteNewLine()
@@ -235,7 +239,8 @@ module _Renewable =
 
                 | false ->
                     
-                    let operatorRanges = x.ApplyCtm_To_AccumulatedPathOperatorRanges()
+                    //let operatorRanges = x.ApplyCtm_To_AccumulatedPathOperatorRanges()
+                    let operatorRanges = x.AccumulatedPathOperatorRanges
                     //canvas.ConcatMatrix(AffineTransform.ofMatrix x.Ctm) |> ignore
                     match x.ExtGState with 
                     | None -> ()
@@ -244,6 +249,7 @@ module _Renewable =
                     canvas
                     |> PdfCanvas.setFillColor x.FillColor
                     |> PdfCanvas.setStrokeColor x.StrokeColor
+                    |> PdfCanvas.concatMatrix x.Ctm
                     |> PdfCanvas.setLineShapingStyle x.LineShapingStyle
                     |> PdfCanvas.setDashpattern x.DashPattern
                     |> ignore
@@ -302,8 +308,7 @@ module _Renewable =
            StrokeColor: iText.Kernel.Colors.Color
            FillShading: option<PdfName * Matrix> 
            StrokeShading: option<PdfName * Matrix> 
-           LineWidth: float32
-           DashPattern: DashPattern
+           LineShapingStyle: LineShapingStyle
            Kind: RenewableTextInfoKind
            RawFontSize: float32
            Font: PdfFont
@@ -339,10 +344,9 @@ module _Renewable =
                 pdfCanvas
                 |> PdfCanvas.setFillColor x.FillColor
                 |> PdfCanvas.setStrokeColor x.StrokeColor
-                |> PdfCanvas.setLineWidth (float x.LineWidth)
-                |> PdfCanvas.setDashpattern x.DashPattern
                 
                 |> PdfCanvas.concatMatrix x.Ctm
+                |> PdfCanvas.setLineShapingStyle x.LineShapingStyle
      
                 |> PdfCanvas.beginText
                 |> PdfCanvas.setTextRenderingMode x.TextRenderingMode
@@ -407,9 +411,8 @@ module _Renewable =
               WordSpacing = renderInfo.GetWordSpacing()
               CharSpacing = renderInfo.GetCharSpacing()
               TextRise = renderInfo.GetRise()
-              LineWidth = renderInfo.GetGraphicsState().GetLineWidth()
               ExtGState = extGState
-              DashPattern = CanvasGraphicsState.getDashPattern (gs)
+              LineShapingStyle = ITextRenderInfo.getLineShapingStyle x
               HeaderTextRenderInfo = 
                 match x.EndTextState with 
                 | EndTextState.Yes -> x.ConcatedTextInfo.HeadWordInfo

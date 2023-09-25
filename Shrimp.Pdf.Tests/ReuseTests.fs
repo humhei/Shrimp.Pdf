@@ -44,8 +44,8 @@ let reuseTests =
         Flow.Reuse (
             Reuses.AddForegroundImage(
                 BackgroundImageFile.Singleton (FsFullPath image),
-                shadowColor = NullablePdfCanvasColor.WHITE,
-                layerName =  BackgroundAddingLayerOptions.Create ("Cdr", "Jpg"),
+                //shadowColor = NullablePdfCanvasColor.WHITE,
+                //layerName =  BackgroundAddingLayerOptions.Create ("Cdr", "Jpg"),
                 extGSState = FsExtGState.Fill_Difference(1.0f)
             )
         )
@@ -59,10 +59,11 @@ let reuseTests =
                 BackgroundImageFile.Singleton (FsFullPath image),
                 //shadowColor = NullablePdfCanvasColor.WHITE,
                 layerName =  
-                    BackgroundAddingLayerOptions.AI (
-                        currentLayer = AiLayerOptions.Create("Cdr"),
-                        backgroundLayer = AiLayerOptions.Create ("Jpg")
-                    )
+                    BackgroundAddingLayerOptions.Pdf (
+                        currentLayerName = "Cdr",
+                        backgroundLayerName = ("Jpg")
+                    ), 
+                backgroundPositionTweak = fun _ -> BackgroundPositionTweak.SpecficRect(FsRectangle.create 0 0 (mm 200) (mm 200))
                 //extGSState = FsExtGState.Fill_Difference(1.0f)
             )
         )
@@ -341,6 +342,23 @@ let reuseTests =
                     )
             )
             |> runTest "datas/reuse/imposing N-UP6.pdf" 
+        () 
+
+    ftestCase "imposing Multiple sizes tests" <| fun _ -> 
+        let r = 
+            Flow.Reuse (
+                Reuses.Impose
+                    (fun args ->
+                        { args with 
+                            ColNums = [0]
+                            RowNum = 0
+                            Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable(Margin.MM6)
+                            Background = Background.Size FsSize.A4
+                            Cropmark = (Some Cropmark.defaultValue)
+                        }
+                    )
+            )
+            |> runTest "datas/reuse/Imposing N-UP multiple sizes.pdf" 
         () 
 
     testCase "imposing N-UP Big data tests" <| fun _ -> 

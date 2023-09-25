@@ -442,3 +442,6 @@ module Operators =
 
     let inchToMM (inch: float) =
         inch * 25.4
+
+    let inch (inch: float) =
+        inch * 72.

@@ -208,6 +208,7 @@ module FileOperations =
         )
         |> FileOperation
 
+    /// [1..9] + [2; 3; 4] => ([1; 2] + [3; 4; 5] + [6; 7; 8; 9])
     let splitDocumentByPageCounts(fPageCountsTarget: TotalNumberOfPages -> DocumentSplitPageCountTarget list, isOverride) =
         let sequenceTargets totalPageCount =
             (0, fPageCountsTarget totalPageCount)
@@ -368,6 +369,7 @@ type PdfRunner =
         runWithFlowModel flowModel flow
         |> List.map (fun m -> m.PdfFile)
 
+    /// [1..9] + [2; 3; 4] => ([1; 2] + [3; 4; 5] + [6; 7; 8; 9])
     static member SplitDocumentByPageCounts (inputPdfFile: PdfFile, fPageCounts, ?isOverride, ?config) =
         
         let flow =

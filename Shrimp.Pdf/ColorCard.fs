@@ -1,5 +1,6 @@
 ﻿namespace Shrimp.Pdf.Colors
 open System.Drawing
+open Shrimp.FSharp.Plus
 type PantoneColorEnum = 
 | ``PANTONE 100 C`` = 0x5c78c2
 | ``PANTONE 101 C`` = 0x5c78cb
@@ -3273,3 +3274,20 @@ type ColorCard =
     | KnownColor of KnownColor
     | Pantone of PantoneColorEnum
     | TPX of TPXColorEnum
+with 
+    member x.LoggingText =
+        match x with 
+        | KnownColor v -> v.ToString()
+        | Pantone v -> v.ToString()
+        | TPX v -> v.ToString()
+
+    static member Parse_Result(text: string) =
+        match text with 
+        | String.EndsWithIC "TPX" -> stringToEnum<TPXColorEnum> text |> TPX |> Result.Ok
+        | String.StartsWithIC "PANTONE" -> stringToEnum<PantoneColorEnum> text |> Pantone |> Result.Ok
+        | Try stringToEnum_Try (r: KnownColor) -> KnownColor r |> Result.Ok
+        | _ -> Result.Error (sprintf "Cannot parse %s to ColorCard" text)
+
+    static member Parse(text: string) =
+        ColorCard.Parse_Result text
+        |> Result.getOrFail

@@ -4,7 +4,10 @@ open Shrimp.Pdf.Colors
 open Newtonsoft.Json
 open iText.Kernel.Pdf.Xobject
 open iText.IO.Image
-
+open Shrimp.FSharp.Plus
+open Shrimp.FSharp.Plus.Refection
+open Shrimp.FSharp.Plus.Text
+open Shrimp.FSharp.Plus.Operators
 #nowarn "0104"
 open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
@@ -13,8 +16,7 @@ open iText.Kernel.Pdf.Canvas
 open Shrimp.Pdf
 open System.IO
 open iText.Kernel.Pdf
-open Shrimp.FSharp.Plus
-open Shrimp.FSharp.Plus.Text
+
 open iText.Kernel.Geom
 
 type StrokeWidthIncrenment =
@@ -280,7 +282,8 @@ type ColorStyle [<JsonConstructor>] private (v) =
     static member DefaultValue = ColorStyle()
 
         
-    
+
+
 
 type StrokeStyle [<JsonConstructor>] private  (v) =
     inherit POCOBaseV<ColorStyle option * ``ufloat>0`` option * int option * DashPattern option>(v)
@@ -630,6 +633,8 @@ type BackgroundOrForegroundFile =
     { File: BackgroundFile
       BackgroundOrForeground: BackgroundOrForeground }
 
+
+
 type VectorStyle [<JsonConstructor>] private (v) =
     inherit POCOBaseV<FillStyle option * StrokeStyle option * TransformStyle option * bool>(v)
 
@@ -645,6 +650,81 @@ type VectorStyle [<JsonConstructor>] private (v) =
         match x.FillStyle with 
         | Some style -> style.Overprint
         | None -> None
+
+    //static member MethodConversion(?fillStyle: FillStyle, ?strokeStyle: StrokeStyle): MethodLiteralConversion<_> =
+    //    let name = nameof(VectorStyle)
+    //    let alternativeFsColorText = 
+    //        match fillColor with 
+    //        | Some (color) -> color.LoggingText_Raw
+    //        | None -> ""
+
+    //    let inboxAreaText =
+    //        match leftBottomBasedInboxArea with 
+    //        | None -> ""
+    //        | Some inboxArea -> inboxArea.LoggingText
+
+
+    //    {
+    //        MethodLiteral = 
+    //            { Name = name
+    //              Parameters = 
+    //                [
+    //                    nameof(fontName)    ==> defaultArg fontName ""
+    //                    nameof(fontSize)    ==> defaultArg fontSize 0.
+    //                    nameof(fillColor)   ==> alternativeFsColorText
+    //                    nameof(leftBottomBasedInboxArea)   ==> inboxAreaText
+    //                    nameof(textPattern) ==> defaultArg textPattern ""
+
+    //                ]
+    //                |> Observations.Create
+    //              }
+
+    //        OfMethodLiteral = (fun (method: MethodLiteral) ->
+    //            match method.Name with 
+    //            | EqualTo name ->
+    //                let fontName = 
+    //                    method.Parameters.[nameof(fontName)].Value.Text
+    //                    |> String.asOption
+
+    //                let fontSize= 
+    //                    method.Parameters.[nameof(fontSize)].Value.Text
+    //                    |> System.Double.Parse
+    //                    |> function 
+    //                        | 0. -> None
+    //                        | fontSize -> Some fontSize
+
+    //                let fillColor = 
+    //                    method.Parameters.[nameof(fillColor)].Value.Text
+    //                    |> String.asOption
+    //                    |> Option.map(AlternativeFsColor.OfLoggingText_Raw >> FsColor.OfAlternativeFsColor)
+
+    //                let inboxArea = 
+    //                    method.Parameters.[nameof(leftBottomBasedInboxArea)].Value.Text
+    //                    |> String.asOption
+    //                    |> Option.map(MMRectangle.Parse)
+    //                    |> Option.map(fun rect ->
+    //                        Info_BoundIs_Args(RelativePosition.Inbox, AreaGettingOptions.FsSpecfic rect.AsFsRectangle)
+    //                    )
+
+    //                let textPattern =
+    //                    match method.Parameters.[nameof(textPattern)].Value.Text.Trim() with 
+    //                    | "" -> None
+    //                    | text ->
+    //                        TextSelectorOrTransformExpr.Parse text
+    //                        |> Some
+
+    //                FontAndSizeQuery(
+    //                    ?fontName = fontName,
+    //                    ?fontSize = fontSize,
+    //                    ?fillColor = fillColor,
+    //                    ?info_BoundIs_Args = inboxArea,
+    //                    ?textPattern = textPattern
+    //                )
+    //                |> Some
+                    
+    //            | _ -> None
+    //        )
+    //    }
 
     member x.StrokeOverprint = 
         match x.StrokeStyle with 
@@ -1625,7 +1705,7 @@ module ModifyOperators =
             modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
 type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?info_BoundIs_Args, ?textPattern, ?wordSep) =
-    inherit POCOBaseEquatable<string option * float option * FsColor option * Info_BoundIs_Args option * TextSelector option * string option>(fontName, fontSize, fillColor, info_BoundIs_Args, textPattern, wordSep)
+    inherit POCOBaseEquatable<string option * float option * FsColor option * Info_BoundIs_Args option * TextSelectorOrTransformExpr option * string option>(fontName, fontSize, fillColor, info_BoundIs_Args, textPattern, wordSep)
 
     [<JsonProperty>]
     member x.FontName = fontName
@@ -1641,6 +1721,105 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
 
     [<JsonProperty>]
     member x.TextPattern = textPattern
+
+    static member MethodConversion(?fontName, ?fontSize: float, ?fillColor: AlternativeFsColor, ?leftBottomBasedInboxArea: MMRectangle, ?textPattern: string): MethodLiteralConversion<_> =
+        let name = nameof(FontAndSizeQuery)
+        let alternativeFsColorText = 
+            match fillColor with 
+            | Some (color) -> color.LoggingText_Raw
+            | None -> ""
+
+        let inboxAreaText =
+            match leftBottomBasedInboxArea with 
+            | None -> ""
+            | Some inboxArea -> inboxArea.LoggingText
+
+
+        {
+            MethodLiteral = 
+                { Name = name
+                  Parameters = 
+                    [
+                        nameof(fontName)    ==> defaultArg fontName ""
+                        nameof(fontSize)    ==> defaultArg fontSize 0.
+                        nameof(fillColor)   ==> alternativeFsColorText
+                        nameof(leftBottomBasedInboxArea)   ==> inboxAreaText
+                        nameof(textPattern) ==> defaultArg textPattern ""
+
+                    ]
+                    |> Observations.Create
+                  }
+
+            OfMethodLiteral = (fun (method: MethodLiteral) ->
+                match method.Name with 
+                | EqualTo name ->
+                    let fontName = 
+                        method.Parameters.[nameof(fontName)].Value.Text
+                        |> String.asOption
+
+                    let fontSize= 
+                        method.Parameters.[nameof(fontSize)].Value.Text
+                        |> System.Double.Parse
+                        |> function 
+                            | 0. -> None
+                            | fontSize -> Some fontSize
+
+                    let fillColor = 
+                        method.Parameters.[nameof(fillColor)].Value.Text
+                        |> String.asOption
+                        |> Option.map(AlternativeFsColor.OfLoggingText_Raw >> FsColor.OfAlternativeFsColor)
+
+                    let inboxArea = 
+                        method.Parameters.[nameof(leftBottomBasedInboxArea)].Value.Text
+                        |> String.asOption
+                        |> Option.map(MMRectangle.Parse)
+                        |> Option.map(fun rect ->
+                            Info_BoundIs_Args(RelativePosition.Inbox, AreaGettingOptions.FsSpecfic rect.AsFsRectangle)
+                        )
+
+                    let textPattern =
+                        match method.Parameters.[nameof(textPattern)].Value.Text.Trim() with 
+                        | "" -> None
+                        | text ->
+                            TextSelectorOrTransformExpr.Parse text
+                            |> Some
+
+                    FontAndSizeQuery(
+                        ?fontName = fontName,
+                        ?fontSize = fontSize,
+                        ?fillColor = fillColor,
+                        ?info_BoundIs_Args = inboxArea,
+                        ?textPattern = textPattern
+                    )
+                    |> Some
+                    
+                | _ -> None
+            )
+        }
+
+    member v.MethodLiteralText =
+        FontAndSizeQuery.MethodConversion(
+            ?fontName = v.FontName,
+            ?fontSize = v.FontSize, 
+            ?fillColor = (v.FillColor |> Option.bind (fun m -> m.AsAlternativeFsColor)),
+            ?textPattern = (v.TextPattern |> Option.map(fun m -> m.MethodLiteralText)),
+            ?leftBottomBasedInboxArea = (
+                match v.Info_BoundIs_Args with 
+                | None -> None
+                | Some v ->
+                    match v.AreaGettingOptions with 
+                    | AreaGettingOptions.FsSpecfic v -> Some (v.MMValue)
+                    | _ -> None
+            )
+        ).MethodLiteralText
+
+    static member MethodConversion_Parse(text) =
+        MethodLiteral.TryParse text
+        |> Result.bind(fun r ->
+            match FontAndSizeQuery.MethodConversion().OfMethodLiteral(r) with 
+            | None -> Result.Error (sprintf "Cannot parse MethodLiteral %s to FontAndSizeQuery" r.Text)
+            | Some r -> Result.Ok r
+        )
 
     member x.LoggingText =
         let fontSize = 
@@ -1666,6 +1845,32 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
         |> List.choose id
         |> List.filter(fun m -> m <> "")
         |> String.concat " "
+
+    member x.PredicateByInBoxTextInfo(text2, fontName2: DocumentFontName, fontSize2: float, fillColor2: FsColor, leftBottomBasedBound: Rectangle) =
+        match textPattern with 
+        | Some textPattern -> textPattern.Predicate text2
+        | None -> true
+        &&
+        match fontName, fontSize with 
+        | Some fontName, Some fontSize -> 
+            fontName2.SameFontNameTo(fontName) && fontSize2 @= fontSize
+
+        | Some fontName, None -> fontName2.SameFontNameTo(fontName)
+        | None, Some fontSize -> fontSize2 @= fontSize
+        | None, None -> true 
+        && ( match fillColor with 
+              | Some fillColor -> 
+                 FsColor.equal (fillColor) fillColor2
+              | None -> true
+           )
+        &&
+        match info_BoundIs_Args with 
+        | Some args2 ->
+            match args2.AreaGettingOptions with 
+            | AreaGettingOptions.FsSpecfic leftBottomBasedRect -> leftBottomBasedBound.IsInsideOf leftBottomBasedRect.AsRectangle
+            | _ -> true
+        | None -> true
+
 
     member x.AsSelector() = 
         Selector.Text(fun args textInfo ->
@@ -2427,7 +2632,17 @@ type Modify =
               ]
             )
 
-
+    static member RemoveICC() =
+        Modify.ReplaceColors(
+            picker = (fun color ->
+                match color with 
+                | FsColor.IccBased iccBased -> iccBased.Color.ToItextColor() |> Some
+                | _ -> None
+            ),
+            nameAndParameters = 
+                { Name = "RemoveICC" 
+                  Parameters = [] }
+        )
 
     static member CreateClippingPath(selector: PageModifingArguments<_> -> _ -> bool, ?keepCompoundPath, ?condition) =
         let options =

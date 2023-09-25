@@ -269,7 +269,29 @@ module ExtensionTypes =
             | DocumentFontName.Valid x ->
                 FsFontName(fontName).ShortFontName = x.ShortFontName
 
+    [<StructuredFormatDisplay("{LoggingText}")>]
+    type MMRectangle =
+        { X: float 
+          Y: float 
+          Width: float 
+          Height: float }
+    with 
+        member x.LoggingText = 
+            sprintf "RectMM %.1f %.1f %.1f %.1f" x.X x.Y x.Width x.Height
 
+        static member Parse(text: string) =
+            let values = 
+                let text = text.TrimStarting("RectMM")
+                text.SplitAsListAndTrim(" ")
+                |> List.map System.Double.Parse
+
+
+            { 
+                X = values.[0]
+                Y = values.[1]
+                Width = values.[2]
+                Height = values.[3]
+            }
 
     [<StructuredFormatDisplay("{LoggingText}")>]
     type FsRectangle =
@@ -294,23 +316,23 @@ module ExtensionTypes =
         member x.Top = x.Bottom + x.Height
 
 
-
         static member OfRectangle(rect: Rectangle) =
             { X      = rect.GetX()       |> float
               Y      = rect.GetY()       |> float
               Width  = rect.GetWidth()   |> float
-              Height = rect.GetHeight()  |> float
-            }
+              Height = rect.GetHeight()  |> float }
 
-        member private x.MMValue =
-            {| X = userUnitToMM x.X
+        member x.MMValue =
+            {  MMRectangle.X = userUnitToMM x.X
                Y = userUnitToMM x.Y 
                Width = userUnitToMM x.Width
-               Height = userUnitToMM x.Height |}
+               Height = userUnitToMM x.Height }
 
         member x.LoggingText = 
             let x = x.MMValue
             sprintf "RectMM %.1f %.1f %.1f %.1f" x.X x.Y x.Width x.Height
+
+
 
         static member create x y width height =
             { X = x 
@@ -319,6 +341,19 @@ module ExtensionTypes =
               Height = height }
 
         override x.ToString() = x.LoggingText
+
+    type MMRectangle with 
+        static member OfFsRectangle(rect: FsRectangle) = rect.MMValue
+
+        member x.AsFsRectangle: FsRectangle = 
+            {
+                X      = mm x.X
+                Y      = mm x.Y
+                Width  = mm x.Width
+                Height = mm x.Height
+            }
+
+        member x.AsRectangle = x.AsFsRectangle.AsRectangle
 
     [<RequireQualifiedAccess>]
     module Subpath =
@@ -1162,6 +1197,9 @@ module ExtensionTypes =
             | Rotation.Clockwise
             | Rotation.Counterclockwise -> Direction.Vertical
 
+        /// ">" => Rotation.Clockwise
+        /// "<" => Rotation.Counterclockwise
+        /// "*" => Rotation.R180
         let ofCharOp(char: char) =
             match char with 
             | '>' -> Some Rotation.Clockwise
@@ -1169,7 +1207,9 @@ module ExtensionTypes =
             | '*' -> Some Rotation.R180
             | _ -> None
 
-
+        /// ">" => Rotation.Clockwise
+        /// "<" => Rotation.Counterclockwise
+        /// "*" => Rotation.R180
         let ofChar(char: char) =
             match ofCharOp char with 
             | Some rotation -> rotation
@@ -1317,6 +1357,7 @@ module ExtensionTypes =
             |> AffineTransform
             |> ofAffineTransform
      
+        
 
         let toMatrix (record: AffineTransformRecord) =
             let values = Array.create 6 0.f
@@ -1357,7 +1398,8 @@ module ExtensionTypes =
             { DashArray = [|value|]
               Phase = value }
 
-        member x.IsEmpty = x = DashPattern.Empty
+        member x.IsEmpty    = (x = DashPattern.Empty)
+        member x.IsNotEmpty = not x.IsEmpty
 
         static member Empty = {DashArray = [||]; Phase = 0.}
 
@@ -1379,6 +1421,11 @@ module ExtensionTypes =
 
             { DashArray = dashArray 
               Phase = phase }
+
+    type PathRenderInfo with 
+        member x.GetLineDashPatternEx() =
+            x.GetLineDashPattern()
+            |> DashPattern.OfPdfArray
 
     type PageBoxKind =
         | ArtBox = 0
@@ -1600,6 +1647,14 @@ module ExtensionTypes =
                 |> List.map(PageSelectorExpr.OfIndexExpr)
                 |> PageSelectorExpr.Compose
 
+        static member OfIntRange(intRange: IntRange) =
+            PageSelectorExpr.Between(SinglePageSelectorExpr.Begin intRange.Start.Value, SinglePageSelectorExpr.Begin intRange.End.Value)
+
+        static member OfIntRanges(intRange: IntRanges) =
+            intRange.Value
+            |> List.map (PageSelectorExpr.OfIntRange)
+            |> PageSelectorExpr.Compose
+
         override x.ToString() =
             match x with 
             | PageSelectorExpr.SinglePage expr -> expr.ToString()
@@ -1608,6 +1663,9 @@ module ExtensionTypes =
                 exprs
                 |> List.map (fun m -> m.ToString())
                 |> String.concat ", "
+
+
+        member x.Text = x.ToString()
 
     [<RequireQualifiedAccess>]
     module PageSelectorExpr = 

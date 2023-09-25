@@ -430,6 +430,7 @@ module Imposing =
         static member MiddleDashLine(value, ?dashValue) = Spaces(Space.MiddleDashLine(value, ?dashValue = dashValue))
 
 
+    /// ActualBox to TrimBox
     [<RequireQualifiedAccess>]
     type BleedDistance = 
         | UsingActualBox

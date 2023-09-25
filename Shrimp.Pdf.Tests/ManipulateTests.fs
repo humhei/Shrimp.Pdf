@@ -61,6 +61,14 @@ let manipulateTests =
         |> runTest "datas/manipulate/remove layer contents2.pdf" 
         |> ignore
 
+    testCase "remove ICC" <| fun _ ->  
+
+        Flow.Manipulate (
+            Modify.RemoveICC()
+        )
+        |> runTest "datas/manipulate/removeICC.pdf" 
+        |> ignore
+
 
     testCase "read shading colors" <| fun _ ->  
         let path = "datas/manipulate/read shading colors.pdf" 
@@ -242,6 +250,18 @@ let manipulateTests =
             )
         )
         |> runTest "datas/manipulate/make clipping path from blue strokes3.pdf" 
+        |> ignore
+
+    testCase "make clipping path from blue strokes4" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.CreateClippingPath(
+                Info.StrokeColorIs (FsColor.Separation cuttingLineSeparation),
+                keepCompoundPath = true,
+                condition = ClippingCondition.ClipIfPathCountSmallerOrEqualThan 5
+
+            ) 
+        )
+        |> runTest "datas/manipulate/make clipping path from blue strokes4.pdf" 
         |> ignore
 
     testCase "make clipping path from blue strokes by minimum area" <| fun _ ->    
@@ -771,7 +791,7 @@ let manipulateTests =
 
     testCase "add bound to images" <| fun _ -> 
         Flow.Manipulate (
-            Modify.AddBoundToImages()
+            ModifyIM.AddBoundToImages()
         )
         |> runTest "datas/manipulate/add bound to images.pdf" 
         |> ignore
@@ -1654,7 +1674,7 @@ let manipulateTests =
             Manipulate.Factory(fun flowModel doc ->
                 doc.Value.CacheDocumentFonts()
                 Modify.MapFontAndSize(
-                    FontAndSizeQuery(textPattern = TextSelector.EqualTo ("30")) =>
+                    FontAndSizeQuery(textPattern = TextSelectorOrTransformExpr.Selector (TextSelector.EqualTo ("30"))) =>
                     NewFontAndSize(FsPdfFontFactory.CreateDocumentFont(FontNames.``Tahoma-Bold``), fontSize = 12., alignment = XEffort.Middle)
                 )
             )

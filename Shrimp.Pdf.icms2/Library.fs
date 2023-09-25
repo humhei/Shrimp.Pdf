@@ -147,10 +147,12 @@ module Core =
 
     [<RequireQualifiedAccess>]
     type GrayIcc =
-        | ``Dot Gain 15%`` = 0
-        | ``Dot Gain 20%`` = 1
-        | ``Dot Gain 25%`` = 2
-        | ``Dot Gain 30%`` = 3
+        | ``Dot Gain 15%``    = 0
+        | ``Dot Gain 20%``    = 1
+        | ``Dot Gain 25%``    = 2
+        | ``Dot Gain 30%``    = 3
+        | ISONewspaper26v4_gr = 4
+        | GrayXYZ = 5
 
     [<RequireQualifiedAccess>]
     module GrayIcc =
@@ -160,6 +162,8 @@ module Core =
             | String.Contains "Dot Gain 20%" -> Some GrayIcc.``Dot Gain 20%``
             | String.Contains "Dot Gain 25%" -> Some GrayIcc.``Dot Gain 25%``
             | String.Contains "Dot Gain 30%" -> Some GrayIcc.``Dot Gain 30%``
+            | String.Contains "prtrGRAYLab"  -> Some GrayIcc.ISONewspaper26v4_gr
+            | String.Contains "prtrGRAYXYZ"  -> Some GrayIcc.GrayXYZ
             | _ -> None
 
 
@@ -182,6 +186,7 @@ module Core =
         | ``SRGB Color Space Profile`` = 0
         | AdobeRGB1998 = 1
         | AppleRGB = 2
+        | CIERGB = 3
 
     [<RequireQualifiedAccess>]
     module RgbIcc =
@@ -189,7 +194,8 @@ module Core =
             match streamText with 
             | String.Contains "sRGB IEC61966-2.1" -> Some RgbIcc.``SRGB Color Space Profile``
             | String.Contains "Adobe RGB (1998)" -> Some RgbIcc.AdobeRGB1998
-            | String.Contains "Apple RGB" -> Some RgbIcc.AdobeRGB1998
+            | String.Contains "Apple RGB" -> Some RgbIcc.AppleRGB
+            | String.Contains "CIE RGB" -> Some RgbIcc.CIERGB
             | _ -> None
 
 

@@ -21,13 +21,16 @@ open Shrimp.Pdf.Constants
 
 
 module Flip =
+    /// '$' => Flip.HFlip
+    /// '%' => Flip.VFlip
     let ofCharOp(char: char) =
         match char with     
         | '$' -> Some Flip.HFlip
         | '%' -> Some Flip.VFlip
         | _ -> None
 
-
+    /// '$' => Flip.HFlip
+    /// '%' => Flip.VFlip
     let ofChar(char: char) =
         match ofCharOp char with 
         | Some flip -> flip

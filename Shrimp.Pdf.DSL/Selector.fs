@@ -2,6 +2,7 @@
 
 open iText.Kernel.Pdf.Canvas.Parser
 open Newtonsoft.Json
+open Shrimp.FSharp.Plus.Refection
 
 
 
@@ -15,6 +16,7 @@ open Shrimp.Pdf
 open iText.Kernel.Geom
 open Shrimp.Pdf.Colors
 open Shrimp.FSharp.Plus
+open Shrimp.FSharp.Plus.Operators
 open System.Collections.Generic
 open System.Linq
 open Shrimp.Pdf.Constants
@@ -350,7 +352,36 @@ type Info_BoundIs_Args [<JsonConstructor>] (relativePosition: RelativePosition, 
     member private x.BoundGettingStrokeOptionsOP = boundGettingStrokeOptionsOp
 
 
+    static member MethodConversion_InboxArea(area: MMRectangle option): MethodLiteralConversion<Info_BoundIs_Args>  =
+        let name = nameof(Info_BoundIs_Args)
+        let areaText =
+            match area with 
+            | None -> ""
+            | Some area -> area.LoggingText
+        {
+            MethodLiteral = 
+                { Name = name
+                  Parameters = 
+                    [
+                        nameof(area) ==> areaText
+                    ]
+                    |> Observations.Create
+                  }
 
+            OfMethodLiteral = (fun (method: MethodLiteral) ->
+                match method.Name with 
+                | EqualTo name ->
+                    let pattern = 
+                        method.Parameters.[nameof(area)].Value.Text.Trim()
+                        |> String.asOption
+                        |> Option.map MMRectangle.Parse
+                        |> Option.map(fun rect -> AreaGettingOptions.FsSpecfic rect.AsFsRectangle)
+                    
+                    Info_BoundIs_Args(RelativePosition.Inbox, ?areaGettingOptionsOp = pattern)
+                    |> Some
+                | _ -> None
+            )
+        }
 
 
                 

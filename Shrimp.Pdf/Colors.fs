@@ -494,26 +494,35 @@ module _Colors =
             | FsValueColor.Lab (labColor) -> labColor.LoggingText
 
 
-
-        static member OfLoggingText_Raw(text: string) =
+        static member OfLoggingText_Raw_Result(text: string) =
             match text with 
             | String.StartsWithIC "CMYK " -> 
                 FsDeviceCmyk.OfLoggingText_Raw text
                 |> FsValueColor.Cmyk
+                |> Result.Ok
 
             | String.StartsWithIC "RGB" ->
                 FsDeviceRgb.OfLoggingText_Raw text
                 |> FsValueColor.Rgb
+                |> Result.Ok
 
             | String.StartsWithIC "K " ->
                 FsGray.OfLoggingText_Raw text
                 |> FsValueColor.Gray    
+                |> Result.Ok
 
             | String.StartsWithIC "LAB " ->
                 FsLab.OfLoggingText_Raw text
                 |> FsValueColor.Lab
+                |> Result.Ok
 
-            | _ -> failwithf "Cannot parsing %s to FsValueColor" text
+            | _ -> 
+                sprintf "Cannot parsing %s to FsValueColor" text
+                |> Result.Error
+
+        static member OfLoggingText_Raw(text: string) =
+            FsValueColor.OfLoggingText_Raw_Result(text)
+            |> Result.getOrFail
 
         member x.MapColorValue(mapping) =
             match x with
@@ -757,7 +766,7 @@ module _Colors =
             //x.Name
             x.LoggingTextWithColor_Raw
 
-        static member OfLoggingText_Raw(text: string) =
+        static member OfLoggingText_Raw_Result(text: string) =
             try
                 let parts = text.Split '#'
                 let name = parts.[0]
@@ -770,8 +779,15 @@ module _Colors =
                 { Name = name 
                   BaseColor = valueColor
                   Transparency = transparency }
+                |> Result.Ok
+
             with ex ->
-                failwithf "Cannot parse %s to FsSeparation" text
+                sprintf "Cannot parse %s to FsSeparation" text
+                |> Result.Error
+
+        static member OfLoggingText_Raw(text: string) =
+             FsSeparation.OfLoggingText_Raw_Result text
+             |> Result.getOrFail
 
         static member Create(name: string, color: Color, ?transparency) =
             { Name = name 
@@ -1472,7 +1488,7 @@ module _Colors =
             )
             |> String.concat "; "
 
-    [<RequireQualifiedAccess>]
+    [<RequireQualifiedAccess; CustomEquality; CustomComparison>]
     type FsColor =
         | Separation of FsSeparation
         | IccBased of FsIccBased
@@ -1571,6 +1587,12 @@ module _Colors =
                 | FsColor.DeviceN (_, y) -> x.Equals(y)
                 | _ -> FALSE
 
+        interface System.IComparable with 
+            member x.CompareTo(y) =
+                match x.Equals y with 
+                | true -> 0
+                | _ -> -1
+
         static member RGB_BLACK = FsValueColor.RGB_BLACK  |> FsColor.ValueColor
         static member RGB_WHITE = FsValueColor.RGB_WHITE  |> FsColor.ValueColor
         static member RGB_RED = FsValueColor.RGB_RED  |> FsColor.ValueColor
@@ -1607,6 +1629,52 @@ module _Colors =
 
         static member valueColor(valueColor: FsGray) =
             FsColor.ValueColor (FsValueColor.Gray valueColor)
+
+
+        override x.Equals(y) =
+            match y with 
+            | :? FsColor as y ->
+                x.IsEqualTo(y)
+
+            | _ -> false
+
+
+        //interface System.IComparable with 
+        //    member x.CompareTo(y) =
+        //        match y with 
+        //        | :? FsColor as y ->
+        //            let valueEqualOptions = ValueEqualOptions.DefaultRoundedValue
+        //            let FALSE = false
+        //            match x with 
+        //            | FsColor.IccBased x -> 
+        //                match y with 
+        //                | FsColor.IccBased y -> compare x y
+        //                | _ -> -1
+        //            | FsColor.Separation x -> 
+        //                match y with 
+        //                | FsColor.Separation y -> compare x y
+        //                | _ -> -1
+
+        //            | FsColor.ValueColor x -> 
+        //                match y with 
+        //                | FsColor.ValueColor y -> compare x y
+        //                | _ -> -1
+
+        //            | FsColor.PatternColor x -> 
+        //                match y with 
+        //                | FsColor.PatternColor y -> compare (x.GetHashCode()) (y.GetHashCode())
+        //                | _ -> -1
+
+        //            | FsColor.ShadingColor x ->     
+        //                match y with 
+        //                | FsColor.ShadingColor y -> compare (x.GetHashCode()) (y.GetHashCode())
+        //                | _ -> -1
+
+        //            | FsColor.DeviceN (_, x) ->
+        //                match y with 
+        //                | FsColor.DeviceN (_, y) -> compare (x.GetHashCode()) (y.GetHashCode())
+        //                | _ -> -1
+        //        | _ -> failwithf "Cannot compare diffrent type %A" (x.GetType(), y.GetType())
 
 
     type FsSeparation with 
@@ -1894,6 +1962,31 @@ module _Colors =
 
             | PdfCanvasColor.Registration -> "Registration"
 
+        member x.LoggingText_RAW =
+            match x with 
+            | PdfCanvasColor.Value v -> v.LoggingText_Raw
+            | PdfCanvasColor.Separation v -> v.LoggingText_Raw
+            | PdfCanvasColor.ColorCard colorCard ->
+                match colorCard with 
+                | ColorCard.KnownColor knownColorEnum -> knownColorEnum.ToString()
+                | ColorCard.Pantone colorEnum -> colorEnum.ToString()
+                | ColorCard.TPX tpxColorEnum -> tpxColorEnum.ToString()
+
+            | PdfCanvasColor.Registration -> "Registration"
+
+        static member Parse_Result(text: string) =
+            match text with 
+            | "Registration" -> PdfCanvasColor.Registration                                 |> Result.Ok
+            | TryR FsValueColor.OfLoggingText_Raw_Result r -> PdfCanvasColor.Value r        |> Result.Ok
+            | TryR FsSeparation.OfLoggingText_Raw_Result r -> PdfCanvasColor.Separation r   |> Result.Ok
+            | TryR ColorCard.Parse_Result r -> PdfCanvasColor.ColorCard r                   |> Result.Ok
+            | _ -> 
+                Result.Error(sprintf "Cannot parse %s to PdfCanvasColor" text)
+                
+        static member Parse(text: string) =
+            PdfCanvasColor.Parse_Result text
+            |> Result.getOrFail
+
         override x.ToString() = 
             x.GetType().Name + " " + x.LoggingText
 
@@ -1994,6 +2087,7 @@ module _Colors =
             |> PdfCanvasColor.Value
 
 
+
     [<RequireQualifiedAccess>]
     type NullablePdfCanvasColor =
         | N 
@@ -2054,6 +2148,26 @@ module _Colors =
             match x with 
             | NullablePdfCanvasColor.Non -> "N"
             | NullablePdfCanvasColor.PdfCanvasColor v -> v.LoggingText
+
+        static member Parse_Result(text: string) =
+            match text with 
+            | "N" 
+            | "n" -> 
+                NullablePdfCanvasColor.N
+                |> Result.Ok
+                
+            | TryR PdfCanvasColor.Parse_Result r ->
+                NullablePdfCanvasColor.OfPdfCanvasColor r
+                |> Result.Ok
+
+            | _ -> 
+                sprintf "Cannot parse %s to NullablePdfCanvasColor" text
+                |> Result.Error
+
+        static member Parse(text: string) =
+            NullablePdfCanvasColor.Parse_Result(text)
+            |> Result.getOrFail
+                
 
         override x.ToString() = x.GetType().Name + x.LoggingText
 

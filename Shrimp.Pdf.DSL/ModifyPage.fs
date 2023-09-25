@@ -474,6 +474,9 @@ module ModifyPageOperators =
 
 
 
+
+
+
     type PdfRunner with 
     
         static member private ReadInfosCommon(parse, pdfFile: PdfFile, selector, fInfos, ?pageSelector, ?inShadowMode) =
@@ -510,6 +513,7 @@ module ModifyPageOperators =
                 fInfos args infos
             )
 
+        /// defaultArg inShadowMode true
         static member ReadTotalPageNumber(pdfFile: PdfFile, ?inShadowMode) =
             let pdfFile = 
                 match defaultArg inShadowMode true with 
