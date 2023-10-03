@@ -1271,16 +1271,22 @@ module ExtensionTypes =
           TranslateX: float 
           TranslateY: float }
     with
+        /// ScaleX
         member x.m00 = x.ScaleX
 
+        /// ShearY
         member x.m10 = x.ShearY
 
+        /// ShearX
         member x.m01 = x.ShearX
 
+        /// ScaleY
         member x.m11 = x.ScaleY
 
+        /// TranslateX
         member x.m02 = x.TranslateX
 
+        /// TranslateY
         member x.m12 = x.TranslateY
 
         static member GetFlipInstance(flip: Flip) =

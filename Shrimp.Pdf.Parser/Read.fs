@@ -930,6 +930,15 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
                     let bbox = 
                         //PdfFormXObject.getBBox formObject
                         let ctm = this.GetGraphicsState().GetCtm() |> AffineTransform.ofMatrix
+                        let ctm =
+                            match PdfFormXObject.tryGetMatrix formObject with 
+                            | None -> ctm
+                            | Some ctm2 -> 
+                                ctm.Concatenate(ctm2)
+                                |> ignore
+
+                                ctm
+
                         ctm.Transform(unTransformedBBox)
 
                     let originState = listener.GetXObjectClippingBox()

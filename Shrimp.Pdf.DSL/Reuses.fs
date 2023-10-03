@@ -83,6 +83,52 @@ type RegularImposingSheet<'T> private (userState: 'T, imposingSheet: ImposingShe
 type RegularImposingSheet = RegularImposingSheet<unit>
 
 
+type PreImposer =
+    /// allowRedirectCellSize = true -> allow cellSize exceeding to page
+    static member VirtualPreImpose_RepeatOne(cellSize: FsSize, imposingArguments: _ImposingArguments, allowRedirectCellSize) =
+        let virtualDocument: VirtualDocument = 
+            { Pages =  [
+                    VirtualPdfPage.OfCellSize cellSize
+                ]
+            }
+
+        let imposingArguments = 
+            ImposingArguments.Create(fun _ ->
+                { imposingArguments with
+                    DesiredSizeOp = Some cellSize
+                    IsRepeated = true }
+            )
+
+        let document = 
+            ImposingDocument
+                (VirtuableSplitDocument.Virtual virtualDocument, imposingArguments, allowRedirectCellSize = Some allowRedirectCellSize)
+        
+        document.Build()
+        document.GetFirstSheet()
+        |> RegularImposingSheet.Create
+
+    /// allowRedirectCellSize = true -> allow cellSize exceeding to page
+    static member VirtualPreImpose(pages: FsSize list, imposingArguments: _ImposingArguments, allowRedirectCellSize) =
+        let virtualDocument: VirtualDocument = 
+            { Pages =
+                pages
+                |> List.map(fun page ->
+                    VirtualPdfPage.OfCellSize page
+                )
+            }
+
+        let imposingArguments = 
+            ImposingArguments.Create(fun _ ->
+                { imposingArguments with
+                    IsRepeated = true }
+            )
+
+        let document = 
+            ImposingDocument
+                (VirtuableSplitDocument.Virtual virtualDocument, imposingArguments, allowRedirectCellSize = Some allowRedirectCellSize)
+
+        document.Build()
+        document.GetSheets()
 
 [<AutoOpen>]
 module _Reuses =

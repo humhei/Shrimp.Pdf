@@ -203,6 +203,8 @@ module _PrefixReuses =
             | [] -> raise (PageNumSequenceEmptyException "PageNumberSequence is empty")
             | _ -> ()
     
+
+
         static member Create (sequence: int list) =
             PageNumSequence.EnsureSequenceNotEmpty sequence
     
@@ -212,6 +214,7 @@ module _PrefixReuses =
             |> AtLeastOneList.Create
             |> PageNumSequence
     
+
         static member Create (sequence: (int * Rotation) list) =
             PageNumSequence.EnsureSequenceNotEmpty sequence
             let pageNumbers = List.map fst sequence

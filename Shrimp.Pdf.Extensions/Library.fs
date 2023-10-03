@@ -1454,6 +1454,25 @@ module iText =
         let getBBox (xobject:PdfFormXObject) =
             xobject.GetBBox().ToRectangle()
 
+        let tryGetMatrix (xobject:PdfFormXObject) = 
+            let ctm = xobject.GetPdfObject().Get(PdfName.Matrix)
+            match ctm with 
+            | null -> None
+            | ctm ->
+                let ctm = (ctm :?> PdfArray).ToDoubleArray()
+                AffineTransform(ctm)
+                |> Some
+
+        let getActualBox (xobject:PdfFormXObject) =
+            let bbox = xobject.GetBBox().ToRectangle()
+            let ctm = xobject.GetPdfObject().Get(PdfName.Matrix)
+            match ctm with 
+            | null -> bbox
+            | ctm ->
+                let ctm = (ctm :?> PdfArray).ToDoubleArray()
+                let ctm = AffineTransform(ctm)
+                ctm.Transform(bbox)
+
         let setBBox (rect: Rectangle) (xobject:PdfFormXObject) =
             xobject.SetBBox(rect |> Rectangle.toPdfArray)
 

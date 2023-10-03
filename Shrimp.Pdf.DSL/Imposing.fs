@@ -206,6 +206,7 @@ module Imposing =
             | Background.Size pageSize -> pageSize
             | Background.File backgroundFile -> BackgroundFile.getSize backgroundFile
 
+        /// redirectCellSize if (cellSize + margin > backgroundSize)
         let redirectCellSize (cellSize: FsSize, margin: Margin) (background)=
 
             let backgroundSize_shrink_by_margin = 
@@ -828,13 +829,64 @@ module Imposing =
 
             pdfCanvas
 
+    type VirtualPdfPage =
+        { TrimBox: Rectangle 
+          CropBox: Rectangle }
+    with 
+        static member OfCellSize(cellSize: FsSize) =
+            let pageBox = FsSize.toPageSize cellSize
+            { TrimBox = pageBox 
+              CropBox = pageBox }
 
+    type VirtualPdfNotSupportedException() =
+        inherit System.Exception(sprintf "VirtualPdfNotSupportedException")
 
+    [<RequireQualifiedAccess>]
+    type VirtuablePdfPage =
+        | PdfPage of PdfPage
+        | VirtualPdfPage of VirtualPdfPage
+    with 
+        member internal x.EntityPdfPageF =
+            match x with 
+            | PdfPage v -> v
+            | VirtualPdfPage v -> 
+                //"Cannot get VirtualPdfPage as PdfPage"
+                VirtualPdfNotSupportedException()
+                |> raise
+        
+        member x.GetTrimBox() =
+            match x with 
+            | PdfPage v -> v.GetTrimBox()
+            | VirtualPdfPage v -> v.TrimBox
+
+        member x.GetActualBox() =
+            match x with 
+            | PdfPage v -> v.GetActualBox()
+            | VirtualPdfPage v -> v.CropBox
+
+    type VirtualDocument =
+        { Pages: VirtualPdfPage list }
+
+    [<RequireQualifiedAccess>]
+    type VirtuableSplitDocument =
+        | Entity of SplitDocument
+        | Virtual of VirtualDocument
+    with 
+        member internal x.Writer =
+            match x with 
+            | Entity v -> v.Writer
+            | Virtual v -> 
+                raise <| VirtualPdfNotSupportedException()
+
+        member x.GetReadPages() =
+            match x with 
+            | Entity v -> v.Reader.GetPages() |> List.map VirtuablePdfPage.PdfPage
+            | Virtual v -> v.Pages |> List.map VirtuablePdfPage.VirtualPdfPage
 
     /// coordinate origin is left top of table
     /// y: top -> bottom --------0 -> tableHeight
     type ImposingCell = 
-        { Page: PdfPage
+        { Page: VirtuablePdfPage
           Size: FsSize
           X: float
           Y: float
@@ -842,6 +894,8 @@ module Imposing =
           ImposingRow: ImposingRow }
 
     with 
+        member internal cell.EntityPdfPageF = cell.Page.EntityPdfPageF
+
         member cell.ToRectangle() =
             Rectangle.create cell.X cell.Y cell.Size.Width cell.Size.Height
 
@@ -849,7 +903,7 @@ module Imposing =
 
         member private x.ImposingDocument: ImposingDocument = x.ImposingSheet.ImposingDocument
 
-        member private x.SplitDocument = x.ImposingDocument.SplitDocument
+        member private x.SplitDocument: VirtuableSplitDocument = x.ImposingDocument.SplitDocument
 
         member internal x.Offset(offset: FsPoint) =
             { x with 
@@ -896,7 +950,7 @@ module Imposing =
         member private cell.GetXObjectContentBox() =
             let xObjectContentBox = 
                 if cell.UseBleed
-                then PdfPage.getTrimBox cell.Page
+                then cell.Page.GetTrimBox()
                 else cell.Page.GetActualBox()
 
             xObjectContentBox
@@ -913,11 +967,10 @@ module Imposing =
         member private cell.GetClippedXObject() =
             let scaleX, scaleY = cell.GetScale()
 
-
-            let xobject = cell.Page.CopyAsFormXObject(cell.SplitDocument.Writer)
+            let xobject = cell.EntityPdfPageF.CopyAsFormXObject(cell.SplitDocument.Writer)
             if cell.UseBleed
             then 
-                let trimBox = PdfPage.getTrimBox cell.Page
+                let trimBox = PdfPage.getTrimBox cell.EntityPdfPageF
                         
                 let actualBox = cell.Page.GetActualBox()
 
@@ -1014,6 +1067,10 @@ module Imposing =
             else xobject
 
         static member AddToPdfCanvas (pageMargin: Margin) (cellContentAreas_ExtendByCropmarkDistance: Rectangle list) (pdfCanvas: PdfCanvas) (cell: ImposingCell) =
+            match cell.Page with 
+            | VirtuablePdfPage.VirtualPdfPage _ -> failwithf "Invalid token, VirtualPdfPage are not allowed to Add to PdfCanvas"
+            | VirtuablePdfPage.PdfPage _ -> ()
+
             let addXObject (pdfCanvas: PdfCanvas) = 
                 let scaleX, scaleY = cell.GetScale()
                 let xObject = cell.GetClippedXObject()
@@ -1191,7 +1248,7 @@ module Imposing =
             ||> Seq.fold (ImposingCell.AddToPdfCanvas pageMargin cellContentAreas_ExtendByCropmarkDistance)
 
 
-        member internal this.Push(readerPage: PdfPage, cellSize) =
+        member internal this.Push(readerPage: VirtuablePdfPage, cellSize) =
             let pageSize = sheet.PageSize
             let args = this.ImposingArguments.Value
             let fillingMode = this.ImposingArguments.FillingMode
@@ -1280,7 +1337,7 @@ module Imposing =
 
         let mutable y = 0.
 
-        member private x.SplitDocument : SplitDocument = imposingDocument.SplitDocument
+        member private x.SplitDocument : VirtuableSplitDocument = imposingDocument.SplitDocument
 
         member x.ImposingArguments : ImposingArguments  = imposingDocument.ImposingArguments
 
@@ -1297,7 +1354,7 @@ module Imposing =
 
         member internal x.Y = y
 
-        member internal x.Push(readerPage: PdfPage, cellSize) =
+        member internal x.Push(readerPage: VirtuablePdfPage, cellSize) =
 
             let args = x.ImposingArguments.Value
             let fillingMode = x.ImposingArguments.FillingMode
@@ -1557,7 +1614,7 @@ module Imposing =
         )
 
     /// Build() -> Draw()
-    and ImposingDocument internal (splitDocument: SplitDocument, imposingArguments: ImposingArguments, allowRedirectCellSize: bool option) =  
+    and ImposingDocument internal (splitDocument: VirtuableSplitDocument, imposingArguments: ImposingArguments, allowRedirectCellSize: bool option) =  
         let sheets = new ResizeArray<ImposingSheet>()
         let mutable isDrawed = false
 
@@ -1565,7 +1622,7 @@ module Imposing =
 
         let mutable imposingArguments = imposingArguments
 
-        member internal x.SplitDocument: SplitDocument = splitDocument
+        member internal x.SplitDocument: VirtuableSplitDocument = splitDocument
 
         member x.ImposingArguments: ImposingArguments = imposingArguments
 
@@ -1598,13 +1655,13 @@ module Imposing =
             let args = x.ImposingArguments.Value
             sheets.Clear()
 
-            let reader = splitDocument.Reader
+            //let reader = splitDocument.Reader
 
-            let readerPages = PdfDocument.getPages reader
+            let readerPages = splitDocument.GetReadPages()
 
             let rec produceSheet pageSize readerPages (sheet: ImposingSheet) =
                 match readerPages with 
-                | (readerPage : PdfPage * FsSize) :: t ->
+                | (readerPage : VirtuablePdfPage * FsSize) :: t ->
                     
                     if sheet.Push(readerPage) 
                     then 
@@ -1626,7 +1683,7 @@ module Imposing =
                 | [] -> sheet, []
 
 
-            let rec produceSheets pageSize desiredPageOriention (readerPages: (PdfPage * FsSize) list) (sheets: ImposingSheet list) =
+            let rec produceSheets pageSize desiredPageOriention (readerPages: (VirtuablePdfPage * FsSize) list) (sheets: ImposingSheet list) =
                 if readerPages.Length = 0 then sheets
                 else
                     match desiredPageOriention with 
@@ -1762,8 +1819,17 @@ module Imposing =
 
         member x.GetSheet(index) = sheets.[index]
 
+        static member CreateVirtual(splitDocument, imposingArguments: ImposingArguments, allowRedirectCellSize) =
+            ImposingDocument(VirtuableSplitDocument.Virtual splitDocument, imposingArguments, allowRedirectCellSize = allowRedirectCellSize)
+            
+
+
+
+        new (splitDocument: SplitDocument, imposingArguments: ImposingArguments, allowRedirectCellSize) =
+            ImposingDocument(VirtuableSplitDocument.Entity splitDocument, imposingArguments, allowRedirectCellSize = allowRedirectCellSize)
+            
         new (splitDocument: SplitDocument, imposingArguments: ImposingArguments) =
-            ImposingDocument(splitDocument, imposingArguments, allowRedirectCellSize = None)
+            ImposingDocument(VirtuableSplitDocument.Entity splitDocument, imposingArguments, allowRedirectCellSize = None)
 
 
     [<RequireQualifiedAccess>]

@@ -344,7 +344,7 @@ let reuseTests =
             |> runTest "datas/reuse/imposing N-UP6.pdf" 
         () 
 
-    ftestCase "imposing Multiple sizes tests" <| fun _ -> 
+    testCase "imposing Multiple sizes tests" <| fun _ -> 
         let r = 
             Flow.Reuse (
                 Reuses.Impose
