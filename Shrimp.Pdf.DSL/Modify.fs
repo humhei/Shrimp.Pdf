@@ -8,6 +8,8 @@ open Shrimp.FSharp.Plus
 open Shrimp.FSharp.Plus.Refection
 open Shrimp.FSharp.Plus.Text
 open Shrimp.FSharp.Plus.Operators
+open Shrimp.Pdf.RegisterableFonts
+
 #nowarn "0104"
 open iText.Kernel.Colors
 open Shrimp.Pdf.Extensions
@@ -1704,11 +1706,16 @@ module ModifyOperators =
                 )
             modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
-type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?info_BoundIs_Args, ?textPattern, ?wordSep) =
-    inherit POCOBaseEquatable<string option * float option * FsColor option * Info_BoundIs_Args option * TextSelectorOrTransformExpr option * string option>(fontName, fontSize, fillColor, info_BoundIs_Args, textPattern, wordSep)
+type FontAndSizeQuery [<JsonConstructor>] (?fontNames, ?fontSize, ?fillColor, ?info_BoundIs_Args, ?textPattern, ?wordSep) =
+    inherit POCOBaseEquatable<option<string list> * float option * FsColor option * Info_BoundIs_Args option * TextSelectorOrTransformExpr option * string option>(fontNames, fontSize, fillColor, info_BoundIs_Args, textPattern, wordSep)
+    let fontNamesQuery =
+        match fontNames with 
+        | None -> None
+        | Some fontNames -> AtLeastOneList.TryCreate fontNames
+
 
     [<JsonProperty>]
-    member x.FontName = fontName
+    member x.FontNames = fontNames
 
     [<JsonProperty>]
     member x.FontSize = fontSize
@@ -1722,8 +1729,16 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
     [<JsonProperty>]
     member x.TextPattern = textPattern
 
-    static member MethodConversion(?fontName, ?fontSize: float, ?fillColor: AlternativeFsColor, ?leftBottomBasedInboxArea: MMRectangle, ?textPattern: string): MethodLiteralConversion<_> =
+    static member MethodConversion(?fontNames, ?fontSize: float, ?fillColor: AlternativeFsColor, ?leftBottomBasedInboxArea: MMRectangle, ?textPattern: string): MethodLiteralConversion<_> =
         let name = nameof(FontAndSizeQuery)
+        let fontNames =
+            match fontNames with 
+            | None -> None
+            | Some fontNames ->
+                fontNames
+                |> String.concat "☆"
+                |> Some
+
         let alternativeFsColorText = 
             match fillColor with 
             | Some (color) -> color.LoggingText_Raw
@@ -1740,7 +1755,7 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
                 { Name = name
                   Parameters = 
                     [
-                        nameof(fontName)    ==> defaultArg fontName ""
+                        nameof(fontNames)    ==> defaultArg fontNames ""
                         nameof(fontSize)    ==> defaultArg fontSize 0.
                         nameof(fillColor)   ==> alternativeFsColorText
                         nameof(leftBottomBasedInboxArea)   ==> inboxAreaText
@@ -1753,9 +1768,10 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
             OfMethodLiteral = (fun (method: MethodLiteral) ->
                 match method.Name with 
                 | EqualTo name ->
-                    let fontName = 
-                        method.Parameters.[nameof(fontName)].Value.Text
+                    let fontNames = 
+                        method.Parameters.[nameof(fontNames)].Value.Text
                         |> String.asOption
+                        |> Option.map(fun m -> m.SplitAsListAndTrim("☆"))
 
                     let fontSize= 
                         method.Parameters.[nameof(fontSize)].Value.Text
@@ -1785,7 +1801,7 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
                             |> Some
 
                     FontAndSizeQuery(
-                        ?fontName = fontName,
+                        ?fontNames = fontNames,
                         ?fontSize = fontSize,
                         ?fillColor = fillColor,
                         ?info_BoundIs_Args = inboxArea,
@@ -1799,7 +1815,7 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
 
     member v.MethodLiteralText =
         FontAndSizeQuery.MethodConversion(
-            ?fontName = v.FontName,
+            ?fontNames = v.FontNames,
             ?fontSize = v.FontSize, 
             ?fillColor = (v.FillColor |> Option.bind (fun m -> m.AsAlternativeFsColor)),
             ?textPattern = (v.TextPattern |> Option.map(fun m -> m.MethodLiteralText)),
@@ -1835,9 +1851,15 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
         let textPattern = textPattern |> Option.map (fun m -> m.ToString())
         let info_BoundIs_Args = info_BoundIs_Args |> Option.map(fun m -> m.ToString())
 
-            
+        let fontNames =
+            match fontNames with 
+            | None -> None
+            | Some fontNames ->
+                fontNames
+                |> String.concat "☆"
+                |> Some
 
-        [ fontName 
+        [ fontNames 
           fontSize 
           fillColor
           textPattern
@@ -1851,11 +1873,20 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
         | Some textPattern -> textPattern.Predicate text2
         | None -> true
         &&
-        match fontName, fontSize with 
-        | Some fontName, Some fontSize -> 
-            fontName2.SameFontNameTo(fontName) && fontSize2 @= fontSize
+        match fontNamesQuery, fontSize with 
+        | Some fontNames, Some fontSize -> 
+            fontNames.AsList
+            |> List.exists(fun fontName ->
+                fontName2.SameFontNameTo(fontName)
+            )
+            && fontSize2 @= fontSize
 
-        | Some fontName, None -> fontName2.SameFontNameTo(fontName)
+        | Some fontNames, None -> 
+            fontNames.AsList
+            |> List.exists(fun fontName ->
+                fontName2.SameFontNameTo(fontName)
+            )
+
         | None, Some fontSize -> fontSize2 @= fontSize
         | None, None -> true 
         && ( match fillColor with 
@@ -1880,9 +1911,18 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontName, ?fontSize, ?fillColor, ?in
                 textPattern.Predicate text
             | None -> true
             &&
-            match fontName, fontSize with 
-            | Some fontName, Some fontSize -> TextInfo.FontNameAndSizeIs(fontName, fontSize) args textInfo
-            | Some fontName, None -> TextInfo.FontNameIs(fontName) args textInfo
+            match fontNamesQuery, fontSize with 
+            | Some fontNames, Some fontSize -> 
+                fontNames.AsList
+                |> List.exists(fun fontName ->
+                    TextInfo.FontNameAndSizeIs(fontName, fontSize) args textInfo
+                )
+            | Some fontNames, None -> 
+                fontNames.AsList
+                |> List.exists(fun fontName ->
+                    TextInfo.FontNameIs(fontName) args textInfo
+                )
+
             | None, Some fontSize -> TextInfo.FontSizeIs(fontSize) args textInfo
             | None, None -> true 
             && ( match fillColor with 
@@ -1922,6 +1962,56 @@ with
             vs
             |> List.map(fun v -> v.AsSelector())
             |> Selector.OR
+
+    static member Arial =
+        let fontNames = 
+            FontNames.Query.Arial_Regular_Names
+            |> List.map(fun m -> m.Text())
+        FontAndSizeQuery(fontNames)
+
+type FontMapping =
+    { FontAndSizeQuery: FontAndSizeQueryUnion
+      NewFontAndSize: NewFontAndSize }
+with 
+    static member Arial_Regular_To_Bold =
+        let query = 
+            let fontNames = 
+                FontNames.Query.Arial_Regular_Names
+                |> List.map(fun m -> m.Text())
+
+            FontAndSizeQuery(fontNames)
+            |> FontAndSizeQueryUnion.Value
+
+        let newFontAndSize = 
+            let newFont = FsPdfFontFactory.Registerable(Arial.arial (Arial.FontWeight.Bold))
+            NewFontAndSize(newFont)
+
+        { FontAndSizeQuery = query 
+          NewFontAndSize   = newFontAndSize }
+
+    static member Arial_Bold_To_Regular =
+        let query = 
+            let fontNames = 
+                FontNames.Query.Arial_Bold_Names
+                |> List.map(fun m -> m.Text())
+
+            FontAndSizeQuery(fontNames)
+            |> FontAndSizeQueryUnion.Value
+
+        let newFontAndSize = 
+            let newFont = FsPdfFontFactory.Registerable(Arial.arial (Arial.FontWeight.Regular))
+            NewFontAndSize(newFont)
+
+        { FontAndSizeQuery = query 
+          NewFontAndSize   = newFontAndSize }
+
+type FontMappings = FontMappings of FontMapping al1List
+with 
+    member x.AsAl1List =
+        let (FontMappings v) = x
+        v
+
+    member x.AsList = x.AsAl1List.AsList
 
 type NewFontAndSize with 
     member x.AsModifier(): Modifier<_> =

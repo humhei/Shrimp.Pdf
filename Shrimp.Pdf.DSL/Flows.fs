@@ -99,7 +99,7 @@ module _Flows =
                     )
                     ||>> (List.choose id >> PageNumSequence.Create)
                 )
-                <+>Flow.Func(fun (sequence: PageNumSequence) ->
+                <.+> Flow.Func(fun (sequence: PageNumSequence) ->
                     Flow.Reuse(Reuses.SequencePages sequence)
                 )
 

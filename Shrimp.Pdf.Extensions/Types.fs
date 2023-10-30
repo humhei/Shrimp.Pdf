@@ -1118,6 +1118,7 @@ module ExtensionTypes =
             let (AreaRow v) = x
             v
 
+
     //type PageAreas = PageAreas of FsRectangle list
     //with 
     //    member x.Areas =
@@ -1166,6 +1167,7 @@ module ExtensionTypes =
             |> List.map(AreaRow)
             |> AreaTable
     
+
     type Flip =
         | HFlip = 0
         | VFlip = 1
@@ -1176,6 +1178,7 @@ module ExtensionTypes =
         | Clockwise = 1
         | Counterclockwise = 2
         | R180 = 3
+
 
     type Margin with 
         member x.Rotate(rotation: Rotation) =
@@ -1261,6 +1264,12 @@ module ExtensionTypes =
         let notNon = function
             | Rotation.None  -> false
             | _ -> true
+
+        let add (rotation1) rotation2 =
+            let angle1 = getAngle rotation1
+            let angle2 = getAngle rotation2
+            angle1 + angle2
+            |> ofAngle
 
 
     type AffineTransformRecord =
@@ -1457,11 +1466,17 @@ module ExtensionTypes =
     [<RequireQualifiedAccess>]
     type CanvasFontSize =
         | Numeric of size: float
-        | OfRootArea of scale: float
-        | OfFsArea of FsRectangle * scale: float
+        | OfRootAreaCase of scale: float * maxFontSize: float option
+        | OfFsAreaCase of FsRectangle * scale: float * maxFontSize: float option
     with    
-        static member OfArea(rect, ?scale) =
-            CanvasFontSize.OfFsArea(FsRectangle.OfRectangle rect, defaultArg scale 1.)
+        static member OfRootArea(scale, ?maxFontSize) =
+            CanvasFontSize.OfRootAreaCase(scale, maxFontSize)
+
+        static member OfFsArea(rect, scale, ?maxFontSize) =
+            CanvasFontSize.OfFsAreaCase(rect, scale, maxFontSize)
+
+        static member OfArea(rect, ?scale, ?maxFontSize) =
+            CanvasFontSize.OfFsAreaCase(FsRectangle.OfRectangle rect, defaultArg scale 1., maxFontSize)
 
     [<RequireQualifiedAccess>]
     type RelativePosition =
@@ -1485,6 +1500,7 @@ module ExtensionTypes =
         | Left = 0
         | Right = 1
         | Middle  = 2
+
 
     type Effort =
         { XEffort: XEffort 
@@ -1516,8 +1532,77 @@ module ExtensionTypes =
         | RightBottom of float * float
         | BottomMiddle of float * float
         | Center of float * float
+    with 
+        member x.X = 
+            match x with
+            | Position.LeftTop (x, y) 
+            | Position.LeftBottom (x, y) 
+            | Position.LeftMiddle(x, y) 
+            | Position.Center (x, y) 
+            | Position.BottomMiddle (x, y) 
+            | Position.TopMiddle(x, y) 
+            | Position.RightBottom (x, y) 
+            | Position.RightTop (x, y)
+            | Position.RightMiddle (x, y) -> x
+            
+        member x.Y = 
+            match x with
+            | Position.LeftTop (x, y) 
+            | Position.LeftBottom (x, y) 
+            | Position.LeftMiddle(x, y) 
+            | Position.Center (x, y) 
+            | Position.BottomMiddle (x, y) 
+            | Position.TopMiddle(x, y) 
+            | Position.RightBottom (x, y) 
+            | Position.RightTop (x, y)
+            | Position.RightMiddle (x, y) -> y
 
 
+        static member PreciseCenter = Position.Center(0, 0)
+
+        static member OfEffort(xEffort, yEffort) =
+            match xEffort with 
+            | XEffort.Left ->
+                match yEffort with 
+                | YEffort.Middle -> Position.LeftMiddle(0, 0)
+                | YEffort.Bottom -> Position.LeftBottom(0, 0)
+                | YEffort.Top -> Position.LeftTop(0, 0)
+
+            | XEffort.Middle ->
+                match yEffort with 
+                | YEffort.Middle -> Position.Center(0, 0)
+                | YEffort.Bottom -> Position.BottomMiddle(0, 0)
+                | YEffort.Top -> Position.TopMiddle(0, 0)
+
+            | XEffort.Right ->
+                match yEffort with 
+                | YEffort.Middle -> Position.RightMiddle(0, 0)
+                | YEffort.Bottom -> Position.RightBottom(0, 0)
+                | YEffort.Top    -> Position.RightTop(0, 0)
+
+        member x.MapValue(mapping) =
+            match x with
+            | Position.LeftBottom (x, y)-> Position.LeftBottom (mapping (x, y))
+            | Position.LeftMiddle (x, y) -> Position.LeftMiddle (mapping (x, y))
+            | Position.LeftTop (x, y) -> Position.LeftTop (mapping (x, y))
+            | Position.TopMiddle (x, y) -> Position.TopMiddle (mapping (x, y))
+            | Position.RightTop (x, y) -> Position.RightTop (mapping (x, y))
+            | Position.RightMiddle (x, y) -> Position.RightMiddle (mapping (x, y))
+            | Position.RightBottom (x, y) -> Position.RightBottom (mapping (x, y))
+            | Position.BottomMiddle (x, y) -> Position.BottomMiddle (mapping (x, y))
+            | Position.Center (x, y) -> Position.Center (mapping (x, y))
+
+        member x.MapValue_One (mapping) = 
+            x.MapValue (fun (x, y) -> (mapping x, mapping y))
+
+        member x.LoggingText_MM =
+            let userUnitToMM_Round1 (x) =   
+                userUnitToMM x
+                |> Math.round1f
+
+            (x.MapValue_One userUnitToMM_Round1).ToString() + " (mm)"
+
+        override x.ToString() = x.LoggingText_MM
 
 
     [<RequireQualifiedAccess>]
@@ -1584,17 +1669,11 @@ module ExtensionTypes =
             | Position.BottomMiddle (x, y) 
             | Position.Center (x, y) -> x, y
 
-        let mapValue (mapping) position = 
-            match position with
-            | Position.LeftBottom (x, y)-> Position.LeftBottom (mapping (x, y))
-            | Position.LeftMiddle (x, y) -> Position.LeftMiddle (mapping (x, y))
-            | Position.LeftTop (x, y) -> Position.LeftTop (mapping (x, y))
-            | Position.TopMiddle (x, y) -> Position.TopMiddle (mapping (x, y))
-            | Position.RightTop (x, y) -> Position.RightTop (mapping (x, y))
-            | Position.RightMiddle (x, y) -> Position.RightMiddle (mapping (x, y))
-            | Position.RightBottom (x, y) -> Position.RightBottom (mapping (x, y))
-            | Position.BottomMiddle (x, y) -> Position.BottomMiddle (mapping (x, y))
-            | Position.Center (x, y) -> Position.Center (mapping (x, y))
+        let mapValue (mapping) (position: Position) = 
+            position.MapValue mapping
+
+
+            
 
     type TextRenderingMode = iText.Kernel.Pdf.Canvas.PdfCanvasConstants.TextRenderingMode
     type LineJoinStyle = iText.Kernel.Pdf.Canvas.PdfCanvasConstants.LineJoinStyle

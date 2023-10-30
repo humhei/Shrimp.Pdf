@@ -74,6 +74,7 @@ module _PrefixReuses =
             | PageNumSequenceToken.PageNumWithRotationAndFlip (_, rotation, _) -> rotation
             | PageNumSequenceToken.PageNumWithFlipAndRotation (_, _, rotation) -> rotation
     
+
         member x.Flip =
             match x with 
             | PageNumSequenceToken.PageNum _
@@ -82,6 +83,25 @@ module _PrefixReuses =
             | PageNumSequenceToken.PageNumWithRotationAndFlip (_, _, flip) 
             | PageNumSequenceToken.PageNumWithFlipAndRotation (_, flip, _) -> Some flip
     
+        member x.MapRotation(f) =
+            let newRotation = f x.Rotation
+            match x.Flip with 
+            | None -> PageNumSequenceToken.PageNumWithRotation(x.PageNumValue, newRotation)
+            | Some flip ->
+                match x with 
+                | PageNumSequenceToken.PageNum pageNum 
+                | PageNumSequenceToken.PageNumWithRotation (pageNum, _) -> failwith "Invalid token"
+                | PageNumSequenceToken.PageNumWithFlip (pageNum, flip) ->  
+                    PageNumSequenceToken.PageNumWithFlipAndRotation(pageNum, flip, newRotation)
+
+                | PageNumSequenceToken.PageNumWithRotationAndFlip (pageNum, _, _) ->
+                    PageNumSequenceToken.PageNumWithRotationAndFlip(pageNum, newRotation, flip)
+                    
+                | PageNumSequenceToken.PageNumWithFlipAndRotation (pageNum, _, _) -> 
+                    PageNumSequenceToken.PageNumWithFlipAndRotation(pageNum, flip, newRotation)
+                
+
+
         member internal x.AHeadFlipOrRotationEnum() =
             match x with 
             | PageNumSequenceToken.PageNum _
@@ -234,7 +254,13 @@ module _PrefixReuses =
             sequences
             |> AtLeastOneList.collect(fun m -> m.Value_Al1List)
             |> PageNumSequence
-    
+
+        static member Parse(text: string) =
+            let text = Text.trimAllToOne text
+            text.SplitAsListAndTrim(" ")
+            |> List.map PageNumSequenceToken.Parse
+            |> PageNumSequence.Create
+
     [<RequireQualifiedAccess>]
     type EmptablePageNumSequenceToken =
         | EmptyPage 
@@ -565,7 +591,7 @@ module _PrefixReuses =
         
         
                     loop unionToken
-        
+                
             |> reuse 
                 ("SequencePages" )
                 [ "pageNumSequence" => pageNumSequence.ToString() ]

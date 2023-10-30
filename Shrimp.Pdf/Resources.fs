@@ -37,17 +37,20 @@ module Resources =
                     Path.GetFullPath (config.Value.GetString("shrimp.pdf.resourcesDirectory"))
             | None -> Path.GetFullPath (config.Value.GetString("shrimp.pdf.resourcesDirectory"))
 
+
+    let obtainMarkFile (fileNameWithoutExtension: string) =
+        resourceDirectory.Value </> "Marks" </> fileNameWithoutExtension + ".pdf"
+        |> PdfFile
+
     [<RequireQualifiedAccess>]
     module PdfDocument =
+
 
         /// should storage local resources in disk first   
         /// then invoke it: e.g. obtainCmykMarkFromResource "CMYK" writer 
         let obtainMarkFromResources (fileNameWithoutExtension: string) (writer: PdfDocument) =
 
-            let file = 
-                resourceDirectory.Value </> "Marks" </> fileNameWithoutExtension + ".pdf"
-
-            PdfFile file |> ignore
+            let file = (obtainMarkFile fileNameWithoutExtension).Path
 
             lock writer (fun _ ->
                 let doc = new PdfDocument(new PdfReader(file))

@@ -381,7 +381,7 @@ let extractTests =
             |> runTest "datas/extract/extract vectors22.pdf" 
             |> ignore
 
-        ftestCase "extract vectors tests23" <| fun _ -> 
+        testCase "extract vectors tests23" <| fun _ -> 
             Flow.Reuse (
                 Reuses.ExtractIM(
                     PageSelector.All,
@@ -727,6 +727,28 @@ let extractTests =
             |> runTest "datas/extract/tile pages by selector3.pdf" 
             |> ignore
     
+        testCase "tile pages by selector9" <| fun _ -> 
+            Flows.TilePages
+                (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
+                distincterOrTextPicker = (PageTilingDistincterOrTextPicker.TextPicker(
+                    { TagColor = Some Colors.PdfExtractorTagColor
+                      TransformTextPickers = 
+                        (fun args bound infos ->
+                            let coloredBoxWithTextInfos = ColoredBoxWithNumberAndText.Pick(PageNumber args.PageNum, Colors.PdfExtractorTagColor, infos)
+                            coloredBoxWithTextInfos :> System.IComparable
+                        )
+                    }
+                )),
+                pageTilingRenewOptions = 
+                    PageTilingRenewOptions.VisibleInfosInActualBox(
+                        PageTilingRenewInfosSplitter.``Groupby_DenseBoundIsInside_MM1.5``
+                    ),
+                borderKeepingPageSelector = NullablePageSelector.First,
+                transform = (fun rect -> Rectangle.applyMargin -Margin.MM3 rect.Bound)
+            )
+            |> runTest "datas/extract/tile pages by selector9.pdf" 
+            |> ignore
+
         testCase "tile pages by selector tests5" <| fun _ -> 
             Flows.TilePagesAndNUp
                 (Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBox PageBoxKind.ActualBox)),
@@ -750,6 +772,8 @@ let extractTests =
 
             |> runTest "datas/extract/tile pages by selector5.pdf" 
             |> ignore
+
+
 
         testCase "tile pages by selector tests6" <| fun _ -> 
             Flows.TilePages
@@ -855,10 +879,6 @@ let extractTests =
             |> ignore
 
         testCase "tile pages and NUP by selector3" <| fun _ -> 
-            let pageNumbers =
-                [1; 10]
-                |> List.map PageNumber
-                |> AtLeastTwoList.Create 
 
             Flows.TilePagesAndNUp(
                  Path(Info.StrokeColorIs FsColor.RGB_BLUE <&&> Info.BoundIsInsideOf(AreaGettingOptions.PageBoxWithOffset (PageBoxKind.ActualBox, Margin.Create(mm 0.3)))),
@@ -964,6 +984,7 @@ let extractTests =
             |> runTest "datas/extract/tile pages by selector8.pdf" 
             |> ignore
 
+      
 
 
     ]

@@ -34,6 +34,9 @@ module Manipulates =
     
     open Imposing
 
+
+
+
     type ModifyPage with
         static member private AddVSpaceMiddleLines(fLine: PageNumber * RowNumber -> SpaceMiddleLine option) =
             ModifyPage.Create(
@@ -363,4 +366,25 @@ module Manipulates =
                 "add rectangle to canvas root area"
                 [
                     "canvasAreaOptions" => canvasAreaOptions.ToString()
+                ]
+
+        static member AddMarks(canvasAreaOptions, marks: MarkAddingElement list, ?pageSelector) =
+            ModifyPage.Create(
+                "add marks",
+                defaultArg pageSelector PageSelector.All,
+                Dummy,
+                (
+                    marks
+                    |> List.map(fun mark -> 
+                        PageModifier.AddMarks(canvasAreaOptions, marks)
+                    )
+                    |> PageModifier.Batch
+                )
+
+            )  ||>> ignore
+            |> Manipulate.rename 
+                "add marks"
+                [
+                    "canvasAreaOptions" => canvasAreaOptions.ToString()
+                    "marks"             => marks.ToString()
                 ]

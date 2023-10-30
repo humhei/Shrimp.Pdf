@@ -296,7 +296,8 @@ type private PdfDocumentCache private
     member internal x.GetOrCreateXObject(pdfFile: PdfFile) =
         xobjectCache.GetOrAdd((pdfFile), fun (pdfFile) ->
             use doc = new ReaderDocument(pdfFile.Path)
-            doc, doc.Reader.GetPage(1).CopyAsFormXObject(pdfDocument())
+            let xobject = doc.Reader.GetPage(1).CopyAsFormXObject(pdfDocument())
+            doc, xobject
         )
         |> snd
 

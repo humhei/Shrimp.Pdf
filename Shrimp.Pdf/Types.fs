@@ -60,6 +60,8 @@ module _FsSizeExtensions =
         member x.GetArea(position, size) =
             x.GetArea(position, size.Width, size.Height)
 
+
+
 [<CustomEquality; NoComparison>]
 type RoundedSize = private RoundedSize of FsSize
 with 

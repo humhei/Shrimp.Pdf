@@ -89,10 +89,12 @@ module FontNames =
             | ``Arial-Black`` = 59
             | ``Arial-BoldltalicMT`` = 60
             | ``Arial-BoldMT`` = 61
+            | ``Arial,Bold`` = 610
             | ``ArialEnllnicodeBold`` = 62
             | ``Arial-ltalicMT`` = 63
             | ``Arial-Lgt`` = 64
             | ``ArialMT`` = 65
+            |    Arial = 650
             | ``ArialNarrow`` = 66
             | ``ArialNarrow-Bold`` = 67
             | ``ArialNarrow-Boldltalic`` = 68
@@ -1428,6 +1430,19 @@ module FontNames =
                 member x.FsFontName = FsFontName(x.ToString())
 
         let [<Literal>] ArialMT = "ArialMT"
+        let [<Literal>] Arial = "Arial"
+
+        let Arial_Regular_Names = 
+            [
+                FontNames.Arial
+                FontNames.ArialMT
+            ]
+
+        let Arial_Bold_Names = 
+            [
+                FontNames.``Arial-BoldMT``
+                FontNames.``Arial,Bold``
+            ]
 
 
 module RegisterableFonts =
@@ -1586,4 +1601,6 @@ module RegisterableFonts =
         match fontName with 
         | String.EqualIC "SimSun" -> Result.Ok CommonFonts.Songti
         | String.EqualIC "ArialMT" -> Result.Ok (Arial.arial (Arial.FontWeight.Regular))
+        | String.EqualIC "Arial" -> Result.Ok (Arial.arial (Arial.FontWeight.Regular))
+        | String.EqualIC "Arial,Bold" -> Result.Ok (Arial.arial (Arial.FontWeight.Bold))
         | _ -> Result.Error (sprintf "Cannot find RigisterableFont by %s" fontName)

@@ -25,6 +25,10 @@ type ColoredText =
 
 type PageModifier<'userState, 'newUserState> = PageModifingArguments<'userState> -> seq<IIntegratedRenderInfo> -> 'newUserState
 
+type MarkAddingElement =
+    { Mark: Mark 
+      Position: Position }
+
 type RectangleTransform = 
     { OldRect: Rectangle
       NewRect: Rectangle}
@@ -193,6 +197,13 @@ type PageModifier =
             PdfPage.setPageBox pageBoxKind rect args.Page
             |> ignore
 
+    static member ApplyMargin(pageBoxKind: PageBoxKind, margin) : PageModifier<_, _> =
+        fun (args: PageModifingArguments<_>) infos ->
+            let pageBox = PdfPage.getPageBox pageBoxKind args.Page
+            let rect = pageBox |> Rectangle.applyMargin margin
+            PdfPage.setPageBox pageBoxKind rect args.Page
+            |> ignore
+
     static member SetPageBoxTo(pageBoxKind: PageBoxKind, size: FsSize, ?xEffect, ?yEffect) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             let pageBox = 
@@ -227,6 +238,7 @@ type PageModifier =
         PageModifier.AddNew (canvasAreaOptions, (fun args ->
             [ Canvas.addText text (mapping) ]
         ))
+
 
 
     static member AddLine(line, mapping) : PageModifier<_, _> =
@@ -324,6 +336,14 @@ type PageModifier =
     static member AddRectangleToCanvasRootArea(canvasAreaOptions, mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) : PageModifier<_, _> =
         PageModifier.AddNew (canvasAreaOptions, (fun args ->
             [ Canvas.addRectangleToRootArea mapping ]
+        ))
+
+    static member AddMarks(canvasAreaGettingOptions, markAddingElements: MarkAddingElement list) : PageModifier<_, _> =
+        PageModifier.AddNew (canvasAreaGettingOptions, (fun args ->
+            markAddingElements
+            |> List.map(fun m ->
+                Canvas.addMark m.Mark m.Position
+            )
         ))
 
     static member AddVarnish(canvasAreaOptions, varnish) =
@@ -479,6 +499,7 @@ module ModifyPageOperators =
 
     type PdfRunner with 
     
+        /// default inShadowMode: true
         static member private ReadInfosCommon(parse, pdfFile: PdfFile, selector, fInfos, ?pageSelector, ?inShadowMode) =
             let pdfFile = 
                 match defaultArg inShadowMode true with 
@@ -530,6 +551,7 @@ module ModifyPageOperators =
             let document = document.Reader
             document.GetNumberOfPages()
 
+        /// default inShadowMode: true
         static member ReadInfos(pdfFile: PdfFile, selector, fInfos, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadInfosCommon(
                 NonInitialClippingPathPdfDocumentContentParser.parse,
@@ -540,6 +562,7 @@ module ModifyPageOperators =
                 ?inShadowMode = inShadowMode
             )
 
+        /// default inShadowMode: true
         static member ReadInfosIM(pdfFile: PdfFile, selector, fInfos, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadInfosCommon(
                 NonInitialClippingPathPdfDocumentContentParser.parseIM,
@@ -550,6 +573,7 @@ module ModifyPageOperators =
                 ?inShadowMode = inShadowMode
             )
 
+        /// default inShadowMode: true
         static member ReadInfosIMStoppable(pdfFile: PdfFile, selector, fInfos, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadInfosCommon(
                 NonInitialClippingPathPdfDocumentContentParser.parseIMStoppable,
@@ -562,6 +586,7 @@ module ModifyPageOperators =
    
 
 
+        /// default inShadowMode: true
         static member ReadTextInfos(pdfFile: PdfFile, ?selector, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadInfos(
                 pdfFile, 
@@ -575,11 +600,13 @@ module ModifyPageOperators =
                 ?inShadowMode = inShadowMode
             )
 
+        /// default inShadowMode: true
         static member ReadTextInfos_Record(pdfFile, ?selector, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadTextInfos(pdfFile, ?selector = selector, ?pageSelector = pageSelector, ?inShadowMode = inShadowMode)
             |> List.map(List.map(fun m -> m.RecordValue))
 
 
+        /// default inShadowMode: true
         static member ReadPathInfos(pdfFile: PdfFile, ?selector, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadInfos(
                 pdfFile, 
@@ -593,12 +620,14 @@ module ModifyPageOperators =
                 ?inShadowMode = inShadowMode
             )
 
+        /// default inShadowMode: true
         static member ReadPathInfos_Record(pdfFile, ?selector, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadPathInfos(pdfFile, ?selector = selector, ?pageSelector = pageSelector, ?inShadowMode = inShadowMode)
             |> List.map(List.map(fun m -> m.RecordValue))
 
 
 
+        /// default inShadowMode: true
         static member ReadColors(pdfFile: PdfFile, ?selector, ?pageSelector, ?inShadowMode) =
             PdfRunner.ReadInfos(
                 pdfFile, 

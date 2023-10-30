@@ -1146,6 +1146,8 @@ let manipulateTests =
             |> List.replicate 10
             |> String.concat " "
 
+        let font = RegisterableFonts.Arial.arial RegisterableFonts.Arial.FontWeight.Italic
+
         Flow.Manipulate (
             ModifyPage.Create
                 ("add text to position",
@@ -1154,7 +1156,7 @@ let manipulateTests =
                   PageModifier.Batch [
                     PageModifier.AddText(AreaGettingOptions.Specfic(Rectangle.create 0 0 100 100), longText, fun args ->
                       { args with 
-                          PdfFontFactory = FsPdfFontFactory.Registerable (Arial.arial Arial.FontWeight.Italic)
+                          PdfFontFactory = FsPdfFontFactory.Registerable font
                           CanvasFontSize = CanvasFontSize.Numeric 25. 
                           FontColor = PdfCanvasColor.Separation (FsSeparation.Create("帖标",FsValueColor.RGB_BLUE))
                           FontRotation = Rotation.None 
@@ -1491,6 +1493,21 @@ let manipulateTests =
         |> runTest "datas/manipulate/add rect to area.pdf" 
         |> ignore
 
+    ftestCase "add marks to area" <| fun _ -> 
+        let marks =
+            [
+                { Mark = Mark.LeftTauge; Position = Position.LeftBottom (0, mm 9.2)}
+                { Mark = Mark.RightTauge; Position = Position.RightBottom (0, mm 9.2)}
+                { Mark = Mark.VerticalRegistering; Position = Position.LeftMiddle(0, 0)}
+                { Mark = Mark.VerticalRegistering; Position = Position.RightMiddle(0, 0)}
+            ]
+
+        Flow.Manipulate(
+            ModifyPage.AddMarks(AreaGettingOptions.PageBox PageBoxKind.ActualBox, marks)
+        )
+        |> runTest "datas/manipulate/add marks to area.pdf" 
+        |> ignore
+
     testList "trim to visible tests" [
         testCase "trim to visible test" <| fun _ -> 
             Flow.Manipulate(
@@ -1588,7 +1605,7 @@ let manipulateTests =
     testCase "map arial to arial_bold" <| fun _ -> 
         let flow =
             Modify.MapFontAndSize(
-                FontAndSizeQuery(ArialMT, 12.) =>
+                FontAndSizeQuery([ArialMT], 12.) =>
                 NewFontAndSize(FsPdfFontFactory.Registerable(yaHei FontWeight.Regular), 12.)
             )
 

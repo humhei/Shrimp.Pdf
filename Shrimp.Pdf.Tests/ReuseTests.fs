@@ -76,11 +76,17 @@ let reuseTests =
         //let m = BackgroundFile.Create @"C:\Users\Jia\Desktop\New Document1.pdf"
         //let a = m
 
-
+        let file =
+            @"D:\VsCode\Workspace\Shrimp.Workflow\src\CustomerSupply\tests\CustomerSupply.Tests\bin\Debug\netcoreapp3.1\datas\Disney\健乐内盒90×40mmExtractor.raw.pdf"
+            //@"datas/reuse/add background as layer.background.pdf"
         Flow.Reuse (
-            Reuses.AddForeground(PdfFile @"datas/reuse/add background as layer.background.pdf", xEffect = XEffort.Middle, yEffect = YEffort.Middle, layerName =  BackgroundAddingLayerOptions.Create ("Origin", "Background"))
-        )
-        |> runTest "datas/reuse/add background as layer.pdf" 
+            Reuses.AddBackgroundOrForeground(
+                BackgroundFile.Create(
+                    file
+                ),
+                BackgroundOrForeground.Foreground
+        ))
+        |> runTest @"D:\Users\Jia\Documents\MyData\Docs\2017\健乐\Disney\包装\23-10-19\.extract\Innerboxlabels-306481.pdf"
         |> ignore
 
     testCase "add foreground tests" <| fun _ -> 
@@ -282,6 +288,8 @@ let reuseTests =
         |> runTest "datas/reuse/imposing N-UP2.pdf" 
         |> ignore
 
+
+
     testCase "create page template tests" <| fun _ -> 
 
         Flow.Reuse (
@@ -343,6 +351,26 @@ let reuseTests =
             )
             |> runTest "datas/reuse/imposing N-UP6.pdf" 
         () 
+
+    testCase "imposing N-UP7 tests" <| fun _ -> 
+
+        Flow.Reuse (
+            Reuses.Impose
+                (fun args ->
+                    let args = 
+                        { args with 
+                            ColNums = [0]
+                            RowNum = 0
+                            Cropmark = Some Cropmark.defaultValue
+                            Background = Background.Size ({ Width = mm 222; Height = mm 298 })
+                            Sheet_PlaceTable = Sheet_PlaceTable.Trim_CenterTable(Margin.MM6)
+                            UseBleed = true
+                        }
+                    args
+                ) ||>> fun imposingDocument -> imposingDocument.GetSheets()
+        )
+        |> runTest "datas/reuse/Imposing N-UP7.pdf" 
+        |> ignore
 
     testCase "imposing Multiple sizes tests" <| fun _ -> 
         let r = 

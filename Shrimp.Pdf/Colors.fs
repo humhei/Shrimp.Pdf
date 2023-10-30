@@ -313,6 +313,15 @@ module _Colors =
                   b = r.[2] |> float32 }
             | Failure (error, _, _) -> failwith error
 
+        member x.HexLiteral =
+            let encodeToString (values: int list) =
+                match values with 
+                | [l;a;b] -> 
+                    sprintf "0x%02x%02x%02x" l (a + 128) (b + 128)
+                | _ -> invalidArg "value" (values.ToString())
+
+            encodeToString [int x.L; int x.a; int x.b]
+
         static member Create(l, a, b) =
             { L = l 
               a = a

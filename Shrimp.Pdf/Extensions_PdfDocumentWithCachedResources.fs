@@ -95,6 +95,7 @@ module PdfDocumentWithCachedResources =
           Position: Position
           HorizontalTextAlignment: TextAlignment option 
           StrokeWidth: float option
+          MaxFontSize: float option
           ClipContents: bool
           FsExtGState: FsExtGState option
           VerticalTextAlignment: VerticalAlignment option }
@@ -110,6 +111,7 @@ module PdfDocumentWithCachedResources =
               StrokeWidth = None
               ClipContents = false
               FsExtGState = None
+              MaxFontSize = None
               VerticalTextAlignment = None }
 
         member args.GetCalculatedHorizontalTextAlignment() =
@@ -302,6 +304,9 @@ module PdfDocumentWithCachedResources =
         let addRectangle (rect: Rectangle) (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
             addRectangles [rect] mapping canvas
 
+
+            
+
     type PdfCanvas with 
         member x.SetExtGState(fsExtGSState) =
             PdfCanvas.setExtGState fsExtGSState x
@@ -318,14 +323,25 @@ module PdfDocumentWithCachedResources =
                 let pdfDocument = canvas.GetPdfDocument() :?> PdfDocumentWithCachedResources
                 pdfDocument.GetOrCreatePdfFont(pdfFontFactory)
             
+            let redirectByMaxFontSize maxFontSize fontSize =
+                match maxFontSize with 
+                | None -> fontSize
+                | Some maxFontSize ->
+                    min fontSize maxFontSize
+
             match canvasFontSize with 
             | CanvasFontSize.Numeric size -> size
-            | CanvasFontSize.OfRootArea (scale) ->
+            | CanvasFontSize.OfRootAreaCase (scale, maxFontSize) ->
                 let area = canvas.GetRootArea()
                 PdfFont.fontSizeOfArea area text pdfFont * scale
+                |> redirectByMaxFontSize maxFontSize 
 
-            | CanvasFontSize.OfFsArea (area, scale) ->
+            | CanvasFontSize.OfFsAreaCase (area, scale, maxFontSize) ->
                 PdfFont.fontSizeOfArea area.AsRectangle text pdfFont * scale
+                |> redirectByMaxFontSize maxFontSize 
+
+
+
 
         member canvas.CalcTextLineWidthUnits (text, args: CanvasAddTextArguments) = 
             let pdfFont = 
@@ -421,6 +437,23 @@ module PdfDocumentWithCachedResources =
         let addRectangle rect (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: Canvas) =
             PdfCanvas.addRectangle rect mapping (canvas.GetPdfCanvas()) |> ignore
             canvas
+
+        let addMark (mark: Mark) (position) (canvas: Canvas) =
+            let document = canvas.GetPdfDocument() :?> PdfDocumentWithCachedResources
+            let pdfFormObject = document.GetOrCreateXObject(Mark.obtainPdfFile mark)
+            //let pagebox = canvas.GetPage().GetPageBox(PageBoxKind.ActualBox)
+            let affineTransform: AffineTransform = 
+                let rootArea = canvas.GetRootArea()
+                let xobjectBBox = pdfFormObject |> PdfFormXObject.getActualBox
+
+                let xobjectArea = rootArea.GetArea(position, xobjectBBox.GetWidthF(), xobjectBBox.GetHeightF())
+                AffineTransform.GetTranslateInstance(xobjectArea.GetXF(), xobjectArea.GetYF())
+
+            canvas.GetPdfCanvas().AddXObject(pdfFormObject, affineTransform)
+            |> ignore
+
+            canvas
+
 
 
         let addRectangleToRootArea (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: Canvas) =

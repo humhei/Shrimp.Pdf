@@ -134,6 +134,24 @@ module iText =
 
     type Rectangle with 
 
+        member this.MapCoordinate(f) =
+            let width = this.GetWidth()
+            let height = this.GetHeight()
+            let newPoint: FsPoint =
+                {
+                    X = this.GetXF()
+                    Y = this.GetYF()
+                }
+                |> f
+
+            Rectangle(float32 newPoint.X, float32 newPoint.Y, width, height)
+
+        member this.MoveRightUp(right, up) =
+            let width = this.GetWidth()
+            let height = this.GetHeight()
+            let newX = this.GetX() + right
+            let newY = this.GetY() + up
+            Rectangle(newX, newY, width, height)
 
         member this.GetWidthF() = this.GetWidth() |> float
         member this.GetHeightF() = this.GetHeight() |> float
@@ -1792,7 +1810,9 @@ module iText =
             | PageBoxKind.TrimBox -> page.GetTrimBox()
             | PageBoxKind.CropBox -> page.GetCropBox()
             | PageBoxKind.ActualBox -> page.GetActualBox()
-            | PageBoxKind.AllBox -> failwith "PageBoxKind.AllBox is settable only"
+            | PageBoxKind.AllBox -> 
+                page.GetActualBox()
+                //failwith "PageBoxKind.AllBox is settable only"
             | PageBoxKind.MediaBox -> page.GetMediaBox()
 
         member page.GetFsRotation() =

@@ -118,10 +118,7 @@ type PreImposer =
             }
 
         let imposingArguments = 
-            ImposingArguments.Create(fun _ ->
-                { imposingArguments with
-                    IsRepeated = true }
-            )
+            ImposingArguments.Create(fun _ -> imposingArguments)
 
         let document = 
             ImposingDocument
@@ -1527,12 +1524,12 @@ module _Reuses =
         static member AddForeground (pageBoxKind: PageBoxKind, rectOptions: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin, ?xEffect, ?yEffect, ?pageSelector) =
             Reuses.AddBackgroundOrForeground(BackgroundOrForeground.Foreground, pageBoxKind, rectOptions, ?margin = margin, ?pageSelector = pageSelector)
 
-        static member private AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground, ?xEffect, ?yEffect, ?pageSelector, ?layerName: BackgroundAddingLayerOptions) =
-            let xEffect = defaultArg xEffect XEffort.Middle
-            let yEffect = defaultArg yEffect YEffort.Middle
+        static member AddBackgroundOrForeground(backgroundFile: BackgroundFile, choice: BackgroundOrForeground, ?fPosition, ?pageSelector, ?layerName: BackgroundAddingLayerOptions) =
+            //let xEffect = defaultArg xEffect XEffort.Middle
+            //let yEffect = defaultArg yEffect YEffort.Middle
 
             let pageSelector = defaultArg pageSelector PageSelector.All
-            (fun flowModel (doc: SplitDocument) ->
+            (fun (flowModel:FlowModel<_>) (doc: SplitDocument) ->
 
                 let backgroundInfos =
 
@@ -1549,10 +1546,22 @@ module _Reuses =
 
                 let reader = doc.Reader
                 let selectedPages = reader.GetPageNumbers(pageSelector)
+                let totalNumberOfPages = reader.GetNumberOfPages()
                 PdfDocument.getPages reader
                 |> List.mapi (fun i readerPage ->
-                    
-                    match List.contains (i+1) selectedPages with 
+                    let pageNumber = (i+1)
+                    let position = 
+                        match fPosition with 
+                        | None -> Position.PreciseCenter
+                        | Some fPosition -> 
+                            let args =
+                                { UserState = flowModel.UserState
+                                  PageNum = pageNumber
+                                  Page = readerPage
+                                  TotalNumberOfPages = totalNumberOfPages }
+                            fPosition args
+
+                    match List.contains pageNumber selectedPages with 
                     | true ->
                         let backgroundPageBox, backgroundXObject = backgroundInfos.GetPageBoxAndXObject(i+1)
                         let readerPageBox = readerPage.GetActualBox()
@@ -1568,20 +1577,22 @@ module _Reuses =
                         let bk_x = 
                             let baseX =  readerPageBox.GetX() - backgroundPageBox.GetX() 
                             let lengthDiff = readerPageBox.GetWidth() - backgroundPageBox.GetWidth()
-                            match xEffect with 
-                            | XEffort.Left -> baseX
-                            | XEffort.Middle ->
-                                baseX + lengthDiff / 2.f
-                            | XEffort.Right -> baseX + lengthDiff
+                            match position with 
+                            | Position.Left (x, _) -> baseX 
+                            | Position.XCenter (x, _) ->
+                                baseX + lengthDiff / 2.f 
+                            | Position.Right (x, _) -> baseX + lengthDiff 
+                            |> fun m -> m + float32 position.X
 
                         let bk_y = 
                             let baseY = readerPageBox.GetY() - backgroundPageBox.GetY() 
                             let lengthDiff = readerPageBox.GetHeight() - backgroundPageBox.GetHeight()
-                            match yEffect with 
-                            | YEffort.Bottom -> baseY
-                            | YEffort.Middle ->
+                            match position with 
+                            | Position.Bottom _ -> baseY
+                            | Position.YCenter _ ->
                                 baseY + lengthDiff / 2.f
-                            | YEffort.Top -> baseY + lengthDiff
+                            | Position.Top _ -> baseY + lengthDiff
+                            |> fun m -> m + float32 position.Y
 
                         match layerName with 
                         | None ->
@@ -1646,15 +1657,23 @@ module _Reuses =
                     "pageSelector" => pageSelector.ToString()
                     "backgroundFile" => backgroundFile.ToString()
                     "layer" => choice.ToString()
-                    "xEffect" => xEffect.ToString()
-                    "yEffect" => yEffect.ToString()
                 ]
 
-        static member AddBackground (backgroundFile: PdfFile, ?xEffect, ?yEffect, ?pageSelector, ?layerName) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background, ?xEffect = xEffect, ?yEffect = yEffect, ?pageSelector = pageSelector, ?layerName = layerName)
+        static member AddBackground (backgroundFile: PdfFile, ?position, ?pageSelector, ?layerName) =
+            let createFPostion (position) =
+                match position with 
+                | None -> None
+                | Some position -> Some (fun _ -> position)
 
-        static member AddForeground (foregroundFile: PdfFile, ?xEffect, ?yEffect, ?pageSelector, ?layerName) =
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create foregroundFile, BackgroundOrForeground.Foreground, ?xEffect = xEffect, ?yEffect = yEffect, ?pageSelector = pageSelector, ?layerName = layerName)
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background, ?fPosition = createFPostion position, ?pageSelector = pageSelector, ?layerName = layerName)
+
+        static member AddForeground (foregroundFile: PdfFile, ?position, ?pageSelector, ?layerName) =
+            let createFPostion (position) =
+                match position with 
+                | None -> None
+                | Some position -> Some (fun _ -> position)
+
+            Reuses.AddBackgroundOrForeground(BackgroundFile.Create foregroundFile, BackgroundOrForeground.Foreground, ?fPosition = createFPostion position, ?pageSelector = pageSelector, ?layerName = layerName)
 
         static member AssignToLayer (layerName) =
             (fun flowModel (doc: SplitDocument) ->

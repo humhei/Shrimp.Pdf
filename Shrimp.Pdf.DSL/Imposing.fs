@@ -171,8 +171,8 @@ module Imposing =
     [<RequireQualifiedAccess>]
     module Cropmark =
         let defaultValue = 
-            { Length = mm 3.8
-              Distance = mm 3.2
+            { Length = mm 5.0
+              Distance = mm 1.5
               Width = mm 0.1
               IsRevealedBetweenCells = true
               Color = PdfCanvasColor.Registration }

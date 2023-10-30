@@ -169,6 +169,11 @@ module _Tile =
         static member ``Filter__BoundIs_InsideOrCross_MM1.5`` =
             PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross Margin.``MM1.5``
             
+        
+        //static member Filter__BoundIs_InsideOrCross_MM0 =
+        //    PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross Margin.Zero
+            
+
         static member Filter__BoundIs_InsideOrCross_MM3 =
             PageTilingRenewInfosSplitter.Filter__BoundIs_InsideOrCross Margin.MM3
             
@@ -197,7 +202,7 @@ module _Tile =
                 ))
                 |> List.filter(fun m -> m.Bound.Value.IsSome)
 
-            let loop_groupBy predicate bounds infos =
+            let loop_groupBy predicate predicateCross bounds infos =
                 let rec loop accum (bounds: IndexedBound list) (infos: BoundCachableInfo list) =
                     
                     match bounds with 
@@ -234,9 +239,12 @@ module _Tile =
                                         loop2 (currentInfo :: currentInfos) leftInfos t
 
                                     | Some (Choice2Of2 leftInfo) ->
-                                        loop2 currentInfos (leftInfo :: leftInfos) t
-
-
+                                        match leftInfo.Bound.Value with 
+                                        | None -> loop2 (currentInfos) (leftInfo :: leftInfos) t
+                                        | Some leftInfoBound ->
+                                            match predicateCross bound leftInfoBound with 
+                                            | true -> loop2 (leftInfo :: currentInfos) (leftInfo :: leftInfos) t
+                                            | false -> loop2 (currentInfos) (leftInfo :: leftInfos) t
 
                             loop2 [] [] infos
 
@@ -296,6 +304,9 @@ module _Tile =
                     (fun indexedBound infoBound ->
                         infoBound.IsCenterPointInsideOf (indexedBound.Bound)
                     )
+                    (fun indexedBound infoBound ->
+                        infoBound.IsCrossOf(indexedBound.Bound)
+                    )
                     bounds
                     infos
 
@@ -308,6 +319,9 @@ module _Tile =
                 loop_groupBy 
                     (fun (indexedBound: IndexedBound) infoBound ->
                         infoBound.IsInsideOf(indexedBound.Bound)
+                    )
+                    (fun indexedBound infoBound ->
+                        infoBound.IsCrossOf(indexedBound.Bound)
                     )
                     bounds
                     infos

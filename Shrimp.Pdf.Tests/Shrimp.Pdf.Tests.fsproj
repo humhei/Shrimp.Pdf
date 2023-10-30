@@ -18,7 +18,7 @@
     
     <EmbeddedResource Remove="datas\compose\**" />
     <None Remove="datas\compose\**" />    
-    <Compile Include="FunctionTests.fs" />
+    <Compile Include="CodeGen.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="ParsingTests.fs" />
     <Compile Include="BugFixmentTests.fs" />
