@@ -388,3 +388,22 @@ module Manipulates =
                     "canvasAreaOptions" => canvasAreaOptions.ToString()
                     "marks"             => marks.ToString()
                 ]
+
+        static member AddEdgeCropMarks(?canvasAreaOptions, ?cropMark, ?mapping, ?pageSelector) =
+            let cropMark = defaultArg cropMark EdgeCropMark.DefaultValue
+            let canvasAreaOptions = defaultArg canvasAreaOptions (AreaGettingOptions.PageBox PageBoxKind.ActualBox)
+            ModifyPage.Create(
+                "add Edge CropMarks",
+                defaultArg pageSelector PageSelector.All,
+                Dummy,
+                (
+                    PageModifier.AddEdgeCropMarks(canvasAreaOptions, cropMark, defaultArg mapping id)
+                )
+
+            )  ||>> ignore
+            |> Manipulate.rename 
+                "add edge cropMarks"
+                [
+                    "canvasAreaOptions" => canvasAreaOptions.ToString()
+                    "cropMark"             => cropMark.ToString()
+                ]

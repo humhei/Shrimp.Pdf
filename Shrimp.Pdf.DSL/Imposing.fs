@@ -55,7 +55,7 @@ with
     member x.CounterClockwise() = x.Rotate(Rotation.Counterclockwise)
 
 
-    static member Create(pdfFile: PdfFile) =
+    static member Create(pdfFile: PdfFile, addtionalFlow) =
         let clearedPdfFile = 
             backgroundCache.GetOrAddOrUpdate(pdfFile, fun () ->
                 let targetPath =
@@ -64,9 +64,11 @@ with
 
                 let newPdfFile: PdfFile = 
                     let flow = 
-                        Reuses.ClearDirtyInfos()
+                        Flow.Reuse(Reuses.ClearDirtyInfos())
+                        <+>
+                        addtionalFlow
 
-                    runWithBackup targetPath pdfFile.Path (Flow.Reuse flow)
+                    runWithBackup targetPath pdfFile.Path (flow)
                     |> List.exactlyOne_DetailFailingText
                     |> fun flowModel -> flowModel.PdfFile
 
@@ -78,13 +80,15 @@ with
         |> BackgroundFile
 
 
-
+    static member Create(pdfFile: PdfFile) =
+        BackgroundFile.Create(pdfFile, Flow.dummy() ||>> ignore)
 
     static member Create(path: string) =
         PdfFile path
         |> BackgroundFile.Create
 
-
+    static member Create(path: string, addtionalFlow) =
+        BackgroundFile.Create(PdfFile path, addtionalFlow)
 [<RequireQualifiedAccess>]
 module BackgroundFile =
     let private backgroundFilePageBoxCache = new ConcurrentDictionary<BackgroundFile, Rectangle list>()
@@ -170,13 +174,20 @@ module Imposing =
 
     [<RequireQualifiedAccess>]
     module Cropmark =
+        /// mm 1.5
         let defaultValue = 
-            { Length = mm 5.0
+            { Length = mm 4.5
               Distance = mm 1.5
               Width = mm 0.1
               IsRevealedBetweenCells = true
               Color = PdfCanvasColor.Registration }
 
+        let mm3 =
+            { Length = mm 3
+              Distance = mm 3
+              Width = mm 0.1
+              IsRevealedBetweenCells = true
+              Color = PdfCanvasColor.Registration }
 
     [<RequireQualifiedAccess>]
     type Sheet_PlaceTable =

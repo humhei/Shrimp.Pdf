@@ -171,6 +171,7 @@ module Core =
     type CmykIcc =
         | JapanColor2001Coated = 0 
         | ``USWebCoatedSWOP`` = 1
+        | ``ISOCoated V2`` = 2
 
     [<RequireQualifiedAccess>]
     module CmykIcc =
@@ -178,6 +179,7 @@ module Core =
             match streamText with 
             | String.Contains "Japan Color 2001 Coated" -> Some CmykIcc.JapanColor2001Coated
             | String.Contains "U.S. Web Coated (SWOP) v2" -> Some CmykIcc.USWebCoatedSWOP
+            | String.Contains "prtrCMYKLab" -> Some CmykIcc.``ISOCoated V2``
             | _ -> None
 
 

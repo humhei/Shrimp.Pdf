@@ -125,14 +125,65 @@ module PageInfosValidationIM =
 
 type Modifier<'userState> = _SelectionModifierFixmentArguments<'userState> -> ModifierPdfCanvasActions
 type ModifierIM<'userState> = _SelectionModifierFixmentArgumentsIM<'userState> -> ModifierPdfCanvasActions
+
+ [<RequireQualifiedAccess>]
+ module private Modifier =
+     let toIM (modifier: Modifier<_>): ModifierIM<_> =
+         fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
+             { CurrentRenderInfo = args.CurrentRenderInfoIM :?> IIntegratedRenderInfo
+               PageModifingArguments = args.PageModifingArguments }
+             |> modifier
+ 
+
+
+type ShadableModifierIM<'userState> =
+    { 
+        SHShadingModifier: option<PageModifingArguments<'userState> -> IntegratedPathRenderInfo -> OperatorRange -> PdfCanvas -> unit>
+        ClippingPathShadingModifier: option<PageModifingArguments<'userState> -> IntegratedPathRenderInfo -> OperatorRange -> PdfCanvas -> unit>
+        CommonModifierIM: _SelectionModifierFixmentArgumentsIM<'userState> -> ModifierPdfCanvasActions
+    }
+
+type ShadableModifier<'userState> =
+    { 
+        SHShadingModifier: option<PageModifingArguments<'userState> -> IntegratedPathRenderInfo -> OperatorRange -> PdfCanvas -> unit>
+        ClippingPathShadingModifier: option<PageModifingArguments<'userState> -> IntegratedPathRenderInfo -> OperatorRange -> PdfCanvas -> unit>
+        CommonModifier: _SelectionModifierFixmentArguments<'userState> -> ModifierPdfCanvasActions
+    }
+with 
+    member x.ToIM() =
+        { SHShadingModifier = x.SHShadingModifier 
+          ClippingPathShadingModifier = x.ClippingPathShadingModifier 
+          CommonModifierIM = Modifier.toIM x.CommonModifier }
+        
  
 [<RequireQualifiedAccess>]
-module private Modifier =
-    let toIM (modifier: Modifier<_>): ModifierIM<_> =
-        fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
-            { CurrentRenderInfo = args.CurrentRenderInfoIM :?> IIntegratedRenderInfo
-              PageModifingArguments = args.PageModifingArguments }
-            |> modifier
+type ModifierUnion<'userState> =
+    | Modifier of Modifier<'userState>
+    | ShadingModifier of ShadableModifier<'userState>
+with 
+    member x.CommonModifier =
+        match x with 
+        | Modifier vv -> vv
+        | ShadingModifier vv -> vv.CommonModifier
+
+[<RequireQualifiedAccess>]
+type ModifierUnionIM<'userState> =
+    | Modifier of ModifierIM<'userState>
+    | ShadingModifier of ShadableModifierIM<'userState>
+with 
+    member x.CommonModifier =
+        match x with 
+        | Modifier vv -> vv
+        | ShadingModifier vv -> vv.CommonModifierIM
+
+
+
+[<RequireQualifiedAccess>]
+module private ModifierUnion =
+    let toIM (modifier: ModifierUnion<_>) =
+        match modifier with 
+        | ModifierUnion.Modifier vv -> Modifier.toIM vv |> ModifierUnionIM.Modifier
+        | ModifierUnion.ShadingModifier vv -> vv.ToIM() |> ModifierUnionIM.ShadingModifier
 
 
 [<RequireQualifiedAccess>]
@@ -173,7 +224,33 @@ module private Modifiers =
               CurrentRenderInfoIM = args.CurrentRenderInfo }
         )
        
+    let toSelectionModifierUnionIM (pageModifingArguments: PageModifingArguments<_>) (modifiers: ModifierUnionIM<_> list): ModifierUnion =
+        let modifiers =
+            List.choose2(fun m ->
+                match m with 
+                | ModifierUnionIM.Modifier v1 -> Choice1Of2 v1
+                | ModifierUnionIM.ShadingModifier v2 -> Choice2Of2 v2
+            ) modifiers
 
+        match modifiers.Items1, modifiers.Items2 with 
+        | [], [shadingModifier] ->
+            let commonModifier = toSelectionModifierIM pageModifingArguments [shadingModifier.CommonModifierIM]
+            ModifierUnion.ShadingModifier 
+                {
+                    SHShadingModifier = 
+                        shadingModifier.SHShadingModifier |> Option.map (fun f -> f pageModifingArguments)
+                    ClippingPathShadingModifier = 
+                        shadingModifier.ClippingPathShadingModifier
+                        |> Option.map (fun f -> f pageModifingArguments) 
+                    CommonModifier = commonModifier
+                }
+
+        | _, _ :: _ -> failwithf "Multiple shadable modifiers is not supported"
+        | _, [] -> 
+            toSelectionModifierIM pageModifingArguments modifiers.Items1
+
+
+            |> ModifierUnion.Modifier
 open Constants.Operators
 
 
@@ -189,6 +266,12 @@ with
         { OriginColors = AtLeastOneList.Create AlternativeFsColor.Whites
           NewColor =  NullablePdfCanvasColor.OfPdfCanvasColor newColor
           Tolerance = defaultArg tolerance ValueEqualOptionsTolerance.DefaultValue }
+
+    static member BlackTo(newColor, ?tolerance) =
+        { OriginColors = AtLeastOneList.Create AlternativeFsColor.Blacks
+          NewColor =  NullablePdfCanvasColor.OfPdfCanvasColor newColor
+          Tolerance = defaultArg tolerance ValueEqualOptionsTolerance.DefaultValue }
+
 
     static member Create(originColors, newColor, ?tolerance) =
         { OriginColors = originColors
@@ -233,6 +316,11 @@ with
         colorMapping.Add [newColorMapping]
         |> ColorMappings
 
+    static member Create(colorMapping) =
+        colorMapping
+        |> AtLeastOneList.singleton 
+        |> ColorMappings
+
     static member Concat(colorMappingLists: ColorMappings al1List) =
         colorMappingLists
         |> AtLeastOneList.collect(fun (ColorMappings colorMappings) -> colorMappings)
@@ -244,6 +332,11 @@ with
         |> AtLeastOneList.Create
         |> ColorMappings
 
+    static member BlackTo(newColor) =
+        ColorMapping.BlackTo(newColor)
+        |> List.singleton
+        |> AtLeastOneList.Create
+        |> ColorMappings
 
     member internal x.AsPicker() =
         let (ColorMappings colorMappings) = x
@@ -784,7 +877,7 @@ type VectorStyle [<JsonConstructor>] private (v) =
             | IIntegratedRenderInfo.Path pathInfo ->
                 { Actions = 
                     [
-                        PdfCanvas.closePathByOperation (pathInfo.PathRenderInfo.GetOperation())
+                        PdfCanvas.closePathByOperation (pathInfo.PathRenderInfo.GetOperation()) (pathInfo.PathRenderInfo.GetRule())
                         yield! 
                             pathInfo.AccumulatedPathOperatorRanges
                             |> Seq.map(fun operatorRange -> 
@@ -1373,6 +1466,7 @@ type Modifier =
                 | 1 -> ModifierPdfCanvasActions.Keep(args.Tag)
                 | _ -> 
                     let close = pathInfo.PathRenderInfo.GetOperation()
+                    let rule = pathInfo.PathRenderInfo.GetRule()
                     let suffixActions =
                         let splittedOperatorRanges = 
                             pathInfo.AccumulatedPathOperatorRanges
@@ -1390,7 +1484,7 @@ type Modifier =
                                 operatorRanges.AsList
                                 |> List.map(PdfCanvas.writeOperatorRange)
 
-                            drawActions @ [PdfCanvas.closePathByOperation close]
+                            drawActions @ [PdfCanvas.closePathByOperation close rule]
                         )
                         
 
@@ -1412,6 +1506,11 @@ type SelectorAndModifiersRecordIM<'userState> =
       Selector: Selector<'userState> 
       Modifiers: ModifierIM<'userState> list }
 
+type SelectorAndModifiersRecordShadableIM<'userState> =
+    { Name: string 
+      Selector: Selector<'userState> 
+      Modifiers: ShadableModifierIM<'userState> list }
+
 type SelectorAndModifiersRecord<'userState> =
     { Name: string 
       Selector: Selector<'userState> 
@@ -1428,6 +1527,32 @@ type SelectorAndModifiersRecordEx<'userState> =
 type SelectorAndModifiers<'userState>(name, selector: Selector<'userState>, modifiers: Modifier<'userState> list, ?parameters: list<string * string>, ?pageInfosValidation) =
     let pageInfosValidation = defaultArg pageInfosValidation PageInfosValidation.ignore
     
+    member x.Name = name
+
+    member x.Selector = selector
+
+    member x.Modifiers = modifiers
+
+    member x.Parameters = parameters
+
+    member x.PageInfosValidation = pageInfosValidation
+
+type SelectorAndModifiersUnion<'userState>(name, selector: Selector<'userState>, modifiers: ModifierUnion<'userState> list, ?parameters: list<string * string>, ?pageInfosValidation) =
+    let pageInfosValidation = defaultArg pageInfosValidation PageInfosValidation.ignore
+    
+    member x.Name = name
+
+    member x.Selector = selector
+
+    member x.Modifiers = modifiers
+
+    member x.Parameters = parameters
+
+    member x.PageInfosValidation = pageInfosValidation
+
+type SelectorAndModifiersUnionIM<'userState>(name, selector: Selector<'userState>, modifiers: ModifierUnionIM<'userState> list, ?parameters: list<string * string>, ?pageInfosValidation) =
+    let pageInfosValidation = defaultArg pageInfosValidation PageInfosValidationIM.ignore
+
     member x.Name = name
 
     member x.Selector = selector
@@ -1461,6 +1586,38 @@ type SelectorAndModifiers<'userState> with
             PageInfosValidationIM.ofPageInfosValidation x.PageInfosValidation
 
         SelectorAndModifiersIM(x.Name, x.Selector, modifiers, ?parameters = x.Parameters, pageInfosValidation = pageInfosValidation)
+
+    member internal x.ToUnion() =
+        let modifiers =
+            x.Modifiers
+            |> List.map(ModifierUnion<_>.Modifier)
+
+        let pageInfosValidation = x.PageInfosValidation
+
+        SelectorAndModifiersUnion(x.Name, x.Selector, modifiers, ?parameters = x.Parameters, pageInfosValidation = pageInfosValidation)
+
+type SelectorAndModifiersIM<'userState> with 
+    member internal x.ToUnion() =
+        let modifiers =
+            x.Modifiers
+            |> List.map(ModifierUnionIM<_>.Modifier)
+
+        let pageInfosValidation = x.PageInfosValidation
+
+        SelectorAndModifiersUnionIM(x.Name, x.Selector, modifiers, ?parameters = x.Parameters, pageInfosValidation = pageInfosValidation)
+
+
+
+type SelectorAndModifiersUnion<'userState> with 
+    member internal x.ToIM() =
+        let modifiers =
+            x.Modifiers
+            |> List.map(ModifierUnion.toIM)
+
+        let pageInfosValidation =
+            PageInfosValidationIM.ofPageInfosValidation x.PageInfosValidation
+
+        SelectorAndModifiersUnionIM(x.Name, x.Selector, modifiers, ?parameters = x.Parameters, pageInfosValidation = pageInfosValidation)
 
 
 [<AutoOpen>]
@@ -1525,18 +1682,19 @@ module ModifyOperators =
                                 |> List.map(fun (m, _) -> m.Name)
                                 |> String.concat "; "
 
-                            pageLogger.Log(fun () ->
-                                sprintf "run %s %d in %O" names pageNumber stopWatch.Elapsed
+                            pageLogger.Log(
+                                (fun () -> sprintf "run %s %d in %O" names pageNumber stopWatch.Elapsed),
+                                alwaysPrintingConsole_If_Info = true
                             ) pageNumber
 
                             r
 
 
 
-        let modify (pageSelector: PageSelector) pageLogger (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfo seq -> unit)>) (document: IntegratedDocument) =
+        let modify (pageSelector: PageSelector) pageLogger (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * ModifierUnion * (PageNumber -> IIntegratedRenderInfo seq -> unit)>) (document: IntegratedDocument) =
             modifyCommon pageSelector pageLogger selectorModifierPageInfosValidationMappingFactory PdfPage.modify document
 
-        let modifyIM (pageSelector: PageSelector) pageLogger (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * Modifier * (PageNumber -> IIntegratedRenderInfoIM seq -> unit)>) (document: IntegratedDocument) =
+        let modifyIM (pageSelector: PageSelector) pageLogger (selectorModifierPageInfosValidationMappingFactory: (PageNumber * PdfPage) -> Map<SelectorModiferToken, RenderInfoSelector * ModifierUnion * (PageNumber -> IIntegratedRenderInfoIM seq -> unit)>) (document: IntegratedDocument) =
             modifyCommon pageSelector pageLogger selectorModifierPageInfosValidationMappingFactory PdfPage.modifyIM document
             
 
@@ -1595,14 +1753,14 @@ module ModifyOperators =
 
 
     /// async may doesn't make any sense for cpu bound computation?
-    let private modifyIM (modifyingAsyncWorker, pageSelector, loggingPageCountInterval, (selectorAndModifiersList: list<SelectorAndModifiersIM<'userState>>)) =
+    let private modifyIM (modifyingAsyncWorker, pageSelector, loggingPageCountInterval, (selectorAndModifiersList: list<SelectorAndModifiersUnionIM<'userState>>)) =
         let names = 
             selectorAndModifiersList
             |> List.map (fun selectorAndModifier -> selectorAndModifier.Name)
 
         if names.Length <> (List.distinct names).Length then failwithf "Duplicated keys in SelectorAndModifiers %A" selectorAndModifiersList
 
-        let asyncManiputation (selectorAndModifiersList: SelectorAndModifiersIM<_> list) = 
+        let asyncManiputation (selectorAndModifiersList: SelectorAndModifiersUnionIM<_> list) = 
             fun (totalNumberOfPages) (transformPageNum: PageNumber -> PageNumber) (flowModel: FlowModel<_>) (document: IntegratedDocument) ->
                 IntegratedDocument.modifyIM
                     pageSelector 
@@ -1621,7 +1779,7 @@ module ModifyOperators =
                                       TotalNumberOfPages = totalNumberOfPages }
                                 ( { Name = selectorAndModifiers.Name }, 
                                     ( Selector.toRenderInfoSelector pageModifingArguments selectorAndModifiers.Selector,
-                                      Modifiers.toSelectionModifierIM pageModifingArguments selectorAndModifiers.Modifiers,
+                                      Modifiers.toSelectionModifierUnionIM pageModifingArguments selectorAndModifiers.Modifiers,
                                       selectorAndModifiers.PageInfosValidation.Value
                                     )
                                 )
@@ -1659,18 +1817,24 @@ module ModifyOperators =
         ||>> ignore
         
     /// async may doesn't make any sense for cpu bound computation?
-    let private modify (modifyingAsyncWorker, pageSelector, loggingPageCountInterval, (selectorAndModifiersList: list<SelectorAndModifiers<'userState>>)) =
+    let private modify (modifyingAsyncWorker, pageSelector, loggingPageCountInterval, (selectorAndModifiersList: list<SelectorAndModifiersUnion<'userState>>)) =
         modifyIM (modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList |> List.map (fun m -> m.ToIM()))
 
 
     type Modify =
         static member Create(pageSelector, selectorAndModifiersList: SelectorAndModifiers<'userState> list, ?modifyingAsyncWorker, ?loggingPageCountInterval) =
             let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
+            let selectorAndModifiersList = 
+                selectorAndModifiersList
+                |> List.map(fun m -> m.ToUnion())
 
             modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
         static member CreateIM(pageSelector, selectorAndModifiersList: SelectorAndModifiersIM<'userState> list, ?modifyingAsyncWorker, ?loggingPageCountInterval) =
             let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
+            let selectorAndModifiersList = 
+                selectorAndModifiersList
+                |> List.map(fun m -> m.ToUnion())
 
             modifyIM(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
@@ -1680,7 +1844,7 @@ module ModifyOperators =
             let selectorAndModifiersList =
                 selectorAndModifiersList
                 |> List.map (fun m ->
-                    SelectorAndModifiers(m.Name, m.Selector, m.Modifiers)
+                    SelectorAndModifiers(m.Name, m.Selector, m.Modifiers).ToUnion()
                 )
             modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
@@ -1692,7 +1856,16 @@ module ModifyOperators =
             let selectorAndModifiersList =
                 selectorAndModifiersList
                 |> List.map (fun m ->
-                    SelectorAndModifiersIM(m.Name, m.Selector, m.Modifiers)
+                    SelectorAndModifiersIM(m.Name, m.Selector, m.Modifiers).ToUnion()
+                )
+            modifyIM(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
+
+        static member Create_Record_Shadarable (pageSelector, selectorAndModifiersList: SelectorAndModifiersRecordShadableIM<'userState> list, ?modifyingAsyncWorker, ?loggingPageCountInterval) =
+            let modifyingAsyncWorker = defaultArg modifyingAsyncWorker ModifyingAsyncWorker.Sync
+            let selectorAndModifiersList =
+                selectorAndModifiersList
+                |> List.map (fun m ->
+                    SelectorAndModifiersUnionIM(m.Name, m.Selector, List.map ModifierUnionIM.ShadingModifier m.Modifiers)
                 )
             modifyIM(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
@@ -1702,7 +1875,7 @@ module ModifyOperators =
             let selectorAndModifiersList =
                 selectorAndModifiersList
                 |> List.map (fun m ->
-                    SelectorAndModifiers(m.Name, m.Selector, m.Modifiers, m.Parameters, m.PageInfosValidation)
+                    SelectorAndModifiers(m.Name, m.Selector, m.Modifiers, m.Parameters, m.PageInfosValidation).ToUnion()
                 )
             modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList)
 
@@ -2019,29 +2192,44 @@ type NewFontAndSize with
 
     
 type TextStyle [<JsonConstructor>] private (v) =
-    inherit POCOBaseV<VectorStyle option * NewFontAndSize option>(v)
+    inherit POCOBaseV<VectorStyle option * NewFontAndSize option * string option>(v)
 
-    member x.VectorStyle = x.VV.Item2_1()
+    member x.VectorStyle = x.VV.Item3_1()
 
-    member x.NewFontAndSize = x.VV.Item2_2()
+    member x.NewFontAndSize = x.VV.Item3_2()
+
+    member x.NewText = x.VV.Item3_3()
 
     member x.AsModifier() =
         fun args ->
-            [
-                match x.VectorStyle with 
-                | Some style -> (style.AsModifier args)
-                | None ->       ()
+            let r = 
+                [
+                    match x.VectorStyle with 
+                    | Some style -> (style.AsModifier args)
+                    | None ->       ()
 
-                match x.NewFontAndSize with 
-                | Some newFontAndSize -> (newFontAndSize.AsModifier() args)
-                | None -> ()
-            ]
-            |> ModifierPdfCanvasActions.ConcatOrKeep args.Tag 
+                    match x.NewFontAndSize with 
+                    | Some newFontAndSize -> (newFontAndSize.AsModifier() args)
+                    | None -> ()
+                ]
+                |> ModifierPdfCanvasActions.ConcatOrKeep args.Tag 
+
+            match x.NewText with 
+            | None -> r
+            | Some newText ->
+                let newText =
+                    { PdfConcatedWord.HeadWord = newText 
+                      FollowedWords = [] }
+
+                { r with
+                    Close = CloseOperatorUnion.CreateText(text = newText)
+                }
 
 
-    new (?vectorStyle, ?newFontAndSize) =
-        DefaultArgs.CheckAllInputsAreNotEmpty(vectorStyle, newFontAndSize)
-        new TextStyle((vectorStyle, newFontAndSize))
+
+    new (?vectorStyle, ?newFontAndSize, ?newText) =
+        DefaultArgs.CheckAllInputsAreNotEmpty(vectorStyle, newFontAndSize, newText)
+        new TextStyle((vectorStyle, newFontAndSize, newText))
 
 type Modifier with 
     static member ChangeTextStyle(textStyle: TextStyle) =
@@ -2413,6 +2601,7 @@ type Modify =
                                     |> List.concat
 
                             { ModifierPdfCanvasActions.Actions = actions 
+                              
                               SuffixActions = []
                               Close = 
                                 match textInfos with 
@@ -2604,7 +2793,6 @@ type Modify =
                         | _ ->
                             let pageSelector =
                                 pageNumbers
-                                |> AtLeastOneSet.Create
                                 |> PageSelector.Numbers
 
                             Modify.CancelCompoundPath(pageSelector, selector)

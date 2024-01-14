@@ -37,6 +37,7 @@ module _Colors =
             DeviceRgb(int color.R, int color.G, int color.B)
 
 
+
     type Icc with 
         member x.ColorSpace = 
             match x with 
@@ -59,12 +60,17 @@ module _Colors =
 
         member x.Value = v
 
+    type SeparationComparisonOptions =
+        | Name = 0
+        | NameAndColorValue = 1
 
     type ValueEqualOptionsTolerance = 
         { Rgb: ToleranceColorValue 
           Cmyk: ToleranceColorValue
           Lab: ToleranceColorValue
-          Gray: ToleranceColorValue}
+          Gray: ToleranceColorValue
+          SeparationComparison: SeparationComparisonOptions
+          }
     with    
 
         
@@ -81,13 +87,17 @@ module _Colors =
             { Rgb  =  ToleranceColorValue 0.0025 
               Cmyk = ToleranceColorValue 0.0025
               Lab  = ToleranceColorValue 0.1
-              Gray = ToleranceColorValue 0.0025 }
+              Gray = ToleranceColorValue 0.0025
+              SeparationComparison = SeparationComparisonOptions.NameAndColorValue 
+            }
 
         static member Rough =
             { Rgb  =  ToleranceColorValue 0.01
               Cmyk = ToleranceColorValue  0.01
               Lab  = ToleranceColorValue  1.0
-              Gray = ToleranceColorValue  0.01 }
+              Gray = ToleranceColorValue  0.01
+              SeparationComparison = SeparationComparisonOptions.NameAndColorValue 
+            }
             
 
     [<RequireQualifiedAccess>]
@@ -104,6 +114,15 @@ module _Colors =
             
         /// ValueEqualOptions.DefaultRoundedValue
         static member DefaultValue = ValueEqualOptions.DefaultRoundedValue
+
+        /// ValueEqualOptions.DefaultRoundedValue with SeparationComparison = SeparationComparisonOptions.Name
+        static member DefaultValue_SeparationComparisonOptions_Name = 
+            ValueEqualOptions.RoundedValue
+                (
+                    { ValueEqualOptionsTolerance.DefaultValue with 
+                        SeparationComparison = SeparationComparisonOptions.Name
+                    }
+                )
 
 
 
@@ -227,6 +246,10 @@ module _Colors =
         static member Create(r, g, b) =
             FsDeviceRgb.Create(float32 r / 255.f, float32 g / 255.f, float32 b / 255.f)
         
+        static member OfHex(hex: int) =
+            let color = System.Drawing.Color.FromArgb(hex)
+            FsDeviceRgb.Create(int color.R, int color.G, int color.B)
+
         static member private RegularColorMapping =
             [ FsDeviceRgb.RED => "RED"           
               FsDeviceRgb.GREEN => "GREEN"        
@@ -447,7 +470,11 @@ module _Colors =
             
             | Failure (error, _, _) -> failwith error
 
-
+        /// Some K when C = 0 & Y = 0 & M = 0
+        member x.AsGray = 
+            match x.C = 0.f && x.Y = 0.f && x.M = 0.f with 
+            | true -> Some (FsGray (1.f - x.K))
+            | false -> None
 
 
     [<RequireQualifiedAccess>]
@@ -751,6 +778,7 @@ module _Colors =
     type FsSeparation =
         { Name: string 
           BaseColor: FsValueColor
+          /// 0(full transport) -> 1.0(entity)
           Transparency: float }
     with 
         member x.Color =
@@ -825,11 +853,18 @@ module _Colors =
               Transparency = 1.
             }
 
-        static member IsEqual(color1: FsSeparation, color2: FsSeparation, valueEqualOptions) =
+        static member IsEqual(color1: FsSeparation, color2: FsSeparation, valueEqualOptions: ValueEqualOptions) =
             color1.Name.EqualIC color2.Name
             && color1.Transparency = color2.Transparency
-            && FsValueColor.IsEqual (color1.Color, color2.Color, valueEqualOptions)
+            && 
+                match valueEqualOptions with 
+                | ValueEqualOptions.RoundedValue tolerance ->
+                    match tolerance.SeparationComparison with 
+                    | SeparationComparisonOptions.Name -> true
+                    | SeparationComparisonOptions.NameAndColorValue -> FsValueColor.IsEqual (color1.Color, color2.Color, valueEqualOptions)
 
+                | ValueEqualOptions.Exactly ->
+                    FsValueColor.IsEqual (color1.Color, color2.Color, valueEqualOptions)
 
         static member OfPantone(color: PantoneColorEnum) =
             let fsValueColor = FsLab.OfPantone color
@@ -1425,6 +1460,13 @@ module _Colors =
               FsValueColor.RGB_WHITE ]
             |> List.map AlternativeFsColor.ValueColor
 
+        static member Blacks = 
+            [ FsValueColor.BLACK
+              FsValueColor.CMYK_BLACK
+              FsValueColor.RGB_BLACK ]
+            |> List.map AlternativeFsColor.ValueColor
+
+
         override x.ToString() = x.GetType().Name + " " + x.LoggingText
             
         member x.IsEqualsTo(y, valueEqualOptions) =
@@ -1470,11 +1512,11 @@ module _Colors =
             colors.Distinct(comparer)
             
     type FsDeviceNElement =
-        { ColorName: PdfName 
+        { ColorName: DecodedPdfName
           ColorValue: float }
     with 
         member x.LoggingText = 
-            sprintf "%s#%g" (x.ColorName.ToString()) x.ColorValue
+            sprintf "%s#%g" (x.ColorName.ReadableName) x.ColorValue
 
     type FsDeviceN = FsDeviceN of FsDeviceNElement al1List
     with 
@@ -1745,7 +1787,7 @@ module _Colors =
                     let fsDiviceN =
                         List.zip3 [1..numberOfComponents] colorNames colorValue
                         |> List.map(fun (_, colorName, colorValue) ->
-                            { ColorName = colorName 
+                            { ColorName = DecodedPdfName.Create colorName 
                               ColorValue = float colorValue }
                         )
                         |> AtLeastOneList.Create

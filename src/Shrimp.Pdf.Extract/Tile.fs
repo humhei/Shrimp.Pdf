@@ -346,7 +346,7 @@ module _Tile =
             | UsingOriginPdfPage _ -> false
             | VisibleInfosInActualBox v -> v.SplitTextToWords
 
-    type PageTilingResultCount = private PageTilingResultCount of int
+    type PageTilingResultCount = PageTilingResultCount of int
     with 
         member x.Value = 
             let (PageTilingResultCount count) = x
@@ -445,7 +445,7 @@ module _Tile =
           SamplePdfFile: SamplePdfFile option
           OriginBorderKeepingNumbers: int list }
     with 
-        member internal x.ToTextPicker_OR_Fail() =
+        member x.ToTextPicker_OR_Fail() =
             { Value_TextPicker =
                 x.Value
                 |> AtLeastOneList.map(fun m ->
@@ -1083,7 +1083,9 @@ module _Tile =
                                         for pageNumber in pageNumbers do 
                                             let page = splitDocument.Reader.GetPage(pageNumber.Value)
                                             let samplePage = page.CopyTo(sampleDocument)
-                                            sampleDocument.AddPage(samplePage) |> ignore
+                                            let newPage = sampleDocument.AddPage(samplePage) 
+                                            newPage.ClippingContentsToPageBox(PageBoxKind.ActualBox, Margin.Create(mm 0.3))
+
                                         sampleDocument.Close()
                                         { PdfFile = PdfFile targetPdfPath
                                           PageSize = FsSize.ofFsRectangle r.Bound.Bound }

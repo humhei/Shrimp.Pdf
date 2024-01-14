@@ -174,6 +174,22 @@ module iText =
 
         member x.FsRectangle() = FsRectangle.OfRectangle x
             
+        member x.HorizontalAlimentOf(y: Rectangle) =
+            let index = 
+                [
+                    abs (x.GetXCenter() - y.GetXCenter())
+                    abs (x.GetLeft() - y.GetLeft())
+                    abs (x.GetRight() - y.GetRight())
+                ]
+                |> List.indexed
+                |> List.minBy snd
+                |> fst
+
+            match index with 
+            | 0 -> XEffort.Middle
+            | 1 -> XEffort.Left
+            | 2 -> XEffort.Right
+            | _ -> failwithf "Invalid token"
 
         member rect.applyMargin(margin :Margin) =   
             let left = margin.Left
@@ -1654,11 +1670,20 @@ module iText =
 
             | _ -> canvas
 
-        let closePathByOperation (operation: int) (canvas:PdfCanvas) =
+        let closePathByOperation (operation: int) (fillingRule: int) (canvas:PdfCanvas) =
             match operation with 
-            | PathRenderInfo.FILL -> canvas.Fill()
+            | PathRenderInfo.FILL -> 
+                match fillingRule with 
+                | FillingRule.EVEN_ODD -> canvas.EoFill()
+                | FillingRule.NONZERO_WINDING -> canvas.Fill()
+                | _ -> failwithf "Invalid token"
+
             | PathRenderInfo.STROKE -> canvas.Stroke()
-            | IPathRenderInfo.FILLANDSTROKE -> canvas.FillStroke()
+            | IPathRenderInfo.FILLANDSTROKE -> 
+                match fillingRule with 
+                | FillingRule.EVEN_ODD -> canvas.EoFillStroke()
+                | FillingRule.NONZERO_WINDING -> canvas.FillStroke()
+                | _ -> failwithf "Invalid token"
             | _ -> canvas.EndPath()
 
         let setTextRenderingMode (textRenderingMode: int) (canvas:PdfCanvas) =
@@ -1687,6 +1712,9 @@ module iText =
 
         let rectangle (rect: Rectangle) (canvas: PdfCanvas) =
             canvas.Rectangle(rect)
+
+        let ellipse (rect: Rectangle) (canvas: PdfCanvas) =
+            canvas.Ellipse(rect.GetXF(), rect.GetYF(), rect.GetRightF(), rect.GetTopF())
 
         let addXObject (xobject: PdfXObject) (affineTransformRecord: AffineTransformRecord) (canvas: PdfCanvas) =
             canvas.AddXObject (xobject, affineTransformRecord)
@@ -1845,6 +1873,24 @@ module iText =
                 x.GetPageBox(pageBoxKind)
                 |> Rectangle.applyMargin margin
 
+
+        member page.ClippingContentsToPageBox(pageBoxKind: PageBoxKind, ?margin: Margin) =
+            let pageBox = page.GetPageBox(pageBoxKind)
+            let contentBox = 
+                pageBox |> Rectangle.applyMargin (defaultArg margin Margin.Zero)
+            let writerCanvas = 
+                new PdfCanvas(page.NewContentStreamBefore(), page.GetResources(), page.GetDocument())
+
+            writerCanvas
+                .SaveState()
+                .Rectangle(contentBox)
+                .EoClip()
+                .EndPath()
+                |> ignore
+
+            writerCanvas.AttachContentStream(page.NewContentStreamAfter())
+                    
+            writerCanvas.RestoreState() |> ignore
 
 
     [<RequireQualifiedAccess>]

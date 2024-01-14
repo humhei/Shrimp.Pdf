@@ -342,6 +342,16 @@ let manipulateTests =
 
         ()
 
+
+    testCase "read separation colors3" <| fun _ -> 
+        let pdfFile = PdfFile @"datas/manipulate/read separation colors3.pdf"
+        let testFile = Path.changeExtension ".tests.pdf" (pdfFile.Path)
+        let infos =
+            PdfRunner.ReadColors(
+                pdfFile
+            )
+
+        ()
     
     testCase "modify tests" <| fun _ -> 
         Flow.Manipulate (
@@ -971,6 +981,14 @@ let manipulateTests =
         |> runTest "datas/manipulate/add line to position.pdf" 
         |> ignore
 
+
+    testCase "add edge cropLines" <| fun _ -> 
+        Flow.Manipulate (
+            ModifyPage.AddEdgeCropMarks()
+        )
+        |> runTest "datas/manipulate/add edge cropLines.pdf" 
+        |> ignore
+
     testCase "add colored texts to position" <| fun _ -> 
         Flow.Manipulate (
             ModifyPage.Create
@@ -1493,7 +1511,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/add rect to area.pdf" 
         |> ignore
 
-    ftestCase "add marks to area" <| fun _ -> 
+    testCase "add marks to area" <| fun _ -> 
         let marks =
             [
                 { Mark = Mark.LeftTauge; Position = Position.LeftBottom (0, mm 9.2)}
@@ -1579,6 +1597,14 @@ let manipulateTests =
                 ModifyPage.TrimToVisible (PageSelector.All)
             )
             |> runTest "datas/manipulate/trim to visible10.pdf" 
+            |> ignore
+
+
+        testCase "trim to visible test11" <| fun _ -> 
+            Flow.Manipulate(
+                ModifyPage.TrimToVisible (PageSelector.All)
+            )
+            |> runTest "datas/manipulate/trim to visible11.pdf" 
             |> ignore
     ]
 
@@ -1813,7 +1839,19 @@ let manipulateTests =
         |> runTest "datas/manipulate/testInfos.pdf" 
         |> ignore
 
+    testCase "create separationColor with shading" <| fun _ -> 
+      let r = 
+          Modify.CreateSeparationColors(SeparationColor.Separation (FsSeparation.OfPantone PantoneColorEnum.``PANTONE 4975 C``))
+          |> Flow.Manipulate 
+          |> runTest "datas/manipulate/create separation color.pdf" 
+      pass()
 
+    ftestCase "create separationColor2 with DeviceN" <| fun _ -> 
+      let r = 
+          Modify.CreateSeparationColors(SeparationColor.Separation (FsSeparation.OfPantone PantoneColorEnum.``PANTONE 4975 C``))
+          |> Flow.Manipulate 
+          |> runTest "datas/manipulate/create separation color2.pdf" 
+      pass()
 
 
   ]

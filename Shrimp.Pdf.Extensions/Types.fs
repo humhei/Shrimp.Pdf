@@ -127,6 +127,9 @@ module ExtensionTypes =
         static member Create(v: string) =
             //v.Replace("#23", "#")
             DecodedPdfName v
+
+        static member Create(v: PdfName) =
+            DecodedPdfName.Create(v.ToString())
     
     [<RequireQualifiedAccess>]
     type EncodedPdfNamePart =   
@@ -269,6 +272,193 @@ module ExtensionTypes =
             | DocumentFontName.Valid x ->
                 FsFontName(fontName).ShortFontName = x.ShortFontName
 
+    
+
+    type StraightLine =
+        { Start: Point
+          End: Point }
+
+
+    type YEffort =
+        | Top = 0
+        | Bottom  = 1
+        | Middle  = 2
+
+    type XEffort =
+        | Left = 0
+        | Right = 1
+        | Middle  = 2
+
+
+    type Effort =
+        { XEffort: XEffort 
+          YEffort: YEffort }
+    with 
+        static member Center = 
+            { XEffort = XEffort.Middle 
+              YEffort = YEffort.Middle }
+
+    type PositionEnum =
+        | LeftBottom          =    0
+        | LeftMiddle          =    1
+        | LeftTop             =    2
+        | TopMiddle           =    3
+        | RightTop            =    4
+        | RightMiddle         =    5
+        | RightBottom         =    6
+        | BottomMiddle        =    7
+        | Center              =    8
+
+    [<RequireQualifiedAccess>]
+    type Position =
+        | LeftBottom of float * float
+        | LeftMiddle of float * float
+        | LeftTop of float * float
+        | TopMiddle of float * float
+        | RightTop of float * float
+        | RightMiddle of float * float
+        | RightBottom of float * float
+        | BottomMiddle of float * float
+        | Center of float * float
+    with 
+        member x.X = 
+            match x with
+            | Position.LeftTop (x, y) 
+            | Position.LeftBottom (x, y) 
+            | Position.LeftMiddle(x, y) 
+            | Position.Center (x, y) 
+            | Position.BottomMiddle (x, y) 
+            | Position.TopMiddle(x, y) 
+            | Position.RightBottom (x, y) 
+            | Position.RightTop (x, y)
+            | Position.RightMiddle (x, y) -> x
+            
+        member x.Y = 
+            match x with
+            | Position.LeftTop (x, y) 
+            | Position.LeftBottom (x, y) 
+            | Position.LeftMiddle(x, y) 
+            | Position.Center (x, y) 
+            | Position.BottomMiddle (x, y) 
+            | Position.TopMiddle(x, y) 
+            | Position.RightBottom (x, y) 
+            | Position.RightTop (x, y)
+            | Position.RightMiddle (x, y) -> y
+
+
+        static member PreciseCenter = Position.Center(0, 0)
+
+        static member OfEffort(xEffort, yEffort) =
+            match xEffort with 
+            | XEffort.Left ->
+                match yEffort with 
+                | YEffort.Middle -> Position.LeftMiddle(0, 0)
+                | YEffort.Bottom -> Position.LeftBottom(0, 0)
+                | YEffort.Top -> Position.LeftTop(0, 0)
+
+            | XEffort.Middle ->
+                match yEffort with 
+                | YEffort.Middle -> Position.Center(0, 0)
+                | YEffort.Bottom -> Position.BottomMiddle(0, 0)
+                | YEffort.Top -> Position.TopMiddle(0, 0)
+
+            | XEffort.Right ->
+                match yEffort with 
+                | YEffort.Middle -> Position.RightMiddle(0, 0)
+                | YEffort.Bottom -> Position.RightBottom(0, 0)
+                | YEffort.Top    -> Position.RightTop(0, 0)
+
+        member x.MapValue(mapping) =
+            match x with
+            | Position.LeftBottom (x, y)-> Position.LeftBottom (mapping (x, y))
+            | Position.LeftMiddle (x, y) -> Position.LeftMiddle (mapping (x, y))
+            | Position.LeftTop (x, y) -> Position.LeftTop (mapping (x, y))
+            | Position.TopMiddle (x, y) -> Position.TopMiddle (mapping (x, y))
+            | Position.RightTop (x, y) -> Position.RightTop (mapping (x, y))
+            | Position.RightMiddle (x, y) -> Position.RightMiddle (mapping (x, y))
+            | Position.RightBottom (x, y) -> Position.RightBottom (mapping (x, y))
+            | Position.BottomMiddle (x, y) -> Position.BottomMiddle (mapping (x, y))
+            | Position.Center (x, y) -> Position.Center (mapping (x, y))
+
+        member x.MapValue_One (mapping) = 
+            x.MapValue (fun (x, y) -> (mapping x, mapping y))
+
+        member x.LoggingText_MM =
+            let userUnitToMM_Round1 (x) =   
+                userUnitToMM x
+                |> Math.round1f
+
+            (x.MapValue_One userUnitToMM_Round1).ToString() + " (mm)"
+
+
+
+    [<RequireQualifiedAccess>]
+    module Position =
+        let create x y = function
+            | PositionEnum.LeftBottom          ->   Position.LeftBottom      (x, y)
+            | PositionEnum.LeftMiddle          ->   Position.LeftMiddle      (x, y)
+            | PositionEnum.LeftTop             ->   Position.LeftTop         (x, y)
+            | PositionEnum.TopMiddle           ->   Position.TopMiddle       (x, y)
+            | PositionEnum.RightTop            ->   Position.RightTop        (x, y)
+            | PositionEnum.RightMiddle         ->   Position.RightMiddle     (x, y)
+            | PositionEnum.RightBottom         ->   Position.RightBottom     (x, y)
+            | PositionEnum.BottomMiddle        ->   Position.BottomMiddle    (x, y)
+            | PositionEnum.Center              ->   Position.Center          (x, y)
+
+
+        let (|Left|XCenter|Right|) = function
+            | Position.LeftTop (x, y) 
+            | Position.LeftBottom (x, y) 
+            | Position.LeftMiddle(x, y) -> Left (x, y)
+            | Position.Center (x, y) 
+            | Position.BottomMiddle (x, y) 
+            | Position.TopMiddle(x, y) -> XCenter (x, y)
+            | Position.RightBottom (x, y) 
+            | Position.RightTop (x, y)
+            | Position.RightMiddle (x, y) -> Right (x, y)
+
+        let (|Bottom|Top|YCenter|) = function
+            | Position.LeftBottom (x, y)
+            | Position.RightBottom (x, y)
+            | Position.BottomMiddle (x, y)-> Bottom (x, y)
+            | Position.LeftTop (x, y) 
+            | Position.RightTop (x, y)
+            | Position.TopMiddle(x, y) -> Top (x, y)
+            | Position.Center (x, y) 
+            | Position.LeftMiddle (x, y) 
+            | Position.RightMiddle(x, y) -> YCenter (x, y)
+
+        let (|LeftEdge|_|) = function
+            | Left (0., _) -> Some ()
+            | _ -> None
+    
+        let (|BottomEdge|_|) = function
+            | Bottom (_, 0.) -> Some ()
+            | _ -> None
+
+        let (|TopEdge|_|) = function
+            | Top (_, 0.) -> Some ()
+            | _ -> None
+
+        let (|RightEdge|_|) = function
+            | Right (0., _)  -> Some ()
+            | _ -> None
+
+        let getValue position = 
+            match position with
+            | Position.LeftBottom (x, y)
+            | Position.LeftMiddle (x, y)
+            | Position.LeftTop (x, y) 
+            | Position.TopMiddle (x, y) 
+            | Position.RightTop (x, y)
+            | Position.RightMiddle (x, y)
+            | Position.RightBottom (x, y)
+            | Position.BottomMiddle (x, y) 
+            | Position.Center (x, y) -> x, y
+
+        let mapValue (mapping) (position: Position) = 
+            position.MapValue mapping
+
     [<StructuredFormatDisplay("{LoggingText}")>]
     type MMRectangle =
         { X: float 
@@ -292,6 +482,7 @@ module ExtensionTypes =
                 Width = values.[2]
                 Height = values.[3]
             }
+
 
     [<StructuredFormatDisplay("{LoggingText}")>]
     type FsRectangle =
@@ -333,6 +524,28 @@ module ExtensionTypes =
             sprintf "RectMM %.1f %.1f %.1f %.1f" x.X x.Y x.Width x.Height
 
 
+        member x.AlignXTo(y: FsRectangle, xEffort: XEffort) =
+            match xEffort with 
+            | XEffort.Left ->
+                { x with X = y.X }
+
+            | XEffort.Right ->
+                { x with X = y.Right - x.Width }
+
+            | XEffort.Middle ->
+                { x with X = y.X + (y.Width - x.Width) / 2. }
+                
+
+        member x.AlignYTo(y: FsRectangle, xEffort: YEffort) =
+            match xEffort with 
+            | YEffort.Bottom ->
+                { x with Y = y.Y }
+
+            | YEffort.Top ->
+                { x with Y = y.Top - x.Height }
+
+            | YEffort.Middle ->
+                { x with Y = y.Y + (y.Height - x.Height) / 2. }
 
         static member create x y width height =
             { X = x 
@@ -854,7 +1067,8 @@ module ExtensionTypes =
 
     type IntersectedClippingPathInfoElement =
         { OperatorRanges: ResizeArray<OperatorRange> 
-          Ctm: Matrix }
+          Ctm: Matrix
+          ClippingRule: int }
 
     type IntersectedClippingPathInfo =
         { ClippingPathInfo: ClippingPathInfo 
@@ -958,6 +1172,11 @@ module ExtensionTypes =
 
         static member ``MM1.5`` = Margin.Create(mm 1.5)
 
+        /// Margin.Create(left = mm 6, right = mm 6, bottom = mm 7, top = mm 7)
+        static member MM_H6_V7 = Margin.Create(left = mm 6, right = mm 6, bottom = mm 7, top = mm 7)
+        //static member MM_H6_V12 = Margin.Create(left = mm 6, right = mm 6, bottom = mm 12, top = mm 12)
+        static member MM_H6_V10 = Margin.Create(left = mm 6, right = mm 6, bottom = mm 10, top = mm 10)
+
 
         static member (~-)(margin: Margin) =
             let f (v: float) = -v
@@ -971,6 +1190,16 @@ module ExtensionTypes =
             let distincted =
                 [x.Left; x.Top; x.Right; x.Bottom]
                 |> List.distinct
+
+            match distincted with 
+            | [one] -> sprintf "Margin %.1f" one
+            | _ -> sprintf "Margin %.1f %.1f %.1f %.1f" x.Left x.Top x.Right x.Bottom
+
+        member private x.LoggingText_MM = 
+            let distincted =
+                [x.Left; x.Top; x.Right; x.Bottom]
+                |> List.distinct
+                |> List.map userUnitToMM
 
             match distincted with 
             | [one] -> sprintf "Margin %.1f" one
@@ -1190,6 +1419,23 @@ module ExtensionTypes =
 
             | Rotation.None -> x
             | Rotation.R180 -> Margin.Create(x.Right, x.Bottom, x.Left, x.Top) 
+
+
+        //member x.Landscape() =
+        //    let verticalValue   = x.Top + x.Bottom
+        //    let horizontalValue = x.Left + x.Right
+
+        //    match horizontalValue with 
+        //    | BiggerThan verticalValue -> x
+        //    | _ -> x.Rotate(Rotation.Clockwise)
+
+        //member x.Portrait() =
+        //    let verticalValue   = x.Top + x.Bottom
+        //    let horizontalValue = x.Left + x.Right
+
+        //    match verticalValue with 
+        //    | BiggerThan horizontalValue -> x
+        //    | _ -> x.Rotate(Rotation.Clockwise)
 
 
     [<RequireQualifiedAccess>]
@@ -1486,192 +1732,6 @@ module ExtensionTypes =
 
 
 
-    type StraightLine =
-        { Start: Point
-          End: Point }
-
-
-    type YEffort =
-        | Top = 0
-        | Bottom  = 1
-        | Middle  = 2
-
-    type XEffort =
-        | Left = 0
-        | Right = 1
-        | Middle  = 2
-
-
-    type Effort =
-        { XEffort: XEffort 
-          YEffort: YEffort }
-    with 
-        static member Center = 
-            { XEffort = XEffort.Middle 
-              YEffort = YEffort.Middle }
-
-    type PositionEnum =
-        | LeftBottom          =    0
-        | LeftMiddle          =    1
-        | LeftTop             =    2
-        | TopMiddle           =    3
-        | RightTop            =    4
-        | RightMiddle         =    5
-        | RightBottom         =    6
-        | BottomMiddle        =    7
-        | Center              =    8
-
-    [<RequireQualifiedAccess>]
-    type Position =
-        | LeftBottom of float * float
-        | LeftMiddle of float * float
-        | LeftTop of float * float
-        | TopMiddle of float * float
-        | RightTop of float * float
-        | RightMiddle of float * float
-        | RightBottom of float * float
-        | BottomMiddle of float * float
-        | Center of float * float
-    with 
-        member x.X = 
-            match x with
-            | Position.LeftTop (x, y) 
-            | Position.LeftBottom (x, y) 
-            | Position.LeftMiddle(x, y) 
-            | Position.Center (x, y) 
-            | Position.BottomMiddle (x, y) 
-            | Position.TopMiddle(x, y) 
-            | Position.RightBottom (x, y) 
-            | Position.RightTop (x, y)
-            | Position.RightMiddle (x, y) -> x
-            
-        member x.Y = 
-            match x with
-            | Position.LeftTop (x, y) 
-            | Position.LeftBottom (x, y) 
-            | Position.LeftMiddle(x, y) 
-            | Position.Center (x, y) 
-            | Position.BottomMiddle (x, y) 
-            | Position.TopMiddle(x, y) 
-            | Position.RightBottom (x, y) 
-            | Position.RightTop (x, y)
-            | Position.RightMiddle (x, y) -> y
-
-
-        static member PreciseCenter = Position.Center(0, 0)
-
-        static member OfEffort(xEffort, yEffort) =
-            match xEffort with 
-            | XEffort.Left ->
-                match yEffort with 
-                | YEffort.Middle -> Position.LeftMiddle(0, 0)
-                | YEffort.Bottom -> Position.LeftBottom(0, 0)
-                | YEffort.Top -> Position.LeftTop(0, 0)
-
-            | XEffort.Middle ->
-                match yEffort with 
-                | YEffort.Middle -> Position.Center(0, 0)
-                | YEffort.Bottom -> Position.BottomMiddle(0, 0)
-                | YEffort.Top -> Position.TopMiddle(0, 0)
-
-            | XEffort.Right ->
-                match yEffort with 
-                | YEffort.Middle -> Position.RightMiddle(0, 0)
-                | YEffort.Bottom -> Position.RightBottom(0, 0)
-                | YEffort.Top    -> Position.RightTop(0, 0)
-
-        member x.MapValue(mapping) =
-            match x with
-            | Position.LeftBottom (x, y)-> Position.LeftBottom (mapping (x, y))
-            | Position.LeftMiddle (x, y) -> Position.LeftMiddle (mapping (x, y))
-            | Position.LeftTop (x, y) -> Position.LeftTop (mapping (x, y))
-            | Position.TopMiddle (x, y) -> Position.TopMiddle (mapping (x, y))
-            | Position.RightTop (x, y) -> Position.RightTop (mapping (x, y))
-            | Position.RightMiddle (x, y) -> Position.RightMiddle (mapping (x, y))
-            | Position.RightBottom (x, y) -> Position.RightBottom (mapping (x, y))
-            | Position.BottomMiddle (x, y) -> Position.BottomMiddle (mapping (x, y))
-            | Position.Center (x, y) -> Position.Center (mapping (x, y))
-
-        member x.MapValue_One (mapping) = 
-            x.MapValue (fun (x, y) -> (mapping x, mapping y))
-
-        member x.LoggingText_MM =
-            let userUnitToMM_Round1 (x) =   
-                userUnitToMM x
-                |> Math.round1f
-
-            (x.MapValue_One userUnitToMM_Round1).ToString() + " (mm)"
-
-        override x.ToString() = x.LoggingText_MM
-
-
-    [<RequireQualifiedAccess>]
-    module Position =
-        let create x y = function
-            | PositionEnum.LeftBottom          ->   Position.LeftBottom      (x, y)
-            | PositionEnum.LeftMiddle          ->   Position.LeftMiddle      (x, y)
-            | PositionEnum.LeftTop             ->   Position.LeftTop         (x, y)
-            | PositionEnum.TopMiddle           ->   Position.TopMiddle       (x, y)
-            | PositionEnum.RightTop            ->   Position.RightTop        (x, y)
-            | PositionEnum.RightMiddle         ->   Position.RightMiddle     (x, y)
-            | PositionEnum.RightBottom         ->   Position.RightBottom     (x, y)
-            | PositionEnum.BottomMiddle        ->   Position.BottomMiddle    (x, y)
-            | PositionEnum.Center              ->   Position.Center          (x, y)
-
-
-        let (|Left|XCenter|Right|) = function
-            | Position.LeftTop (x, y) 
-            | Position.LeftBottom (x, y) 
-            | Position.LeftMiddle(x, y) -> Left (x, y)
-            | Position.Center (x, y) 
-            | Position.BottomMiddle (x, y) 
-            | Position.TopMiddle(x, y) -> XCenter (x, y)
-            | Position.RightBottom (x, y) 
-            | Position.RightTop (x, y)
-            | Position.RightMiddle (x, y) -> Right (x, y)
-
-        let (|Bottom|Top|YCenter|) = function
-            | Position.LeftBottom (x, y)
-            | Position.RightBottom (x, y)
-            | Position.BottomMiddle (x, y)-> Bottom (x, y)
-            | Position.LeftTop (x, y) 
-            | Position.RightTop (x, y)
-            | Position.TopMiddle(x, y) -> Top (x, y)
-            | Position.Center (x, y) 
-            | Position.LeftMiddle (x, y) 
-            | Position.RightMiddle(x, y) -> YCenter (x, y)
-
-        let (|LeftEdge|_|) = function
-            | Left (0., _) -> Some ()
-            | _ -> None
-    
-        let (|BottomEdge|_|) = function
-            | Bottom (_, 0.) -> Some ()
-            | _ -> None
-
-        let (|TopEdge|_|) = function
-            | Top (_, 0.) -> Some ()
-            | _ -> None
-
-        let (|RightEdge|_|) = function
-            | Right (0., _)  -> Some ()
-            | _ -> None
-
-        let getValue position = 
-            match position with
-            | Position.LeftBottom (x, y)
-            | Position.LeftMiddle (x, y)
-            | Position.LeftTop (x, y) 
-            | Position.TopMiddle (x, y) 
-            | Position.RightTop (x, y)
-            | Position.RightMiddle (x, y)
-            | Position.RightBottom (x, y)
-            | Position.BottomMiddle (x, y) 
-            | Position.Center (x, y) -> x, y
-
-        let mapValue (mapping) (position: Position) = 
-            position.MapValue mapping
-
 
             
 
@@ -1769,7 +1829,7 @@ module ExtensionTypes =
         | Odd 
         | Even
         | Expr of PageSelectorExpr
-        | Numbers of AtLeastOneSet<int>
+        | NumbersCase of al1List<PageNumber>
         | And of PageSelector list
     with 
         override x.ToString() =
@@ -1789,10 +1849,9 @@ module ExtensionTypes =
                 sprintf "AND [%s]" listText 
 
             | PageSelector.Expr expr -> expr.ToString()
-            | PageSelector.Numbers numbers -> 
+            | PageSelector.NumbersCase numbers -> 
                 let numbers = 
-                    numbers.Value
-                    |> Set.toList
+                    numbers.AsList
                     |> List.map string
                     |> String.concat ", "
 
@@ -1813,8 +1872,14 @@ module ExtensionTypes =
 
         member x.Text = x.ToString()
 
+        static member Numbers(pageNumbers: int list) =
+            pageNumbers
+            |> List.map PageNumber
+            |> AtLeastOneList.Create
+            |> PageSelector.NumbersCase
+
         static member Number(pageNumber: int) =
-            AtLeastOneSet.Create [pageNumber]
+            List.singleton pageNumber
             |> PageSelector.Numbers
 
 
@@ -1916,12 +1981,13 @@ module ExtensionTypes =
             | PageSelector.Expr expr -> 
                 pdfDocument.GetPageNumbers(expr)
             | PageSelector.All -> [1..numberOfPages]
-            | PageSelector.Numbers numbers -> 
+            | PageSelector.NumbersCase numbers -> 
                 let intersectedNumbers =
-                    Set.intersect
-                        numbers.Value
-                        (Set.ofList [1..numberOfPages])
-                    |> Set.toList
+                    numbers.AsList
+                    |> List.map(fun m -> m.Value)
+                    |> List.filter(fun m ->
+                        m >= 1 && m <= numberOfPages
+                    )
 
                 intersectedNumbers
 

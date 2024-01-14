@@ -12,12 +12,22 @@ open Shrimp.Pdf.icms2
 open iText.Kernel.Pdf.Colorspace
 open Fake.IO.Globbing.Operators
 open iText.Kernel.Pdf
+open Fake.IO
 open Shrimp.FSharp.Plus
 
 
 
 let bugFixmentTests =
   testList "bug Fixment Tests" [
+
+    testCase "PdfDocument Infinited" <| fun _ ->
+        let pdfFile =
+          @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\MX\MARVEL吊牌95x65mm.pdf"
+
+        let writer = 
+          PdfDocumentWithCachedResources(pdfFile, Path.changeExtension ".writer.pdf" pdfFile)
+
+        pass()
 
     testCase "fsSepearationNRE" <| fun _ -> 
         Flow.Manipulate (

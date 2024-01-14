@@ -537,6 +537,10 @@ and private OperatorRangeCallbackablePdfCanvasProcessor(listener) =
 
 
 
+type ShadableKind =
+    | Normal = 0
+    | SHShading = 1
+    | ClippingPathShading = 2
 
 [<Struct>]
 type _SelectionModifierFixmentArguments =
@@ -544,6 +548,40 @@ type _SelectionModifierFixmentArguments =
 
 
 type private Modifier = _SelectionModifierFixmentArguments -> ModifierPdfCanvasActions
+
+type ShadableModifier =
+    { 
+        SHShadingModifier: option<IntegratedPathRenderInfo -> OperatorRange -> PdfCanvas -> unit>
+        ClippingPathShadingModifier: option<IntegratedPathRenderInfo -> OperatorRange -> PdfCanvas -> unit>
+        CommonModifier: _SelectionModifierFixmentArguments -> ModifierPdfCanvasActions
+    }
+with 
+    static member Create(commonModifier) =
+        { SHShadingModifier = None 
+          ClippingPathShadingModifier = None
+          CommonModifier = commonModifier }
+    
+    static member CreateSHShadingModifier(commonModifier, shModifier) =
+        { SHShadingModifier = shModifier
+          ClippingPathShadingModifier = None
+          CommonModifier = commonModifier }
+
+    static member CreateClippingShadingModifier(commonModifier, clippingShadingModifier) =
+        { SHShadingModifier = None
+          ClippingPathShadingModifier = clippingShadingModifier
+          CommonModifier = commonModifier }
+
+
+
+[<RequireQualifiedAccess>]
+type ModifierUnion =
+    | Modifier of (_SelectionModifierFixmentArguments -> ModifierPdfCanvasActions)
+    | ShadingModifier of ShadableModifier
+with 
+    member x.CommonModifier =
+        match x with 
+        | Modifier vv -> vv
+        | ShadingModifier vv -> vv.CommonModifier
 
 
 type internal ModifierPdfCanvas(contentStream, resources, document) =
@@ -555,9 +593,25 @@ type internal ModifierPdfCanvas(contentStream, resources, document) =
         base.Rectangle(rect)
 
 
-and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * Modifier>, removingLayer: string option, document: PdfDocument) =
+and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * ModifierUnion>, removingLayer: string option, document: PdfDocument) =
     inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(Map.map (fun _ -> fst) selectorModifierMapping))
-    
+    let exists_ClippingPath_Shading_Modifier =
+        selectorModifierMapping
+        |> Map.exists(fun _ (_, modifier) ->
+            match modifier with 
+            | ModifierUnion.ShadingModifier vv -> vv.ClippingPathShadingModifier.IsSome
+            | _ -> false
+        )
+
+    let exists_SH_Shading_Modifier =
+        selectorModifierMapping
+        |> Map.exists(fun _ (_, modifier) ->
+            match modifier with 
+            | ModifierUnion.ShadingModifier vv -> vv.SHShadingModifier.IsSome
+            | _ -> false
+        )
+
+
     let eventTypes = 
         selectorModifierMapping
         |> Map.map (fun _ -> fst)
@@ -640,7 +694,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                     match eventListener.CurrentRenderInfoToken.Value with 
                     | [token] ->
                         let fix = snd selectorModifierMapping.[token]
-                        fix { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
+                        fix.CommonModifier { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
                     | _ -> 
                         let keys = eventListener.CurrentRenderInfoToken.Value
                         failwithf "Multiple modifiers %A are not supported  when image is selectable" keys
@@ -706,15 +760,40 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                 | CurrentRenderInfoStatus.Selected ->
                     let isShading = 
                         match eventListener.CurrentRenderInfo with 
-                        | IIntegratedRenderInfoIM.Path (pathRenderInfo) -> pathRenderInfo.IsShading
-                        | _ ->false
+                        | IIntegratedRenderInfoIM.Path (pathRenderInfo) -> 
+                            match pathRenderInfo.IsShading with 
+                            | true -> Some pathRenderInfo
+                            | false -> None
+
+                        | _ -> None
 
                     match isShading with 
-                    | true -> 
-                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                        |> ignore
+                    | Some shadingInfo -> 
+                        match exists_ClippingPath_Shading_Modifier with 
+                        | false -> 
+                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                            |> ignore
 
-                    | false ->
+                        | true ->
+                            let shadingModifiers = 
+                                eventListener.CurrentRenderInfoToken.Value
+                                |> List.choose(fun token -> 
+                                    let fix = snd selectorModifierMapping.[token]
+                                    match fix with 
+                                    | ModifierUnion.ShadingModifier vv -> vv.ClippingPathShadingModifier
+                                    | _ -> None
+                                )
+
+                            match shadingModifiers with 
+                            | [] ->failwithf "Invalid token"
+                            | [shadingModifier] ->
+                                shadingModifier shadingInfo operatorRange currentPdfCanvas
+
+                            | _ -> failwithf "Multiple clippingPath shading %d operators currently not supported" shadingModifiers.Length
+
+                            
+
+                    | None ->
                         let currentGS = this.GetGraphicsState()
                         currentPdfCanvas.SetCanvasGraphicsState(currentGS)
 
@@ -722,12 +801,25 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                             eventListener.CurrentRenderInfoToken.Value
                             |> List.map(fun token -> 
                                 let fix = snd selectorModifierMapping.[token]
-                                fix { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
+                                fix.CommonModifier { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
                             )
                             |> ModifierPdfCanvasActions.ConcatOrKeep tag
 
+                        let setTextMatrix() =
+                            match tag with 
+                            | IntegratedRenderInfoTag.Text ->   [
+                                fun (canvas: PdfCanvas) -> 
+                                    let x = eventListener.CurrentRenderInfo :?> IntegratedTextRenderInfo
+                                    let textMatrix = x.ConcatedTextInfo.HeadWordInfo.GetTextMatrix()
+                                    let transform = AffineTransform.ofMatrix textMatrix
+                                    canvas.SetTextMatrix(transform)
+                                ]
+
+                            | IntegratedRenderInfoTag.Path -> []
+
+
                         modifierPdfCanvasActions.UseCanvas (currentPdfCanvas :> PdfCanvas) operatorRange (fun operatorRange canvas ->
-                            (canvas, modifierPdfCanvasActions.Actions)
+                            (canvas, setTextMatrix() @ modifierPdfCanvasActions.Actions)
                             ||> List.fold(fun canvas action ->
                                 action canvas 
                             )
@@ -768,10 +860,40 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                 | _ -> failwith "Invalid token"
 
             | _ ->
+                
+                let writeOperatorRange() =
+                    match exists_SH_Shading_Modifier with 
+                    | false -> 
+                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                        |> ignore
+
+                    | true ->
+                        match operatorName with 
+                        | EQ sh -> 
+                            let shadingModifiers = 
+                                eventListener.CurrentRenderInfoToken.Value
+                                |> List.choose(fun token -> 
+                                    let fix = snd selectorModifierMapping.[token]
+                                    match fix with 
+                                    | ModifierUnion.ShadingModifier vv -> vv.SHShadingModifier
+                                    | _ -> None
+                                )
+
+                            match shadingModifiers with 
+                            | [] ->failwithf "Invalid token"
+                            | [shadingModifier] ->
+                                let shadingInfo = eventListener.CurrentRenderInfo :?> IntegratedPathRenderInfo
+                                shadingModifier shadingInfo operatorRange currentPdfCanvas
+
+                            | _ -> failwithf "Multiple sh shading %d  operators currently not supported" shadingModifiers.Length
+
+
+                        | _ -> 
+                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                            |> ignore
+
                 match removingLayer with 
-                | None ->
-                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                    |> ignore
+                | None -> writeOperatorRange()
 
                 | Some layerName ->
                     match operatorName with 
@@ -788,22 +910,13 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                                 match layerName2.ToString() with 
                                 | EqualTo layerName -> 
                                     isRemovingLayer <- true
-                                | _ ->
-                                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                                    |> ignore
+                                | _ -> writeOperatorRange()
 
-                            | _ -> 
-                                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                                |> ignore
+                            | _ -> writeOperatorRange()
 
-                        | _ ->
-                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                            |> ignore
+                        | _ -> writeOperatorRange()
 
-
-                    | _ -> 
-                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                        |> ignore
+                    | _ -> writeOperatorRange()
 
         | true -> 
             match operatorName with 

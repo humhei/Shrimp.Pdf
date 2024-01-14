@@ -39,6 +39,17 @@ let reuseTests =
         |> runTest "datas/reuse/assignToLayer.pdf" 
         |> ignore
 
+    testCase "set background size" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.SetBackgroundSize(
+                PageSelector.All,
+                FsSize.A3,
+                position = Position.LeftMiddle(mm 20, 0)
+            )
+        )
+        |> runTest @"datas/reuse/set background size to A3.pdf" 
+        |> ignore
+
     testCase "add background image tests2" <| fun _ -> 
         let image = @"datas/reuse/add background image.jpg" 
         Flow.Reuse (
@@ -51,6 +62,8 @@ let reuseTests =
         )
         |> runTest @"datas/reuse/add background image.pdf" 
         |> ignore
+
+
 
     testCase "add background image tests ai rgb" <| fun _ -> 
         let image = @"datas/reuse/add background image rgb.jpg" 
@@ -753,6 +766,33 @@ let reuseTests =
             Reuses.Insert("datas/reuse/insertPagesResource.pdf")
         )
         |> runTest "datas/reuse/insertPages.pdf" 
+        |> ignore
+
+    testCase "insert pages tests for each 2" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.InsertEx(
+                "datas/reuse/insert pages tests for each 2 Resource.pdf",
+                pageInsertingOptions = PageInsertingOptionsEx.BeforeForEach(2))
+        )
+        |> runTest "datas/reuse/insert pages tests for each 2.pdf" 
+        |> ignore
+
+    testCase "insert pages tests for each 2 test2" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.InsertEx(
+                "datas/reuse/insert pages tests for each 2 Resource test2.pdf",
+                pageInsertingOptions = PageInsertingOptionsEx.BeforeForEach(2))
+        )
+        |> runTest "datas/reuse/insert pages tests for each 2 test2.pdf" 
+        |> ignore
+
+    testCase "insert pages tests for each 3" <| fun _ -> 
+        Flow.Reuse (
+            Reuses.InsertEx(
+                "datas/reuse/insert pages tests for each 3 Resource.pdf",
+                pageInsertingOptions = PageInsertingOptionsEx.BeforeForEach(1))
+        )
+        |> runTest "datas/reuse/insert pages tests for each 3.pdf" 
         |> ignore
 
     testCase "insert empty pages tests" <| fun _ -> 

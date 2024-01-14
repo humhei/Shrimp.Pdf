@@ -130,29 +130,31 @@ module _Renewable =
 
     type RenewableClippingPathInfoElement =
         { ClippingPathCtm: Matrix 
-          AccumulatedPathOperatorRanges: seq<OperatorRange> }
-    with 
-        member x.ApplyCtm_To_AccumulatedPathOperatorRanges() =
-            { Ctm = x.ClippingPathCtm
-              AccumulatedPathOperatorRanges = x.AccumulatedPathOperatorRanges }
-                .ApplyCtm_To_AccumulatedPathOperatorRanges()
+          AccumulatedPathOperatorRanges: seq<OperatorRange>
+          ClippingRule: int }
+    //with 
+        //member x.ApplyCtm_To_AccumulatedPathOperatorRanges() =
+        //    { Ctm = x.ClippingPathCtm
+        //      AccumulatedPathOperatorRanges = x.AccumulatedPathOperatorRanges }
+        //        .ApplyCtm_To_AccumulatedPathOperatorRanges()
 
 
 
     type IntersectedClippingPathInfoElement with 
         member x.Renewable() =
             { ClippingPathCtm = x.Ctm 
-              AccumulatedPathOperatorRanges = x.OperatorRanges }
+              AccumulatedPathOperatorRanges = x.OperatorRanges
+              ClippingRule = x.ClippingRule }
 
     type RenewableClippingPathInfo = RenewableClippingPathInfo of RenewableClippingPathInfoElement list
     with
         member x.ApplyCtm_WriteToCanvas(canvas: PdfCanvas, suffixActions) = 
 
             PdfCanvas.useCanvas canvas (fun canvas ->
-                
                 let (RenewableClippingPathInfo elements) = x
                 elements
                 |> List.iter(fun x ->
+
                     let operatorRanges = 
                         { Ctm = x.ClippingPathCtm
                           AccumulatedPathOperatorRanges = x.AccumulatedPathOperatorRanges }
@@ -161,7 +163,17 @@ module _Renewable =
                     for operatorRange in operatorRanges do
                         PdfCanvas.writeOperatorRange operatorRange canvas |> ignore
 
-                    canvas.Clip().EndPath() |> ignore
+                    match x.ClippingRule with 
+                    | FillingRule.EVEN_ODD  -> 
+                        canvas.EoClip().EndPath() |> ignore
+                        //failwithf "Not implemented when clipping rule is even odd"
+                    | FillingRule.NONZERO_WINDING -> canvas.Clip().EndPath() |> ignore
+
+                    | _ -> failwithf "Invalid token"
+
+                    
+
+
                 )
 
                 //canvas.ConcatMatrix(AffineTransform.ofMatrix x.Ctm) |> ignore
@@ -198,6 +210,7 @@ module _Renewable =
           StrokeShading: option<PdfName * Matrix> 
           Path: Path
           Ctm: Matrix
+          FillingRule: int
           Operation: int
           AccumulatedPathOperatorRanges: seq<OperatorRange>
           LineShapingStyle: LineShapingStyle
@@ -257,7 +270,7 @@ module _Renewable =
                     for operatorRange in operatorRanges do
                         PdfCanvas.writeOperatorRange operatorRange canvas |> ignore
 
-                    PdfCanvas.closePathByOperation x.Operation canvas |> ignore
+                    PdfCanvas.closePathByOperation x.Operation x.FillingRule canvas |> ignore
                     canvas
             )
 
@@ -280,12 +293,14 @@ module _Renewable =
                 match x.GetAppliedExtGState() with 
                 | EqualTo FsExtGState.DefaultValue -> None
                 | extGState -> Some extGState
+            let rule = info.GetRule()
 
             {
                 Ctm = info.GetCtm()
                 FillColor = info.GetFillColor()
                 StrokeColor = info.GetStrokeColor()
                 Operation = info.GetOperation()
+                FillingRule = info.GetRule()
                 Path = info.GetPath()
                 AccumulatedPathOperatorRanges = x.AccumulatedPathOperatorRanges
                 LineShapingStyle = IPathRenderInfo.getLineShapingStyle x

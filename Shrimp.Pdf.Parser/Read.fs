@@ -573,7 +573,8 @@ module internal Listeners =
 
                                 operatorRanges.Add(
                                     { OperatorRanges = accumulatedPathOperatorRanges
-                                      Ctm = pathRenderInfo.GetGraphicsState().GetCtm() }
+                                      Ctm = pathRenderInfo.GetGraphicsState().GetCtm()
+                                      ClippingRule = pathRenderInfo.GetClippingRule() }
                                 )
 
                                 info.PathRenderInfo.PreserveGraphicsState()

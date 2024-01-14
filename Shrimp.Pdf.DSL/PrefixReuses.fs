@@ -333,7 +333,7 @@ module _PrefixReuses =
             |> AtLeastOneList.collect(fun m -> m.Value_Al1List)
             |> EmptablePageNumSequence
     
-    // number in page sequence must be bigger than 0
+    // number in page sequence must be >= 0
     type CopiedNumSequence = private CopiedNumSequence of AtLeastOneList<int>
     with 
         member x.Value = 
@@ -343,7 +343,9 @@ module _PrefixReuses =
         member x.ShuffingText =
             x.Value
             |> List.mapi (fun i copyNumber ->
-                List.replicate copyNumber (i+1)
+                match copyNumber with 
+                | 0 -> []
+                | _ -> List.replicate copyNumber (i+1)
             )
             |> List.concat
             |> List.map string
@@ -351,12 +353,20 @@ module _PrefixReuses =
     
 
         static member Create(sequence: int list) =
-            if List.exists (fun pageNumber -> pageNumber <= 0) sequence then failwithf "number in sequence %A must be bigger than 0" sequence
+            if List.exists (fun pageNumber -> pageNumber < 0) sequence then failwithf "number in sequence %A must be >= 0" sequence
             sequence
             |> AtLeastOneList.Create
             |> CopiedNumSequence 
     
-    
+        member x.ToPageNumberSequence() =
+            x.Value
+            |> List.mapi (fun i copyNumber ->
+                match copyNumber with 
+                | 0 -> []
+                | _ -> List.replicate copyNumber (i+1)
+            )
+            |> List.concat
+            |> PageNumSequence.Create
     
     type PageResizingScalingOptions =
         | Uniform = 0
@@ -423,8 +433,25 @@ module _PrefixReuses =
         /// e.g. [1; 3; 5] will pick page1, page3, page5
         static member SequencePages (pageNumSequence: EmptablePageNumSequence) =
             fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
+                let __checkPageNumberSequenceValid =
+                    let totalNumberOfPages = splitDocument.Reader.GetNumberOfPages()
+                    let pageNumberIntList =
+                        pageNumSequence.Value 
+                        |> List.choose(fun m -> 
+                            match m with 
+                            | EmptablePageNumSequenceToken.PageNumSequenceToken v -> Some v.PageNumValue
+                            | _ -> None
+                        )
+
+                    for pageNum in pageNumberIntList do 
+                        match pageNum > totalNumberOfPages with 
+                        | true -> failwithf "Invalid page number token %d, totalNumber of pages is %d" pageNum totalNumberOfPages
+                        | false -> ()
+                
                 let unionTokens = 
                     let pages =  PdfDocument.getPages splitDocument.Reader
+
+
                     pageNumSequence.Value
                     |> List.mapi (fun i token ->
                         match token with 

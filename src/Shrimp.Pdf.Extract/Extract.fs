@@ -297,9 +297,7 @@ module _Extract =
 
 
                     PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
-
-                        if keepBorder
-                        then writeInfos(infoChoices.Bounds)
+                        writerCanvas.SaveState() |> ignore
 
                         writerCanvas
                             .ConcatMatrix(AffineTransform.ofRecord transform_translate)
@@ -310,6 +308,10 @@ module _Extract =
 
                         if keepBorder
                         then writeInfos(infoChoices.TagInfos)
+
+                        writerCanvas.RestoreState() |> ignore
+                        if keepBorder
+                        then writeInfos(infoChoices.Bounds)
 
                         writerCanvas
                     )
@@ -328,13 +330,14 @@ module _Extract =
 
                             let infoChoices = infoChoices boundPredicate
                             PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
+                                writeInfos(infoChoices.Infos)
+
                                 if keepBorder
                                 then writeInfos(infoChoices.Bounds)
 
                                 if keepBorder
                                 then writeInfos(infoChoices.TagInfos)
 
-                                writeInfos(infoChoices.Infos)
                                 writerCanvas
                             )
 

@@ -141,9 +141,33 @@ module _Reuses =
 
     let private reuse name parameters f = Reuse(f = f, flowName = FlowName.Override(name, parameters))
 
+    
+    [<RequireQualifiedAccess>]
+    type PageInsertingOptionsEx =
+        | BeforePointCase of SinglePageSelectorExpr
+        | AfterPointCase  of SinglePageSelectorExpr
+        /// e.g multple = 2, will insert pages before even pages
+        | Before_InMultiple of multiple: int 
+        /// e.g multple = 2, will insert pages after even pages
+        | After_InMultiple of multiple: int 
+
+    with 
+        static member BeforePoint(?insertPoint) =
+            PageInsertingOptionsEx.BeforePointCase(defaultArg insertPoint (SinglePageSelectorExpr.Begin 1))
+
+        static member AfterPoint(?insertPoint) =
+            PageInsertingOptionsEx.AfterPointCase(defaultArg insertPoint (SinglePageSelectorExpr.End 1))
+
+        static member BeforeForEach(?multiple) =
+            PageInsertingOptionsEx.Before_InMultiple(defaultArg multiple 1)
+
+        static member AfterForEach(?multiple) =
+            PageInsertingOptionsEx.After_InMultiple(defaultArg multiple 1)
+
     type PageInsertingOptions =
         | BeforePoint = 0
         | AfterPoint = 1
+
 
 
     type private CellIndex =
@@ -310,70 +334,130 @@ module _Reuses =
 
             
 
-                
+    [<RequireQualifiedAccess>]
+    type ResizeToSameSize_Target =
+        | Size of FsSize
+        | MinimumPageSize
+        | MaximunPageSize
+
+    [<RequireQualifiedAccess>]
+    type SetBackgroundSize_PageBoxSetter =
+        | SetArtBoxToContents
+        | SetTrimBoxToContents
+        | Non
 
     type Reuses with
 
-        static member Insert(insertingFile: string, ?insertingFilePageSelector: PageSelector, ?pageInsertingOptions: PageInsertingOptions, ?insertingPoint: SinglePageSelectorExpr) =
+        static member InsertEx(insertingFile: string, ?insertingFilePageSelector: PageSelector, ?pageInsertingOptions: PageInsertingOptionsEx) =
             let insertingFilePageSelector = defaultArg insertingFilePageSelector PageSelector.All
-            let pageInsertingOptions = defaultArg pageInsertingOptions PageInsertingOptions.AfterPoint
-            let insertingPoint = defaultArg insertingPoint (SinglePageSelectorExpr.End 1)
+            let pageInsertingOptions = defaultArg pageInsertingOptions (PageInsertingOptionsEx.AfterPoint())
 
             fun flowModel (splitDocument: SplitDocument) ->
                 if Path.GetFullPath(insertingFile) = Path.GetFullPath(splitDocument.ReaderPath) 
                 then failwith "Cannot insert file to self"
+                let readerResource = new PdfDocument(new PdfReader(insertingFile))
+                let resourcePages = readerResource.GetPages(insertingFilePageSelector)
+                let readerPages = splitDocument.Reader.GetPages()
 
-                let numberOfPages = splitDocument.Reader.GetNumberOfPages()
-                let insertingPoint =
-                    splitDocument.Reader.GetPageNumber insertingPoint
+                let allReaderPages =
+                    match pageInsertingOptions with 
+                    | PageInsertingOptionsEx.AfterPointCase (expr) ->
+                        let middleLeftPageNum = 
+                            splitDocument.Reader.GetPageNumbers(PageSelectorExpr.SinglePage expr)
+                            |> List.exactlyOne_DetailFailingText
 
-                let tryCopyPages (reader: PdfDocument) pageFrom pageTo =
-                    if pageTo >= pageFrom
-                    then reader.CopyPagesTo(pageFrom, pageTo, splitDocument.Writer) |> ignore
-
-
-                match pageInsertingOptions with
-                | PageInsertingOptions.AfterPoint ->
-                    tryCopyPages splitDocument.Reader 1 insertingPoint 
-                    
-
-                    let readerResource = new PdfDocument(new PdfReader(insertingFile))
-                    let readerResourcePageNumbers = readerResource.GetPageNumbers(insertingFilePageSelector)
-
-                    for readerResourcePageNumber in readerResourcePageNumbers do
-                        let page = readerResource.GetPage(readerResourcePageNumber).CopyTo(splitDocument.Writer)
-                        splitDocument.Writer.AddPage(page) |> ignore
-                    readerResource.Close()
+                        let afterPages = readerPages.[middleLeftPageNum+1..]
+                        readerPages.[1..middleLeftPageNum] @ resourcePages @ afterPages
 
 
-                    tryCopyPages splitDocument.Reader (insertingPoint + 1) numberOfPages
+                    | PageInsertingOptionsEx.BeforePointCase (expr) ->
+                        let middleLeftPageNum = 
+                            splitDocument.Reader.GetPageNumbers(PageSelectorExpr.SinglePage expr)
+                            |> List.exactlyOne_DetailFailingText
 
-                | PageInsertingOptions.BeforePoint ->
-                    tryCopyPages splitDocument.Reader 1 (insertingPoint - 1)
-                    
+                        let afterPages = readerPages.[middleLeftPageNum..]
+                        readerPages.[1 .. middleLeftPageNum-1] @ resourcePages @ afterPages
 
-                    let readerResource = new PdfDocument(new PdfReader(insertingFile))
-                    let readerResourcePageNumbers = readerResource.GetPageNumbers(insertingFilePageSelector)
+                    | PageInsertingOptionsEx.Before_InMultiple (multiple) ->
+                        let pages = 
+                            readerPages
+                            |> List.chunkBySize multiple
+                            |> List.mapi(fun i readerPages ->
+                                let resourcePages_indexes =
+                                    [0..readerPages.Length-1]
+                                    |> List.map(fun j ->
+                                        let index = i * multiple + j
+                                        index % resourcePages.Length
+                                    )
 
-                    for readerResourcePageNumber in readerResourcePageNumbers do
-                        let page = readerResource.GetPage(readerResourcePageNumber).CopyTo(splitDocument.Writer)
-                        splitDocument.Writer.AddPage(page) |> ignore
+                                let resourcePages = 
+                                    resourcePages_indexes
+                                    |> List.map(fun i -> resourcePages.[i])
 
-                    readerResource.Close()
+                                resourcePages @ readerPages
+                            )
+                            |> List.concat
+
+                        pages
+
+                    | PageInsertingOptionsEx.After_InMultiple (multiple) ->
+                        let pages = 
+                            readerPages
+                            |> List.chunkBySize multiple
+                            |> List.mapi(fun i readerPages ->
+                                let resourcePages_indexes =
+                                    [0..multiple-1]
+                                    |> List.map(fun j ->
+                                        let index = i * multiple + j
+                                        index % resourcePages.Length
+                                    )
+
+                                let resourcePages = 
+                                    resourcePages_indexes
+                                    |> List.map(fun i -> resourcePages.[i])
+
+                                readerPages @ resourcePages 
+                            )
+                            |> List.concat
 
 
-                    tryCopyPages splitDocument.Reader (insertingPoint) numberOfPages
+                        pages
+
+
+
+                allReaderPages
+                |> List.iter(fun readerPage ->
+                    let page = readerPage.CopyTo(splitDocument.Writer)
+                    splitDocument.Writer.AddPage(page) |> ignore
+
+                )
+            
+                readerResource.Close()
                 
 
             |> reuse 
                 "Insert"
                 ["insertingFile" => insertingFile.ToString()
                  "insertingFilePageSelector" => insertingFilePageSelector.ToString()
-                 "pageInsertingOptions" => pageInsertingOptions.ToString()
-                 "insertingPoint" => insertingPoint.ToString()]
+                 "pageInsertingOptions" => pageInsertingOptions.ToString() ]
+
+        static member Insert(insertingFile: string, ?insertingFilePageSelector: PageSelector, ?pageInsertingOptions: PageInsertingOptions, ?insertingPoint) =
+            let pageInsertingOptions = defaultArg pageInsertingOptions PageInsertingOptions.AfterPoint
+            let insertingPoint = defaultArg insertingPoint (SinglePageSelectorExpr.End 1)
+            let pageInsertingOptionsEx =
+                match pageInsertingOptions with 
+                | PageInsertingOptions.AfterPoint ->
+                    PageInsertingOptionsEx.AfterPointCase(insertingPoint)
+
+                | PageInsertingOptions.BeforePoint ->
+                    PageInsertingOptionsEx.BeforePointCase(insertingPoint)
+                    
+
+            Reuses.InsertEx(insertingFile, ?insertingFilePageSelector = insertingFilePageSelector, pageInsertingOptions = pageInsertingOptionsEx)
+
 
         static member InsertEmptyPages(fEmptyPageCount, ?pageInsertingOptions: PageInsertingOptions) =
-            let pageInsertingOptions = defaultArg pageInsertingOptions PageInsertingOptions.AfterPoint
+            let pageInsertingOptions = defaultArg pageInsertingOptions (PageInsertingOptions.AfterPoint)
 
             fun flowModel (splitDocument: SplitDocument) ->
                 PdfDocument.getPages splitDocument.Reader
@@ -381,7 +465,7 @@ module _Reuses =
                     let pageNum = i + 1
 
                     let addEmptyPages() =
-                        let emptyPageNumberCount = fEmptyPageCount pageNum
+                        let emptyPageNumberCount = fEmptyPageCount (PageNumber pageNum)
                         [1..emptyPageNumberCount]
                         |> List.iter(fun _ ->
                             let writerPage: PdfPage = splitDocument.Writer.AddNewPage(PageSize(page.GetActualBox()))
@@ -422,6 +506,7 @@ module _Reuses =
 
 
 
+
                 match preparedInsertingEmptyPagesCount with 
                 | 0 -> Reuse.dummy() ||>> ignore
                 | i -> 
@@ -429,7 +514,7 @@ module _Reuses =
                     let insertingPoint = splitDocument.Reader.GetPageNumber(insertingPoint)
                     Reuses.InsertEmptyPages(
                         fEmptyPageCount = (fun pageNum ->
-                            match pageNum with 
+                            match pageNum.Value with 
                             | EqualTo insertingPoint -> i
                             | _ -> 0
                         ),
@@ -592,7 +677,7 @@ module _Reuses =
                             if pageNumbers.IsEmpty then Reuse.dummy() ||>> ignore
                             else
                                 let pageSelector = 
-                                    PageSelector.Numbers (AtLeastOneSet.Create pageNumbers)
+                                    PageSelector.Numbers (List.ofSeq pageNumbers)
 
                                 let rotation = 
                                     match pageResizingRotatingOptions with 
@@ -683,6 +768,49 @@ module _Reuses =
             <+>
             (resize())
            
+        static member ResizeToSameSize (target: ResizeToSameSize_Target) =
+            match target with 
+            | ResizeToSameSize_Target.Size size ->
+                Reuses.Resize(PageSelector.All, PageBoxKind.AllBox, size)
+
+            | _ ->
+                Reuse.Factory(fun flowModel document ->
+                    let size =
+                        let pageBoxes = 
+                            document.Reader.GetPages()
+                            |> List.map(fun m -> m.GetActualBox())
+                            |> List.map(fun m -> FsSize.ofRectangle m)
+
+                        let heights =
+                            pageBoxes
+                            |> List.map(fun m -> m.Height)
+
+                        let widths =
+                            pageBoxes
+                            |> List.map(fun m -> m.Width)
+
+                        match target with 
+                        | ResizeToSameSize_Target.MaximunPageSize ->
+                            { Width  = List.max widths 
+                              Height = List.max heights }
+
+
+                        | ResizeToSameSize_Target.MinimumPageSize ->
+                            { Width  = List.min widths 
+                              Height = List.min heights }
+
+                        | ResizeToSameSize_Target.Size _ -> failwithf "Invalid token"
+
+                    Reuses.Resize(PageSelector.All, PageBoxKind.AllBox, size)
+                    
+                )
+
+            |> Reuse.rename 
+                "ResizeToSameSize"
+                [
+                    "target" => target.ToString()
+                ]
+                        
 
         static member Resize (pageSelector: PageSelector, pageResizingRotatingOptions: PageResizingRotatingOptions, pageResizingScalingOptions: PageResizingScalingOptions, size: FsSize) =
             Reuses.Resize(pageSelector, pageResizingRotatingOptions, pageResizingScalingOptions, (fun _ _ -> size))
@@ -693,6 +821,67 @@ module _Reuses =
                  "pageSelector" => pageSelector.ToString()
                  "size" => size.ToString() ]
 
+        static member SetBackgroundSize (pageSelector: PageSelector, bkSize: FsSize, ?position: Position, ?pageBoxSetter: SetBackgroundSize_PageBoxSetter, ?keepDirection) =
+            let position = defaultArg position Position.PreciseCenter
+            let pageBoxSetter = defaultArg pageBoxSetter SetBackgroundSize_PageBoxSetter.SetArtBoxToContents
+            let keepDirection = defaultArg keepDirection false
+            fun flowModel (splitDocument: SplitDocument) ->
+                let pages = splitDocument.Reader.GetPages()
+                for page in pages do 
+                    let pageBox = page.GetActualBox()
+                    let bkSize = 
+                        match keepDirection with 
+                        | true -> bkSize.AlignDirection(pageBox)
+                        | false -> bkSize
+
+                    let xobject = page.CopyAsFormXObject(splitDocument.Writer)
+                    let writerPage = splitDocument.Writer.AddNewPage(FsSize.toPageSize bkSize)
+                    let x =
+                        let baseX = 0.
+                        let lengthDiff = bkSize.Width - pageBox.GetWidthF()
+                        match position with 
+                        | Position.Left (x, _) -> baseX 
+                        | Position.XCenter (x, _) ->
+                            baseX + lengthDiff / 2. 
+                        | Position.Right (x, _) -> baseX + lengthDiff 
+                        |> fun m -> m + position.X
+
+                    let y = 
+                        let baseY = 0.
+                        let lengthDiff = bkSize.Height - pageBox.GetHeightF()
+                        match position with 
+                        | Position.Bottom _ -> baseY
+                        | Position.YCenter _ ->
+                            baseY + lengthDiff / 2.
+                        | Position.Top _ -> baseY + lengthDiff
+                        |> fun m -> m + position.Y
+
+                    let canvas = PdfCanvas(writerPage)
+                    canvas.AddXObjectAt(xobject, float32 x, float32 y)
+                    |> ignore
+
+                    let contectRect = Rectangle.create x y (pageBox.GetWidthF()) (pageBox.GetHeightF())
+                    match pageBoxSetter with 
+                    | SetBackgroundSize_PageBoxSetter.Non -> ()
+                    | SetBackgroundSize_PageBoxSetter.SetArtBoxToContents ->
+                        writerPage
+                            .SetArtBox(contectRect)
+                        |> ignore
+
+                    | SetBackgroundSize_PageBoxSetter.SetTrimBoxToContents ->
+                        writerPage
+                            .SetTrimBox(contectRect)
+                        |> ignore
+                        
+            |> reuse    
+                "SetBackgroundSize"
+                [
+                    "PageSelector" => pageSelector.Text
+                    "bkSize" => bkSize.MMText
+                    "position" => position.LoggingText_MM
+                    "pageBoxSetter"  => pageBoxSetter.ToString()
+                    "keepDirection" => keepDirection.ToString()
+                ]
 
         static member Scale (pageSelector, fScaleX: PageNumber -> float, fScaleY: PageNumber -> float) =
             Reuse.Factory(fun _ splitDocument ->
@@ -878,6 +1067,7 @@ module _Reuses =
                     | Some offsetLists -> imposingDocument.Offset(offsetLists)
                     | None -> ()
                     imposingDocument.Draw()
+
                 | false -> splitDocument.Writer.AddNewPage() |> ignore
                 (imposingDocument)
 
@@ -947,101 +1137,104 @@ module _Reuses =
                    Reuse.dummy()
                    ||>> ignore
 
+            let flow =
 
-
-            match cellRotation with 
-            | CellRotation.None -> 
-                setBleedDistance()
-                <+>
-                Reuses.Impose_Raw(fArgs, offsetLists = offsetLists,  draw = true)
-            | _ ->
-                
-                Reuse.Factory(fun flowModel doc ->
-                    let doc = ImposingDocument(doc, args)
-                    doc.Build()
-                    let args = args.Value
-                    let sequence = 
-                        let baseSequence = 
-                            match args.IsRepeated with 
-                            | true -> 
-                                doc.GetSheets()
-                                |> List.mapi (fun i sheet -> 
-                                    let colNum_perRow = sheet.Rows.[0].Cells.Count
-                                    let rowsCount = sheet.RowsCount
-                                    let sequence = List.replicate (sheet.GetCellsCount()) (i+1)
-                                    sequence
-                                    |> List.mapi (fun i pageNum ->
-                                        let index = i
-                                        { ColIndex = (index % colNum_perRow) 
-                                          RowIndex = (index / colNum_perRow) 
-                                          PageNum = pageNum
-                                        }
-                                    )
-                                )
-                                |> List.concat
-
-                            | false ->
-
-                                let sequence =
-                                    let rec loop sheets accum previous_LastPageNum =
-                                        match sheets with 
-                                        | [] -> accum 
-                                        | (sheet: ImposingSheet) :: t ->
-                                            let rec loop2 rows accum previous_LastPageNum =
-                                                match rows with 
-                                                | [] -> accum
-                                                | (row: ImposingRow) :: t ->
-                                                    let cells =
-                                                        row.Cells
-                                                        |> Seq.mapi(fun  i cell ->
-                                                            { ColIndex = cell.Index
-                                                              RowIndex = cell.ImposingRow.RowIndex
-                                                              PageNum = previous_LastPageNum + i + 1
-                                                            }
-                                                        )
-                                                        |> List.ofSeq
-
-                                                    loop2 t (accum @ cells) (previous_LastPageNum + cells.Length)
-
-                                            let cells = loop2 (List.ofSeq sheet.Rows) [] previous_LastPageNum
-                                            loop t (accum @ cells) (previous_LastPageNum + cells.Length)
-
-                                    loop (doc.GetSheets()) [] 0
-
-                                sequence
-
-                        let sequence_applyCellRotation =
-                            baseSequence
-                            |> List.map (fun cellIndex ->
-                                match cellRotation, cellIndex.ColIndex+1, cellIndex.RowIndex+1 with 
-                                | CellRotation.R180WhenColNumIsEven, Even, _ -> 
-                                    PageNumSequenceToken.PageNumWithRotation(cellIndex.PageNum, Rotation.R180)
-
-                                | CellRotation.R180WhenRowNumIsEven, _, Even ->
-                                    PageNumSequenceToken.PageNumWithRotation(cellIndex.PageNum, Rotation.R180)
-                                    
-                                | _ -> PageNumSequenceToken.PageNum cellIndex.PageNum
-                            )
-
-                        sequence_applyCellRotation
-                        |> PageNumSequence.Create
-
+                match cellRotation with 
+                | CellRotation.None -> 
                     setBleedDistance()
                     <+>
-                    Reuses.SequencePages sequence
-                    <+>
-                    Reuses.Impose_Raw
-                        (
-                            (fun _ -> 
-                            { args with IsRepeated = false }),
-                            offsetLists = offsetLists,
-                            draw = true 
-                        )
-                    ||>> fun doc -> 
-                        doc.ReSetIsRepeated(args.IsRepeated)
-                        doc
-                )
+                    Reuses.Impose_Raw(fArgs, offsetLists = offsetLists,  draw = true)
+                | _ ->
+                
+                    Reuse.Factory(fun flowModel doc ->
+                        let doc = ImposingDocument(doc, args)
+                        doc.Build()
+                        let args = args.Value
+                        let sequence = 
+                            let baseSequence = 
+                                match args.IsRepeated with 
+                                | true -> 
+                                    doc.GetSheets()
+                                    |> List.mapi (fun i sheet -> 
+                                        let colNum_perRow = sheet.Rows.[0].Cells.Count
+                                        let rowsCount = sheet.RowsCount
+                                        let sequence = List.replicate (sheet.GetCellsCount()) (i+1)
+                                        sequence
+                                        |> List.mapi (fun i pageNum ->
+                                            let index = i
+                                            { ColIndex = (index % colNum_perRow) 
+                                              RowIndex = (index / colNum_perRow) 
+                                              PageNum = pageNum
+                                            }
+                                        )
+                                    )
+                                    |> List.concat
 
+                                | false ->
+
+                                    let sequence =
+                                        let rec loop sheets accum previous_LastPageNum =
+                                            match sheets with 
+                                            | [] -> accum 
+                                            | (sheet: ImposingSheet) :: t ->
+                                                let rec loop2 rows accum previous_LastPageNum =
+                                                    match rows with 
+                                                    | [] -> accum
+                                                    | (row: ImposingRow) :: t ->
+                                                        let cells =
+                                                            row.Cells
+                                                            |> Seq.mapi(fun  i cell ->
+                                                                { ColIndex = cell.Index
+                                                                  RowIndex = cell.ImposingRow.RowIndex
+                                                                  PageNum = previous_LastPageNum + i + 1
+                                                                }
+                                                            )
+                                                            |> List.ofSeq
+
+                                                        loop2 t (accum @ cells) (previous_LastPageNum + cells.Length)
+
+                                                let cells = loop2 (List.ofSeq sheet.Rows) [] previous_LastPageNum
+                                                loop t (accum @ cells) (previous_LastPageNum + cells.Length)
+
+                                        loop (doc.GetSheets()) [] 0
+
+                                    sequence
+
+                            let sequence_applyCellRotation =
+                                baseSequence
+                                |> List.map (fun cellIndex ->
+                                    match cellRotation, cellIndex.ColIndex+1, cellIndex.RowIndex+1 with 
+                                    | CellRotation.R180WhenColNumIsEven, Even, _ -> 
+                                        PageNumSequenceToken.PageNumWithRotation(cellIndex.PageNum, Rotation.R180)
+
+                                    | CellRotation.R180WhenRowNumIsEven, _, Even ->
+                                        PageNumSequenceToken.PageNumWithRotation(cellIndex.PageNum, Rotation.R180)
+                                    
+                                    | _ -> PageNumSequenceToken.PageNum cellIndex.PageNum
+                                )
+
+                            sequence_applyCellRotation
+                            |> PageNumSequence.Create
+
+                        setBleedDistance()
+                        <+>
+                        Reuses.SequencePages sequence
+                        <+>
+                        Reuses.Impose_Raw
+                            (
+                                (fun _ -> 
+                                { args with IsRepeated = false }),
+                                offsetLists = offsetLists,
+                                draw = true 
+                            )
+                        ||>> fun doc -> 
+                            doc.ReSetIsRepeated(args.IsRepeated)
+                            doc
+                    )
+
+                
+                
+            flow <.+> Reuses.ClearDirtyInfos()
             |> Reuse.rename
                 "Impose"
                 ["imposingArguments" => args.ToString()]
@@ -1742,6 +1935,12 @@ module _Reuses =
         static member SelectPages(pdfFile, pageSelector, ?backupPdfPath) =
             Reuses.SelectPages(pageSelector)
             |> PdfRunner.Reuse(pdfFile, ?backupPdfPath = backupPdfPath)
+
+
+        static member SequencePages(pdfFile, pageNumSequence: PageNumSequence, ?backupPdfPath) =
+            Reuses.SequencePages(pageNumSequence)
+            |> PdfRunner.Reuse(pdfFile, ?backupPdfPath = backupPdfPath)
+
 
         /// default useBleed: false
         static member OneColumn(?backupPdfPath, ?margin, ?useBleed, ?spaces, ?isForce) =

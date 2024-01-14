@@ -27,12 +27,13 @@ open Shrimp.Pdf.js.shared
 [<AutoOpen>]
 module __Image_ModifyPage  =
     type ModifyPage with
-        static member TrimToVisible (pageSelector: PageSelector, ?margin: Margin)  =
+        static member SetPageBoxToSelections (pageSelector: PageSelector, selector, ?pageBoxKind, ?margin: Margin)  =
+            let pageBoxKind = defaultArg pageBoxKind PageBoxKind.AllBox
             let margin = defaultArg margin (Margin.Create 0.)
             ModifyPage.CreateIM(
-                "trim to visible",
+                "trim to selection",
                 pageSelector,
-                Selector.All (InfoIM.IsVisible()),
+                Selector.All (selector),
                 (fun args renderInfos ->
                     let bounds = 
                         renderInfos
@@ -45,7 +46,8 @@ module __Image_ModifyPage  =
 
                     match bound with 
                     | Some bound ->
-                        args.Page.SetActualBox(bound |> Rectangle.applyMargin margin)
+                        let bound = bound |> Rectangle.applyMargin margin
+                        PdfPage.setPageBox pageBoxKind bound args.Page
                         |> ignore
 
                     | None -> 
@@ -56,3 +58,14 @@ module __Image_ModifyPage  =
                     "margin" => margin.ToString()
                 ]
             )  ||>> ignore
+
+
+        static member TrimToVisible (pageSelector: PageSelector, ?margin: Margin)  =
+            let margin = defaultArg margin (Margin.Create 0.)
+            ModifyPage.SetPageBoxToSelections(pageSelector, InfoIM.IsVisible(), margin = margin, pageBoxKind = PageBoxKind.AllBox)
+            |> Manipulate.rename
+                "trim to visible"
+                [
+                    "margin" => margin.ToString()
+                ]
+            ||>> ignore

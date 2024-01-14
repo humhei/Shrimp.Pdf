@@ -14,6 +14,9 @@ open iText.Kernel.Geom
 
 [<AutoOpen>]
 module PdfDocumentWithCachedResources =
+    type PdfCanvasShape =
+        | Rect   = 0
+        | Ellipse = 1 
 
     type PdfCanvasAddRectangleArguments =
         { LineWidth: float 
@@ -21,6 +24,7 @@ module PdfDocumentWithCachedResources =
           FillColor: NullablePdfCanvasColor
           IsStrokeOverprint: bool
           IsFillOverprint: bool
+          Shape: PdfCanvasShape
           BlendModes: BlendMode list }
     with 
         static member DefaultValue =
@@ -29,7 +33,8 @@ module PdfDocumentWithCachedResources =
               FillColor = NullablePdfCanvasColor.N
               IsFillOverprint = false
               IsStrokeOverprint = false
-              BlendModes = [] }
+              BlendModes = []
+              Shape = PdfCanvasShape.Rect }
             
         member x.FsExtGState: FsExtGState option = 
             let tryAddBlendMode(v: FsExtGState option) =
@@ -294,14 +299,30 @@ module PdfDocumentWithCachedResources =
             |> PdfCanvas.setLineWidth args.LineWidth
             |> fun canvas ->
                 for rect in rects do 
-                    PdfCanvas.rectangle rect canvas
-                    |> ignore
+                    match args.Shape with 
+                    | PdfCanvasShape.Rect ->
+                        PdfCanvas.rectangle rect canvas
+                        |> ignore
+
+                    | PdfCanvasShape.Ellipse -> 
+                        PdfCanvas.ellipse rect canvas
+                        |> ignore
+                        
 
                 canvas
 
             |> close
 
         let addRectangle (rect: Rectangle) (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
+            let mapping = fun args -> 
+                { mapping args with Shape = PdfCanvasShape.Rect }
+
+            addRectangles [rect] mapping canvas
+
+        let addEllipse (rect: Rectangle) (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
+            let mapping = fun args -> 
+                { mapping args with Shape = PdfCanvasShape.Ellipse }
+
             addRectangles [rect] mapping canvas
 
 
@@ -437,6 +458,8 @@ module PdfDocumentWithCachedResources =
         let addRectangle rect (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: Canvas) =
             PdfCanvas.addRectangle rect mapping (canvas.GetPdfCanvas()) |> ignore
             canvas
+
+
 
         let addMark (mark: Mark) (position) (canvas: Canvas) =
             let document = canvas.GetPdfDocument() :?> PdfDocumentWithCachedResources

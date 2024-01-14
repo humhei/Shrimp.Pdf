@@ -28,6 +28,21 @@ let icmsTests =
           |> runTest "datas/icms2/black or white.pdf" 
           |> ignore
 
+      testCase "black or white2" <| fun _ -> 
+          Flow.Manipulate (
+              Modify.Create (
+                  PageSelector.First,
+                  [
+                      { Name = "black or white2"
+                        Selector = PathOrText(fun _ _ -> true)
+                        Modifiers = [] }
+                        //Modifiers = [Modifier.ConvertColorsTo(Icc.Cmyk CmykIcc.JapanColor2001Coated)] }
+                  ]
+              )
+          )
+          |> runTest "datas/icms2/black or white2.pdf" 
+          |> ignore
+
       testCase "black or white inversed" <| fun _ -> 
           Flows.BlackOrWhite_Negative_Film(strokeWidthIncrement = StrokeWidthIncrenment.Create 0.3)
           |> runTest "datas/icms2/black or white inversed.pdf" 

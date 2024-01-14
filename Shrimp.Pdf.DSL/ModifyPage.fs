@@ -4,6 +4,7 @@ open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Parser
 open iText.Kernel.Pdf.Canvas.Parser
 open Shrimp.Pdf
+open Shrimp.Pdf.Imposing
 open iText.Kernel.Geom
 open iText.Layout
 open iText.Layout.Properties
@@ -66,10 +67,40 @@ with
             .ConcatMatrix(AffineTransform.ofRecord transform_translate)
             .ConcatMatrix(AffineTransform.ofRecord transform_scale)
 
+type EdgeCropMarkLTRB =
+    | TopAndBottom = 0
+    | All = 1
+    | LeftAndRight = 2
+    | Left = 3
+    | Right = 4
+    | Top = 4
+    | Bottom = 6
+
+
+type EdgeCropMark =
+    { DistanceToPageEdge: float
+      Length: float
+      LTRB: EdgeCropMarkLTRB }
+with 
+    static member DefaultValue =
+        { DistanceToPageEdge = mm 6
+          Length = mm 3
+          LTRB = EdgeCropMarkLTRB.All
+        }
+
+    static member MM3_6 = 
+        { DistanceToPageEdge = mm 6
+          Length = mm 3
+          LTRB = EdgeCropMarkLTRB.All  }
+
+    static member MM6_6 = 
+        { DistanceToPageEdge = mm 6
+          Length = mm 6 
+          LTRB = EdgeCropMarkLTRB.All }
 
 type PageModifier =
 
-    static member private AddNew (canvasAreaOptions, canvasActionsBuilder) : PageModifier<_, _> =
+    static member AddNew (canvasAreaOptions, canvasActionsBuilder) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             let page = args.Page
             let rootArea = page.GetArea(canvasAreaOptions)
@@ -85,7 +116,7 @@ type PageModifier =
             ) 
             |> ignore
 
-    static member private AddNew (canvasActionsBuilder) : PageModifier<_, _> =
+    static member AddNew (canvasActionsBuilder) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             let page = args.Page
             let canvas = new PdfCanvas(page)
@@ -234,6 +265,8 @@ type PageModifier =
             args.Page.GetPageEdge(innerBox, pageBoxKind) 
 
 
+
+
     static member AddText(canvasAreaOptions, text, mapping) : PageModifier<_, _> =
         PageModifier.AddNew (canvasAreaOptions, (fun args ->
             [ Canvas.addText text (mapping) ]
@@ -338,6 +371,120 @@ type PageModifier =
             [ Canvas.addRectangleToRootArea mapping ]
         ))
 
+    static member AddEdgeCropMarks (canvasAreaOptions, cropMark: EdgeCropMark, mapping) : PageModifier<_, _> =
+        PageModifier.AddNew (fun args ->
+            let area = args.Page.GetArea(canvasAreaOptions)
+            let lines = 
+                let leftTops =
+                    let leftTop = area.GetPoint(Position.LeftTop(0, 0))
+                    {|
+                        Vertical = 
+                            let x = leftTop.x + cropMark.DistanceToPageEdge
+                            {
+                                Start = Point (x, leftTop.y)
+                                End   = Point (x, leftTop.y - cropMark.Length)
+                            }
+                        Horizontal =
+                            let y = leftTop.y - cropMark.DistanceToPageEdge
+                            {
+                                Start = Point (leftTop.x, y)
+                                End   = Point (leftTop.x + cropMark.Length, y)
+                            }
+                    |}
+               
+                let rightTops =
+                    let rightTop = area.GetPoint(Position.RightTop(0, 0))
+                    {|
+                        Vertical = 
+                            let x = rightTop.x - cropMark.DistanceToPageEdge
+                            {
+                                Start = Point (x, rightTop.y)
+                                End   = Point (x, rightTop.y - cropMark.Length)
+                            }
+                        Horizontal =
+                            let y = rightTop.y - cropMark.DistanceToPageEdge
+                            {
+                                Start = Point (rightTop.x, y)
+                                End   = Point (rightTop.x - cropMark.Length, y)
+                            }
+                    |}
+
+                let leftBottoms =
+                    let leftBottom = area.GetPoint(Position.LeftBottom(0, 0))
+                    {|
+                        Vertical = 
+                            let x = leftBottom.x + cropMark.DistanceToPageEdge
+                            {
+                                Start = Point (x, leftBottom.y)
+                                End   = Point (x, leftBottom.y + cropMark.Length)
+                            }
+                        Horizontal =
+                            let y = leftBottom.y + cropMark.DistanceToPageEdge
+                            {
+                                Start = Point (leftBottom.x, y)
+                                End   = Point (leftBottom.x + cropMark.Length, y)
+                            }
+                    |}
+
+                let rightBottoms =
+                    let rightBottom = area.GetPoint(Position.RightBottom(0, 0))
+                    {|
+                        Vertical = 
+                            let x = rightBottom.x - cropMark.DistanceToPageEdge
+                            {
+                                Start = Point (x, rightBottom.y)
+                                End   = Point (x, rightBottom.y + cropMark.Length)
+                            }
+                        Horizontal =
+                            let y = rightBottom.y + cropMark.DistanceToPageEdge
+                            {
+                                Start = Point (rightBottom.x, y)
+                                End   = Point (rightBottom.x - cropMark.Length, y)
+                            }
+                    |}
+                
+                [
+                    match cropMark.LTRB with 
+                    | EdgeCropMarkLTRB.Left
+                    | EdgeCropMarkLTRB.Top
+                    | EdgeCropMarkLTRB.All ->
+                        leftTops.Horizontal
+                        leftTops.Vertical
+
+                    | _ -> ()
+
+                    match cropMark.LTRB with 
+                    | EdgeCropMarkLTRB.Right
+                    | EdgeCropMarkLTRB.Top
+                    | EdgeCropMarkLTRB.All ->
+                        rightTops.Horizontal
+                        rightTops.Vertical
+                    | _ -> ()
+
+                    match cropMark.LTRB with 
+                    | EdgeCropMarkLTRB.Left
+                    | EdgeCropMarkLTRB.Bottom
+                    | EdgeCropMarkLTRB.All ->
+                        leftBottoms.Horizontal
+                        leftBottoms.Vertical
+                    | _ -> ()
+
+                    match cropMark.LTRB with 
+                    | EdgeCropMarkLTRB.Right
+                    | EdgeCropMarkLTRB.Bottom
+                    | EdgeCropMarkLTRB.All ->
+                        rightBottoms.Horizontal
+                        rightBottoms.Vertical
+                    | _ -> ()
+                ]
+            lines
+            |> List.map (fun line ->
+                PdfCanvas.addLine line mapping
+            )
+            
+        )
+
+
     static member AddMarks(canvasAreaGettingOptions, markAddingElements: MarkAddingElement list) : PageModifier<_, _> =
         PageModifier.AddNew (canvasAreaGettingOptions, (fun args ->
             markAddingElements
@@ -357,22 +504,8 @@ type PageModifier =
 
     static member ClippingContentsToPageBox(pageBoxKind: PageBoxKind, ?margin: Margin): PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos -> 
-            let pageBox = args.Page.GetPageBox(pageBoxKind)
-            let contentBox = 
-                pageBox |> Rectangle.applyMargin (defaultArg margin Margin.Zero)
-            let writerCanvas = 
-                new PdfCanvas(args.Page.NewContentStreamBefore(), args.Page.GetResources(), args.Page.GetDocument())
+            args.Page.ClippingContentsToPageBox(pageBoxKind, ?margin = margin)
 
-            writerCanvas
-                .SaveState()
-                .Rectangle(contentBox)
-                .EoClip()
-                .EndPath()
-                |> ignore
-
-            writerCanvas.AttachContentStream(args.Page.NewContentStreamAfter())
-                    
-            writerCanvas.RestoreState() |> ignore
 
 
 
@@ -550,6 +683,33 @@ module ModifyPageOperators =
             use document = new ReaderDocument(pdfFile.Path)
             let document = document.Reader
             document.GetNumberOfPages()
+
+        /// defaultArg: inShadowMode true || pageSelector PageSelector.First || pageBoxKind PageBoxKind.ActualBox
+        static member ReadPageBox(pdfFile: PdfFile, ?pageBoxKind, ?pageSelector, ?inShadowMode) =
+            let pdfFile = 
+                match defaultArg inShadowMode true with 
+                | true ->
+                    let ext = Path.GetFileName pdfFile.Path
+                    let tmpPath = System.IO.Path.GetTempFileNameEx() |> Path.changeExtension ext
+                    System.IO.File.Copy(pdfFile.Path, tmpPath, true)
+                    PdfFile tmpPath
+
+                | false -> pdfFile
+
+
+            use document = new ReaderDocument(pdfFile.Path)
+            let document = document.Reader
+            let pages = document.GetPages(defaultArg pageSelector PageSelector.First)
+            let pageBoxKind = defaultArg pageBoxKind PageBoxKind.ActualBox
+            let totalNumberOfPages = document.GetNumberOfPages()
+            pages
+            |> List.mapi(fun i page -> 
+                {|
+                    PageNum = i
+                    PageBox = page.GetPageBox(pageBoxKind)
+                    TotalNumberOfPages = totalNumberOfPages
+                |}
+            )
 
         /// default inShadowMode: true
         static member ReadInfos(pdfFile: PdfFile, selector, fInfos, ?pageSelector, ?inShadowMode) =

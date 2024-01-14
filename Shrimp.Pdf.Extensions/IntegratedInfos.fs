@@ -160,6 +160,8 @@ module IntegratedInfos =
           StrokeOpacity: float32 option }
 
     with 
+        
+
         member x.SplitToWords() =
             match x.EndTextState with 
             | EndTextState.No

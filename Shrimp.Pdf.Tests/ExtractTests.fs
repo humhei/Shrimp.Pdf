@@ -393,6 +393,30 @@ let extractTests =
             |> runTest "datas/extract/extract vectors23.pdf" 
             |> ignore
 
+        testCase "extract vectors tests24" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(fun args info -> 
+                        true
+                    )
+                )
+            )
+            |> runTest "datas/extract/extract vectors24.pdf" 
+            |> ignore
+
+        testCase "extract vectors tests25" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(fun args info -> 
+                        true
+                    )
+                )
+            )
+            |> runTest "datas/extract/extract vectors25.pdf" 
+            |> ignore
+
         testCase "extract circle dashline test" <| fun _ -> 
             Flow.Reuse (
                 Reuses.ExtractIM(
