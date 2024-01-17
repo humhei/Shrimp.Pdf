@@ -761,9 +761,9 @@ let reuseTests =
         |> runTest "datas/reuse/scaling page 0.8.pdf" 
         |> ignore
         
-    testCase "insert pages tests" <| fun _ -> 
+    ftestCase "insert pages tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.Insert("datas/reuse/insertPagesResource.pdf")
+            Reuses.Insert("datas/reuse/insertPagesResource.pdf", PageSelector.All, PageInsertingOptions.AfterPoint)
         )
         |> runTest "datas/reuse/insertPages.pdf" 
         |> ignore

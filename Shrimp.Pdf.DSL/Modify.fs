@@ -1196,7 +1196,7 @@ type Modifier =
                 stroke = CloseOperator.Close
             )
          
-         
+    
 
     static member OpenFill(?fillColor) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>)  ->

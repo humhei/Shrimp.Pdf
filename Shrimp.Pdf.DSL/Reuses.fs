@@ -366,8 +366,8 @@ module _Reuses =
                             splitDocument.Reader.GetPageNumbers(PageSelectorExpr.SinglePage expr)
                             |> List.exactlyOne_DetailFailingText
 
-                        let afterPages = readerPages.[middleLeftPageNum+1..]
-                        readerPages.[1..middleLeftPageNum] @ resourcePages @ afterPages
+                        let afterPages = readerPages.[middleLeftPageNum..]
+                        readerPages.[0..middleLeftPageNum-1] @ resourcePages @ afterPages
 
 
                     | PageInsertingOptionsEx.BeforePointCase (expr) ->
@@ -375,8 +375,8 @@ module _Reuses =
                             splitDocument.Reader.GetPageNumbers(PageSelectorExpr.SinglePage expr)
                             |> List.exactlyOne_DetailFailingText
 
-                        let afterPages = readerPages.[middleLeftPageNum..]
-                        readerPages.[1 .. middleLeftPageNum-1] @ resourcePages @ afterPages
+                        let afterPages = readerPages.[middleLeftPageNum-1..]
+                        readerPages.[0 .. middleLeftPageNum-2] @ resourcePages @ afterPages
 
                     | PageInsertingOptionsEx.Before_InMultiple (multiple) ->
                         let pages = 
@@ -821,6 +821,7 @@ module _Reuses =
                  "pageSelector" => pageSelector.ToString()
                  "size" => size.ToString() ]
 
+        /// keepDirection => bkSize.AlignDirection(pageBox)
         static member SetBackgroundSize (pageSelector: PageSelector, bkSize: FsSize, ?position: Position, ?pageBoxSetter: SetBackgroundSize_PageBoxSetter, ?keepDirection) =
             let position = defaultArg position Position.PreciseCenter
             let pageBoxSetter = defaultArg pageBoxSetter SetBackgroundSize_PageBoxSetter.SetArtBoxToContents

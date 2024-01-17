@@ -93,8 +93,6 @@
 
   </ItemGroup>
 
-  <ItemGroup />
-
   <ItemGroup>
     <PackageReference Include="Fake.Core.Environment" Version="5.16.1" />
     <PackageReference Include="FParsec" Version="1.1.1" />
@@ -105,6 +103,7 @@
     <ProjectReference Include="..\Shrimp.Pdf.icms2\Shrimp.Pdf.icms2.fsproj" />
     <ProjectReference Include="..\Shrimp.Pdf.Logger\Shrimp.Pdf.Logger.fsproj" />
     <ProjectReference Include="..\Shrimp.Pdf.Parser\Shrimp.Pdf.Parser.fsproj" />
+    <ProjectReference Include="..\Shrimp.Pdf.PostScript\Shrimp.Pdf.PostScript.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

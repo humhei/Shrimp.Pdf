@@ -151,7 +151,7 @@ let myTests =
             "
 
         let inputValues =
-            List.replicate 1 1.
+            List.replicate 4 1.
             |> List.map PostScriptValue.Double
 
         let r = PostScriptInterpreter.Create(inputValues, text)

@@ -178,6 +178,7 @@ type ImageDataOrImageXObject =
 type ImageCloseOperator =
     | Keep
     | New of ctm: AffineTransformRecord * ImageDataOrImageXObject
+    | Remove
 
 [<RequireQualifiedAccess>]
 type CloseOperatorUnion =
@@ -336,6 +337,11 @@ with
           Close = CloseOperatorUnion.Image (ImageCloseOperator.New (originCtm, image))
           SuffixActions = [] }
 
+    static member RemoveImage() =  
+        { Actions = [] 
+          Close = CloseOperatorUnion.Image (ImageCloseOperator.Remove)
+          SuffixActions = [] }
+
     static member CreateCloseOperator(tag, ?fill, ?stroke, ?text) =
         { Actions = []
           SuffixActions = []
@@ -474,6 +480,8 @@ with
                     | ImageDataOrImageXObject.ImageXObject image ->
                         canvas.AddXObject(image, ctm) 
                         
+                | ImageCloseOperator.Remove ->
+                    canvas
 
 
                     

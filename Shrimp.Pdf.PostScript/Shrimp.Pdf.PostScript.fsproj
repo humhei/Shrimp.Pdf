@@ -10,7 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Shrimp.FSharp.Plus" Version="5.99.484" />
+    <PackageReference Include="Shrimp.FSharp.Plus" Version="5.99.485" />
   </ItemGroup>
     <ItemGroup>
         <PackageReference Update="FSharp.Core" Version="5.0.1" />

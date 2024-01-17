@@ -27,6 +27,7 @@ open Shrimp.Pdf.js.shared
 
 [<AutoOpen>]
 module _Image_Modify  =
+            
     type ModifyIM with
         static member AddBoundToImages(?selector, ?canvasAddRectangleArgs) =
             let canvasAddRectangleArgs =

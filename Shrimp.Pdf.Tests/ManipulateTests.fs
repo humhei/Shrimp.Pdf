@@ -1841,16 +1841,30 @@ let manipulateTests =
 
     testCase "create separationColor with shading" <| fun _ -> 
       let r = 
-          Modify.CreateSeparationColors(SeparationColor.Separation (FsSeparation.OfPantone PantoneColorEnum.``PANTONE 4975 C``))
+          Modify.CreateSeparaColors(SeparaColor.Separation (FsSeparation.OfPantone PantoneColorEnum.``PANTONE 4975 C``))
           |> Flow.Manipulate 
           |> runTest "datas/manipulate/create separation color.pdf" 
       pass()
 
-    ftestCase "create separationColor2 with DeviceN" <| fun _ -> 
+    testCase "create separationColor2 with separtion DeviceN " <| fun _ -> 
       let r = 
-          Modify.CreateSeparationColors(SeparationColor.Separation (FsSeparation.OfPantone PantoneColorEnum.``PANTONE 4975 C``))
+          Modify.CreateSeparaColors(SeparaColor.Separation (FsSeparation.OfPantone PantoneColorEnum.``PANTONE 4975 C``))
           |> Flow.Manipulate 
           |> runTest "datas/manipulate/create separation color2.pdf" 
+      pass()
+
+    testCase "create separationColor3 with separtion DeviceN" <| fun _ -> 
+      let r = 
+          Modify.CreateSeparaColors(SeparaColor.Separation (FsSeparation.OfPantone PantoneColorEnum.``PANTONE 4975 C``))
+          |> Flow.Manipulate 
+          |> runTest "datas/manipulate/create separation color3.pdf" 
+      pass()
+
+    testCase "create separationColor3 with gray DeviceN" <| fun _ -> 
+      let r = 
+          Modify.CreateSeparaColors(SeparaColor.Black)
+          |> Flow.Manipulate 
+          |> runTest "datas/manipulate/create separation color4.pdf" 
       pass()
 
 

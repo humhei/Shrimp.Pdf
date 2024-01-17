@@ -6,6 +6,7 @@ open Shrimp.FSharp.Plus
 #nowarn "0104"
 open System.Drawing
 open iText.Kernel.Pdf
+open Shrimp.Pdf.PostScript
 open Shrimp.FSharp.Plus.Math
 open Shrimp.Pdf
 open iText.Kernel.Colors
@@ -1132,14 +1133,7 @@ module _Colors =
 
                 let alterColorSpace = x.GetAlternateSpace()
 
-                let values = 
-                    let pdfStream = colorSpacePdfFunction :?> PdfStream
-                    let bytes = pdfStream.GetBytes()
-                    let result = System.Text.Encoding.UTF8.GetString(bytes)
-                    match result with 
-                    | ParseRegex.NamedMany1F ("(?<token>\d+\.?\d*)\s+mul", "token") values -> 
-                        values
-                        |> List.map System.Single.Parse
+
 
                 match alterColorSpace with 
                 | ColorSpace.Lab ->
@@ -1155,6 +1149,26 @@ module _Colors =
                         match dictionaryRange with 
                         | [0.f; 1.f; 0.f; 1.f; 0.f; 1.f; 0.f; 1.f] -> ()
                         | _ -> failwith "Not implemented"
+                    let values = 
+                        let pdfStream = colorSpacePdfFunction :?> PdfStream
+                        let bytes = pdfStream.GetBytes()
+                        let result = System.Text.Encoding.UTF8.GetString(bytes)
+                        let postScript = 
+                            let values = 
+                                List.replicate 4 1.
+                                |> List.map PostScriptValue.Double
+                            PostScriptInterpreter.Create(values, result)
+                        let results = 
+                            postScript.StackResult.ToArray().[0..3]
+                            |> List.ofArray
+                            |> List.map(fun m -> float32 m.AsDouble)
+                            |> List.rev
+                        results
+                        //match result with 
+                        //| ParseRegex.NamedMany1F ("(?<token>\d+\.?\d*)\s+mul", "token") values -> 
+                        //    values
+                        //    |> List.map System.Single.Parse
+                    
                     values
 
                 | _ -> failwith "Not implemnted"
@@ -2000,6 +2014,7 @@ module _Colors =
         | Separation of FsSeparation
         | ColorCard of ColorCard
         | Registration
+
     with 
         member x.LoggingText =
             match x with 

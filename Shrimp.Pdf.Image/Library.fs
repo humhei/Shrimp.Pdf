@@ -422,7 +422,9 @@ module _ModifierIM =
                  | IIntegratedRenderInfoIM.Vector renderInfo ->
                      ModifierPdfCanvasActions.Keep(renderInfo.Tag)
 
-
+        static member RemoveImage() =
+            fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->
+                ModifierPdfCanvasActions.RemoveImage()
 
         static member SetMaximunDpi(maximunDpi: int) =
             fun (args: _SelectionModifierFixmentArgumentsIM<'userState>) ->

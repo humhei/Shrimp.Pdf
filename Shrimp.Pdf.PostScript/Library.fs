@@ -54,6 +54,8 @@ module _PostScriptInterpreter =
     let private popParams1_int(stack: Stack<PostScriptValue>) =
         stack.Pop().AsInt
         
+    let private popParams1_Boolean(stack: Stack<PostScriptValue>) =
+        stack.Pop().AsBoolean
 
     let private popParams2(stack: Stack<PostScriptValue>) =
         let param2 = stack.Pop()
@@ -174,35 +176,38 @@ module _PostScriptInterpreter =
 
     module BitwiseOperators =
 
-        type IBitwiseOperator =
+        type IBitwiseOperator1 =
             inherit IOperator
             abstract member Invoke: bool -> bool
 
+
+        type IBitwiseOperator2 =
+            inherit IOperator
+            abstract member Invoke: bool * bool -> bool
+
         type IBitShiftOperator =
             inherit IOperator
-            abstract member Invoke: int -> int
+            abstract member Invoke: value: int * shift: int -> int
 
         type IComparisonOperator =
             inherit IOperator
-            abstract member Compare: PostScriptValue -> bool
+            abstract member Compare: PostScriptValue * PostScriptValue -> bool
 
         type IBooleanOperator =
             inherit IOperator
             abstract member Value: bool
             
-        type ParamBitwiseOperator(paramB: bool, predicate: bool -> bool) =
-            member x.ParamB = paramB
+        type ParamBitwiseOperator(predicate: bool -> bool -> bool) =
+            member x.Invoke(b1, b2) =
+                predicate b1 b2
 
-            member x.Invoke(b) =
-                predicate b
-
-            interface IBitwiseOperator with 
-                member x.Invoke(b) = x.Invoke(b)
+            interface IBitwiseOperator2 with 
+                member x.Invoke(b1, b2) = x.Invoke(b1, b2)
 
                 member x.InvokeStack(stack) =
-                    let value = stack.Pop().AsBoolean
                     let paramB = stack.Pop().AsBoolean
-                    let b = x.Invoke(value)
+                    let value = stack.Pop().AsBoolean
+                    let b = x.Invoke(value, paramB)
                     stack.Push(PostScriptValue.Boolean b)
                     stack
 
@@ -214,35 +219,35 @@ module _PostScriptInterpreter =
                     stack
 
 
-        type ComparisonOperator(param, compare) =
-            member x.Param = param
-                member x.Compare(value) = compare value
+        type ComparisonOperator(compare) =
+            member x.Compare(v1, v2) = compare v1 v2
 
             interface IComparisonOperator with
-                member x.Compare(value) = compare value
+                member x.Compare(v1, v2) = compare v1 v2
 
                 member x.InvokeStack(stack) =
+                    let paramB = stack.Pop()
                     let value = stack.Peek()
-                    let b = x.Compare(value)
+                    let b = x.Compare(value, paramB)
                     stack.Push(PostScriptValue.Boolean b)
                     stack
 
-        type AndOperator(paramB) =
-            inherit ParamBitwiseOperator(paramB, fun value ->
+        type AndOperator() =
+            inherit ParamBitwiseOperator(fun value paramB ->
                 value && paramB
             )
 
         type FalseOperator() =
             inherit BooleanOperator(false)
 
-        type LEOperator(param) =
-            inherit ComparisonOperator(param, fun value ->
+        type LEOperator() =
+            inherit ComparisonOperator(fun value param ->
                 value <= param
             )
 
         type NotOperator() =
             member x.Invoke(b) = not b
-            interface IBitwiseOperator with 
+            interface IBitwiseOperator1 with 
                 member x.Invoke(b) = not b
 
                 member x.InvokeStack(stack) =
@@ -254,9 +259,9 @@ module _PostScriptInterpreter =
         type TrueOperator() =
             inherit BooleanOperator(true)
 
-        type BitShiftOperator(shift: int) =
+        type BitShiftOperator() =
 
-            member x.Invoke(value: int) =
+            member x.Invoke(value: int, shift) =
                 let value = value
                 match shift with 
                 | BiggerOrEqual 0 -> 
@@ -266,47 +271,48 @@ module _PostScriptInterpreter =
                     value >>> shift
 
             interface IBitShiftOperator with 
-                member x.Invoke(value: int) = x.Invoke(value)
+                member x.Invoke(value: int, shift) = x.Invoke(value, shift)
 
                 member x.InvokeStack(stack) =
+                    let shift = stack.Pop().AsInt
                     let value = stack.Pop().AsInt
-                    let b = x.Invoke(value)
+                    let b = x.Invoke(value, shift)
                     stack.Push(PostScriptValue.Double (b))
                     stack
                 
 
-        type GEOperator(param) =
-            inherit ComparisonOperator(param, fun value ->
+        type GEOperator() =
+            inherit ComparisonOperator(fun value param ->
                 value >= param
             )
 
-        type LTOperator(param) =
-            inherit ComparisonOperator(param, fun value ->
+        type LTOperator() =
+            inherit ComparisonOperator(fun value param ->
                 value < param
             )
 
-        type OrOperator(paramB) =
-            inherit ParamBitwiseOperator(paramB, fun value ->
+        type OrOperator() =
+            inherit ParamBitwiseOperator(fun value paramB ->
                 value || paramB
             )
 
-        type XOROperator(paramB) =
-            inherit ParamBitwiseOperator(paramB, fun value ->
+        type XOROperator() =
+            inherit ParamBitwiseOperator(fun value paramB ->
                  (value || paramB) && (value <> paramB)
             )
 
-        type EQOperator(paramB) =
-            inherit ComparisonOperator(paramB, fun value ->
+        type EQOperator() =
+            inherit ComparisonOperator(fun value paramB ->
                 value = paramB
             )
 
-        type GTOperator(param) =
-            inherit ComparisonOperator(param, fun value ->
+        type GTOperator() =
+            inherit ComparisonOperator(fun value param ->
                 value > param
             )
 
-        type NEOperator(paramB) =
-            inherit ComparisonOperator(paramB, fun value ->
+        type NEOperator() =
+            inherit ComparisonOperator(fun value paramB ->
                 value <> paramB
             )
 
@@ -315,20 +321,30 @@ module _PostScriptInterpreter =
                 nameof(TrueOperator) => (TrueOperator >> fun r -> r :> IOperator)
                 nameof(FalseOperator) => (FalseOperator >> fun r -> r :> IOperator)
                 nameof(NotOperator) => (NotOperator >> fun r -> r :> IOperator)
+                nameof(AndOperator) => (AndOperator >> fun r -> r :> IOperator)
+                nameof(OrOperator) => (OrOperator >> fun r -> r :> IOperator)
+                nameof(XOROperator) => (XOROperator >> fun r -> r :> IOperator)
+                nameof(LEOperator) => ( LEOperator >> fun r -> r :> IOperator)
+                nameof(LTOperator) => ( LTOperator >> fun r -> r :> IOperator)
+                nameof(GEOperator) => ( GEOperator >> fun r -> r :> IOperator)
+                nameof(GTOperator) => ( GTOperator >> fun r -> r :> IOperator)
+                nameof(NEOperator) => ( NEOperator >> fun r -> r :> IOperator)
+                nameof(EQOperator) => ( EQOperator >> fun r -> r :> IOperator)
+                nameof(BitShiftOperator) => (BitShiftOperator >> fun r -> r :> IOperator)
             ]
 
         let oneParamOperators = 
             [
-                nameof(AndOperator) => (PostScriptValue.asBoolean >> AndOperator >> fun r -> r :> IOperator)
-                nameof(OrOperator) => (PostScriptValue.asBoolean >> OrOperator >> fun r -> r :> IOperator)
-                nameof(XOROperator) => (PostScriptValue.asBoolean >> XOROperator >> fun r -> r :> IOperator)
-                nameof(LEOperator) => (id >> LEOperator >> fun r -> r :> IOperator)
-                nameof(LTOperator) => (id >> LTOperator >> fun r -> r :> IOperator)
-                nameof(GEOperator) => (id >> GEOperator >> fun r -> r :> IOperator)
-                nameof(GTOperator) => (id >> GTOperator >> fun r -> r :> IOperator)
-                nameof(NEOperator) => (id >> NEOperator >> fun r -> r :> IOperator)
-                nameof(EQOperator) => (id >> EQOperator >> fun r -> r :> IOperator)
-                nameof(BitShiftOperator) => (PostScriptValue.asInt >> BitShiftOperator >> fun r -> r :> IOperator)
+                //nameof(AndOperator) => (PostScriptValue.asBoolean >> AndOperator >> fun r -> r :> IOperator)
+                //nameof(OrOperator) => (PostScriptValue.asBoolean >> OrOperator >> fun r -> r :> IOperator)
+                //nameof(XOROperator) => (PostScriptValue.asBoolean >> XOROperator >> fun r -> r :> IOperator)
+                //nameof(LEOperator) => (id >> LEOperator >> fun r -> r :> IOperator)
+                //nameof(LTOperator) => (id >> LTOperator >> fun r -> r :> IOperator)
+                //nameof(GEOperator) => (id >> GEOperator >> fun r -> r :> IOperator)
+                //nameof(GTOperator) => (id >> GTOperator >> fun r -> r :> IOperator)
+                //nameof(NEOperator) => (id >> NEOperator >> fun r -> r :> IOperator)
+                //nameof(EQOperator) => (id >> EQOperator >> fun r -> r :> IOperator)
+                //nameof(BitShiftOperator) => (PostScriptValue.asInt >> BitShiftOperator >> fun r -> r :> IOperator)
             ]
 
         let twoParamsOperators = 
@@ -339,12 +355,17 @@ module _PostScriptInterpreter =
 
 
     module ArithmeticOperators =
-        type IArithmeticOperator =
+
+        type IArithmeticOperator1 =
             inherit IOperator
             abstract member Invoke: float -> float
 
+        type IArithmeticOperator2 =
+            inherit IOperator
+            abstract member Invoke: float * float -> float
+
         type NotImplementedArithmeticOperator() =
-            interface IArithmeticOperator with 
+            interface IArithmeticOperator1 with 
                 member x.Invoke(input) = failwithf "Not implemented postscript operator %A" (x.GetType())
                 member x.InvokeStack(stack) = failwithf "Not implemented postscript operator %A" (x.GetType())
 
@@ -354,7 +375,7 @@ module _PostScriptInterpreter =
 
             member x.Invoke(input) = mapping input
 
-            interface IArithmeticOperator with 
+            interface IArithmeticOperator1 with 
                 member x.Invoke(input) = x.Invoke(input)
                 member x.InvokeStack(stack) =
                     let value = stack.Pop().AsDouble
@@ -362,17 +383,17 @@ module _PostScriptInterpreter =
                     stack.Push(PostScriptValue.Double (b))
                     stack
 
-        type ParamArithmeticOperator(param, mapping) =
+        type ParamArithmeticOperator(mapping) =
             member x.Mapping = mapping
 
-            member x.Param = param
-            member x.Invoke(input) = mapping input 
+            member x.Invoke(input, param) = mapping input param
 
-            interface IArithmeticOperator with 
-                member x.Invoke(input) = x.Invoke(input)
+            interface IArithmeticOperator2 with 
+                member x.Invoke(input, param) = x.Invoke(input, param)
                 member x.InvokeStack(stack) =
+                    let param = stack.Pop().AsDouble
                     let value = stack.Pop().AsDouble
-                    let b = x.Invoke(value)
+                    let b = x.Invoke(value, param)
                     stack.Push(PostScriptValue.Double (b))
                     stack
 
@@ -386,8 +407,8 @@ module _PostScriptInterpreter =
         type FloorOperator() =
             inherit DirectArithmeticOperator(Math.Floor)
 
-        type ModOperator(moder: float) =
-            inherit ParamArithmeticOperator(moder, fun value ->
+        type ModOperator() =
+            inherit ParamArithmeticOperator(fun value moder ->
                 Double.toInt_Safe value % Double.toInt_Safe moder
                 |> float
             )
@@ -395,8 +416,8 @@ module _PostScriptInterpreter =
         type SinOperator() =
             inherit DirectArithmeticOperator(Math.Sin)
 
-        type AddOperator(addingValue: float) =
-             inherit ParamArithmeticOperator(addingValue, fun value ->
+        type AddOperator() =
+             inherit ParamArithmeticOperator(fun value addingValue ->
                  addingValue + value
              )
 
@@ -404,14 +425,14 @@ module _PostScriptInterpreter =
         type CvrOperator() =
             inherit NotImplementedArithmeticOperator()
 
-        type IdivOperator(divider: float) =
-            inherit ParamArithmeticOperator(divider, fun value ->
+        type IdivOperator() =
+            inherit ParamArithmeticOperator(fun value divider ->
                 value / divider
                 |> floor
             )
 
-        type MulOperator(multiple: float) =
-             inherit ParamArithmeticOperator(multiple, fun value ->
+        type MulOperator() =
+             inherit ParamArithmeticOperator(fun value multiple ->
                  multiple * value
              )
 
@@ -423,8 +444,8 @@ module _PostScriptInterpreter =
              inherit DirectArithmeticOperator(Math.Atan)
 
 
-        type DivOperator(divider: float) =
-             inherit ParamArithmeticOperator(divider, fun value ->
+        type DivOperator() =
+             inherit ParamArithmeticOperator(fun value divider ->
                  value / divider
              )
 
@@ -434,8 +455,8 @@ module _PostScriptInterpreter =
         type NegOperator() =
              inherit DirectArithmeticOperator(fun m -> -m)
 
-        type SubOperator(suber) =
-             inherit ParamArithmeticOperator(suber, fun value ->
+        type SubOperator() =
+             inherit ParamArithmeticOperator(fun value suber ->
                  value - suber
              )
 
@@ -475,16 +496,22 @@ module _PostScriptInterpreter =
                 nameof(RoundOperator) => (RoundOperator >> fun r -> r :> IOperator)
                 nameof(TruncateOperator) => (TruncateOperator >> fun r -> r :> IOperator)
                 nameof(CosOperator) => (CosOperator >> fun r -> r :> IOperator)
+                nameof(ModOperator) => (ModOperator >> fun r -> r :> IOperator)    
+                nameof(AddOperator) => (AddOperator >> fun r -> r :> IOperator)
+                nameof(MulOperator) => (MulOperator >> fun r -> r :> IOperator)
+                nameof(DivOperator) => (DivOperator >> fun r -> r :> IOperator)
+                nameof(IdivOperator) => (IdivOperator >> fun r -> r :> IOperator)
+                nameof(SubOperator) => (SubOperator >> fun r -> r :> IOperator)
             ]
 
         let oneParamOperators = 
             [
-                nameof(ModOperator) => (PostScriptValue.asDouble >> ModOperator >> fun r -> r :> IOperator)    
-                nameof(AddOperator) => (PostScriptValue.asDouble >> AddOperator >> fun r -> r :> IOperator)
-                nameof(MulOperator) => (PostScriptValue.asDouble >> MulOperator >> fun r -> r :> IOperator)
-                nameof(DivOperator) => (PostScriptValue.asDouble >> DivOperator >> fun r -> r :> IOperator)
-                nameof(IdivOperator) => (PostScriptValue.asDouble >> IdivOperator >> fun r -> r :> IOperator)
-                nameof(SubOperator) => (PostScriptValue.asDouble >> SubOperator >> fun r -> r :> IOperator)
+                //nameof(ModOperator) => (PostScriptValue.asDouble >> ModOperator >> fun r -> r :> IOperator)    
+                //nameof(AddOperator) => (PostScriptValue.asDouble >> AddOperator >> fun r -> r :> IOperator)
+                //nameof(MulOperator) => (PostScriptValue.asDouble >> MulOperator >> fun r -> r :> IOperator)
+                //nameof(DivOperator) => (PostScriptValue.asDouble >> DivOperator >> fun r -> r :> IOperator)
+                //nameof(IdivOperator) => (PostScriptValue.asDouble >> IdivOperator >> fun r -> r :> IOperator)
+                //nameof(SubOperator) => (PostScriptValue.asDouble >> SubOperator >> fun r -> r :> IOperator)
             ]
 
         let twoParamsOperators = 
@@ -493,68 +520,92 @@ module _PostScriptInterpreter =
             ]
 
     
-    [<RequireQualifiedAccess>]
-    type OperatorUnion =
-        | Direct   of (unit -> IOperator)
-        | OneParam of (PostScriptValue -> IOperator)
-        | TwoParams of (PostScriptValue * PostScriptValue -> IOperator)
+    //[<RequireQualifiedAccess>]
+    //type OperatorUnion =
+    //    | Direct   of (unit -> IOperator)
+    //    | OneParam of (PostScriptValue -> IOperator)
+    //    | TwoParams of (PostScriptValue * PostScriptValue -> IOperator)
 
     let private directOperators = 
         StackOperators.directOperators 
         @ ArithmeticOperators.directOperators 
         @ BitwiseOperators.directOperators
         |> List.mapFst(fun m -> m.TrimEnding("Operator", ignoreCase = true))
-        |> List.mapSnd OperatorUnion.Direct
+        //|> List.mapSnd OperatorUnion.Direct
 
-    let private oneParamOperators = 
-        StackOperators.oneParamOperators
-        @ ArithmeticOperators.oneParamOperators
-        @ BitwiseOperators.oneParamOperators
-        |> List.mapFst(fun m -> m.TrimEnding("Operator", ignoreCase = true))
-        |> List.mapSnd OperatorUnion.OneParam
+    //let private oneParamOperators = 
+    //    StackOperators.oneParamOperators
+    //    @ ArithmeticOperators.oneParamOperators
+    //    @ BitwiseOperators.oneParamOperators
+    //    |> List.mapFst(fun m -> m.TrimEnding("Operator", ignoreCase = true))
+    //    |> List.mapSnd OperatorUnion.OneParam
 
-    let private twoParamsOperators = 
-        StackOperators.twoParamsOperators
-        @ ArithmeticOperators.twoParamsOperators
-        @ BitwiseOperators.twoParamsOperators
-        |> List.mapFst(fun m -> m.TrimEnding("Operator", ignoreCase = true))
-        |> List.mapSnd OperatorUnion.TwoParams
+    //let private twoParamsOperators = 
+    //    StackOperators.twoParamsOperators
+    //    @ ArithmeticOperators.twoParamsOperators
+    //    @ BitwiseOperators.twoParamsOperators
+    //    |> List.mapFst(fun m -> m.TrimEnding("Operator", ignoreCase = true))
+    //    |> List.mapSnd OperatorUnion.TwoParams
 
     let private allOperators = 
         let operators = 
-            directOperators @ oneParamOperators @ twoParamsOperators
+            directOperators 
             |> List.mapFst StringIC
 
-        let map = Map.ofList operators
-        match map.Count = operators.Length with 
-        | true -> map
-        | false -> 
+        let __checkNamesNotDuplicated =
             operators
-            |> List.ensureNotDuplicatedWith fst
-            |> ignore
-            
-            failwithf ""
+            |> List.map fst
+            |> List.ensureNotDuplicated
+
+        Map.ofList operators
+        
+    let private invokeOperators (operators: IOperator list) stack = 
+        (stack, operators)
+        ||> List.fold(fun stack operator ->
+            operator.InvokeStack(stack)
+        )
 
     type IFOperator =
-        { Current: IOperator list }
+        { IfTrue: IOperator list }
+    with 
+        interface IOperator with 
+            member x.InvokeStack(stack) =
+                let b = stack.Pop().AsBoolean
+                match b with 
+                | true -> invokeOperators x.IfTrue stack
+                | false -> stack
 
-    type PostScriptInterpreter private (inputValues: PostScriptValue list, operators: IOperator list) =
-        let stack = Stack<PostScriptValue>(inputValues)
-        let newStack =
-            (stack, operators)
-            ||> List.fold(fun stack operator ->
-                operator.InvokeStack(stack)
-            )
+
+    type IfElseOperator =
+        { IfTrue: IOperator list
+          IfFalse: IOperator list }
+    with 
+        interface IOperator with 
+            member x.InvokeStack(stack) =
+                let b = stack.Pop().AsBoolean
+                match b with 
+                | true -> invokeOperators x.IfTrue stack
+                | false -> invokeOperators x.IfFalse stack
+
+    type PostScriptInterpreter private (operators: IOperator list) =
+        let stack = Stack<PostScriptValue>()
+        let newStack = invokeOperators operators stack
             
 
         member x.StackResult = newStack
             
         static member Create(inputValues: PostScriptValue list, inputString: string) =
+            let IF = "if"
+            let IF_ELSE = "ifelse"
             let inputString = 
                 inputString.Trim().TrimStart('{').TrimEnd('}')
                 |> Text.trimAllToOne
+                |> fun m ->     
+                    m.Replace("{", " { ").Replace("}", " } ")
 
             let operators = 
+                let expressionStack = Stack()
+                let stack = Stack()
                 let rec loop accumOperands accumOperators (parts: StringIC list) =
                     match parts with 
                     | [] -> 
@@ -564,28 +615,56 @@ module _PostScriptInterpreter =
 
                     | part :: t ->
                         match part.Value with 
-                        | "{" -> failwithf ""
+                        | "{" -> 
+                            let accumOperands =
+                                accumOperands
+                                |> List.map PostScriptValueOperator
+                                |> List.map(fun m -> m :> IOperator)
+
+                            stack.Push((accumOperands @ accumOperators))
+                            loop [] [] t
+
+                        | "}" ->
+                            let expression = 
+                                let accumOperands =
+                                    accumOperands
+                                    |> List.map PostScriptValueOperator
+                                    |> List.map(fun m -> m :> IOperator)
+
+                                (accumOperands @ accumOperators)
+
+                            expressionStack.Push(expression)
+                            loop [] (stack.Pop()) t
+
+                        | String.EqualIC IF ->
+                            match expressionStack.Count with 
+                            | 1 ->
+                                failwithf ""
+                            | count -> failwithf "Expression stack Length should be 1 for if but here is %d" count
+                        | String.EqualIC IF_ELSE ->
+                            match expressionStack.Count with 
+                            | 2 -> ()
+                            | count -> failwithf "Expression stack Length should be 2 for ifelse but here is %d" count
+                            
+                            match accumOperands with 
+                            | [] -> ()
+                            | _ :: _ -> failwithf "accumOperands %A for ifelse should be empty" accumOperands
+
+                            let if_False = expressionStack.Pop()
+                            let if_True = expressionStack.Pop()
+                            let operator = 
+                                { IfTrue = if_True 
+                                  IfFalse = if_False }
+                            loop [] (operator :: accumOperators) t
 
                         | _ ->
                             match allOperators.TryFind part with 
                             | Some operator -> 
-                                match operator with 
-                                | OperatorUnion.Direct operator -> 
-                                    match accumOperands with 
-                                    | [] -> loop [] (operator() :: accumOperators) t
-                                    | _ -> failwithf "Invalid accum operands %A for direct operator %s" accumOperands part.Value
-
-                                | OperatorUnion.OneParam operator -> 
-                                    match accumOperands with 
-                                    | [operand] -> 
-                                        loop [] (operator operand :: accumOperators) t
-                                    | _ -> failwithf "Invalid accum operands %A for OneParam operator %s" accumOperands part.Value
-
-                                | OperatorUnion.TwoParams operator -> 
-                                    match accumOperands with 
-                                    | [operand1; operand2] -> loop [] (operator (operand1, operand2) :: accumOperators) t
-                                    | _ -> failwithf "Invalid accum operands %A for OneParam operator %s" accumOperands part.Value
-
+                                let accumOperands =
+                                    accumOperands
+                                    |> List.map PostScriptValueOperator
+                                    |> List.map(fun m -> m :> IOperator)
+                                loop [] (operator() :: accumOperands @ accumOperators) t
 
                             | None -> 
                                 loop (PostScriptValue.String part.Value :: accumOperands) accumOperators t
@@ -594,8 +673,8 @@ module _PostScriptInterpreter =
                     inputString.SplitAsListAndTrim(" ")
                     |> List.map StringIC
 
-                loop [] [] parts
+                loop (List.rev inputValues) [] parts
 
             
-            PostScriptInterpreter(inputValues, operators)
+            PostScriptInterpreter(operators)
 
