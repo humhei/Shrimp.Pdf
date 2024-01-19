@@ -14,11 +14,22 @@ open Shrimp.Pdf.Colors
 
 [<AutoOpen>]
 module _Template_ColoredBoxes =
-    type TargetPageBox = TargetPageBox of Rectangle option
+    type TargetPageBox = TargetPageBox of option<PageBoxKind * Rectangle>
     with 
         member x.Value =
-            let (TargetPageBox v) = x
+            let (TargetPageBox (v)) = x
             v
+
+        static member create pageBoxKind (rect: Rectangle option) =
+            match rect with 
+            | None -> TargetPageBox None
+            | Some rect -> TargetPageBox(Some (pageBoxKind, rect))
+
+        static member Create (rect: Rectangle option) =
+            match rect with 
+            | None -> TargetPageBox None
+            | Some rect -> TargetPageBox(Some (PageBoxKind.AllBox, rect))
+
     
     type SerializableIndexedBound =
         { Index: int 
@@ -92,7 +103,7 @@ module _Template_ColoredBoxes =
                             let infoBound: TargetPageBox = fBound info
                             match infoBound.Value with 
                             | None -> false
-                            | Some infoBound ->
+                            | Some (_, infoBound) ->
                                 (match predicateEx with 
                                     | Some predicateEx -> 
                                         predicateEx info bound infoBound 
@@ -124,7 +135,7 @@ module _Template_ColoredBoxes =
                         |> List.filter(fun info -> 
                             let infoBound: TargetPageBox = fBound info
                             match infoBound.Value with 
-                            | Some infoBound -> infoBound.Is_InsideOrCross_Of(bound.Bound)
+                            | Some (_, infoBound) -> infoBound.Is_InsideOrCross_Of(bound.Bound)
                             | None -> false
                         )
                     match infos with 
@@ -319,7 +330,7 @@ module _Template_ColoredBoxes =
                     fBound = (fun info ->
                         IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth info
                         |> Some 
-                        |> TargetPageBox
+                        |> TargetPageBox.Create
                     )
                 ) 
 
@@ -600,7 +611,7 @@ module _Template_ColoredBoxes =
                         (fun info ->
                             IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth info
                             |> Some
-                            |> TargetPageBox
+                            |> TargetPageBox.Create
                         )
                     )
 

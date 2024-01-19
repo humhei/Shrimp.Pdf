@@ -44,7 +44,7 @@ let extractTests =
                                 infos,
                                 (fun m -> 
                                     let bound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m
-                                    TargetPageBox(Some bound)
+                                    TargetPageBox.Create(Some bound)
                                 )
                             )
 
@@ -58,6 +58,8 @@ let extractTests =
     ]
 
     testList "extract tests" [
+
+
         testCase "extract and scale" <| fun _ -> 
             Flow.Reuse (
                 Reuses.TransformForEach(
@@ -109,6 +111,27 @@ let extractTests =
                 )
             )
             |> runTest "datas/extract/extract and scale4.pdf" 
+            |> ignore
+
+        testCase "extract to two pages" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractToTwoPages(
+                    Selector.PathOrText(Info.StrokeColorIs (FsColor.RGB_BLUE))
+                )
+            )
+             
+            |> runTest "datas/extract/extract to two pages.pdf" 
+            |> ignore
+
+        ftestCase "extract to two pages2" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractToTwoPages(
+                    Selector.PathOrText(Info.StrokeColorIs (FsColor.valueColor FsDeviceCmyk.MAGENTA)),
+                    ExtractToTwoPages_PageBoxSetter.ToSelection(PageBoxKind.AllBox, Margin.Zero)
+                )
+            )
+             
+            |> runTest "datas/extract/extract to two pages2.pdf" 
             |> ignore
 
         testCase "extract paths tests" <| fun _ -> 

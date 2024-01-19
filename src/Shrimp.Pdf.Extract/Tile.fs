@@ -198,7 +198,7 @@ module _Tile =
                 |> List.collect(fun m -> m.Infos)
                 |> List.map(fun m -> BoundCachableInfo(m, fun info -> 
                     (x.GetInfoBound() info.Info.OriginInfo)
-                    |> TargetPageBox
+                    |> TargetPageBox.Create
                 ))
                 |> List.filter(fun m -> m.Bound.Value.IsSome)
 
@@ -219,7 +219,7 @@ module _Tile =
 
                                         match infoBound.Value with 
                                         | None -> None
-                                        | Some infoBound ->
+                                        | Some (_, infoBound) ->
                                             let b = 
                                                 (match predicateEx with 
                                                     | Some predicateEx -> 
@@ -241,7 +241,7 @@ module _Tile =
                                     | Some (Choice2Of2 leftInfo) ->
                                         match leftInfo.Bound.Value with 
                                         | None -> loop2 (currentInfos) (leftInfo :: leftInfos) t
-                                        | Some leftInfoBound ->
+                                        | Some (_, leftInfoBound) ->
                                             match predicateCross bound leftInfoBound with 
                                             | true -> loop2 (leftInfo :: currentInfos) (leftInfo :: leftInfos) t
                                             | false -> loop2 (currentInfos) (leftInfo :: leftInfos) t
@@ -290,7 +290,7 @@ module _Tile =
                         |> List.filter(fun info -> 
                             let infoBound: TargetPageBox = info.Bound
                             match infoBound.Value with 
-                            | Some infoBound -> infoBound.Is_InsideOrCross_Of(bound.Bound)
+                            | Some (_, infoBound) -> infoBound.Is_InsideOrCross_Of(bound.Bound)
                             | None -> false
                         )
                     match infos with 
@@ -617,10 +617,10 @@ module _Tile =
                                     |> List.mapi(fun i targetPageInfoOp ->
                                         match targetPageInfoOp with 
                                         | Some (targetPageBox, infos) ->
-                                            TargetRenewablePageInfo.NewPage(TargetPageBox (Some targetPageBox.Bound), TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers))
+                                            TargetRenewablePageInfo.NewPage(TargetPageBox.Create (Some targetPageBox.Bound), TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers))
 
                                         | None ->
-                                            TargetRenewablePageInfo.EmptyPage(TargetPageBox (Some bounds.[i]))
+                                            TargetRenewablePageInfo.EmptyPage(TargetPageBox.Create (Some bounds.[i]))
                                     )
 
                                 )
@@ -711,10 +711,10 @@ module _Tile =
                                 |> List.mapi(fun i targetPageInfoOp ->
                                     match targetPageInfoOp with 
                                     | Some (targetPageBox, infos) ->
-                                        TargetRenewablePageInfo.NewPage(TargetPageBox (Some targetPageBox.Bound), TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers))
+                                        TargetRenewablePageInfo.NewPage(TargetPageBox.Create (Some targetPageBox.Bound), TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers))
 
                                     | None ->
-                                        TargetRenewablePageInfo.EmptyPage(TargetPageBox (Some bounds.[i]))
+                                        TargetRenewablePageInfo.EmptyPage(TargetPageBox.Create (Some bounds.[i]))
                                 )
 
                             )
@@ -966,7 +966,7 @@ module _Tile =
                                                 match targetPageInfoOp with 
                                                 | Some (targetPageBox, infos) ->
                                                     TargetRenewablePageInfo.NewPage(
-                                                        TargetPageBox (Some targetPageBox.Bound),
+                                                        TargetPageBox.Create (Some targetPageBox.Bound),
                                                         TargetRenewableNewPageInfoElement.Create(
                                                             infos,
                                                             borderKeepingPageNumbers,
@@ -986,7 +986,7 @@ module _Tile =
                                                     )
 
                                                 | None ->
-                                                    TargetRenewablePageInfo.EmptyPage(TargetPageBox (Some bounds.[i]))
+                                                    TargetRenewablePageInfo.EmptyPage(TargetPageBox.Create (Some bounds.[i]))
                                             )
                                         )
                                         false

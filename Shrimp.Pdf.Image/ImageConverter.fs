@@ -29,18 +29,8 @@ module _ImageConverter =
         | Vertical of float
         | Horizontal of float
 
-    type ImageConverter = 
-        static member ConvertPdfToJpeg(pdfFile: PdfFile, ?dpi, ?targetDir): Async<JpgFile list> =
-            let targetDir = 
-                defaultArg targetDir (Path.GetDirectoryName pdfFile.Path)
-                |> FsFullPath
-
-            let dpi = defaultArg dpi 300.f
-
-            client.Value <? ServerMsg.ConvertPdfFileToImage(pdfFile, dpi, targetDir)
-
-        static member ConvertImageToPdf(image: string, targetPath: PdfPath, ?targetLength: ResizingTargetLength, ?pageOrientation) =
-            let pdfDoc = new PdfDocument(new PdfWriter(targetPath.Path))
+    type PdfDocument with 
+        member pdfDoc.AddImageAsPage(image: string, ?targetLength: ResizingTargetLength) =
             let image = ImageDataFactory.Create(image)
             let width = image.GetWidth()
             let height = image.GetHeight()
@@ -74,11 +64,29 @@ module _ImageConverter =
                         let scale = length / width
                         Rectangle(width * scale, height * scale)
 
+            let pdfPage = pdfDoc.AddNewPage(PageSize rect)
 
-            let canvas = new PdfCanvas(pdfDoc.AddNewPage(PageSize rect))
+            let canvas = new PdfCanvas(pdfPage)
 
             canvas.AddImageFittedIntoRectangle(image, rect, asInline = false)
             |> ignore
+
+            pdfPage
+
+    type ImageConverter = 
+        static member ConvertPdfToJpeg(pdfFile: PdfFile, ?dpi, ?targetDir): Async<JpgFile list> =
+            let targetDir = 
+                defaultArg targetDir (Path.GetDirectoryName pdfFile.Path)
+                |> FsFullPath
+
+            let dpi = defaultArg dpi 300.f
+
+            client.Value <? ServerMsg.ConvertPdfFileToImage(pdfFile, dpi, targetDir)
+
+        static member ConvertImageToPdf(image: string, targetPath: PdfPath, ?targetLength: ResizingTargetLength, ?pageOrientation) =
+            let pdfDoc = new PdfDocument(new PdfWriter(targetPath.Path))
+            let page = pdfDoc.AddImageAsPage(image, ?targetLength = targetLength)
+            let rect = page.GetPageSize()
 
             pdfDoc.Close()
 

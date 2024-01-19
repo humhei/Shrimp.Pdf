@@ -1958,6 +1958,11 @@ module iText =
         let getActualBox (page: PdfPage) =
             page.GetActualBox()
 
+    type PdfPage with
+        member x.SetPageBox(pageBoxKind, rect) =
+            PdfPage.setPageBox pageBoxKind rect x
+
+
     [<RequireQualifiedAccess>]
     module PdfDocument =
         let getPages (doc: PdfDocument) = doc.GetPages()

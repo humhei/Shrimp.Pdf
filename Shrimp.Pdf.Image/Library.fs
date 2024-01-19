@@ -694,6 +694,182 @@ module _ModifierIM =
     
 
 
+    type PdfPage with 
+        member page.AddBackgroundOrForegroundImage 
+            (i: int,
+             imageCache: System.Collections.Concurrent.ConcurrentDictionary<_, _>,
+             image: BackgroundImageFile,
+             choice: BackgroundOrForeground,
+             ?shadowColor,
+             ?xEffect,
+             ?yEffect,
+             ?backgroundPositionTweak: PageNumber -> BackgroundPositionTweak,
+             ?layerName: BackgroundAddingLayerOptions,
+             ?extGSState: FsExtGState
+            ) =
+            let pageBox = 
+                page.GetActualBox()
+
+            let pageSize = 
+                pageBox
+                |> PageSize
+
+            let writerDoc = page.GetDocument()
+            let xEffect = defaultArg xEffect XEffort.Middle
+            let yEffect = defaultArg yEffect YEffort.Middle
+            let addShadowColor pageSize (pdfCanvas: PdfCanvas) =
+                match shadowColor with 
+                | None -> pdfCanvas
+                | Some (pdfFileShadow: NullablePdfCanvasColor) ->
+                    pdfCanvas
+                        .SaveState()
+                        .SetFillColor(pdfFileShadow)
+                        .Rectangle(pageSize)
+                        .Fill()
+                        .RestoreState()
+
+            let pageNumber = i + 1
+
+            let typedPageNumber = PageNumber pageNumber
+
+            let pdfCanvas = 
+                match choice with 
+                | BackgroundOrForeground.Background ->
+                    new PdfCanvas(page.NewContentStreamBefore(), page.GetResources(), writerDoc)
+
+                | BackgroundOrForeground.Foreground ->
+                    new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), writerDoc)
+                    
+
+
+            let image = 
+                let createImage (imageFile: FsFullPath) =
+                    imageCache.GetOrAdd(imageFile, valueFactory = fun imageFile ->
+                        match imageFile.Path.ToLower() with 
+                        | String.EndsWith ".pdf" -> 
+                            let backgroundFile = BackgroundFile.Create imageFile.Path
+                            let backgroundInfos =
+
+                                let pageBoxs = BackgroundFile.getPageBoxes backgroundFile
+                                let totalPageNumber = pageBoxs.Length
+                                let reader = new PdfDocument(new PdfReader(backgroundFile.ClearedPdfFile.Path))
+          
+                                {|  
+                                    Close = fun () -> reader.Close()
+                                    PageBoxAndXObject = 
+                                        match image with 
+                                        | BackgroundImageFile.Singleton _ ->
+                                            let index = (pageNumber-1) % totalPageNumber
+                                            pageBoxs.[index], (reader.GetPage(index+1).CopyAsFormXObject(writerDoc) :> PdfXObject)
+
+                                        | BackgroundImageFile.Multiple _ ->
+                                            pageBoxs.[0], (reader.GetPage(1).CopyAsFormXObject(writerDoc) :> PdfXObject)
+                                |}
+
+                            backgroundInfos
+
+                        | _ -> 
+                            let imageData = ImageDataFactory.Create(imageFile.Path)
+                            let xobject = PdfImageXObject(imageData)
+                            {|
+                                Close = ignore 
+                                PageBoxAndXObject = 
+                                    let width = 
+                                        xobject.GetWidth() 
+                                        |> float
+                                        |> fun m -> m / float (imageData.GetDpiX())
+                                        |> inch
+
+                                    let height = 
+                                        xobject.GetHeight() 
+                                        |> float
+                                        |> fun m -> m / float (imageData.GetDpiY())
+                                        |> inch
+
+                                    let pageBox = Rectangle.create 0 0 (width) (height)
+                                    //let fsRect = FsRectangle.OfRectangle pageBox
+                                    pageBox, xobject :> PdfXObject
+                            |}
+                    )
+
+                match image with 
+                | BackgroundImageFile.Singleton image -> createImage image
+                | BackgroundImageFile.Multiple images -> createImage (images.[i])
+
+            let addImage() =    
+                pdfCanvas.AddPdfXObjectDSLEx(
+                    backgroundPageBox = fst image.PageBoxAndXObject,
+                    backgroundXObject  = snd image.PageBoxAndXObject,
+                    readerPageBox = pageBox,
+                    xEffect = xEffect,
+                    yEffect = yEffect,
+                    positionTweak = (
+                        match backgroundPositionTweak with 
+                        | None -> BackgroundPositionTweak.DefaultValue
+                        | Some backgroundPositionTweak -> backgroundPositionTweak typedPageNumber
+                    ),
+                    extGSState = extGSState
+                )
+                |> ignore
+                
+
+            match layerName with 
+            | None ->
+                match choice with 
+                | BackgroundOrForeground.Background ->
+                    addImage()
+
+                    pdfCanvas
+                    |> addShadowColor pageSize
+                    |> ignore
+
+                | BackgroundOrForeground.Foreground -> 
+                    addImage()
+
+            | Some layerName ->
+                let bklayer = 
+                    layerName.BackgroundLayer.CreateLayer(writerDoc)
+
+                let currentLayer = layerName.CurrentLayer.CreateLayer(writerDoc)
+                match choice with 
+                | BackgroundOrForeground.Background ->
+                    let _addBKContents =
+                        pdfCanvas.BeginLayerUnion(bklayer) |> ignore<PdfCanvas>
+                        addImage()
+                        pdfCanvas
+                        |> addShadowColor pageSize
+                        |> ignore
+
+                        pdfCanvas.EndLayerUnion(bklayer) |> ignore<PdfCanvas>
+
+                    let __currentContents = 
+                        pdfCanvas.BeginLayerUnion(currentLayer) |> ignore<PdfCanvas>
+
+                        let afterPdfCanvas = new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), writerDoc)
+                        afterPdfCanvas.EndLayerUnion(currentLayer) |> ignore<PdfCanvas>
+                    ()
+
+
+                | BackgroundOrForeground.Foreground -> 
+                    let __currentContents = 
+                        let beforePdfCanvas = new PdfCanvas(page.NewContentStreamBefore(), page.GetResources(), writerDoc)
+                        beforePdfCanvas.BeginLayerUnion(currentLayer) |> ignore<PdfCanvas>
+
+                        pdfCanvas.EndLayerUnion(currentLayer) |> ignore<PdfCanvas>
+
+                    let __addBKContents = 
+                        pdfCanvas.BeginLayerUnion(bklayer) |> ignore<PdfCanvas>
+                        addImage()
+                        pdfCanvas.EndLayerUnion(bklayer) |> ignore<PdfCanvas>
+
+                    ()
+
+
+
+
+
+
+
 
 
     type Reuses with 
@@ -728,7 +904,7 @@ module _ModifierIM =
                         let readerXObject = readerPage.CopyAsFormXObject(doc.Writer)
 
                         let pageSize = 
-                            readerPage.GetActualBox()
+                            readerPageBox
                             |> PageSize
 
                         let writerPage = doc.Writer.AddNewPage(pageSize)

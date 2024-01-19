@@ -71,19 +71,24 @@ module _Extract =
             | TargetNewInfosElementUnion.NewPageInfo v -> v.TagColor
             | TargetNewInfosElementUnion.OriginPage v -> v.TextPickerTagColor
 
+    [<RequireQualifiedAccess>]
+    type ExtractToTwoPages_PageBoxSetter =
+        | ToSelection of pageBoxKind: PageBoxKind * Margin
+        | KeepOrigin
 
     [<RequireQualifiedAccess>]
-    type internal TargetRenewablePageInfo =
+    type internal TargetRenewablePageInfo<'userState> =
         | EmptyPage of TargetPageBox
         | NewPage of TargetPageBox * TargetRenewableNewPageInfoElement
         | Non
         | NewInfosInOriginPage of TargetNewInfosInOriginPageElement list
+        | SplitToTwoPages of pageboxSetter: ExtractToTwoPages_PageBoxSetter * RenewableInfo list * Selector<'userState>
 
     let internal extractVisibleRenewableInfosToWriter 
         (configuration: Configuration)
         (args: PageModifingArguments<_>) 
-        selector 
-        (infosSplitter: RenewableInfo list -> list<TargetRenewablePageInfo>)
+        selector
+        (infosSplitter: RenewableInfo list -> list<TargetRenewablePageInfo<_>>)
         keepOriginPage
         suffixOperation
         (borderKeepingPageNumbers: int list)
@@ -345,57 +350,109 @@ module _Extract =
                 | TargetNewInfosElementUnion.OriginPage (element) ->
                     writeInfosWithTransform element.BoundPredicate element.RectangleTransform
 
+            let rec loop targetPageInfo = 
+                match targetPageInfo with 
+                | TargetRenewablePageInfo.SplitToTwoPages (pageBoxSetter, infos, selector) ->
 
-            match targetPageInfo with 
-            | TargetRenewablePageInfo.EmptyPage targetPageBox ->
-                let writerPage = writer.AddNewPage(PageSize(readerPage.GetActualBox()))
-                match targetPageBox.Value with 
-                | None -> writerPage.SetPageBoxToPage(readerPage) |> ignore
-                | Some pageBox -> writerPage.SetAllBox(pageBox) |> ignore
+                    let selector = Selector.toRenderInfoSelector args selector
+                    let predication = RenderInfoSelector.toRenderInfoIMPredication selector
+                    let infos1, infos2 =
+                        infos
+                        |> List.partition (fun m -> predication m.OriginInfo)
 
-            | TargetRenewablePageInfo.Non -> ()
-            | TargetRenewablePageInfo.NewPage (targetPageBox, infos) ->
+                    let targetPageBox = 
+                        match pageBoxSetter with 
+                        | ExtractToTwoPages_PageBoxSetter.KeepOrigin ->  TargetPageBox None
+                        | ExtractToTwoPages_PageBoxSetter.ToSelection (pageBoxKind, margin) ->
+                            let rects = 
+                                infos1
+                                |> List.choose(fun m -> IIntegratedRenderInfoIM.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m.OriginInfo)
+                                |> AtLeastOneList.TryCreate
+                                
+                            match rects with 
+                            | None -> TargetPageBox None
+                            | Some rects ->
+                                let rect = 
+                                    rects
+                                    |> Rectangle.ofRectangles
+                                    |> Rectangle.applyMargin margin
 
-                let writerPage = writer.AddNewPage(PageSize(readerPage.GetActualBox()))
+                                TargetPageBox (Some (pageBoxKind, rect))
 
-                let writerCanvas = new PdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
-                PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
-                    writerCanvas
-                        .WriteLiteral("0 G\n")
-                        .WriteLiteral("0 g\n")
+                    let asTargetPageInfo infos  =
+                        let element = 
+                            { RenewableInfos = infos
+                              TagColor = None 
+                              BoundPredicate = None 
+                              RectangleTransform = None 
+                              BorderKeepingPageNumbers = borderKeepingPageNumbers }
+
+
+                        TargetRenewablePageInfo.NewPage(targetPageBox, element)
+
+                    loop (asTargetPageInfo infos1)
+                    loop (asTargetPageInfo infos2)
+
+
+
+                | TargetRenewablePageInfo.EmptyPage targetPageBox ->
+                    let writerPage = writer.AddNewPage(PageSize(readerPage.GetActualBox()))
+                    match targetPageBox.Value with 
+                    | None -> writerPage.SetPageBoxToPage(readerPage) |> ignore
+                    | Some (pageBoxKind, pageBox) -> 
+                        writerPage.SetPageBox(pageBoxKind, pageBox)
                         |> ignore
 
-                    writeAreaInfos (TargetNewInfosElementUnion.NewPageInfo infos) writerCanvas writerPage
-                    writerCanvas
+                | TargetRenewablePageInfo.Non -> ()
+                | TargetRenewablePageInfo.NewPage (targetPageBox, infos) ->
 
-                ) |> ignore
-                suffixOperation (writerPage, writerCanvas)
+                    let writerPage = writer.AddNewPage(PageSize(readerPage.GetActualBox()))
 
-                //writerPage.SetPageBoxToPage(readerPage) |> ignore
+                    let writerCanvas = new PdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
+                    PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
+                        writerCanvas
+                            .WriteLiteral("0 G\n")
+                            .WriteLiteral("0 g\n")
+                            |> ignore
 
-                match targetPageBox.Value with 
-                | Some pageBox -> writerPage.SetAllBox(pageBox) |> ignore
-                | None -> writerPage.SetPageBoxToPage(readerPage) |> ignore
+                        writeAreaInfos (TargetNewInfosElementUnion.NewPageInfo infos) writerCanvas writerPage
+                        writerCanvas
 
-            | TargetRenewablePageInfo.NewInfosInOriginPage (infos) ->
-                let writerPage = writer.AddNewPage(PageSize(readerPage.GetActualBox()))
-                writerPage.SetPageBoxToPage(readerPage) |> ignore
-                let writerCanvas = new PdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
-                PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
-                    writerCanvas
-                        .WriteLiteral("0 G\n")
-                        .WriteLiteral("0 g\n")
-                        |> ignore
+                    ) |> ignore
+                    suffixOperation (writerPage, writerCanvas)
 
-                    infos
-                    |> List.iter(fun infos ->    
-                        writeAreaInfos (TargetNewInfosElementUnion.OriginPage infos) writerCanvas writerPage
+                    //writerPage.SetPageBoxToPage(readerPage) |> ignore
+
+                    match targetPageBox.Value with 
+                    | Some (pageBoxKind, pageBox) -> 
+                        writerPage.SetPageBox(pageBoxKind,pageBox) 
+                        |> ignore<PdfPage>
+
+                    | None -> 
+                        writerPage.SetPageBoxToPage(readerPage)
+                        |> ignore<PdfPage>
+
+                | TargetRenewablePageInfo.NewInfosInOriginPage (infos) ->
+                    let writerPage = writer.AddNewPage(PageSize(readerPage.GetActualBox()))
+                    writerPage.SetPageBoxToPage(readerPage) |> ignore
+                    let writerCanvas = new PdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
+                    PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
+                        writerCanvas
+                            .WriteLiteral("0 G\n")
+                            .WriteLiteral("0 g\n")
+                            |> ignore
+
+                        infos
+                        |> List.iter(fun infos ->    
+                            writeAreaInfos (TargetNewInfosElementUnion.OriginPage infos) writerCanvas writerPage
+                        )
+
+                        writerCanvas
                     )
+                    suffixOperation (writerPage, writerCanvas)
 
-                    writerCanvas
-                )
-                suffixOperation (writerPage, writerCanvas)
 
+            loop targetPageInfo
         )
 
 
@@ -405,6 +462,7 @@ module _Extract =
         ) pageNumber
 
         splittedInfos
+
 
 
     type Reuses with
@@ -449,3 +507,37 @@ module _Extract =
 
         static member ExtractPaths(pageSelector, pathSelector, ?keepOriginPage) =
             Reuses.ExtractIM(pageSelector, Selector.Path pathSelector, ?keepOriginPage = keepOriginPage)
+
+
+        static member ExtractToTwoPages (selector: Selector<'userState>, ?pageBoxSetter) =
+            fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
+                let pageBoxSetter = defaultArg pageBoxSetter ExtractToTwoPages_PageBoxSetter.KeepOrigin
+                let reader = splitDocument.Reader
+                let totalNumberOfPages = reader.GetNumberOfPages()
+
+                [1..totalNumberOfPages]
+                |> List.iter(fun pageNumber ->
+                    let readerPage = reader.GetPage(pageNumber)
+                    let args: PageModifingArguments<_> = 
+                        { UserState = flowModel.UserState
+                          Page = readerPage
+                          TotalNumberOfPages = totalNumberOfPages
+                          PageNum = pageNumber
+                        }
+
+                    extractVisibleRenewableInfosToWriter
+                        flowModel.Configuration
+                        args
+                        (Selector.All(fun _ _ -> true))
+                        (fun infos -> [TargetRenewablePageInfo.SplitToTwoPages(pageBoxSetter, infos, selector)])
+                        false
+                        ignore
+                        []
+                        reader
+                        splitDocument.Writer
+                    |> ignore
+                )
+
+            |> reuse 
+                "ExtractToTwoPages"
+                ["selector" => selector.ToString()]
