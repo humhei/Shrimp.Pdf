@@ -17,17 +17,9 @@ open System.IO
 open Shrimp.LiteDB
 
 
-[<AutoOpen>]
-module private _BackgroundFileCache =
-    let backgroundCache = 
-        new LightWeightFileInfoDictionary<PdfFile, PdfFile, PdfPath>(
-            cacheFileMapping = (fun m -> Path.changeExtension ".cache" m.Path),
-            keyFilesGetter = (fun m -> [m.Path]),
-            valueFilesGetter = (fun m -> [m.FileInfo]),
-            primaryKeyGetter = (fun m -> primaryKey m.PdfPath)
-        )
 
-type BackgroundFile = private BackgroundFile of originPdf: PdfFile * clearedPdf: PdfFile * currrentRotation: Rotation
+
+type BackgroundFile = BackgroundFile of originPdf: PdfFile * clearedPdf: PdfFile * currrentRotation: Rotation
 with
     member private x.Value =
         let (BackgroundFile (value, _, _)) = x
@@ -55,40 +47,9 @@ with
     member x.CounterClockwise() = x.Rotate(Rotation.Counterclockwise)
 
 
-    static member Create(pdfFile: PdfFile, addtionalFlow) =
-        let clearedPdfFile = 
-            backgroundCache.GetOrAddOrUpdate(pdfFile, fun () ->
-                let targetPath =
-                    pdfFile.Path
-                    |> Path.changeExtension "backgroundFile.cleared.pdf"
+    static member OfRaw(file: PdfFile) =
+        BackgroundFile(file, file, Rotation.None)
 
-                let newPdfFile: PdfFile = 
-                    let flow = 
-                        Flow.Reuse(Reuses.ClearDirtyInfos())
-                        <+>
-                        addtionalFlow
-
-                    runWithBackup targetPath pdfFile.Path (flow)
-                    |> List.exactlyOne_DetailFailingText
-                    |> fun flowModel -> flowModel.PdfFile
-
-                newPdfFile
-            )
-            |> Async.RunSynchronously
-
-        (pdfFile, clearedPdfFile, Rotation.None)
-        |> BackgroundFile
-
-
-    static member Create(pdfFile: PdfFile) =
-        BackgroundFile.Create(pdfFile, Flow.dummy() ||>> ignore)
-
-    static member Create(path: string) =
-        PdfFile path
-        |> BackgroundFile.Create
-
-    static member Create(path: string, addtionalFlow) =
-        BackgroundFile.Create(PdfFile path, addtionalFlow)
 [<RequireQualifiedAccess>]
 module BackgroundFile =
     let private backgroundFilePageBoxCache = new ConcurrentDictionary<BackgroundFile, Rectangle list>()

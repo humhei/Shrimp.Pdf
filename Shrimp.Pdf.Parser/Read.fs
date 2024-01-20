@@ -989,6 +989,7 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
     new (listener) = NonInitialCallbackablePdfCanvasProcessor(listener, dict [])
 
 
+
 type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXObjectOperator, fCurrentResource) =
     member this.OriginalOperator: IContentOperator = originalOperator
 

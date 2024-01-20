@@ -59,7 +59,7 @@ let imageTests =
                 |> PdfPath
 
             let pdfFile = 
-                ImageConverter.ConvertImageToPdf(jpgFile.Path, targetPath, ResizingTargetLength.Length (mm 50.), PageOrientation.Landscape)
+                ImageConverter.ConvertImageToPdf(jpgFile.Path, targetPath)
                 //ImageConverter.ConvertImageToPdf(jpgFile.Path, targetPath)
 
             pass()

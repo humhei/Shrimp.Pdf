@@ -5,11 +5,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Extensions.fs" />
     <Compile Include="ImageConverter.fs" />
     <Compile Include="Library.fs" />
     <Compile Include="Modify.fs" />
     <Compile Include="Separated.fs" />
     <Compile Include="ModifyPage.fs" />
+    <Compile Include="Reuses.fs" />
   </ItemGroup>
 
   <ItemGroup>

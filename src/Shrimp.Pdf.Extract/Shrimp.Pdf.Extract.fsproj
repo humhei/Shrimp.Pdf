@@ -13,9 +13,8 @@
     <Compile Include="Extract.fs" />
     <Compile Include="Tile.fs" />
     <Compile Include="TransformForEach.fs" />
+    <Compile Include="Background.fs" />
   </ItemGroup>
-
-  <ItemGroup />
 
   <ItemGroup>
     <ProjectReference Include="..\..\Shrimp.Pdf.Image\Shrimp.Pdf.Image.fsproj" />

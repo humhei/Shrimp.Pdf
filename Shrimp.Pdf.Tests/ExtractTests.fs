@@ -94,7 +94,7 @@ let extractTests =
         testCase "extract and scale4" <| fun _ ->  
             Flow.Reuse (
                 Reuses.AddForeground(
-                    PdfFile (@"datas/extract/extract and scale4.template.pdf")
+                    BackgroundFile.Create (@"datas/extract/extract and scale4.template.pdf")
                 )
                 <+>
                 Reuses.TransformForEach(
@@ -123,7 +123,7 @@ let extractTests =
             |> runTest "datas/extract/extract to two pages.pdf" 
             |> ignore
 
-        ftestCase "extract to two pages2" <| fun _ -> 
+        testCase "extract to two pages2" <| fun _ -> 
             Flow.Reuse (
                 Reuses.ExtractToTwoPages(
                     Selector.PathOrText(Info.StrokeColorIs (FsColor.valueColor FsDeviceCmyk.MAGENTA)),
@@ -732,7 +732,7 @@ let extractTests =
         testCase "tile pages by selector tests3" <| fun _ -> 
             Flow.Reuse (
                 Reuses.AddForeground(
-                    PdfFile (@"datas/extract/extract and scale4.template.pdf")
+                    BackgroundFile.Create (@"datas/extract/extract and scale4.template.pdf")
                 )
             )
             <+>
@@ -872,7 +872,7 @@ let extractTests =
         testCase "tile pages and NUP by selector" <| fun _ -> 
             Flow.Reuse (
                 Reuses.AddForeground(
-                    PdfFile (@"datas/extract/extract and scale4.template.pdf")
+                    BackgroundFile.Create (@"datas/extract/extract and scale4.template.pdf")
                 )
             )
             <+>
@@ -901,7 +901,7 @@ let extractTests =
 
             Flow.Reuse (
                 Reuses.AddForeground(
-                    PdfFile (@"datas/extract/tile pages and NUP by selector2_CustomSupply.pdf")
+                    BackgroundFile.Create (@"datas/extract/tile pages and NUP by selector2_CustomSupply.pdf")
                 )
             )
             <+>

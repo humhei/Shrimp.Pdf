@@ -26,7 +26,7 @@ let reuseTests =
     
     testCase "add background tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.AddBackground(PdfFile @"datas/reuse/backgroundFile.pdf")
+            Reuses.AddBackground(BackgroundFile.Create @"datas/reuse/backgroundFile.pdf")
         )
         |> runTest "datas/reuse/add background.pdf" 
         |> ignore
@@ -68,7 +68,7 @@ let reuseTests =
     testCase "add background image tests ai rgb" <| fun _ -> 
         let image = @"datas/reuse/add background image rgb.jpg" 
         Flow.Reuse (
-            Reuses.AddBackgroundImage(
+            Reuses.AddForegroundImage(
                 BackgroundImageFile.Singleton (FsFullPath image),
                 //shadowColor = NullablePdfCanvasColor.WHITE,
                 layerName =  
@@ -76,7 +76,7 @@ let reuseTests =
                         currentLayerName = "Cdr",
                         backgroundLayerName = ("Jpg")
                     ), 
-                backgroundPositionTweak = fun _ -> BackgroundPositionTweak.SpecficRect(FsRectangle.create 0 0 (mm 200) (mm 200))
+                backgroundPositionTweak = fun _ -> BackgroundPositionTweak.OfPageBox(mm 20, mm 20)
                 //extGSState = FsExtGState.Fill_Difference(1.0f)
             )
         )
@@ -104,7 +104,7 @@ let reuseTests =
 
     testCase "add foreground tests" <| fun _ -> 
         Flow.Reuse (
-            Reuses.AddForeground(PdfFile @"datas/reuse/backgroundFile.pdf")
+            Reuses.AddForeground(BackgroundFile.Create @"datas/reuse/backgroundFile.pdf")
         )
         |> runTest "datas/reuse/add foreground.pdf" 
         |> ignore

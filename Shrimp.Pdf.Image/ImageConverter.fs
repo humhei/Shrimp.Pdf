@@ -1,19 +1,16 @@
 ﻿namespace Shrimp.Pdf.ImageConverter
 
 open iText.Kernel.Pdf
-open iText.Kernel.Pdf.Xobject
 open iText.IO.Image
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Geom
 open Shrimp.Pdf
-open Shrimp.Pdf.Colors
 open Shrimp.Pdf.Extensions
 
 #nowarn "0104"
 open Shrimp.FSharp.Plus
 open System.IO
 open Fake.IO
-open Shrimp.Pdf.ImageConverter.Core
 open Shrimp.Pdf.ImageConverter.Core.Cluster
 open Akkling
 
@@ -25,6 +22,7 @@ module _ImageConverter =
 
     [<RequireQualifiedAccess>]
     type ResizingTargetLength =    
+        /// MaxLength for vertical and horizontal
         | Length of float
         | Vertical of float
         | Horizontal of float
@@ -37,7 +35,10 @@ module _ImageConverter =
 
             let rect = 
                 match targetLength with 
-                | None -> Rectangle(width, height)
+                | None -> 
+                    let scaleX = 72.f / (float32 (image.GetDpiX()))
+                    let scaleY = 72.f / (float32 (image.GetDpiY()))
+                    Rectangle(width * scaleX, height * scaleY)
                 | Some length ->    
                     match length with 
                     | ResizingTargetLength.Length length ->

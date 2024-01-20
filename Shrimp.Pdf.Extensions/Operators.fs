@@ -29,6 +29,8 @@ module Constants =
 
     let [<Literal>] MAXIMUM_MM_WIDTH = 5080.
 
+    let [<Literal>] UNTITLED = "untitled"
+
 
     module Operators =
 

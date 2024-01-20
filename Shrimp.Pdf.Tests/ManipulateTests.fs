@@ -593,6 +593,21 @@ let manipulateTests =
         |> runTest "datas/manipulate/change stroke color b255 to m100_3.pdf" 
         |> ignore
 
+    ftestCase "change red to black" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "change red to black"
+                      Selector = PathOrText(Info.FillColorIs FsColor.RGB_RED <&&> Info.BoundIsOutsideOf(AreaGettingOptions.PageBox PageBoxKind.TrimBox))
+                      Modifiers = [Modifier.SetFillColor(DeviceGray.BLACK)]
+                    }
+                ]
+            ) 
+        )
+        |> runTest "datas/manipulate/change red to black.pdf" 
+        |> ignore
+
     testCase "change red to black outside of trimbox" <| fun _ -> 
         Flow.Manipulate (
             Modify.Create(
@@ -1743,7 +1758,7 @@ let manipulateTests =
                             Text(TextInfo.TextContainsIC "30")
                           Modifiers = 
                             [ 
-                                Modifier.AddBackground (PdfFile @"datas/manipulate/star.pdf", PasteObjectSize.BySelection Margin.MM6) 
+                                Modifier.AddBackground (BackgroundFile.Create @"datas/manipulate/star.pdf", PasteObjectSize.BySelection Margin.MM6) 
                                 Modifier.SetFillColor(DeviceCmyk.CYAN)
                                 Modifier.ChangeTextStyle(
                                     TextStyle(

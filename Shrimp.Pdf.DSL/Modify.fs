@@ -1079,9 +1079,9 @@ type Modifier =
                     pdfActions
 
 
-    static member AddBackground(backgroundFile: PdfFile, pasteObjectSize: PasteObjectSize) =
+    static member AddBackground(backgroundFile: BackgroundFile, pasteObjectSize: PasteObjectSize) =
         Modifier.AddBackgroundOrForeground(
-            { File = BackgroundFile.Create backgroundFile 
+            { File = backgroundFile 
               BackgroundOrForeground = BackgroundOrForeground.Background },
             pasteObjectSize
         )

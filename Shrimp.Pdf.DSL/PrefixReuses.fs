@@ -638,6 +638,7 @@ module _PrefixReuses =
                 (sprintf "SelectPages %s" (pageSelector.Text))
                 []
 
+        /// remove rotation + MovePageBoxToOrigin
         static member ClearDirtyInfos(?keepOriginPageBoxes) =
             let keepOriginPageBoxes = defaultArg keepOriginPageBoxes false
             Reuse.Factory(fun flowModel doc ->

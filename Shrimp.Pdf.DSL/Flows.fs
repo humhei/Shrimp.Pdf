@@ -204,8 +204,8 @@ module _Flows =
                             )
                             <+>
                             Flow.Reuse(
-                                Reuse.Func(fun clippingPathFile ->
-                                    Reuses.AddForeground(clippingPathFile)
+                                Reuse.Func(fun (clippingPathFile: PdfFile) ->
+                                    Reuses.AddForeground(BackgroundFile.OfRaw clippingPathFile)
                                 )
                             )
                         | false -> 

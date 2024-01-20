@@ -1853,21 +1853,23 @@ module _Reuses =
                     "layer" => choice.ToString()
                 ]
 
-        static member AddBackground (backgroundFile: PdfFile, ?position, ?pageSelector, ?layerName) =
+        static member AddBackground (backgroundFile: BackgroundFile, ?position, ?pageSelector, ?layerName) =
             let createFPostion (position) =
                 match position with 
                 | None -> None
                 | Some position -> Some (fun _ -> position)
 
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create backgroundFile, BackgroundOrForeground.Background, ?fPosition = createFPostion position, ?pageSelector = pageSelector, ?layerName = layerName)
+            Reuses.AddBackgroundOrForeground(backgroundFile, BackgroundOrForeground.Background, ?fPosition = createFPostion position, ?pageSelector = pageSelector, ?layerName = layerName)
 
-        static member AddForeground (foregroundFile: PdfFile, ?position, ?pageSelector, ?layerName) =
+
+        static member AddForeground (foregroundFile: BackgroundFile, ?position, ?pageSelector, ?layerName) =
             let createFPostion (position) =
                 match position with 
                 | None -> None
                 | Some position -> Some (fun _ -> position)
 
-            Reuses.AddBackgroundOrForeground(BackgroundFile.Create foregroundFile, BackgroundOrForeground.Foreground, ?fPosition = createFPostion position, ?pageSelector = pageSelector, ?layerName = layerName)
+            Reuses.AddBackgroundOrForeground(foregroundFile, BackgroundOrForeground.Foreground, ?fPosition = createFPostion position, ?pageSelector = pageSelector, ?layerName = layerName)
+
 
         static member AssignToLayer (layerName) =
             (fun flowModel (doc: SplitDocument) ->
