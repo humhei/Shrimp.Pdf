@@ -593,19 +593,34 @@ let manipulateTests =
         |> runTest "datas/manipulate/change stroke color b255 to m100_3.pdf" 
         |> ignore
 
-    ftestCase "change red to black" <| fun _ -> 
+    testCase "change red to black" <| fun _ -> 
         Flow.Manipulate (
             Modify.Create(
                 PageSelector.All,
                 [
                     { Name = "change red to black"
-                      Selector = PathOrText(Info.FillColorIs FsColor.RGB_RED <&&> Info.BoundIsOutsideOf(AreaGettingOptions.PageBox PageBoxKind.TrimBox))
+                      Selector = PathOrText(Info.FillColorIs FsColor.RGB_RED)
                       Modifiers = [Modifier.SetFillColor(DeviceGray.BLACK)]
                     }
                 ]
             ) 
         )
         |> runTest "datas/manipulate/change red to black.pdf" 
+        |> ignore
+
+    ftestCase "change red to black NUped" <| fun _ -> 
+        Flow.Manipulate (
+            Modify.Create(
+                PageSelector.All,
+                [
+                    { Name = "change red to black NUped"
+                      Selector = PathOrText(Info.FillColorIs FsColor.RGB_RED)
+                      Modifiers = [Modifier.SetFillColor(DeviceGray.BLACK)]
+                    }
+                ]
+            ) 
+        )
+        |> runTest "datas/manipulate/change red to black NUped.pdf" 
         |> ignore
 
     testCase "change red to black outside of trimbox" <| fun _ -> 
