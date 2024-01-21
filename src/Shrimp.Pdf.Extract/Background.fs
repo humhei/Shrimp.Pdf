@@ -1,46 +1,23 @@
 ﻿// Learn more about F# at http://fsharp.org
 namespace Shrimp.Pdf
-open Akka.Configuration
-open Shrimp.Akkling.Cluster.Intergraction.Configuration
 open Shrimp.FSharp.Plus
-open FParsec
-open FParsec.CharParsers
 open Shrimp.Pdf
 open Shrimp.Pdf.Extract
 open Shrimp.LiteDB
-open Shrimp.Pdf.Image
 
 #nowarn "0104"
 open Shrimp.Pdf.Constants
 open Shrimp.Pdf.Extensions
-open Shrimp.Pdf
-open Shrimp.FSharp.Plus
 open Akkling
 open Fake.IO
-open iText.Kernel.Pdf.Layer
 
 #nowarn "0104"
 open Shrimp.Pdf.DSL
-open Shrimp.Pdf.Extensions
-open Shrimp.Pdf
-open Shrimp.Pdf.Constants
-open System.IO
 open iText.Kernel.Pdf
 open iText.Kernel.Pdf.Xobject
-open Shrimp.Pdf.Parser
-open System.Drawing
-open Shrimp.FSharp.Plus
 open Shrimp.Pdf.Colors
-open Akkling
-open Shrimp.Pdf.icms2
-open iText.Layout.Element
-open Fake.IO
-open Shrimp.Pdf.icms2.client
-open iText.Kernel.Pdf.Canvas.Parser.Data
 open iText.IO.Image
-open FSharp.Data
 open System.Collections.Concurrent
-open Shrimp.Pdf.js.shared
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Geom
 
@@ -84,6 +61,11 @@ module _Extract_BackgroundOrForeground =
                             |> Path.changeExtension "backgroundFile.cleared.pdf"
 
                         | name ->
+                            let name = 
+                                match name.LeftOf("-") with 
+                                | Some name -> name
+                                | None -> name
+
                             pdfFile.Path
                             |> Path.changeExtension (sprintf "%s.backgroundFile.cleared.pdf" name)
 

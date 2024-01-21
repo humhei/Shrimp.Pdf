@@ -21,6 +21,7 @@
     <Compile Include="CodeGen.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="ParsingTests.fs" />
+    <Compile Include="PerformaceTests.fs" />
     <Compile Include="BugFixmentTests.fs" />
     <Compile Include="FileOperationTests.fs" />
     <Compile Include="RealSamplesTest.fs" />

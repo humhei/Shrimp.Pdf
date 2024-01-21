@@ -4,6 +4,7 @@ open Fake.IO
 open Fake.IO.FileSystemOperators
 open System.IO
 open Shrimp.FSharp.Plus
+open Shrimp.Pdf.Parser
 
 type NameAndParameters =
     { Name: string 
@@ -11,9 +12,10 @@ type NameAndParameters =
 
 
 type Configuration =
-    { LoggerLevel: PdfLoggerLevel }
+    { LoggerLevel: PdfLoggerLevel
+      PdfModifyOptions: PdfModifyOptions option }
 with 
-    static member DefaultValue = { LoggerLevel = PdfLoggerLevel.Info }
+    static member DefaultValue = { LoggerLevel = PdfLoggerLevel.Info; PdfModifyOptions = None }
 
 type PdfConfiguration = Configuration
 

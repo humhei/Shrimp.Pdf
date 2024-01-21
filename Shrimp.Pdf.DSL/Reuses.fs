@@ -989,7 +989,7 @@ module _Reuses =
                     )
                     |> EmptablePageNumSequence.Create
 
-                (Reuses.SequencePages pageNumSequence)
+                (Reuses.SequencePages (pageNumSequence))
             )
 
             |> Reuse.rename 

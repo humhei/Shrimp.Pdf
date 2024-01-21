@@ -360,6 +360,7 @@ module Manipulates =
                 "add rectangle to canvas root area",
                 defaultArg pageSelector PageSelector.All,
                 Dummy,
+                //fun _ _ -> ()
                 PageModifier.AddRectangleToCanvasRootArea(canvasAreaOptions, fArgs)
             )  ||>> ignore
             |> Manipulate.rename 

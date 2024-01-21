@@ -608,7 +608,7 @@ let manipulateTests =
         |> runTest "datas/manipulate/change red to black.pdf" 
         |> ignore
 
-    ftestCase "change red to black NUped" <| fun _ -> 
+    testCase "change red to black NUped" <| fun _ -> 
         Flow.Manipulate (
             Modify.Create(
                 PageSelector.All,

@@ -10,6 +10,8 @@ open Shrimp.FSharp.Plus
 open Shrimp.FSharp.Plus.Text
 open Shrimp.Pdf.Colors
 
+type PdfModifyOptions = Shrimp.Pdf.Parser.PdfModifyOptions
+
 [<AutoOpen>]
 module _IAbstractRenderInfoExtensions =
     type IAbstractRenderInfo with 

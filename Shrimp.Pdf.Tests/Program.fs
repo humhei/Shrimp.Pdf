@@ -43,6 +43,7 @@ let allTests =
             ImageTests.imageTests
             ParsingTests.parsingTests
             ExtractTests.extractTests
+            PerformanceTests.performanceTests
         ]
 
 [<EntryPoint>]

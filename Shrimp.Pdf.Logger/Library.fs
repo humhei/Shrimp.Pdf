@@ -19,7 +19,7 @@ module PdfLogger =
         lazy
             match NLog.LogManager.Configuration with 
             | null -> None
-            | conf -> Some conf
+            | config -> Some config
 
     let warning (message: string) =
         match configuration.Value with 

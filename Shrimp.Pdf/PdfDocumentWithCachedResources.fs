@@ -1,4 +1,7 @@
 ﻿namespace Shrimp.Pdf
+
+open System.Collections.Generic
+
 #nowarn "0104"
 open iText.Kernel.Font
 open System.IO
@@ -370,6 +373,7 @@ type private PdfDocumentCache private
 and PdfDocumentWithCachedResources =
     inherit PdfDocument
     val private cache: PdfDocumentCache
+    val private editorResources: FsPdfDocumentEditorResources
 
 
 
@@ -492,14 +496,23 @@ and PdfDocumentWithCachedResources =
             x.ClearCache()
             x.Close()
 
+    interface IFsPdfDocumentEditor with 
+        member x.Resources = x.editorResources
+
     new (writer: string) as this = 
-        { inherit PdfDocument(new PdfWriter(writer)); cache = new PdfDocumentCache((fun _ -> this)) }
+        { inherit PdfDocument(new PdfWriter(writer));
+            cache = new PdfDocumentCache((fun _ -> this));
+            editorResources = FsPdfDocumentEditorResources() }
 
     new (reader: string, writer: string) as this =  
-        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = new PdfDocumentCache((fun _ -> this)) }
+        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer));
+            cache = new PdfDocumentCache((fun _ -> this));
+            editorResources = FsPdfDocumentEditorResources() }
 
     new (reader: string, writer: string, oldDocument: PdfDocumentWithCachedResources) as this =  
-        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer)); cache = oldDocument.cache.Spawn(fun _ -> this) }
+        { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer));
+            cache = oldDocument.cache.Spawn(fun _ -> this);
+            editorResources = FsPdfDocumentEditorResources() }
 
 
 type IntegratedDocument internal (reader: string, writer: string) =

@@ -176,7 +176,8 @@ module _ModifierIM =
                 match args.CurrentRenderInfoIM with 
                 | IIntegratedRenderInfoIM.Pixel imageRenderInfo ->   
                     let key = 
-                        (imageRenderInfo.ImageRenderInfo.GetImage(), inputIcc, outputIcc, intent)
+                        let image = imageRenderInfo.ImageRenderInfo.GetImage()
+                        (image, inputIcc, outputIcc, intent)
 
 
                     match imageRenderInfo.ImageColorSpaceData with 

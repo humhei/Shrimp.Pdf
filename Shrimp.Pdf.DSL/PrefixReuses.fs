@@ -192,6 +192,7 @@ module _PrefixReuses =
 
     exception PageNumSequenceEmptyException of string
     
+
     type private PageSequeningUnion =
         | EmptyPage of targetPage: PdfPage option
         | Token of PageNumSequenceToken * PdfPage
@@ -376,6 +377,28 @@ module _PrefixReuses =
         | Keep = 0
         | ColckwiseIfNeeded = 1
         | CounterColckwiseIfNeeded = 2
+
+    [<RequireQualifiedAccess>]
+    type PageCopyOptions =
+        | ByPage
+        | ByXObject
+
+    type SplitDocument with 
+        member x.AddWriterPage(readerPage: PdfPage, pageCopyOptions: PageCopyOptions) =
+            match pageCopyOptions with 
+            | PageCopyOptions.ByPage ->
+                let page = readerPage.CopyTo(x.Writer)
+                x.Writer.AddPage(page)
+
+            | PageCopyOptions.ByXObject ->
+                let xobject = readerPage.CopyAsFormXObject(x.Writer)
+                let pageSize = PageSize(readerPage.GetPageSize())
+                let writerPage = x.Writer.AddNewPage(pageSize)
+                let canvas = new PdfCanvas(writerPage)
+                canvas.AddXObject(xobject)
+                |> ignore
+                writerPage
+
 
     type Reuses =
         static member MovePageBoxToOrigin(pageSelector: PageSelector, ?keepOriginPageBoxes: bool) =
