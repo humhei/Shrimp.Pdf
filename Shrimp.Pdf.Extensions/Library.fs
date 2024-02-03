@@ -779,6 +779,7 @@ module iText =
             let dashPattern = gs.GetDashPattern()
             DashPattern.OfPdfArray dashPattern
 
+
         let getExtGState (gs: CanvasGraphicsState): FsExtGState =
             { OPM = gs.GetOverprintMode() |> enum
               Fill = 
@@ -788,6 +789,7 @@ module iText =
               Stroke = 
                 { IsOverprint = gs.GetStrokeOverprint() 
                   Opacity = gs.GetStrokeOpacity() }
+              SoftMask = None
               BlendModes = 
                 match gs.GetBlendMode() with 
                 | :? PdfName as pdfName -> [BlendMode.ofPdfName pdfName]

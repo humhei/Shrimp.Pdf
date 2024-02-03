@@ -3,6 +3,7 @@
 open Shrimp.Pdf.Extensions
 open System.Collections.Generic
 open iText.IO.Source
+open iText.Kernel.Pdf.Canvas.Parser
 
 #nowarn "0104"
 open iText.Kernel.Geom
@@ -17,6 +18,115 @@ open Shrimp.FSharp.Plus.Operators
 open iText.IO.Image
 open Shrimp.Pdf.Constants.Operators
 
+[<Struct>]
+type InfoContainerID =
+    | Page 
+    | XObject of int * int
+
+[<AutoOpen>]
+module _FsParserGraphicsStateValueUtils =
+    
+    [<RequireQualifiedAccess>]
+    module FsExtGState = 
+        let defaultCustomHashCode =
+            let defaultValue1 = FsExtGState.DefaultValue
+            let defalutValue2 = { defaultValue1 with BlendModes = [BlendMode.Normal] }
+            [
+                defaultValue1.GetCustomHashCode()
+                defalutValue2.GetCustomHashCode()
+            ]
+
+type FsParserGraphicsStateValue(containerID: InfoContainerID list, gs: ParserGraphicsState, invokeByGS: bool) =
+    let fsExtState =
+        let softMask =
+            match invokeByGS with 
+            | true ->
+                match gs.GetSoftMask() with 
+                | :? PdfName as pdfName ->
+                    match pdfName with 
+                    | EqualTo PdfName.None -> None
+                    | _ -> failwithf "Cannot parse %A to SoftMask" pdfName
+
+                | null -> None
+                | mask ->
+                    let hash = hashNumberOfPdfIndirectReference <| mask.GetIndirectReference()
+                    let ref = 
+                        (mask :?> PdfDictionary)
+                            .Get(PdfName "G")
+                            .GetIndirectReference()
+                            .GetRefersTo()
+                            :?> PdfDictionary
+                    let rawBBox = 
+                        let floatArray = 
+                            ref
+                                    .GetAsArray(PdfName.BBox)
+                                    .ToDoubleArray()
+                        FsRectangle.create floatArray[0] floatArray[1] floatArray[2] floatArray[3]
+
+                    let ctm1 = AffineTransformRecord.ofMatrix (gs.GetCtm())
+                    let ctm2 = 
+                        ref.GetAsArray(PdfName.Matrix)
+                        |> AffineTransformRecord.ofPdfArray
+
+                    let ctm = ctm1.Concatenate(ctm2)
+
+                    let actualBox = 
+                        let ctm = AffineTransformRecord.toAffineTransform ctm
+                        ctm.Transform(rawBBox.AsRectangle)
+                        |> FsRectangle.OfRectangle
+
+                    {
+                        SoftMask = 
+                            {
+                                ID = hash
+                                PdfObject_SkipComparation = SkipComparation mask
+                            }
+
+                        Ctm = (ctm)
+                        RawBBox = rawBBox
+                        ActualBBox = actualBox
+                    }
+
+                    |> Some
+
+            | false -> None
+
+        let extState = CanvasGraphicsState.getExtGState gs
+        { extState with SoftMask = softMask }
+
+    let customHashCode = fsExtState.GetCustomHashCode()
+
+    let invokeByGS = 
+        match invokeByGS with 
+        | false -> false
+        | true -> 
+            List.contains customHashCode FsExtGState.defaultCustomHashCode
+            |> not
+
+    member x.CustomHashCode = customHashCode
+
+    member x.InvokeByGS = invokeByGS
+
+    member x.FsExtState = fsExtState
+
+    member x.ContainerID = containerID
+
+type FsParserGraphicsState private (gs: FsParserGraphicsStateValue) =
+
+    let innerStack = 
+        let stack = Stack()
+        stack.Push(gs)
+        stack
+
+    member x.InnerStack = innerStack
+
+    member x.ProcessGraphicsStateResource(containerID, gs: ParserGraphicsState) =
+        let gs = FsParserGraphicsStateValue(containerID, gs, invokeByGS = true)
+        innerStack.Push(gs)
+        
+    new (containerID, gs: ParserGraphicsState, invokeByGS) =
+        let value = FsParserGraphicsStateValue(containerID, gs, invokeByGS = invokeByGS)
+        new FsParserGraphicsState(value)
 
 
 [<AutoOpen>]
@@ -73,6 +183,8 @@ module _OperatorRangeExtensions =
 [<AutoOpen>]
 module IntegratedInfos =
 
+
+
     type PathInfoRecord =
         { FillColor: iText.Kernel.Colors.Color 
           StrokeColor: iText.Kernel.Colors.Color 
@@ -85,9 +197,8 @@ module IntegratedInfos =
         { PathRenderInfo: PathRenderInfo 
           ClippingPathInfos: ClippingPathInfos
           AccumulatedPathOperatorRanges: seq<OperatorRange>
-          FillOpacity: float32 option 
-          StrokeOpacity: float32 option
-          SoftMasks: al1List<SoftMaskRenderInfo> option
+          GsStates: list<FsParserGraphicsStateValue>
+          ContainerID: InfoContainerID list
         }
     with 
         member x.IsShading = 
@@ -101,10 +212,10 @@ module IntegratedInfos =
         member x.GetAppliedExtGState() =
             let exState = CanvasGraphicsState.getExtGState (x.PathRenderInfo.GetGraphicsState())
 
-            let exState =
-                exState
-                    .SetFillOpacity(defaultArg x.FillOpacity 1.0f)
-                    .SetStrokeOpacity(defaultArg x.FillOpacity 1.0f)
+            //let exState =
+            //    exState
+            //        .SetFillOpacity(defaultArg x.FillOpacity 1.0f)
+            //        .SetStrokeOpacity(defaultArg x.FillOpacity 1.0f)
             
             exState
 
@@ -131,7 +242,6 @@ module IntegratedInfos =
         interface IIntegratedRenderInfoIM with 
             member x.TagIM = IntegratedRenderInfoTagIM.Path
             member x.ClippingPathInfos = x.ClippingPathInfos
-            member x.SoftMasks = x.SoftMasks
 
         interface IIntegratedRenderInfo with 
             member x.Tag = IntegratedRenderInfoTag.Path
@@ -148,7 +258,9 @@ module IntegratedInfos =
           FontName: DocumentFontName
           Bound: FsRectangle
           DenseBound: FsRectangle
-          EndTextState: EndTextState }
+          EndTextState: EndTextState
+          
+          }
     with 
         member x.Text = x.PdfConcatedWord.ConcatedText()
 
@@ -159,22 +271,21 @@ module IntegratedInfos =
           EndTextState: EndTextState
           ConcatedTextInfo: ConcatedTextInfo
           OperatorRange: OperatorRange option
-          FillOpacity: float32 option
-          StrokeOpacity: float32 option
-          SoftMasks: al1List<SoftMaskRenderInfo> option }
+          GsStates: list<FsParserGraphicsStateValue>
+          ContainerID: InfoContainerID list
+          }
 
     with 
         
 
         member x.SplitToWords() =
-            let softMasks = x.SoftMasks
+            let gsStates = x.GsStates
+            let containderID = x.ContainerID
             match x.EndTextState with 
             | EndTextState.No
             | EndTextState.Undified -> [x]
             | EndTextState.Yes ->
                 let clippingPathInfos = x.ClippingPathInfos
-                let strokeOpacity = x.StrokeOpacity
-                let fillOpacity = x.FillOpacity
                 x.ConcatedTextInfo.AsList
                 |> List.map(fun textInfo ->
                     {   
@@ -183,9 +294,8 @@ module IntegratedInfos =
                         OperatorRange = None
                         ConcatedTextInfo = {HeadWordInfo = textInfo; FollowedWordInfos = []}
                         ClippingPathInfos = clippingPathInfos
-                        StrokeOpacity = strokeOpacity
-                        FillOpacity = fillOpacity
-                        SoftMasks = softMasks
+                        GsStates = gsStates
+                        ContainerID = containderID
                     }
                 )
 
@@ -193,10 +303,10 @@ module IntegratedInfos =
         member x.GetAppliedExtGState() =
             let exState = CanvasGraphicsState.getExtGState (x.TextRenderInfo.GetGraphicsState())
 
-            let exState =
-                exState
-                    .SetFillOpacity(defaultArg x.FillOpacity 1.0f)
-                    .SetStrokeOpacity(defaultArg x.FillOpacity 1.0f)
+            //let exState =
+            //    exState
+            //        .SetFillOpacity(defaultArg x.FillOpacity 1.0f)
+            //        .SetStrokeOpacity(defaultArg x.FillOpacity 1.0f)
         
             exState
 
@@ -260,7 +370,6 @@ module IntegratedInfos =
         interface IIntegratedRenderInfoIM with 
             member x.TagIM = IntegratedRenderInfoTagIM.Text
             member x.ClippingPathInfos = x.ClippingPathInfos
-            member x.SoftMasks = x.SoftMasks
         
         interface IIntegratedRenderInfo with 
             member x.Tag = IntegratedRenderInfoTag.Text
@@ -337,19 +446,18 @@ module IntegratedInfos =
           ClippingPathInfos: ClippingPathInfos
           LazyImageData: Lazy<FsImageData>
           LazyColorSpace: Lazy<ImageColorSpaceData option> 
-          FillOpacity: float32 option
-          StrokeOpacity: float32 option
-          SoftMasks: al1List<SoftMaskRenderInfo> option
+          GsStates: list<FsParserGraphicsStateValue>
+          ContainerID: InfoContainerID list
         }
 
     with 
         member x.GetAppliedExtGState() =
             let exState = CanvasGraphicsState.getExtGState (x.ImageRenderInfo.GetGraphicsState())
 
-            let exState =
-                exState
-                    .SetFillOpacity(defaultArg x.FillOpacity 1.0f)
-                    .SetStrokeOpacity(defaultArg x.FillOpacity 1.0f)
+            //let exState =
+            //    exState
+            //        .SetFillOpacity(defaultArg x.FillOpacity 1.0f)
+            //        .SetStrokeOpacity(defaultArg x.FillOpacity 1.0f)
             
             exState
 
@@ -412,7 +520,6 @@ module IntegratedInfos =
         interface IIntegratedRenderInfoIM with 
             member x.TagIM = IntegratedRenderInfoTagIM.Image
             member x.ClippingPathInfos = x.ClippingPathInfos
-            member x.SoftMasks = x.SoftMasks
             
 
 

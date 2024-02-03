@@ -114,7 +114,7 @@ type CurrentDocumentImage =
 type private PdfDocumentCache private 
     (pdfDocument: unit -> PdfDocumentWithCachedResources,
      fontsCache: ConcurrentDictionary<FsPdfFontFactory, PdfFont>,
-     smaskInfo_hashable_fromOtherDocument : ConcurrentDictionary<(int * int) * AffineTransformRecord, Extgstate.PdfExtGState>,
+     smaskInfo_hashable_fromOtherDocument : ConcurrentDictionary<(int * int) * AffineTransformRecord, SoftMaskRenderInfo>,
      fontsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfFont>,
      patternColorsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PatternColor>,
      shadingCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfShading>,
@@ -357,6 +357,31 @@ type private PdfDocumentCache private
             | pdfFont -> pdfFont
         )
 
+    member internal x.GetOrCreateSMask_FromOtherDocument(softMask: SoftMaskRenderInfo) =
+        smaskInfo_hashable_fromOtherDocument.GetOrAdd((softMask.SoftMask.ID, softMask.Ctm), valueFactory = fun _ ->
+            let newPdfObject = softMask.SoftMask.PdfObject.CopyTo(pdfDocument(), allowDuplicating = false)
+            let newSoftMask = 
+                { softMask with 
+                    SoftMask = 
+                        { softMask.SoftMask with PdfObject_SkipComparation = SkipComparation (newPdfObject) }
+                }
+
+            let __setMatrix = 
+                let newSoftMaskPdfObject = (newSoftMask.SoftMask.PdfObject :?> PdfDictionary)
+                let stream = newSoftMaskPdfObject.GetAsStream(PdfName("G")) :> PdfDictionary
+                let matrix = 
+                    stream.GetAsArray(PdfName.Matrix)
+                    |> AffineTransformRecord.ofPdfArray
+
+                let newMatrix = 
+                    softMask.Ctm.Concatenate(matrix)
+
+                stream.Put(PdfName.Matrix, AffineTransformRecord.toPdfArray newMatrix)
+
+            newSoftMask
+        )
+
+
     member private x.FsExtGState_To_PdfExtGState(extGState: FsExtGState) =
         let pdfExtGState = new Extgstate.PdfExtGState()
         pdfExtGState
@@ -365,6 +390,13 @@ type private PdfDocumentCache private
             .SetStrokeOverPrintFlag(extGState.IsStrokeOverprint)
             .SetFillOpacity(extGState.Fill.Opacity)
             .SetStrokeOpacity(extGState.Stroke.Opacity)
+            |> ignore
+
+        match extGState.SoftMask with 
+        | None -> ()
+        | Some softMask -> 
+            let maskInfo = x.GetOrCreateSMask_FromOtherDocument(softMask)
+            pdfExtGState.SetSoftMask(maskInfo.SoftMask.PdfObject)
             |> ignore
 
         match extGState.BlendModes with 
@@ -382,33 +414,6 @@ type private PdfDocumentCache private
             x.FsExtGState_To_PdfExtGState(extGState)
         )
 
-    member internal x.GetOrCreateSMask_FromOtherDocument(softMask: SoftMaskRenderInfo) =
-        smaskInfo_hashable_fromOtherDocument.GetOrAdd((softMask.SoftMask.ID, softMask.Ctm), valueFactory = fun _ ->
-            let newPdfObject = softMask.SoftMask.PdfObject.CopyTo(pdfDocument(), allowDuplicating = false)
-            let newSoftMask = 
-                { softMask with 
-                    SoftMask = 
-                        { softMask.SoftMask with PdfObject_SkipComparation = SkipComparation (newPdfObject) }
-                }
-
-            let pdfExtGState = 
-                x.FsExtGState_To_PdfExtGState FsExtGState.DefaultValue
-
-            let __setMatrix = 
-                let newSoftMaskPdfObject = (newSoftMask.SoftMask.PdfObject :?> PdfDictionary)
-                let stream = newSoftMaskPdfObject.GetAsStream(PdfName("G")) :> PdfDictionary
-                let matrix = 
-                    stream.GetAsArray(PdfName.Matrix)
-                    |> AffineTransformRecord.ofPdfArray
-
-                let newMatrix = 
-                    softMask.Ctm.Concatenate(matrix)
-
-                stream.Put(PdfName.Matrix, AffineTransformRecord.toPdfArray newMatrix)
-
-            pdfExtGState.SetSoftMask(newSoftMask.SoftMask.PdfObject)
-
-        )
 
     new (pdfDocument: unit -> PdfDocumentWithCachedResources) =
         PdfDocumentCache
@@ -505,6 +510,7 @@ and PdfDocumentWithCachedResources =
 
     member x.Renew_OtherDocument_SoftMaskInfo(softMask) =
         x.cache.GetOrCreateSMask_FromOtherDocument(softMask)
+
 
     member x.Renew_OtherDocument_PdfShading(writerResource: PdfResources, otherDocumentColor: Color) =
         match otherDocumentColor with 

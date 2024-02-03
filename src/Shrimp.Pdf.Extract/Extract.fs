@@ -171,90 +171,112 @@ module _Extract =
             let writeAreaInfos (element: TargetNewInfosElementUnion) (writerCanvas: PdfCanvas) (writerPage: PdfPage) =
                 let infos = element.Infos
                 let writeInfos(infos: RenewableInfo list) =
+                    let maxLevel = 
+                        infos
+                        |> List.map(fun m -> m.ContainerID.Length)
+                        |> List.max
+                        |> fun m -> m - 1
+
+                    let rec loop (level: int) (infos: RenewableInfo list) =
+                        infos
+                        |> List.splitIfChangedByKey(fun m ->
+                            m.ContainerID.[0..level]
+                        )
+                        |> List.map(fun (id, i))
+                        |> List.splitIfChangedByKey(fun m -> 
+                            m.GsStates
+                            |> List.map (fun m -> m.CustomHashCode)
+                        )
+                        |> List.iter(fun (_, infos) ->
+                            let gsStates = infos.Head.GsStates
+                            match gsStates with 
+                            | [] -> ()
+                            | gsStates ->
+                                let gsState =
+                                    gsStates
+                                    |> AtLeastOneList.Create
+                                    |> AtLeastOneList.map(fun m -> m.FsExtState)
+                                    |> FsExtGState.Concat
+
+                                writerCanvas.SaveState() |> ignore
+
+                                gsState.Renewable().ApplyCtm_WriteToCanvas(writerCanvas)
+                                //gsState.AsList
+                                //|> List.iter(fun gsState ->
+                                //    gsState.Renewable().ApplyCtm_WriteToCanvas(writerCanvas)
+                                //)
+
+                            let writerCanvas2 = 
+                                match gsStates with 
+                                | [] -> writerCanvas
+                                | gsStates ->
+                                    let rect = 
+                                        writerPage.GetActualBox()
+                                        //solfMasks
+                                        //|> AtLeastOneList.map(fun m -> m.ActualBBox.AsRectangle)
+                                        //|> Rectangle.ofRectangles
+
+                                    let xobject = PdfFormXObject(rect)
+                                    writerCanvas.AddXObject(xobject) |> ignore
+                                    let group = PdfTransparencyGroup()
+                                    group.SetIsolated(false)
+                                    group.SetKnockout(false)
+                                    xobject.SetGroup(group) |> ignore
+                                    PdfCanvas(xobject, writer)
+
+                            let infos = infos.AsList
+                            infos
+                            |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.XObjectClippingBoxState.Serializable)
+                            |> List.iter(fun (xobjectRect, infos) ->
+                                let infos = infos.AsList
+                                let writeInfos() =
+                                    infos
+                                    |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.ClippingPathInfoState)
+                                    |> List.iter(fun (clippingPathInfo, infos) ->   
+                                        let infos = infos.AsList
+                                        let writeInfos() =
+                                            for info in infos do
+                                                info.CopyToDocument(writer, writerCanvas2.GetResources(), readerPage).ApplyCtm_WriteToCanvas(writerCanvas2)
                 
+                                        match clippingPathInfo with 
+                                        | ClippingPathInfoState.Init -> writeInfos()
+                                        | ClippingPathInfoState.Intersected (clippingPathInfo) -> 
+                                            clippingPathInfo.Renewable().ApplyCtm_WriteToCanvas(writerCanvas2, (fun writerCanvas ->
+                                                writeInfos()
+                                                writerCanvas
+                                            ))
+                                    )
 
-                    infos
-                    |> List.splitIfChangedByKey(fun m -> m.SoftMasks)
-                    |> List.iter(fun (solfMasks, infos) ->
-                        match solfMasks with 
-                        | None -> ()
-                        | Some solfMasks ->
-                            writerCanvas.SaveState() |> ignore
+                
+                                match xobjectRect with 
+                                | SerializableXObjectClippingBoxState.IntersectedNone -> failwith "Invalid token: visble render info XObjectClippingBoxState cannot be IntersectedNone"
+                                | SerializableXObjectClippingBoxState.Init -> writeInfos() 
+                                | SerializableXObjectClippingBoxState.IntersectedSome rect ->
+                                    match rect.Width, rect.Height with 
+                                    | BiggerThan MAXIMUM_MM_WIDTH, BiggerThan MAXIMUM_MM_WIDTH -> writeInfos()
+                                    | _ ->
+                                        PdfCanvas.useCanvas writerCanvas2 (fun writerCanvas ->
+                                            writerCanvas
+                                                .Rectangle(rect.AsRectangle)
+                                                .Clip()
+                                                .EndPath()
+                                                |> ignore
 
-                            solfMasks.AsList
-                            |> List.iter(fun solfMask ->
-                                solfMask.Renewable().ApplyCtm_WriteToCanvas(writerCanvas)
+                                            writeInfos()
+
+                                            writerCanvas
+
+                                        )
                             )
 
-                        let writerCanvas2 = 
-                            match solfMasks with 
-                            | None -> writerCanvas
-                            | Some solfMasks ->
-                                let rect = 
-                                    writerPage.GetActualBox()
-                                    //solfMasks
-                                    //|> AtLeastOneList.map(fun m -> m.ActualBBox.AsRectangle)
-                                    //|> Rectangle.ofRectangles
+                            match gsStates with 
+                            | [] -> ()
+                            | gsStates ->
+                                writerCanvas.RestoreState() |> ignore
 
-                                let xobject = PdfFormXObject(rect)
-                                writerCanvas.AddXObject(xobject) |> ignore
-                                let group = PdfTransparencyGroup()
-                                group.SetIsolated(false)
-                                group.SetKnockout(false)
-                                xobject.SetGroup(group) |> ignore
-                                PdfCanvas(xobject, writer)
-
-                        let infos = infos.AsList
-                        infos
-                        |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.XObjectClippingBoxState.Serializable)
-                        |> List.iter(fun (xobjectRect, infos) ->
-                            let infos = infos.AsList
-                            let writeInfos() =
-                                infos
-                                |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.ClippingPathInfoState)
-                                |> List.iter(fun (clippingPathInfo, infos) ->   
-                                    let infos = infos.AsList
-                                    let writeInfos() =
-                                        for info in infos do
-                                            info.CopyToDocument(writer, writerCanvas2.GetResources(), readerPage).ApplyCtm_WriteToCanvas(writerCanvas2)
-                
-                                    match clippingPathInfo with 
-                                    | ClippingPathInfoState.Init -> writeInfos()
-                                    | ClippingPathInfoState.Intersected (clippingPathInfo) -> 
-                                        clippingPathInfo.Renewable().ApplyCtm_WriteToCanvas(writerCanvas2, (fun writerCanvas ->
-                                            writeInfos()
-                                            writerCanvas
-                                        ))
-                                )
-
-                
-                            match xobjectRect with 
-                            | SerializableXObjectClippingBoxState.IntersectedNone -> failwith "Invalid token: visble render info XObjectClippingBoxState cannot be IntersectedNone"
-                            | SerializableXObjectClippingBoxState.Init -> writeInfos() 
-                            | SerializableXObjectClippingBoxState.IntersectedSome rect ->
-                                match rect.Width, rect.Height with 
-                                | BiggerThan MAXIMUM_MM_WIDTH, BiggerThan MAXIMUM_MM_WIDTH -> writeInfos()
-                                | _ ->
-                                    PdfCanvas.useCanvas writerCanvas2 (fun writerCanvas ->
-                                        writerCanvas
-                                            .Rectangle(rect.AsRectangle)
-                                            .Clip()
-                                            .EndPath()
-                                            |> ignore
-
-                                        writeInfos()
-
-                                        writerCanvas
-
-                                    )
                         )
 
-                        match solfMasks with 
-                        | None -> ()
-                        | Some solfMasks ->
-                            writerCanvas.RestoreState() |> ignore
-
-                    )
+                    loop 0 infos
 
 
                 let infoChoices(boundPredicate) =   

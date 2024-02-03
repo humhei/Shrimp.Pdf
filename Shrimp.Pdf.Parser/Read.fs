@@ -204,137 +204,57 @@ module internal Listeners =
 
     let private imageColorSpaceCache = new ConcurrentDictionary<_, _>()
 
-    type FsParserGraphicsState(gs: ParserGraphicsState, previous: FsParserGraphicsState option) =
-        let innerGSStack = 
-            new Stack<_>([|new CanvasGraphicsState(gs)|])
-            
-        let mutable softMasks = 
-            match previous with 
-            | None -> []
-            | Some previous -> previous.SoftMasks
-
-        let mutable fillOpacity = previous |> Option.bind(fun m -> m.FillOpacity)
-        let mutable strokeOpacity = previous |> Option.bind(fun m -> m.StrokeOpacity)
-
-        member private x.ApplyFillOpacity(v) =
-            match v with 
-            | 1.0f -> ()
-            | _ -> 
-                match fillOpacity with 
-                | None -> fillOpacity <- Some v
-                | Some fillOpacity2 -> fillOpacity <- Some (v * fillOpacity2)
-
-        member internal x.FillOpacity = fillOpacity
-        member internal x.StrokeOpacity = strokeOpacity
-        member internal x.SoftMasks = softMasks
-
-
-        member private x.ApplyStrokeOpacity(v) =
-            match v with 
-            | 1.0f -> ()
-            | _ -> 
-                match strokeOpacity with 
-                | None -> strokeOpacity <- Some v
-                | Some strokeOpacity2 -> strokeOpacity <- Some (v * strokeOpacity2)
-
-        member x.Value = innerGSStack.Peek()
-
-        member x.ProcessGraphicsStateResource(gs: ParserGraphicsState) = 
-            let softMask =
-                match gs.GetSoftMask() with 
-                | :? PdfName as pdfName ->
-                    match pdfName with 
-                    | EqualTo PdfName.None -> None
-                    | _ -> failwithf "Cannot parse %A to SoftMask" pdfName
-
-                | null -> None
-                | mask ->
-                    let hash = hashNumberOfPdfIndirectReference <| mask.GetIndirectReference()
-                    let ref = 
-                        (mask :?> PdfDictionary)
-                            .Get(PdfName "G")
-                            .GetIndirectReference()
-                            .GetRefersTo()
-                            :?> PdfDictionary
-                    let rawBBox = 
-                        let floatArray = 
-                            ref
-                                    .GetAsArray(PdfName.BBox)
-                                    .ToDoubleArray()
-                        FsRectangle.create floatArray[0] floatArray[1] floatArray[2] floatArray[3]
-
-                    let ctm1 = AffineTransformRecord.ofMatrix (gs.GetCtm())
-                    let ctm2 = 
-                        ref.GetAsArray(PdfName.Matrix)
-                        |> AffineTransformRecord.ofPdfArray
-
-                    let ctm = ctm1.Concatenate(ctm2)
-
-                    let actualBox = 
-                        let ctm = AffineTransformRecord.toAffineTransform ctm
-                        ctm.Transform(rawBBox.AsRectangle)
-                        |> FsRectangle.OfRectangle
-
-                    {
-                        SoftMask = 
-                            {
-                                ID = hash
-                                PdfObject_SkipComparation = SkipComparation mask
-                            }
-
-                        Ctm = (ctm)
-                        RawBBox = rawBBox
-                        ActualBBox = actualBox
-                    }
-
-                    |> Some
-
-            match softMask with 
-            | None -> ()
-            | Some softMask ->
-                softMasks <- softMask :: softMasks 
-
-            x.ApplyFillOpacity(gs.GetFillOpacity())
-            x.ApplyStrokeOpacity(gs.GetStrokeOpacity())
-            innerGSStack.Push(CanvasGraphicsState gs)
-            |> ignore
 
     [<AllowNullLiteral>]
     type GSStateStackableEventListener() =
-        let gsStack = new Stack<_>()
+        let gsStack = new Stack<FsParserGraphicsState>()
+        let mutable gsStates_invokeByGS = []
 
+        let update_gsStates_invokeByGS() =
+            let gsState = 
+                gsStack.ToArray()
+                |> Array.collect(fun m -> m.InnerStack.ToArray())
+                |> Array.filter(fun m -> m.InvokeByGS)
+                |> Array.toList
+                |> List.rev
 
-        member internal x.SaveGS(gs: ParserGraphicsState) =
-            let gs = 
-                match gsStack.Count with 
-                | 0 -> FsParserGraphicsState (gs, None)
-                | _ -> FsParserGraphicsState (gs, Some (gsStack.Peek()))
+            gsStates_invokeByGS <- gsState
 
+        member internal x.SaveGS(containerID, gs: ParserGraphicsState, ?invokeByGS) =
+            let invokeByGS = defaultArg invokeByGS false
+            let gs = FsParserGraphicsState(containerID, gs, invokeByGS)
             gsStack.Push(gs)
+            match invokeByGS with 
+            | true -> update_gsStates_invokeByGS()
+            | false -> ()
 
-        member internal x.ProcessGraphicsStateResource(gs) =
+
+        member internal x.ProcessGraphicsStateResource(containerID, gs) =
             match gsStack.Count with 
-            | 0 -> x.SaveGS(gs)
-            | _-> ()
+            | 0 -> x.SaveGS(containerID, gs, invokeByGS = true)
+            | _-> gsStack.Peek().ProcessGraphicsStateResource(containerID, gs)
 
-            gsStack.Peek().ProcessGraphicsStateResource(gs)
+            update_gsStates_invokeByGS()
 
-        member internal x.FillOpacity =
-            match gsStack.Count with 
-            | 0 -> None
-            | _ -> gsStack.Peek().FillOpacity
+        //member internal x.FillOpacity =
+        //    match gsStack.Count with 
+        //    | 0 -> None
+        //    | _ -> gsStack.Peek().FillOpacity
 
-        member internal x.SoftMasks =
-            match gsStack.Count with 
-            | 0 -> None
-            | _ -> 
-                gsStack.Peek().SoftMasks
-                |> AtLeastOneList.TryCreate
+        //member internal x.SoftMasks =
+        //    match gsStack.Count with 
+        //    | 0 -> None
+        //    | _ -> 
+        //        gsStack.Peek().SoftMasks
+        //        |> AtLeastOneList.TryCreate
 
-        member internal x.StrokeOpacity =
-            match gsStack.Count with 
-            | 0 -> None
-            | _ -> gsStack.Peek().StrokeOpacity
+        //member internal x.StrokeOpacity =
+        //    match gsStack.Count with 
+        //    | 0 -> None
+        //    | _ -> gsStack.Peek().StrokeOpacity
+
+        member internal x.GsStates_invokeByGS =
+            gsStates_invokeByGS
 
         member internal x.RestoreGS() = 
             gsStack.Pop()
@@ -370,7 +290,7 @@ module internal Listeners =
         let mutable currentRenderInfo: IIntegratedRenderInfoIM option = None
         let mutable currentRenderInfoToken = None
         let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Skiped
-
+        let mutable infoContainerIDStack = [InfoContainerID.Page]
 
         let mutable currentXObjectClippingBox = XObjectClippingBoxState.Init
         let mutable currentClippingPathInfo = ClippingPathInfoState.Init
@@ -392,6 +312,11 @@ module internal Listeners =
         member internal x.EventTypes = et
 
         member internal x.CurrentRenderingClippingPathInfo_Integrated = currentRenderingClippingPathInfo_Integrated
+
+        member internal x.InfoContainerIDStack_Push(container) = infoContainerIDStack <- infoContainerIDStack @ [container]
+        member internal x.InfoContainerIDStack_Pop() = infoContainerIDStack <- List.take (infoContainerIDStack.Length-1) infoContainerIDStack
+
+        member internal x.CurrentInfoContainerID = infoContainerIDStack
 
         member internal x.AddPathOperatorRange(operatorRange) = accumulatedPathOperatorRanges.Add(operatorRange)
 
@@ -557,7 +482,7 @@ module internal Listeners =
 
         member this.ParsedRenderInfos = parsedRenderInfos :> seq<IIntegratedRenderInfoIM>
         member internal this.SaveGS(gs) = 
-            base.SaveGS(gs)
+            base.SaveGS(infoContainerIDStack, gs)
             currentClippingPathInfoElementsStack.Push(ResizeArray()) |> ignore
         
         member internal this.RestoreGS() = 
@@ -565,7 +490,7 @@ module internal Listeners =
             currentClippingPathInfoElementsStack.Pop() |> ignore
 
         member internal this.SaveGS_XObject(gs) = 
-            base.SaveGS(gs)
+            base.SaveGS(infoContainerIDStack, gs)
         
         member internal this.RestoreGS_XObject() = 
             base.RestoreGS()
@@ -632,9 +557,8 @@ module internal Listeners =
                                       ClippingPathInfoState = currentClippingPathInfo }
                                   PathRenderInfo = pathRenderInfo
                                   AccumulatedPathOperatorRanges = accumulatedPathOperatorRanges
-                                  FillOpacity = this.FillOpacity
-                                  StrokeOpacity = this.StrokeOpacity
-                                  SoftMasks = this.SoftMasks }
+                                  GsStates = this.GsStates_invokeByGS
+                                  ContainerID = this.CurrentInfoContainerID }
 
 
                             match pathRenderInfo.IsPathModifiesClippingPath() with 
@@ -676,9 +600,8 @@ module internal Listeners =
                               EndTextState = EndTextState.Undified
                               ConcatedTextInfo = { HeadWordInfo = textRenderInfo; FollowedWordInfos = [] }
                               OperatorRange = None
-                              FillOpacity = this.FillOpacity
-                              StrokeOpacity = this.StrokeOpacity
-                              SoftMasks = this.SoftMasks
+                              GsStates = this.GsStates_invokeByGS
+                              ContainerID = this.CurrentInfoContainerID
                               }
                             :> IIntegratedRenderInfoIM
 
@@ -688,9 +611,8 @@ module internal Listeners =
                                     { XObjectClippingBoxState = currentXObjectClippingBox
                                       ClippingPathInfoState = currentClippingPathInfo }
                                   ImageRenderInfo = imageRenderInfo
-                                  FillOpacity = this.FillOpacity
-                                  StrokeOpacity = this.StrokeOpacity
-                                  SoftMasks = this.SoftMasks
+                                  GsStates = this.GsStates_invokeByGS
+                                  ContainerID = this.CurrentInfoContainerID
                                   LazyImageData = 
                                     lazy 
                                         let rgbIndexedColorSpace =
@@ -986,6 +908,27 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
     override this.ProcessContent(contentBytes, resources) =
         base.ProcessContent(contentBytes, resources)
 
+
+    override this.RegisterXObjectDoHandler(name, handler) =
+        match name with 
+        | EqualTo PdfName.Form ->
+            let handler = 
+                {
+                    new IXObjectDoHandler with 
+                        member x.HandleXObject(processor, canvasTagHierarchy, xObjectStream, xObjectName) =
+                            let id = 
+                                hashNumberOfPdfIndirectReference(xObjectStream.GetIndirectReference())
+                                |> InfoContainerID.XObject
+                            listener.InfoContainerIDStack_Push(id)
+                            handler.HandleXObject(processor, canvasTagHierarchy, xObjectStream, xObjectName)
+                            listener.InfoContainerIDStack_Pop()
+                            |> ignore
+                }
+            base.RegisterXObjectDoHandler(name, handler)
+
+        | _ -> base.RegisterXObjectDoHandler(name, handler)
+
+
     override this.InvokeOperator(operator, operands) =
         //printfn "%s %A" (operator.ToString())(List.ofSeq operands)
         match operator.ToString() with
@@ -1108,7 +1051,7 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
                 this.OriginalOperator.Invoke(processor, operator, operands)
 
         match operatorName with 
-        | EQ gs -> processor.Listener.ProcessGraphicsStateResource(processor.GetGraphicsState())
+        | EQ gs -> processor.Listener.ProcessGraphicsStateResource(processor.Listener.CurrentInfoContainerID, processor.GetGraphicsState())
         | EQ sh -> processor.PaintShading_InClippingArea(operands.[0] :?> PdfName)
         | ContainsBy showTextOperators -> 
             processor.Listener.EndShoeText({Operator = operator; Operands = ResizeArray operands})

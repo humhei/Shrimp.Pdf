@@ -6,6 +6,7 @@ open System.Collections.Generic
 open System
 open System.Text
 open iText.Kernel.Pdf.Canvas
+open iText.Kernel.Pdf.Canvas.Parser
 
 #nowarn "0104"
 open iText.Kernel.Geom
@@ -605,87 +606,7 @@ module ExtensionTypes =
 
 
 
-    type FsExtGState =
-        { 
-            OPM: FsOPM
-            Fill: ExtGStateAppereance
-            Stroke: ExtGStateAppereance
-            BlendModes: BlendMode list
-        }
-    with 
-        member x.IsFillOverprint = x.Fill.IsOverprint
-        member x.IsStrokeOverprint = x.Stroke.IsOverprint
 
-        member x.MapFill(f) =
-            { x with Fill = f x.Fill }
-
-        member x.MapStroke(f) =
-            { x with Stroke = f x.Stroke }
-
-        member x.SetStrokeIsOverprint(isOverprint) =
-            x.MapStroke(fun m -> 
-                { m with IsOverprint = isOverprint }
-            )
-
-        member x.SetStrokeOpacity(opacity) =
-            x.MapStroke(fun m -> 
-                { m with Opacity = opacity }
-            )
-
-        member x.SetFillIsOverprint(isOverprint) =
-            x.MapFill(fun m -> 
-                { m with IsOverprint = isOverprint }
-            )
-
-        member x.SetFillOpacity(opacity) =
-            x.MapFill(fun m -> 
-                { m with Opacity = opacity }
-            )
-
-
-
-        member x.MapAppereance(f) =
-            { x with 
-                Stroke = f x.Stroke
-                Fill = f x.Fill}
-
-
-        static member DefaultValue =
-            { OPM = FsOPM.Illustractor 
-              Fill = ExtGStateAppereance.DefaultValue
-              Stroke = ExtGStateAppereance.DefaultValue
-              BlendModes = [] }
-
-        static member Fill_Difference(?opacticy) =
-            { FsExtGState.DefaultValue with 
-                BlendModes = [ BlendMode.Difference ]
-            }.SetFillOpacity(defaultArg opacticy 1.0f)
-
-        static member StrokeOverprint =
-            FsExtGState.DefaultValue.MapStroke(fun m ->
-                { m with IsOverprint = true }
-            )
-
-        static member FillOverprint =
-            FsExtGState.DefaultValue.MapFill(fun m ->
-                { m with IsOverprint = true }
-            )
-
-        static member FillStrokeOverprint =
-            FsExtGState.DefaultValue.MapAppereance(fun m ->
-                { m with IsOverprint = true }
-            )
-
-        static member FillTransparent(opacity) =
-            FsExtGState.DefaultValue.MapFill(fun m ->
-                { m with Opacity = opacity }
-            )
-
-
-        static member Transparent(opacity) =
-            FsExtGState.DefaultValue.MapAppereance(fun m ->
-                { m with Opacity = opacity }
-            )
 
 
             
@@ -1760,8 +1681,154 @@ module ExtensionTypes =
           RawBBox: FsRectangle
           ActualBBox: FsRectangle }
 
+    type FsExtGState =
+        { 
+            OPM: FsOPM
+            Fill: ExtGStateAppereance
+            Stroke: ExtGStateAppereance
+            BlendModes: BlendMode list
+            SoftMask: SoftMaskRenderInfo option
+        }
+    with 
+        member x.GetCustomHashCode() =
+            let softMask =
+                match x.SoftMask with 
+                | None -> -1
+                | Some v -> hash (v.RawBBox, v.Ctm, v.SoftMask.ID)
 
+            hash (x.OPM, x.Fill, x.Stroke, x.BlendModes, softMask)
+
+        member x.IsFillOverprint = x.Fill.IsOverprint
+        member x.IsStrokeOverprint = x.Stroke.IsOverprint
+
+        member x.MapFill(f) =
+            { x with Fill = f x.Fill }
+
+        member x.MapStroke(f) =
+            { x with Stroke = f x.Stroke }
+
+        member x.SetStrokeIsOverprint(isOverprint) =
+            x.MapStroke(fun m -> 
+                { m with IsOverprint = isOverprint }
+            )
+
+        member x.SetStrokeOpacity(opacity) =
+            x.MapStroke(fun m -> 
+                { m with Opacity = opacity }
+            )
+
+        member x.SetFillIsOverprint(isOverprint) =
+            x.MapFill(fun m -> 
+                { m with IsOverprint = isOverprint }
+            )
+
+        member x.SetFillOpacity(opacity) =
+            x.MapFill(fun m -> 
+                { m with Opacity = opacity }
+            )
+
+
+
+        member x.MapAppereance(f) =
+            { x with 
+                Stroke = f x.Stroke
+                Fill = f x.Fill}
+
+
+        static member DefaultValue =
+            { OPM = FsOPM.Illustractor 
+              Fill = ExtGStateAppereance.DefaultValue
+              Stroke = ExtGStateAppereance.DefaultValue
+              BlendModes = []
+              SoftMask = None }
+
+        static member Fill_Difference(?opacticy) =
+            { FsExtGState.DefaultValue with 
+                BlendModes = [ BlendMode.Difference ]
+            }.SetFillOpacity(defaultArg opacticy 1.0f)
+
+        static member StrokeOverprint =
+            FsExtGState.DefaultValue.MapStroke(fun m ->
+                { m with IsOverprint = true }
+            )
+
+        static member FillOverprint =
+            FsExtGState.DefaultValue.MapFill(fun m ->
+                { m with IsOverprint = true }
+            )
+
+        static member FillStrokeOverprint =
+            FsExtGState.DefaultValue.MapAppereance(fun m ->
+                { m with IsOverprint = true }
+            )
+
+        static member FillTransparent(opacity) =
+            FsExtGState.DefaultValue.MapFill(fun m ->
+                { m with Opacity = opacity }
+            )
+
+
+        static member Transparent(opacity) =
+            FsExtGState.DefaultValue.MapAppereance(fun m ->
+                { m with Opacity = opacity }
+            )
+
+        member x.IsBlendMode_Normal = 
+            x.BlendModes = []
+            || x.BlendModes = [BlendMode.Normal]
+
+        member private x.IsConcatable() =
+            x.SoftMask.IsNone
+            && not x.IsFillOverprint
+            && not x.IsStrokeOverprint
+            && x.IsBlendMode_Normal
             
+        static member Concat(values: al1List<FsExtGState>) =
+            let rec loop accum (values: list<FsExtGState>) =
+                match values with 
+                | h :: t ->
+                    match accum with 
+                    | None -> loop (Some h) t
+                    | Some accum ->
+                        let newAccum = 
+                            match accum.IsConcatable(), h.IsConcatable() with 
+                            | true, true -> failwithf "Cannot concat FsExtGState %A" (accum, h)
+                            | false, false ->
+                                { SoftMask = None 
+                                  BlendModes = []
+                                  Fill = 
+                                    { IsOverprint = false 
+                                      Opacity = accum.Fill.Opacity * h.Fill.Opacity }
+
+                                  Stroke =
+                                    { IsOverprint = false 
+                                      Opacity = accum.Stroke.Opacity * h.Stroke.Opacity }
+                                
+                                  OPM = FsOPM.Illustractor
+                                }
+                            | false, true 
+                            | true, false ->
+                                { SoftMask = accum.SoftMask |> Option.orElse h.SoftMask
+                                  BlendModes = List.distinct (accum.BlendModes @ h.BlendModes)
+                                  Fill = 
+                                    { IsOverprint = accum.IsFillOverprint || h.IsFillOverprint
+                                      Opacity = accum.Fill.Opacity * h.Fill.Opacity }
+
+                                  Stroke =
+                                    { IsOverprint = accum.IsStrokeOverprint || h.IsStrokeOverprint
+                                      Opacity = accum.Stroke.Opacity * h.Stroke.Opacity }
+                                
+                                  OPM = FsOPM.Illustractor
+                                }
+
+                        loop (Some newAccum) t
+
+                | [] -> accum
+
+            loop None values.AsList
+            |> Option.get
+
+
 
     type TextRenderingMode = iText.Kernel.Pdf.Canvas.PdfCanvasConstants.TextRenderingMode
     type LineJoinStyle = iText.Kernel.Pdf.Canvas.PdfCanvasConstants.LineJoinStyle
@@ -1949,12 +2016,11 @@ module ExtensionTypes =
             | NullablePageSelector.PageSelector pageSelector -> Some pageSelector
             | NullablePageSelector.Non -> None
                       
-                      
+
     type IIntegratedRenderInfoIM =
         inherit IAbstractRenderInfoIM
         abstract member TagIM: IntegratedRenderInfoTagIM
         abstract member ClippingPathInfos: ClippingPathInfos
-        abstract member SoftMasks: al1List<SoftMaskRenderInfo> option
 
     type IIntegratedRenderInfo =
         inherit IIntegratedRenderInfoIM
