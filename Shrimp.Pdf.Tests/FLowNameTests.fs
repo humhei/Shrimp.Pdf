@@ -14,7 +14,7 @@ let flowNameTests =
   let addText text position =
     ModifyPage.Create
         ( text,
-          PageSelector.First,
+          PageSelector.First, 
           Dummy,
           PageModifier.Batch [
             PageModifier.AddText(PageBoxKind.ActualBox, text, fun args ->

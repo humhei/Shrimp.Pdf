@@ -195,6 +195,7 @@ type SelectorModiferToken =
     { Name: string }
 
 
+
 module internal Listeners =
     
     type CurrentRenderInfoStatus =
@@ -207,6 +208,11 @@ module internal Listeners =
         let innerGSStack = 
             new Stack<_>([|new CanvasGraphicsState(gs)|])
             
+        let mutable softMasks = 
+            match previous with 
+            | None -> []
+            | Some previous -> previous.SoftMasks
+
         let mutable fillOpacity = previous |> Option.bind(fun m -> m.FillOpacity)
         let mutable strokeOpacity = previous |> Option.bind(fun m -> m.StrokeOpacity)
 
@@ -220,6 +226,8 @@ module internal Listeners =
 
         member internal x.FillOpacity = fillOpacity
         member internal x.StrokeOpacity = strokeOpacity
+        member internal x.SoftMasks = softMasks
+
 
         member private x.ApplyStrokeOpacity(v) =
             match v with 
@@ -232,6 +240,60 @@ module internal Listeners =
         member x.Value = innerGSStack.Peek()
 
         member x.ProcessGraphicsStateResource(gs: ParserGraphicsState) = 
+            let softMask =
+                match gs.GetSoftMask() with 
+                | :? PdfName as pdfName ->
+                    match pdfName with 
+                    | EqualTo PdfName.None -> None
+                    | _ -> failwithf "Cannot parse %A to SoftMask" pdfName
+
+                | null -> None
+                | mask ->
+                    let hash = hashNumberOfPdfIndirectReference <| mask.GetIndirectReference()
+                    let ref = 
+                        (mask :?> PdfDictionary)
+                            .Get(PdfName "G")
+                            .GetIndirectReference()
+                            .GetRefersTo()
+                            :?> PdfDictionary
+                    let rawBBox = 
+                        let floatArray = 
+                            ref
+                                    .GetAsArray(PdfName.BBox)
+                                    .ToDoubleArray()
+                        FsRectangle.create floatArray[0] floatArray[1] floatArray[2] floatArray[3]
+
+                    let ctm1 = AffineTransformRecord.ofMatrix (gs.GetCtm())
+                    let ctm2 = 
+                        ref.GetAsArray(PdfName.Matrix)
+                        |> AffineTransformRecord.ofPdfArray
+
+                    let ctm = ctm1.Concatenate(ctm2)
+
+                    let actualBox = 
+                        let ctm = AffineTransformRecord.toAffineTransform ctm
+                        ctm.Transform(rawBBox.AsRectangle)
+                        |> FsRectangle.OfRectangle
+
+                    {
+                        SoftMask = 
+                            {
+                                ID = hash
+                                PdfObject_SkipComparation = SkipComparation mask
+                            }
+
+                        Ctm = (ctm)
+                        RawBBox = rawBBox
+                        ActualBBox = actualBox
+                    }
+
+                    |> Some
+
+            match softMask with 
+            | None -> ()
+            | Some softMask ->
+                softMasks <- softMask :: softMasks 
+
             x.ApplyFillOpacity(gs.GetFillOpacity())
             x.ApplyStrokeOpacity(gs.GetStrokeOpacity())
             innerGSStack.Push(CanvasGraphicsState gs)
@@ -261,6 +323,13 @@ module internal Listeners =
             match gsStack.Count with 
             | 0 -> None
             | _ -> gsStack.Peek().FillOpacity
+
+        member internal x.SoftMasks =
+            match gsStack.Count with 
+            | 0 -> None
+            | _ -> 
+                gsStack.Peek().SoftMasks
+                |> AtLeastOneList.TryCreate
 
         member internal x.StrokeOpacity =
             match gsStack.Count with 
@@ -564,7 +633,8 @@ module internal Listeners =
                                   PathRenderInfo = pathRenderInfo
                                   AccumulatedPathOperatorRanges = accumulatedPathOperatorRanges
                                   FillOpacity = this.FillOpacity
-                                  StrokeOpacity = this.StrokeOpacity }
+                                  StrokeOpacity = this.StrokeOpacity
+                                  SoftMasks = this.SoftMasks }
 
 
                             match pathRenderInfo.IsPathModifiesClippingPath() with 
@@ -608,6 +678,7 @@ module internal Listeners =
                               OperatorRange = None
                               FillOpacity = this.FillOpacity
                               StrokeOpacity = this.StrokeOpacity
+                              SoftMasks = this.SoftMasks
                               }
                             :> IIntegratedRenderInfoIM
 
@@ -619,6 +690,7 @@ module internal Listeners =
                                   ImageRenderInfo = imageRenderInfo
                                   FillOpacity = this.FillOpacity
                                   StrokeOpacity = this.StrokeOpacity
+                                  SoftMasks = this.SoftMasks
                                   LazyImageData = 
                                     lazy 
                                         let rgbIndexedColorSpace =

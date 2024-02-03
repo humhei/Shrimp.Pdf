@@ -146,6 +146,27 @@ module _Renewable =
               AccumulatedPathOperatorRanges = x.OperatorRanges
               ClippingRule = x.ClippingRule }
 
+    type RenewableSoftMaskRenderInfo = RenewableSoftMaskRenderInfo of SoftMaskRenderInfo
+    with 
+        member x.Value =
+            let (RenewableSoftMaskRenderInfo v) = x
+            v
+
+        member x.ApplyCtm_WriteToCanvas(writerCanvas: PdfCanvas) =
+            let x = x.Value
+            let document = writerCanvas.GetDocument() :?> PdfDocumentWithCachedResources
+            let newSoftMask = document.Renew_OtherDocument_SoftMaskInfo(x)
+                
+            //writerCanvas
+            //|> PdfCanvas.concatMatrixByTransform x.Ctm
+            //|> ignore
+
+            writerCanvas.SetExtGState(newSoftMask)
+            |> ignore
+
+    type SoftMaskRenderInfo with 
+        member x.Renewable() = RenewableSoftMaskRenderInfo x
+
     type RenewableClippingPathInfo = RenewableClippingPathInfo of RenewableClippingPathInfoElement list
     with
         member x.ApplyCtm_WriteToCanvas(canvas: PdfCanvas, suffixActions) = 
@@ -227,7 +248,7 @@ module _Renewable =
                 .ApplyCtm_To_AccumulatedPathOperatorRanges()
 
         member x.ApplyCtm_WriteToCanvas(canvas: PdfCanvas) = 
-
+            
             PdfCanvas.useCanvas canvas (fun canvas ->
                 match x.IsShading with 
                 | true -> 
@@ -507,6 +528,7 @@ module _Renewable =
         | Image of RenewableImageInfo
     with 
 
+
         member private x.Bound =
             match x with 
             | Path info ->  info.OriginInfo.RecordValue.Bound |> Some
@@ -518,6 +540,11 @@ module _Renewable =
             | RenewableInfo.Path info -> info.OriginInfo :> IIntegratedRenderInfoIM
             | RenewableInfo.Text info -> info.OriginInfo :> IIntegratedRenderInfoIM
             | RenewableInfo.Image info -> info.OriginInfo :> IIntegratedRenderInfoIM
+
+
+
+        member x.SoftMasks = x.OriginInfo.SoftMasks
+
 
         member info.CopyToDocument(document, writerResources, readerPage: PdfPage) =
             match info with 

@@ -1761,7 +1761,16 @@ module _Colors =
         let private fsColorCache = new ConcurrentDictionary<SerializableCustomComparable<Color, int>, FsColor>()
 
         let OfItextColor(color: Color) =
-            let color = SerializableCustomComparable(color, fun color -> color.GetHashCode())
+            let color = SerializableCustomComparable(color, fun color -> 
+                match color with 
+                | :? PatternColor as color ->
+                    let colorSpace = color.GetColorSpace().GetHashCode()
+                    let pattern = color.GetPattern().GetHashCode()
+                    let colorValue = color.GetColorValue().GetHashCode()
+                    let hashCode = (hash) (colorSpace, pattern, colorValue)
+                    hashCode
+                | _ -> color.GetHashCode()
+            )
             fsColorCache.GetOrAdd(color, fun color ->
                 let color = color.Value
                 match color with 

@@ -10,7 +10,7 @@
   </ItemGroup>
   <ItemGroup>
       <PackageReference Include="DtronixPdf" Version="1.0.1.1" />
-      <PackageReference Include="Shrimp.FSharp.Plus" Version="5.99.487"/>
+      <PackageReference Include="Shrimp.FSharp.Plus" Version="5.99.490"/>
       <PackageReference Include="Fake.IO.FileSystem" Version="5.18.0" />
         <PackageReference Update="FSharp.Core" Version="5.0.1" />
       <PackageReference Include="TaskBuilder.fs" Version="2.1.0" />

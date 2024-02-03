@@ -778,17 +778,12 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
         let currentPdfCanvas = pdfCanvasStack.Peek()
         let operatorName = operatorRange.Operator.Text()
 
-        let writeImage() =  
+        let getImageClose() =
             match eventListener.CurrentRenderInfoStatus with 
             | CurrentRenderInfoStatus.Skiped -> 
-                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                |> ignore
-
-                None
+                Choice1Of2 operatorRange
 
             | CurrentRenderInfoStatus.Selected ->
-                let currentGS = this.GetGraphicsState()
-                currentPdfCanvas.SetCanvasGraphicsState(currentGS)
                 let modifierPdfCanvasActions =
                     match eventListener.CurrentRenderInfoToken.Value with 
                     | [token] ->
@@ -798,6 +793,20 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                         let keys = eventListener.CurrentRenderInfoToken.Value
                         failwithf "Multiple modifiers %A are not supported  when image is selectable" keys
 
+                modifierPdfCanvasActions
+                |> Choice2Of2
+
+        let writeImage() =  
+            match getImageClose() with 
+            | Choice1Of2 operatorRange ->
+                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                |> ignore
+
+                None
+            
+            | Choice2Of2 modifierPdfCanvasActions ->
+                let currentGS = this.GetGraphicsState()
+                currentPdfCanvas.SetCanvasGraphicsState(currentGS)
 
                 PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
                     (canvas, modifierPdfCanvasActions.Actions)
@@ -889,8 +898,33 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                     let xobjectStreamID = xobjectStream.GetIndirectReference().GetObjNumber()
                     match fsDocumentResources.FixedStreamObjNums.TryGetValue xobjectStreamID with 
                     | true, xobjectStream -> 
-                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                        |> ignore
+                        match subType with 
+                        | Form ->
+                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                            |> ignore
+
+                        | Image ->
+                            match (getImageClose()) with 
+                            | Choice1Of2 operatorRange ->
+                                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                                |> ignore
+
+                            | Choice2Of2 modifierPdfCanvasActions ->
+                                match modifierPdfCanvasActions.Close with 
+                                | CloseOperatorUnion.Image close ->
+                                    match close with 
+                                    | ImageCloseOperator.Keep ->
+                                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                                        |> ignore
+
+                                    | ImageCloseOperator.Remove -> ()
+                                    | ImageCloseOperator.New _ -> failwithf "Not implemented for (XObjectRef,ImageCloseOperator.New)"
+
+                                | _ -> failwith "Invalid token"
+                                
+                        | Others -> 
+                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                            |> ignore
 
                     | false, _ ->
                         fsDocumentResources.FixedStreamObjNums.GetOrAdd(xobjectStreamID, valueFactory = fun _ ->

@@ -6,6 +6,7 @@ open System.IO
 open Shrimp.FSharp.Plus
 open System
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
+open iText.Kernel.Pdf
 
 module Constants =
     
@@ -399,6 +400,11 @@ module Constants =
 [<AutoOpen>]
 module Operators =
     open Constants
+
+    let hashNumberOfPdfIndirectReference(pdfIndirectReference: PdfIndirectReference) =
+        pdfIndirectReference.GetObjNumber(), pdfIndirectReference.GetGenNumber()
+
+
     /// approximately equal to 
     /// benchmark by (CONFIG: shrimp.pdf.tolerance (default is 0.1))
     let (@=) a b =

@@ -66,7 +66,7 @@ let performanceTests =
         |> runTest "datas/performance/replace colors by copied xobjects.pdf" 
         |> ignore
 
-    ftestCase "replace colors by ref xobjects" <| fun _ -> 
+    testCase "replace colors by ref xobjects" <| fun _ -> 
         Flow.Manipulate (
             Modify.Create(
                 PageSelector.All,

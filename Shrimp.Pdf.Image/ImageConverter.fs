@@ -30,10 +30,13 @@ module _ImageConverter =
     type PdfDocument with 
         member pdfDoc.AddImageAsPage(image: string, ?targetLength: ResizingTargetLength) =
             let image = ImageDataFactory.Create(image)
-            let width = image.GetWidth()
-            let height = image.GetHeight()
+
 
             let rect = 
+
+                let width = image.GetWidth()
+                let height = image.GetHeight()
+
                 match targetLength with 
                 | None -> 
                     let scaleX = 72.f / (float32 (image.GetDpiX()))

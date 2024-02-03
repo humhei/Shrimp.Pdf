@@ -86,7 +86,9 @@ module IntegratedInfos =
           ClippingPathInfos: ClippingPathInfos
           AccumulatedPathOperatorRanges: seq<OperatorRange>
           FillOpacity: float32 option 
-          StrokeOpacity: float32 option }
+          StrokeOpacity: float32 option
+          SoftMasks: al1List<SoftMaskRenderInfo> option
+        }
     with 
         member x.IsShading = 
             match x.PathRenderInfo with 
@@ -129,6 +131,7 @@ module IntegratedInfos =
         interface IIntegratedRenderInfoIM with 
             member x.TagIM = IntegratedRenderInfoTagIM.Path
             member x.ClippingPathInfos = x.ClippingPathInfos
+            member x.SoftMasks = x.SoftMasks
 
         interface IIntegratedRenderInfo with 
             member x.Tag = IntegratedRenderInfoTag.Path
@@ -157,12 +160,14 @@ module IntegratedInfos =
           ConcatedTextInfo: ConcatedTextInfo
           OperatorRange: OperatorRange option
           FillOpacity: float32 option
-          StrokeOpacity: float32 option }
+          StrokeOpacity: float32 option
+          SoftMasks: al1List<SoftMaskRenderInfo> option }
 
     with 
         
 
         member x.SplitToWords() =
+            let softMasks = x.SoftMasks
             match x.EndTextState with 
             | EndTextState.No
             | EndTextState.Undified -> [x]
@@ -180,6 +185,7 @@ module IntegratedInfos =
                         ClippingPathInfos = clippingPathInfos
                         StrokeOpacity = strokeOpacity
                         FillOpacity = fillOpacity
+                        SoftMasks = softMasks
                     }
                 )
 
@@ -254,6 +260,7 @@ module IntegratedInfos =
         interface IIntegratedRenderInfoIM with 
             member x.TagIM = IntegratedRenderInfoTagIM.Text
             member x.ClippingPathInfos = x.ClippingPathInfos
+            member x.SoftMasks = x.SoftMasks
         
         interface IIntegratedRenderInfo with 
             member x.Tag = IntegratedRenderInfoTag.Text
@@ -332,6 +339,7 @@ module IntegratedInfos =
           LazyColorSpace: Lazy<ImageColorSpaceData option> 
           FillOpacity: float32 option
           StrokeOpacity: float32 option
+          SoftMasks: al1List<SoftMaskRenderInfo> option
         }
 
     with 
@@ -404,6 +412,7 @@ module IntegratedInfos =
         interface IIntegratedRenderInfoIM with 
             member x.TagIM = IntegratedRenderInfoTagIM.Image
             member x.ClippingPathInfos = x.ClippingPathInfos
+            member x.SoftMasks = x.SoftMasks
             
 
 

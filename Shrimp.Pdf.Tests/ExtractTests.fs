@@ -127,7 +127,20 @@ let extractTests =
             Flow.Reuse (
                 Reuses.ExtractToTwoPages(
                     Selector.PathOrText(Info.StrokeColorIs (FsColor.valueColor FsDeviceCmyk.MAGENTA)),
-                    ExtractToTwoPages_PageBoxSetter.ToSelection(PageBoxKind.AllBox, Margin.Zero)
+                    ExtractToTwoPages_PageBoxSetter.ToSelection(PageBoxKind.AllBox, Margin.Zero),
+                    infosFilter = (
+                        fun infos ->
+                            infos
+                            |> List.filter(fun info -> 
+                                match info with 
+                                | RenewableInfo.Path info ->
+                                    match FsColor.OfItextColor info.StrokeColor = FsColor.CMYK_CYAN with 
+                                    | true -> false
+                                    | false -> true
+
+                                | _ -> true
+                            )
+                    )
                 )
             )
              
@@ -609,6 +622,69 @@ let extractTests =
                 )
             )
             |> runTest "datas/extract/extract objects15.pdf" 
+            |> ignore
+
+        testCase "extract objects tests16" <| fun _ -> 
+            //let m = FsValueColor.OfLoggingText_Raw "CMYK 0.0 96.5 100.0 0.09"
+            //let m = FsSeparation.OfLoggingText_Raw "All#CMYK 99 99 99 99"
+            //let m = FsSeparation.OfLoggingText_Raw "All#CMYK 100.0 100.0 100.0 100.0"
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects16.pdf" 
+            |> ignore
+
+        testCase "extract objects tests17" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects17.pdf" 
+            |> ignore
+
+        testCase "extract objects tests18" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects18.pdf" 
+            |> ignore
+
+        testCase "extract objects tests19" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects19.pdf" 
+            |> ignore
+
+        testCase "extract objects tests20" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects20.pdf" 
+            |> ignore
+
+        ftestCase "extract objects tests22" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/extract/extract objects22.pdf" 
             |> ignore
 
     ]

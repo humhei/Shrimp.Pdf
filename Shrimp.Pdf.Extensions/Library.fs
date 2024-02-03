@@ -6,6 +6,7 @@ open Shrimp.FSharp.Plus
 open iText.Kernel.Geom
 open iText.IO.Font
 open iText.IO.Font.Otf
+
 open iText.Kernel.Font
 open System
 open iText.Kernel.Colors
@@ -21,6 +22,7 @@ open iText.IO.Image
 
 [<AutoOpen>]
 module iText = 
+
     [<RequireQualifiedAccess>]
     type ActualLineWidth =
         | Exactly of  rawLineWidth: float * scale: float
@@ -794,7 +796,6 @@ module iText =
                         yield (i :?> PdfName |> BlendMode.ofPdfName)
                     ]
                 | _ -> failwithf "Cannot read blend mode from %A" (gs.GetBlendMode().GetType())
-
              }
 
 

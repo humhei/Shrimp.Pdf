@@ -5,10 +5,10 @@ open Fake.IO
 open DtronixPdf
 open FSharp.Control.Tasks.V2
 open System.IO
+open NLog
 
 module DtronixPdf =
-
-    let savePdfPageToTarget (dpi: float32) (target: JpgPath) (page: PdfPage) =
+    let savePdfPageToTarget  (dpi: float32) (target: JpgPath) (page: PdfPage) =
         task {
             let size = page.Size
             let scale = dpi / 72.f
@@ -62,7 +62,7 @@ module DtronixPdf =
                 return [targetFile]
 
             | i ->
-                let r =
+                let! r =
                     [0..totalPageNumber-1]
                     |> List.map(fun pageNum ->
                         let task = task {
@@ -73,10 +73,11 @@ module DtronixPdf =
 
                             return! savePdfPageToTarget dpi target page
                         }
-                        task.Result
+                        task
                     )
+                    |> System.Threading.Tasks.Task.WhenAll
                 do! document.DisposeAsync()
-                return r
+                return (List.ofArray r)
                 
 
         }

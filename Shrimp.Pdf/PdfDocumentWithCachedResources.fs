@@ -1,6 +1,7 @@
 ﻿namespace Shrimp.Pdf
 
 open System.Collections.Generic
+open iText.Kernel.Geom
 
 #nowarn "0104"
 open iText.Kernel.Font
@@ -113,6 +114,7 @@ type CurrentDocumentImage =
 type private PdfDocumentCache private 
     (pdfDocument: unit -> PdfDocumentWithCachedResources,
      fontsCache: ConcurrentDictionary<FsPdfFontFactory, PdfFont>,
+     smaskInfo_hashable_fromOtherDocument : ConcurrentDictionary<(int * int) * AffineTransformRecord, Extgstate.PdfExtGState>,
      fontsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfFont>,
      patternColorsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PatternColor>,
      shadingCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfShading>,
@@ -122,8 +124,7 @@ type private PdfDocumentCache private
      xobjectCache: ConcurrentDictionary<PdfFile, ReaderDocument * PdfFormXObject>,
      extGStateCache: ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>) =
     let mutable labColorSpace = None
-    let hashNumberOfPdfIndirectReference(pdfIndirectReference: PdfIndirectReference) =
-        pdfIndirectReference.GetObjNumber(), pdfIndirectReference.GetGenNumber()
+
 
     member internal x.Clear() = 
         fontsCache.Clear()
@@ -146,6 +147,7 @@ type private PdfDocumentCache private
         x.Clear()
         PdfDocumentCache(
             pdfDocument, 
+            new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(), 
@@ -187,6 +189,9 @@ type private PdfDocumentCache private
                 )
             )
 
+
+
+
     member internal x.GetOrCreateSharding_FromOtherDocument(sharding: PdfShading) =
         
         let number = hashNumberOfPdfIndirectReference <| sharding.GetPdfObject().GetIndirectReference()
@@ -194,6 +199,8 @@ type private PdfDocumentCache private
             let pdfObject = sharding.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false)
             PdfShading.MakeShading(pdfObject :?> PdfDictionary)
         )
+
+
 
     member internal x.GetOrCreateImage_FromOtherDocument(image: ImageRenderInfo) =
         match image.IsInline() with 
@@ -229,17 +236,32 @@ type private PdfDocumentCache private
             | :? PdfSpecialCs.Pattern as colorSpace ->
                 match colorSpace.GetPdfObject() with 
                 | :? PdfName as pdfName ->  
+                    let patternColorID = 
+                        patternColor.GetPattern().GetPdfObject().GetIndirectReference()
+                        |> hashNumberOfPdfIndirectReference
+
                     let resource = otherDocumentPage.GetResources()
                     let pattern = 
                         let pdfObject = resource.GetPdfObject()
                         pdfObject.GetAsDictionary(pdfName)
 
-                    let pair = pattern.EntrySet() |> Seq.exactlyOne
-                    
-                    let number = hashNumberOfPdfIndirectReference <| pair.Value.GetIndirectReference()
+                    let number, pdfObject = 
+                        let entrySets = pattern.EntrySet() 
+                        entrySets 
+                        |> List.ofSeq
+                        |> List.map (fun pair -> 
+                            hashNumberOfPdfIndirectReference (pair.Value.GetIndirectReference()), pair.Value
+                        )
+                        |> List.find(fun (hashNumber, pdfObject) ->
+                            hashNumber = patternColorID
+                        )
+
+                    //let pair = snd pairs.[0]
+
+                    //let number = hashNumberOfPdfIndirectReference <| pair.Value.GetIndirectReference()
 
                     patternColorsCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
-                        match pair.Value.CopyTo(pdfDocument(), allowDuplicating = false) with 
+                        match pdfObject.CopyTo(pdfDocument(), allowDuplicating = false) with 
                         | :? PdfStream as pdfObject ->
                         
                             let tiling = PdfPattern.Tiling(pdfObject)
@@ -335,31 +357,63 @@ type private PdfDocumentCache private
             | pdfFont -> pdfFont
         )
 
+    member private x.FsExtGState_To_PdfExtGState(extGState: FsExtGState) =
+        let pdfExtGState = new Extgstate.PdfExtGState()
+        pdfExtGState
+            .SetOverprintMode(int extGState.OPM)
+            .SetFillOverPrintFlag(extGState.IsFillOverprint)
+            .SetStrokeOverPrintFlag(extGState.IsStrokeOverprint)
+            .SetFillOpacity(extGState.Fill.Opacity)
+            .SetStrokeOpacity(extGState.Stroke.Opacity)
+            |> ignore
+
+        match extGState.BlendModes with 
+        | [] -> pdfExtGState
+        | _ ->
+            let blendingModes =
+                extGState.BlendModes
+                |> List.map(fun m -> (BlendMode.toPdfName m) :> PdfObject )
+            let blendingModes = ResizeArray blendingModes :> System.Collections.Generic.IList<_>
+            let pdfArray = PdfArray(blendingModes)
+            pdfExtGState.SetBlendMode(pdfArray)
+
     member internal x.GetOrCreateExtGState(extGState: FsExtGState) = 
         extGStateCache.GetOrAdd(extGState, fun (extGState) ->
-            let pdfExtGState = new Extgstate.PdfExtGState()
-            pdfExtGState
-                .SetOverprintMode(int extGState.OPM)
-                .SetFillOverPrintFlag(extGState.IsFillOverprint)
-                .SetStrokeOverPrintFlag(extGState.IsStrokeOverprint)
-                .SetFillOpacity(extGState.Fill.Opacity)
-                .SetStrokeOpacity(extGState.Stroke.Opacity)
-                |> ignore
+            x.FsExtGState_To_PdfExtGState(extGState)
+        )
 
-            match extGState.BlendModes with 
-            | [] -> pdfExtGState
-            | _ ->
-                let blendingModes =
-                    extGState.BlendModes
-                    |> List.map(fun m -> (BlendMode.toPdfName m) :> PdfObject )
-                let blendingModes = ResizeArray blendingModes :> System.Collections.Generic.IList<_>
-                let pdfArray = PdfArray(blendingModes)
-                pdfExtGState.SetBlendMode(pdfArray)
+    member internal x.GetOrCreateSMask_FromOtherDocument(softMask: SoftMaskRenderInfo) =
+        smaskInfo_hashable_fromOtherDocument.GetOrAdd((softMask.SoftMask.ID, softMask.Ctm), valueFactory = fun _ ->
+            let newPdfObject = softMask.SoftMask.PdfObject.CopyTo(pdfDocument(), allowDuplicating = false)
+            let newSoftMask = 
+                { softMask with 
+                    SoftMask = 
+                        { softMask.SoftMask with PdfObject_SkipComparation = SkipComparation (newPdfObject) }
+                }
+
+            let pdfExtGState = 
+                x.FsExtGState_To_PdfExtGState FsExtGState.DefaultValue
+
+            let __setMatrix = 
+                let newSoftMaskPdfObject = (newSoftMask.SoftMask.PdfObject :?> PdfDictionary)
+                let stream = newSoftMaskPdfObject.GetAsStream(PdfName("G")) :> PdfDictionary
+                let matrix = 
+                    stream.GetAsArray(PdfName.Matrix)
+                    |> AffineTransformRecord.ofPdfArray
+
+                let newMatrix = 
+                    softMask.Ctm.Concatenate(matrix)
+
+                stream.Put(PdfName.Matrix, AffineTransformRecord.toPdfArray newMatrix)
+
+            pdfExtGState.SetSoftMask(newSoftMask.SoftMask.PdfObject)
+
         )
 
     new (pdfDocument: unit -> PdfDocumentWithCachedResources) =
         PdfDocumentCache
             (pdfDocument,
+             new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
@@ -448,6 +502,9 @@ and PdfDocumentWithCachedResources =
         | PdfCanvasColor.Registration ->
                 let resourceColor = ResourceColor.Registration
                 pdfDocument.GetOrCreateColor(resourceColor) 
+
+    member x.Renew_OtherDocument_SoftMaskInfo(softMask) =
+        x.cache.GetOrCreateSMask_FromOtherDocument(softMask)
 
     member x.Renew_OtherDocument_PdfShading(writerResource: PdfResources, otherDocumentColor: Color) =
         match otherDocumentColor with 

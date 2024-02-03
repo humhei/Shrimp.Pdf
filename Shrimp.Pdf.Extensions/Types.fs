@@ -5,6 +5,8 @@ open iText.IO.Font
 open System.Collections.Generic
 open System
 open System.Text
+open iText.Kernel.Pdf.Canvas
+
 #nowarn "0104"
 open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas.Parser.Data
@@ -601,6 +603,8 @@ module ExtensionTypes =
             { IsOverprint = false
               Opacity = 1.0f }
 
+
+
     type FsExtGState =
         { 
             OPM: FsOPM
@@ -1092,17 +1096,6 @@ module ExtensionTypes =
           ClippingPathInfoState: ClippingPathInfoState }
 
 
-    type IIntegratedRenderInfoIM =
-        inherit IAbstractRenderInfoIM
-        abstract member TagIM: IntegratedRenderInfoTagIM
-        abstract member ClippingPathInfos: ClippingPathInfos
-
-
-    type IIntegratedRenderInfo =
-        inherit IIntegratedRenderInfoIM
-        inherit IAbstractRenderInfo
-        abstract member Tag: IntegratedRenderInfoTag
-        abstract member ClippingPathInfos: ClippingPathInfos
 
 
 
@@ -1593,16 +1586,29 @@ module ExtensionTypes =
               TranslateX = affineTransform.GetTranslateX() 
               TranslateY = affineTransform.GetTranslateY() }
 
-        let toAffineTransform (record: AffineTransformRecord) =
-            new AffineTransform(
-                record.m00,
-                record.m10,
-                record.m01,
-                record.m11,
-                record.m02,
+        let toDoubleArray (record: AffineTransformRecord) = 
+            [|
+                record.m00
+                record.m10
+                record.m01
+                record.m11
+                record.m02
                 record.m12
-            )
+            |]
 
+
+        let toAffineTransform (record: AffineTransformRecord) =
+            let affineTransform = 
+                new AffineTransform(
+                    record.m00,
+                    record.m10,
+                    record.m01,
+                    record.m11,
+                    record.m02,
+                    record.m12
+                )
+
+            affineTransform
 
 
         let ofMatrix (matrix: Matrix) =
@@ -1618,7 +1624,10 @@ module ExtensionTypes =
             |> AffineTransform
             |> ofAffineTransform
      
-        
+        let ofPdfArray (pdfArray: PdfArray) =
+            let values = pdfArray.ToFloatArray()
+            Matrix(values[0], values[1], values[2], values[3], values[4], values[5])
+            |> ofMatrix
 
         let toMatrix (record: AffineTransformRecord) =
             let values = Array.create 6 0.f
@@ -1626,6 +1635,14 @@ module ExtensionTypes =
             
             new Matrix(values.[0], values.[1], values.[2], values.[3], values.[4], values.[5])
             //new Matrix(values.[Matrix.I11], values.[Matrix.I12], values.[Matrix.I21], values.[Matrix.I22], values.[Matrix.I31], values.[Matrix.I32])
+
+        let toPdfArray (record: AffineTransformRecord) =
+            let matrix = 
+                toDoubleArray record
+                |> Array.map float32
+
+            PdfArray(matrix)
+
 
     type AffineTransformRecord with 
         member x.Concatenate(y: AffineTransformRecord) =
@@ -1731,6 +1748,17 @@ module ExtensionTypes =
         | OutBox = 2
 
 
+    type IdentifiedPdfObject =
+        { PdfObject_SkipComparation: SkipComparation<PdfObject>
+          ID: int * int }
+    with
+        member x.PdfObject = x.PdfObject_SkipComparation.Value
+
+    type SoftMaskRenderInfo =   
+        { Ctm: AffineTransformRecord
+          SoftMask: IdentifiedPdfObject
+          RawBBox: FsRectangle
+          ActualBBox: FsRectangle }
 
 
             
@@ -1920,7 +1948,21 @@ module ExtensionTypes =
             //| NullablePageSelector.Numbers v    ->   Some (PageSelector.Numbers v)
             | NullablePageSelector.PageSelector pageSelector -> Some pageSelector
             | NullablePageSelector.Non -> None
-                                                                  
+                      
+                      
+    type IIntegratedRenderInfoIM =
+        inherit IAbstractRenderInfoIM
+        abstract member TagIM: IntegratedRenderInfoTagIM
+        abstract member ClippingPathInfos: ClippingPathInfos
+        abstract member SoftMasks: al1List<SoftMaskRenderInfo> option
+
+    type IIntegratedRenderInfo =
+        inherit IIntegratedRenderInfoIM
+        inherit IAbstractRenderInfo
+        abstract member Tag: IntegratedRenderInfoTag
+        abstract member ClippingPathInfos: ClippingPathInfos
+
+
     type PdfDocument with
 
         member pdfDocument.GetPageNumber(pageSelectorExpr: SinglePageSelectorExpr) =

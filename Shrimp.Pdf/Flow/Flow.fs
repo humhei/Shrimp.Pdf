@@ -1,7 +1,8 @@
 ﻿namespace  Shrimp.Pdf
+
+
 #nowarn "0104"
 open Fake.IO
-open Fake.IO.FileSystemOperators
 open System.IO
 open Shrimp.FSharp.Plus
 
@@ -433,7 +434,6 @@ module rec _FlowMutualTypes =
 [<AutoOpen>]
 module Operators =
     let (=>) a b = a,b
-
 
     let runManyWithFlowModels (config: Configuration) (flowModels: FlowModel<_> list) flow = 
         match flowModels with 

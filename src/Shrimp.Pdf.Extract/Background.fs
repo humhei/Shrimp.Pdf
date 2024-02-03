@@ -4,7 +4,7 @@ open Shrimp.FSharp.Plus
 open Shrimp.Pdf
 open Shrimp.Pdf.Extract
 open Shrimp.LiteDB
-
+open System.IO
 #nowarn "0104"
 open Shrimp.Pdf.Constants
 open Shrimp.Pdf.Extensions
@@ -23,11 +23,31 @@ open iText.Kernel.Geom
 
 [<AutoOpen>]
 module _Extract_BackgroundOrForeground =
+
+    let private applyName name (text: string) =
+        match name with 
+        | String.EqualIC UNTITLED ->
+            text
+
+        | name ->
+            let name = 
+                match name.LeftOf("-") with 
+                | Some name -> name
+                | None -> name
+
+            sprintf "%s.%s" name text
+
     [<AutoOpen>]
     module private _BackgroundFileCache =
         let backgroundCache = 
             new LightWeightFileInfoDictionary<PdfFile * string, PdfFile, PdfPath * string>(
-                cacheFileMapping = (fun (m, _) -> Path.changeExtension ".cache" m.Path),
+                cacheFileMapping = (fun (m, name) -> 
+                    let dir = Path.getDirectory m.Path </> ".bk"
+                    Directory.ensure dir
+                    let ext = applyName name ".cache"
+                    dir </> (Path.GetFileName m.Path)
+                    |> Path.changeExtension ext
+                ),
                 keyFilesGetter = (fun (m, _) -> [m.Path]),
                 valueFilesGetter = (fun m -> [m.FileInfo]),
                 primaryKeyGetter = (fun (m, name) -> primaryKey (m.PdfPath, name))
@@ -55,25 +75,17 @@ module _Extract_BackgroundOrForeground =
             let clearedPdfFile = 
                 backgroundCache.GetOrAddOrUpdate((pdfFile, name), fun () ->
                     let targetPath =
-                        match name with 
-                        | String.EqualIC UNTITLED ->
-                            pdfFile.Path
-                            |> Path.changeExtension "backgroundFile.cleared.pdf"
-
-                        | name ->
-                            let name = 
-                                match name.LeftOf("-") with 
-                                | Some name -> name
-                                | None -> name
-
-                            pdfFile.Path
-                            |> Path.changeExtension (sprintf "%s.backgroundFile.cleared.pdf" name)
+                        let dir = Path.getDirectory pdfFile.Path </> ".bk"
+                        Directory.ensure dir
+                        let ext = applyName name "backgroundFile.cleared.pdf"
+                        dir </> Path.GetFileName pdfFile.Path
+                        |> Path.changeExtension ext
 
 
                     let newPdfFile: PdfFile = 
                         let flow = 
                             Flow.Reuse(
-                                Reuses.ClearDirtyInfos()
+                                Reuses.ClearDirtyInfos(keepOriginPageBoxes = true)
                             )
                             <+>
                             (

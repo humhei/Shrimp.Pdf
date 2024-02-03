@@ -13,6 +13,7 @@ open Shrimp.FSharp.Plus
 open Akkling
 open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas
+open iText.Kernel.Pdf.Xobject
 
 
 
@@ -82,7 +83,8 @@ module _Extract =
         | NewPage of TargetPageBox * TargetRenewableNewPageInfoElement
         | Non
         | NewInfosInOriginPage of TargetNewInfosInOriginPageElement list
-        | SplitToTwoPages of pageboxSetter: ExtractToTwoPages_PageBoxSetter * RenewableInfo list * Selector<'userState>
+        | SplitToTwoPages of 
+             RenewableInfo list * Selector<'userState> * pageboxSetter: ExtractToTwoPages_PageBoxSetter * secondarySelector: (Rectangle -> Selector<'userState>) option
 
     let internal extractVisibleRenewableInfosToWriter 
         (configuration: Configuration)
@@ -172,50 +174,88 @@ module _Extract =
                 
 
                     infos
-                    |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.XObjectClippingBoxState.Serializable)
-                    |> List.iter(fun (xobjectRect, infos) ->
-                        let infos = infos.AsList
-                        let writeInfos() =
-                            infos
-                            |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.ClippingPathInfoState)
-                            |> List.iter(fun (clippingPathInfo, infos) ->   
-                                let infos = infos.AsList
-                                let writeInfos() =
-                                    for info in infos do
-                                        info.CopyToDocument(writer, writerPage.GetResources(), readerPage).ApplyCtm_WriteToCanvas(writerCanvas)
-                
-                                match clippingPathInfo with 
-                                | ClippingPathInfoState.Init -> writeInfos()
-                                | ClippingPathInfoState.Intersected (clippingPathInfo) -> 
-                                    clippingPathInfo.Renewable().ApplyCtm_WriteToCanvas(writerCanvas, (fun writerCanvas ->
-                                        writeInfos()
-                                        writerCanvas
-                                    ))
+                    |> List.splitIfChangedByKey(fun m -> m.SoftMasks)
+                    |> List.iter(fun (solfMasks, infos) ->
+                        match solfMasks with 
+                        | None -> ()
+                        | Some solfMasks ->
+                            writerCanvas.SaveState() |> ignore
+
+                            solfMasks.AsList
+                            |> List.iter(fun solfMask ->
+                                solfMask.Renewable().ApplyCtm_WriteToCanvas(writerCanvas)
                             )
 
+                        let writerCanvas2 = 
+                            match solfMasks with 
+                            | None -> writerCanvas
+                            | Some solfMasks ->
+                                let rect = 
+                                    writerPage.GetActualBox()
+                                    //solfMasks
+                                    //|> AtLeastOneList.map(fun m -> m.ActualBBox.AsRectangle)
+                                    //|> Rectangle.ofRectangles
+
+                                let xobject = PdfFormXObject(rect)
+                                writerCanvas.AddXObject(xobject) |> ignore
+                                let group = PdfTransparencyGroup()
+                                group.SetIsolated(false)
+                                group.SetKnockout(false)
+                                xobject.SetGroup(group) |> ignore
+                                PdfCanvas(xobject, writer)
+
+                        let infos = infos.AsList
+                        infos
+                        |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.XObjectClippingBoxState.Serializable)
+                        |> List.iter(fun (xobjectRect, infos) ->
+                            let infos = infos.AsList
+                            let writeInfos() =
+                                infos
+                                |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.ClippingPathInfoState)
+                                |> List.iter(fun (clippingPathInfo, infos) ->   
+                                    let infos = infos.AsList
+                                    let writeInfos() =
+                                        for info in infos do
+                                            info.CopyToDocument(writer, writerCanvas2.GetResources(), readerPage).ApplyCtm_WriteToCanvas(writerCanvas2)
                 
-                        match xobjectRect with 
-                        | SerializableXObjectClippingBoxState.IntersectedNone -> failwith "Invalid token: visble render info XObjectClippingBoxState cannot be IntersectedNone"
-                        | SerializableXObjectClippingBoxState.Init -> writeInfos() 
-                        | SerializableXObjectClippingBoxState.IntersectedSome rect ->
-                            match rect.Width, rect.Height with 
-                            | BiggerThan MAXIMUM_MM_WIDTH, BiggerThan MAXIMUM_MM_WIDTH -> writeInfos()
-                            | _ ->
-                                PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
-                                    writerCanvas
-                                        .Rectangle(rect.AsRectangle)
-                                        .Clip()
-                                        .EndPath()
-                                        |> ignore
-
-                                    writeInfos()
-
-                                    writerCanvas
-
+                                    match clippingPathInfo with 
+                                    | ClippingPathInfoState.Init -> writeInfos()
+                                    | ClippingPathInfoState.Intersected (clippingPathInfo) -> 
+                                        clippingPathInfo.Renewable().ApplyCtm_WriteToCanvas(writerCanvas2, (fun writerCanvas ->
+                                            writeInfos()
+                                            writerCanvas
+                                        ))
                                 )
+
                 
+                            match xobjectRect with 
+                            | SerializableXObjectClippingBoxState.IntersectedNone -> failwith "Invalid token: visble render info XObjectClippingBoxState cannot be IntersectedNone"
+                            | SerializableXObjectClippingBoxState.Init -> writeInfos() 
+                            | SerializableXObjectClippingBoxState.IntersectedSome rect ->
+                                match rect.Width, rect.Height with 
+                                | BiggerThan MAXIMUM_MM_WIDTH, BiggerThan MAXIMUM_MM_WIDTH -> writeInfos()
+                                | _ ->
+                                    PdfCanvas.useCanvas writerCanvas2 (fun writerCanvas ->
+                                        writerCanvas
+                                            .Rectangle(rect.AsRectangle)
+                                            .Clip()
+                                            .EndPath()
+                                            |> ignore
+
+                                        writeInfos()
+
+                                        writerCanvas
+
+                                    )
+                        )
+
+                        match solfMasks with 
+                        | None -> ()
+                        | Some solfMasks ->
+                            writerCanvas.RestoreState() |> ignore
 
                     )
+
 
                 let infoChoices(boundPredicate) =   
                     let infoChoices =
@@ -352,7 +392,7 @@ module _Extract =
 
             let rec loop targetPageInfo = 
                 match targetPageInfo with 
-                | TargetRenewablePageInfo.SplitToTwoPages (pageBoxSetter, infos, selector) ->
+                | TargetRenewablePageInfo.SplitToTwoPages (infos, selector, pageBoxSetter, secondarySelector) ->
 
                     let selector = Selector.toRenderInfoSelector args selector
                     let predication = RenderInfoSelector.toRenderInfoIMPredication selector
@@ -360,24 +400,47 @@ module _Extract =
                         infos
                         |> List.partition (fun m -> predication m.OriginInfo)
 
+                    let rect = 
+                        let rects = 
+                            infos1
+                            |> List.choose(fun m -> IIntegratedRenderInfoIM.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m.OriginInfo)
+                            |> AtLeastOneList.TryCreate
+                            
+                        match rects with 
+                        | None -> failwithf "Cannot select any object by selector %A" selector
+                        | Some rects ->
+                            let rect = 
+                                rects
+                                |> Rectangle.ofRectangles
+
+                            rect
+
+                    let infos1, infos2 =
+                        match secondarySelector with 
+                        | None -> infos1, infos2
+                        | Some secondarySelector ->
+                            let secondarySelector = 
+                                secondarySelector rect
+                                |> Selector.toRenderInfoSelector args 
+
+                            let predication = RenderInfoSelector.toRenderInfoIMPredication secondarySelector
+                            let infos2_1, infos2_2 =
+                                infos2
+                                |> List.partition (fun m -> predication m.OriginInfo)
+                                
+                            infos1 @ infos2_1, infos2_2
+
+                            
+
                     let targetPageBox = 
                         match pageBoxSetter with 
                         | ExtractToTwoPages_PageBoxSetter.KeepOrigin ->  TargetPageBox None
                         | ExtractToTwoPages_PageBoxSetter.ToSelection (pageBoxKind, margin) ->
-                            let rects = 
-                                infos1
-                                |> List.choose(fun m -> IIntegratedRenderInfoIM.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m.OriginInfo)
-                                |> AtLeastOneList.TryCreate
-                                
-                            match rects with 
-                            | None -> TargetPageBox None
-                            | Some rects ->
-                                let rect = 
-                                    rects
-                                    |> Rectangle.ofRectangles
-                                    |> Rectangle.applyMargin margin
+                            let rect = 
+                                rect
+                                |> Rectangle.applyMargin margin
 
-                                TargetPageBox (Some (pageBoxKind, rect))
+                            TargetPageBox (Some (pageBoxKind, rect))
 
                     let asTargetPageInfo infos  =
                         let element = 
@@ -398,8 +461,11 @@ module _Extract =
                 | TargetRenewablePageInfo.EmptyPage targetPageBox ->
                     let writerPage = writer.AddNewPage(PageSize(readerPage.GetActualBox()))
                     match targetPageBox.Value with 
-                    | None -> writerPage.SetPageBoxToPage(readerPage) |> ignore
+                    | None -> 
+                        writerPage.SetPageBoxToPage(readerPage) |> ignore
                     | Some (pageBoxKind, pageBox) -> 
+                        writerPage.SetPageBoxToPage(readerPage) |> ignore
+
                         writerPage.SetPageBox(pageBoxKind, pageBox)
                         |> ignore
 
@@ -425,7 +491,10 @@ module _Extract =
 
                     match targetPageBox.Value with 
                     | Some (pageBoxKind, pageBox) -> 
-                        writerPage.SetPageBox(pageBoxKind,pageBox) 
+                        writerPage.SetPageBoxToPage(readerPage)
+                        |> ignore<PdfPage>
+
+                        writerPage.SetPageBox(pageBoxKind, pageBox) 
                         |> ignore<PdfPage>
 
                     | None -> 
@@ -509,9 +578,9 @@ module _Extract =
             Reuses.ExtractIM(pageSelector, Selector.Path pathSelector, ?keepOriginPage = keepOriginPage)
 
 
-        static member ExtractToTwoPages (selector: Selector<'userState>, ?pageBoxSetter) =
+        static member ExtractToTwoPages (selector: Selector<'userState>, ?pageBoxSetter, ?secondarySelector, ?infosFilter) =
+            let pageBoxSetter = defaultArg pageBoxSetter ExtractToTwoPages_PageBoxSetter.KeepOrigin
             fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
-                let pageBoxSetter = defaultArg pageBoxSetter ExtractToTwoPages_PageBoxSetter.KeepOrigin
                 let reader = splitDocument.Reader
                 let totalNumberOfPages = reader.GetNumberOfPages()
 
@@ -529,7 +598,13 @@ module _Extract =
                         flowModel.Configuration
                         args
                         (Selector.All(fun _ _ -> true))
-                        (fun infos -> [TargetRenewablePageInfo.SplitToTwoPages(pageBoxSetter, infos, selector)])
+                        (fun infos ->   
+                            let infos =
+                                match infosFilter with 
+                                | None -> infos
+                                | Some infosFilter -> infosFilter infos
+                            [TargetRenewablePageInfo.SplitToTwoPages(infos, selector, pageBoxSetter, secondarySelector)]
+                        )
                         false
                         ignore
                         []
@@ -540,4 +615,5 @@ module _Extract =
 
             |> reuse 
                 "ExtractToTwoPages"
-                ["selector" => selector.ToString()]
+                ["selector" => selector.ToString()
+                 "pageBoxSetter" => pageBoxSetter.ToString()]

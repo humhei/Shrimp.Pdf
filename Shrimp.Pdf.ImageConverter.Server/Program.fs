@@ -9,13 +9,14 @@ open System.Threading
 let main argv =
     //let pdfFile =
     //    PdfFile 
-    //        @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\CORSO\.flow\VerifyDocuments\#2022-02-10#(健耐, 巨丰2022-2-10)\健耐 巨丰2022-2-10\吊牌改1.pdf"
+    //        @"C:\Users\Administrator\Desktop\1234\新建文档1.pdf"
 
     //let targetDir =
-    //    FsFullPath @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\CORSO\.flow\VerifyDocuments\#2022-02-10#(健耐, 巨丰2022-2-10)\健耐 巨丰2022-2-10"
+    //    FsFullPath @"C:\Users\Administrator\Desktop\1234"
 
-    //let r = RemoteServer.convertPdfFileToJpegs(pdfFile, 300.f, targetDir).Result
+    //let r = RemoteServer.convertPdfFileToJpegs(pdfFile, 72.f, targetDir).Result
     RemoteServer.createServer() |> ignore
+
     (new ManualResetEventSlim(false)).Wait()
 
     printfn "Hello World from F#!"

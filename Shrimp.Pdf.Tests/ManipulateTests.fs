@@ -1645,9 +1645,13 @@ let manipulateTests =
             ModifyPage.Create(
                 "trim to visible",
                 PageSelector.All,
-                PathOrText (fun _ _ -> true),
+                Path (Info.FillColorIs FsColor.CMYK_MAGENTA),
                 (fun args renderInfos ->
                     let infos = List.ofSeq renderInfos
+                    let m =     
+                        infos
+                        |> List.filter(IIntegratedRenderInfo.isFillVisible)
+
                     ()
                 )
             )
@@ -1655,7 +1659,7 @@ let manipulateTests =
         Flow.Manipulate(
             flow
         )
-        |> runTest "datas/manipulate/test tissue Infos.pdf" 
+        |> runTest @"C:\Users\Administrator\Desktop\页面提取自－2_ExtractToTwoPages222.pdf"
         |> ignore
 
     testCase "map arial to arial_bold" <| fun _ -> 
