@@ -410,7 +410,7 @@ module _ModifierIM =
 
                         ModifierPdfCanvasActions.CreateSuffix_Image(
                             [ 
-                              PdfCanvas.concatMatrixByTransform (AffineTransformRecord.ofAffineTransform ctm)
+                              PdfCanvas.concatMatrixByTransformRecord (AffineTransformRecord.ofAffineTransform ctm)
                               PdfCanvas.addRectangle bound (defaultArg fArgs id)
                             ]
                         )

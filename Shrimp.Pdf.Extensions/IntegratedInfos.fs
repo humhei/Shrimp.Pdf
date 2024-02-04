@@ -199,6 +199,7 @@ module IntegratedInfos =
           AccumulatedPathOperatorRanges: seq<OperatorRange>
           GsStates: list<FsParserGraphicsStateValue>
           ContainerID: InfoContainerID list
+          LazyVisibleBound: Rectangle option
         }
     with 
         member x.IsShading = 
@@ -273,6 +274,7 @@ module IntegratedInfos =
           OperatorRange: OperatorRange option
           GsStates: list<FsParserGraphicsStateValue>
           ContainerID: InfoContainerID list
+          LazyVisibleBound: Rectangle option
           }
 
     with 
@@ -281,6 +283,8 @@ module IntegratedInfos =
         member x.SplitToWords() =
             let gsStates = x.GsStates
             let containderID = x.ContainerID
+            let lazyVisibleBound = x.LazyVisibleBound
+
             match x.EndTextState with 
             | EndTextState.No
             | EndTextState.Undified -> [x]
@@ -296,6 +300,7 @@ module IntegratedInfos =
                         ClippingPathInfos = clippingPathInfos
                         GsStates = gsStates
                         ContainerID = containderID
+                        LazyVisibleBound = lazyVisibleBound
                     }
                 )
 
@@ -448,6 +453,7 @@ module IntegratedInfos =
           LazyColorSpace: Lazy<ImageColorSpaceData option> 
           GsStates: list<FsParserGraphicsStateValue>
           ContainerID: InfoContainerID list
+          LazyVisibleBound: Rectangle option
         }
 
     with 
@@ -542,6 +548,7 @@ module IntegratedInfos =
             | IntegratedRenderInfo.Path info -> info.PathRenderInfo :> AbstractRenderInfo
 
 
+
     [<RequireQualifiedAccess>]
     module IIntegratedRenderInfo =
 
@@ -560,6 +567,9 @@ module IntegratedInfos =
             match info with
             | Text info -> Some (info)
             | _ -> None 
+
+
+
 
     [<RequireQualifiedAccess>]
     module IIntegratedRenderInfoIM =
@@ -623,6 +633,68 @@ module IntegratedInfos =
                 | Some bound -> true
                 | None -> false
 
+    [<RequireQualifiedAccess>]
+    type IntegratedRenderInfoIM =
+        | Path of IntegratedPathRenderInfo
+        | Text of IntegratedTextRenderInfo
+        | Image of IntegratedImageRenderInfo
+    with 
+        member x.LazyVisibleBound =
+            match x with 
+            | Path  info -> info.LazyVisibleBound
+            | Text  info -> info.LazyVisibleBound
+            | Image info -> info.LazyVisibleBound
+
+        member x.SetVisibleBound(boundGettingStrokeOptions) =
+            match x with 
+            | Path info ->
+                match info.LazyVisibleBound with 
+                | None ->
+                    { info with 
+                        LazyVisibleBound = 
+                            IIntegratedRenderInfoIM.tryGetVisibleBound boundGettingStrokeOptions info
+                    }
+
+                | Some _ -> info
+                |> Path
+
+            | Text info ->
+                match info.LazyVisibleBound with 
+                | None ->
+                    { info with 
+                        LazyVisibleBound = 
+                            IIntegratedRenderInfoIM.tryGetVisibleBound boundGettingStrokeOptions info
+                    }
+
+                | Some _ -> info
+                |> Text
+
+            | Image info ->
+                match info.LazyVisibleBound with 
+                | None ->
+                    { info with 
+                        LazyVisibleBound = 
+                            IIntegratedRenderInfoIM.tryGetVisibleBound boundGettingStrokeOptions info
+                    }
+
+                | Some _ -> info
+                |> Image
+
+    [<RequireQualifiedAccess>]
+    module IntegratedRenderInfoIM =
+        let (|Vector|Pixel|) (info: IntegratedRenderInfoIM) = 
+            match info with 
+            | IntegratedRenderInfoIM.Path  info -> Vector (info :> IIntegratedRenderInfo)
+            | IntegratedRenderInfoIM.Text  info -> Vector (info :> IIntegratedRenderInfo)
+            | IntegratedRenderInfoIM.Image info -> Pixel  (info)
+
+
+    type IIntegratedRenderInfoIM with 
+        member x.AsUnion =
+            match x with 
+            | IIntegratedRenderInfoIM.Path info -> IntegratedRenderInfoIM.Path info
+            | IIntegratedRenderInfoIM.Text info -> IntegratedRenderInfoIM.Text info
+            | IIntegratedRenderInfoIM.Image info -> IntegratedRenderInfoIM.Image info
 
 namespace Shrimp.Pdf.Extensions
 

@@ -140,7 +140,7 @@ module _Separations =
                         PdfCanvas.useCanvas pdfCanvas (fun pdfCanvas ->
 
                             pdfCanvas
-                            |> PdfCanvas.concatMatrixByTransform ctm
+                            |> PdfCanvas.concatMatrixByTransformRecord ctm
                             |> PdfCanvas.setFillColor(white)
                             |> ignore
 

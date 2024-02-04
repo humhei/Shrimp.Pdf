@@ -226,8 +226,11 @@ module PdfDocumentWithCachedResources =
             let transform = AffineTransform.ofMatrix matrix
             canvas.ConcatMatrix(transform)
 
-        let concatMatrixByTransform (transform: AffineTransformRecord) (canvas: PdfCanvas) =
+        let concatMatrixByTransformRecord (transform: AffineTransformRecord) (canvas: PdfCanvas) =
             canvas.ConcatMatrix(AffineTransformRecord.toAffineTransform transform)
+
+        let concatMatrixByTransform (transform: AffineTransform) (canvas: PdfCanvas) =
+            canvas.ConcatMatrix(transform)
 
         let setTextMatrix (matrix: Matrix) (canvas: PdfCanvas) =
             let transform = AffineTransform.ofMatrix matrix

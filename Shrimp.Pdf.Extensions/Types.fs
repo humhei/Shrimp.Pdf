@@ -1693,10 +1693,10 @@ module ExtensionTypes =
         member x.GetCustomHashCode() =
             let softMask =
                 match x.SoftMask with 
-                | None -> -1
-                | Some v -> hash (v.RawBBox, v.Ctm, v.SoftMask.ID)
+                | None -> None
+                | Some v -> Some (v.SoftMask.ID, v.RawBBox, v.Ctm)
 
-            hash (x.OPM, x.Fill, x.Stroke, x.BlendModes, softMask)
+            (x.OPM, x.BlendModes, x.Fill, x.Stroke, softMask)
 
         member x.IsFillOverprint = x.Fill.IsOverprint
         member x.IsStrokeOverprint = x.Stroke.IsOverprint
@@ -1792,8 +1792,7 @@ module ExtensionTypes =
                     | Some accum ->
                         let newAccum = 
                             match accum.IsConcatable(), h.IsConcatable() with 
-                            | true, true -> failwithf "Cannot concat FsExtGState %A" (accum, h)
-                            | false, false ->
+                            | true, true ->
                                 { SoftMask = None 
                                   BlendModes = []
                                   Fill = 
@@ -1806,6 +1805,7 @@ module ExtensionTypes =
                                 
                                   OPM = FsOPM.Illustractor
                                 }
+                            | false, false -> failwithf "Cannot concat FsExtGState %A" (accum, h)
                             | false, true 
                             | true, false ->
                                 { SoftMask = accum.SoftMask |> Option.orElse h.SoftMask

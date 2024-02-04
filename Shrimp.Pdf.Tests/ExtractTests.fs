@@ -638,6 +638,26 @@ let extractTests =
             |> ignore
 
         testCase "extract objects tests17" <| fun _ -> 
+
+
+            let m1 = hash [BlendMode.Normal]
+            let m2 = hash [BlendMode.Normal]
+            let p1 = 
+                { FsExtGState.DefaultValue with BlendModes = [BlendMode.Normal] }
+
+            let h1 = p1.GetCustomHashCode()
+
+            let p2 =    
+                p1
+                    .SetFillOpacity(0.100006f)
+                    .SetStrokeOpacity(0.100006f)
+
+            let hash1 = hash p1.Fill
+            let hash2 = hash p1.Stroke
+            let hash3 = hash p2.Fill
+            let hash4 = hash p2.Stroke
+
+
             Flow.Reuse (
                 Reuses.ExtractIM(
                     PageSelector.All,
@@ -645,9 +665,9 @@ let extractTests =
                 )
             )
             |> runTest "datas/extract/extract objects17.pdf" 
-            |> ignore
-
-        testCase "extract objects tests18" <| fun _ -> 
+            |> ignore 
+             
+        ftestCase "extract objects tests18" <| fun _ -> 
             Flow.Reuse (
                 Reuses.ExtractIM(
                     PageSelector.All,
@@ -655,7 +675,7 @@ let extractTests =
                 )
             )
             |> runTest "datas/extract/extract objects18.pdf" 
-            |> ignore
+            |> ignore 
 
         testCase "extract objects tests19" <| fun _ -> 
             Flow.Reuse (
@@ -663,7 +683,7 @@ let extractTests =
                     PageSelector.All,
                     Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
                 )
-            )
+            ) 
             |> runTest "datas/extract/extract objects19.pdf" 
             |> ignore
 
@@ -677,7 +697,7 @@ let extractTests =
             |> runTest "datas/extract/extract objects20.pdf" 
             |> ignore
 
-        ftestCase "extract objects tests22" <| fun _ -> 
+        testCase "extract objects tests22" <| fun _ -> 
             Flow.Reuse (
                 Reuses.ExtractIM(
                     PageSelector.All,

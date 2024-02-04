@@ -9,6 +9,7 @@ open iText.Kernel.Geom
 open iText.Kernel.Font
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf
+open iText.Kernel.Pdf.Xobject
 open Shrimp.FSharp.Plus
 open iText.Kernel.Pdf.Canvas.Parser.Data
 open iText.IO.Image
@@ -17,6 +18,24 @@ open iText.IO.Image
 [<AutoOpen>]
 module _Renewable =
     
+    type OffsetablePdfCanvas(contentStream: PdfStream, resources, pdfDocument, ?xOffset, ?yOffset) =
+        inherit PdfCanvas(contentStream, resources, pdfDocument)
+        let xOffset = defaultArg xOffset 0.f
+        let yOffset = defaultArg yOffset 0.f
+
+        member x.XOffset = xOffset
+
+        member x.YOffset = yOffset
+
+        new (xobject: PdfFormXObject, pdfDocument, ?xOffset, ?yOffset) =
+            new OffsetablePdfCanvas(xobject.GetPdfObject(), xobject.GetResources(), pdfDocument, ?xOffset = xOffset, ?yOffset = yOffset)
+
+
+        member internal x.ApplyOffsetToCtm(ctm: Matrix) =
+            let ctm = AffineTransform.ofMatrix ctm
+            //ctm.Translate(float xOffset, float yOffset)
+            ctm
+
     type private RenewablePathInfoCommon = 
         { AccumulatedPathOperatorRanges: seq<OperatorRange>
           Ctm: Matrix }
@@ -158,7 +177,7 @@ module _Renewable =
     //        let newSoftMask = document.Renew_OtherDocument_SoftMaskInfo(x)
                 
     //        //writerCanvas
-    //        //|> PdfCanvas.concatMatrixByTransform x.Ctm
+    //        //|> PdfCanvas.concatMatrixByTransformRecord x.Ctm
     //        //|> ignore
 
     //        writerCanvas.SetExtGState(newSoftMask)
@@ -175,14 +194,14 @@ module _Renewable =
             let (RenewableGsStateInfo v) = x
             v
 
-        member x.ApplyCtm_WriteToCanvas(writerCanvas: PdfCanvas) =
+        member x.ApplyCtm_WriteToCanvas(writerCanvas: OffsetablePdfCanvas) =
             let x = x.Value
             let document = writerCanvas.GetDocument() :?> PdfDocumentWithCachedResources
 
             let newExtState = document.GetOrCreateExtGState(x)
                 
             //writerCanvas
-            //|> PdfCanvas.concatMatrixByTransform x.Ctm
+            //|> PdfCanvas.concatMatrixByTransformRecord x.Ctm
             //|> ignore
 
             writerCanvas.SetExtGState(newExtState)
@@ -194,7 +213,7 @@ module _Renewable =
 
     type RenewableClippingPathInfo = RenewableClippingPathInfo of RenewableClippingPathInfoElement list
     with
-        member x.ApplyCtm_WriteToCanvas(canvas: PdfCanvas, suffixActions) = 
+        member x.ApplyCtm_WriteToCanvas(canvas: OffsetablePdfCanvas, suffixActions) = 
 
             PdfCanvas.useCanvas canvas (fun canvas ->
                 let (RenewableClippingPathInfo elements) = x
@@ -265,6 +284,7 @@ module _Renewable =
           ClippingPathInfos: ClippingPathInfos
           IsShading: bool
           OriginInfo: IntegratedPathRenderInfo
+          LazyBound: Rectangle option 
         }
     with 
         member x.ApplyCtm_To_AccumulatedPathOperatorRanges() =
@@ -272,8 +292,7 @@ module _Renewable =
               AccumulatedPathOperatorRanges = x.AccumulatedPathOperatorRanges }
                 .ApplyCtm_To_AccumulatedPathOperatorRanges()
 
-        member x.ApplyCtm_WriteToCanvas(canvas: PdfCanvas) = 
-            
+        member x.ApplyCtm_WriteToCanvas(canvas: OffsetablePdfCanvas) = 
             PdfCanvas.useCanvas canvas (fun canvas ->
                 match x.IsShading with 
                 | true -> 
@@ -289,7 +308,7 @@ module _Renewable =
                     //| None -> ()
                     //| Some extGState -> PdfCanvas.setExtGState extGState canvas |> ignore
 
-                    canvas.ConcatMatrix(AffineTransform.ofMatrix ctm) |> ignore
+                    canvas.ConcatMatrix(canvas.ApplyOffsetToCtm ctm) |> ignore
 
                     outputStream.WriteString(BX).Write(shading).WriteSpace().WriteString(sh).WriteSpace().WriteString(EX).WriteNewLine()
                     |> ignore
@@ -308,7 +327,7 @@ module _Renewable =
                     canvas
                     |> PdfCanvas.setFillColor x.FillColor
                     |> PdfCanvas.setStrokeColor x.StrokeColor
-                    |> PdfCanvas.concatMatrix x.Ctm
+                    |> PdfCanvas.concatMatrixByTransform (canvas.ApplyOffsetToCtm(x.Ctm))
                     |> PdfCanvas.setLineShapingStyle x.LineShapingStyle
                     |> PdfCanvas.setDashpattern x.DashPattern
                     |> ignore
@@ -357,6 +376,7 @@ module _Renewable =
                 IsShading = x.IsShading
                 GsStates = x.GsStates
                 OriginInfo = x
+                LazyBound = None
             }
 
     [<RequireQualifiedAccess>]
@@ -387,10 +407,10 @@ module _Renewable =
            HeaderTextRenderInfo: TextRenderInfo
            ClippingPathInfos: ClippingPathInfos
            OriginInfo: IntegratedTextRenderInfo
-     
+           LazyBound: Rectangle option 
            }
      with 
-        member x.ApplyCtm_WriteToCanvas(pdfCanvas: PdfCanvas) =
+        member x.ApplyCtm_WriteToCanvas(pdfCanvas: OffsetablePdfCanvas) =
             match x.FillShading, x.StrokeShading with 
             | None, None -> ()
             | _ -> failwithf "Not implemented when renewing text with shading color"
@@ -407,7 +427,7 @@ module _Renewable =
                 |> PdfCanvas.setFillColor x.FillColor
                 |> PdfCanvas.setStrokeColor x.StrokeColor
                 
-                |> PdfCanvas.concatMatrix x.Ctm
+                |> PdfCanvas.concatMatrixByTransform (pdfCanvas.ApplyOffsetToCtm x.Ctm)
                 |> PdfCanvas.setLineShapingStyle x.LineShapingStyle
      
                 |> PdfCanvas.beginText
@@ -486,6 +506,7 @@ module _Renewable =
               FillShading = None
               StrokeShading = None
               OriginInfo = x
+              LazyBound = None
             }
 
 
@@ -494,7 +515,9 @@ module _Renewable =
           CurrentDocumentImage: CurrentDocumentImage option
           ClippingPathInfos: ClippingPathInfos
           GsStates: list<FsParserGraphicsStateValue>
-          OriginInfo: IntegratedImageRenderInfo }
+          OriginInfo: IntegratedImageRenderInfo
+          LazyBound: Rectangle option 
+        }
     with 
         member x.CopyToDocument(document: PdfDocumentWithCachedResources) =
             { x with 
@@ -502,7 +525,7 @@ module _Renewable =
                     Some (document.Renew_OtherDocument_Image(x.Image))
             }
 
-        member x.ApplyCtm_WriteToCanvas(pdfCanvas: PdfCanvas) =
+        member x.ApplyCtm_WriteToCanvas(pdfCanvas: OffsetablePdfCanvas) =
             match x.CurrentDocumentImage with 
             | Some currentDocumentImage ->
                 PdfCanvas.useCanvas pdfCanvas (fun pdfCanvas ->
@@ -545,7 +568,9 @@ module _Renewable =
               CurrentDocumentImage = None
               ClippingPathInfos = x.ClippingPathInfos
               OriginInfo = x
-              GsStates = x.GsStates }
+              GsStates = x.GsStates
+              LazyBound = None
+            }
 
 
     [<RequireQualifiedAccess>]
@@ -554,13 +579,62 @@ module _Renewable =
         | Text of RenewableTextInfo
         | Image of RenewableImageInfo
     with 
-
-
-        member private x.Bound =
+        member x.LazyVisibleBound = 
             match x with 
-            | Path info ->  info.OriginInfo.RecordValue.Bound |> Some
-            | Text info ->  info.OriginInfo.RecordValue.Bound |> Some
-            | Image info -> info.OriginInfo.VisibleBound() |> Option.map FsRectangle.OfRectangle
+            | Path info -> info.OriginInfo.LazyVisibleBound
+            | Text info -> info.OriginInfo.LazyVisibleBound
+            | Image info -> info.OriginInfo.LazyVisibleBound
+
+        //member private x.Bound =
+        //    match x with 
+        //    | Path info ->  info.OriginInfo.RecordValue.Bound |> Some
+        //    | Text info ->  info.OriginInfo.RecordValue.Bound |> Some
+        //    | Image info -> info.OriginInfo.VisibleBound() |> Option.map FsRectangle.OfRectangle
+
+        member x.LazyBound =
+            match x with 
+            | Path info -> info.LazyBound
+            | Text info -> info.LazyBound
+            | Image info -> info.LazyBound
+
+        //member x.SetBound(boundGettingStrokeOptions) =
+        //    match x with 
+        //    | Path info ->
+        //        match info.LazyBound with 
+        //        | None ->
+        //            { info with 
+        //                LazyBound = 
+        //                    IAbstractRenderInfo.getBound boundGettingStrokeOptions info.OriginInfo
+        //                    |> Some
+        //            }
+
+        //        | Some _ -> info
+        //        |> RenewableInfo.Path
+
+        //    | Text info ->
+        //        match info.LazyBound with 
+        //        | None ->
+        //            { info with 
+        //                LazyBound = 
+        //                    IAbstractRenderInfo.getBound boundGettingStrokeOptions info.OriginInfo
+        //                    |> Some
+        //            }
+
+        //        | Some _ -> info
+        //        |> RenewableInfo.Text
+
+        //    | Image info ->
+        //        match info.LazyBound with 
+        //        | None ->
+        //            { info with 
+        //                LazyBound = 
+        //                    IIntegratedRenderInfoIM.getBound boundGettingStrokeOptions info.OriginInfo
+        //            }
+
+        //        | Some _ -> info
+        //        |> RenewableInfo.Image
+
+
 
         member x.ContainerID =
             match x with 

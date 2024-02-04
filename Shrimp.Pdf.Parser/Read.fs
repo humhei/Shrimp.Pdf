@@ -558,7 +558,8 @@ module internal Listeners =
                                   PathRenderInfo = pathRenderInfo
                                   AccumulatedPathOperatorRanges = accumulatedPathOperatorRanges
                                   GsStates = this.GsStates_invokeByGS
-                                  ContainerID = this.CurrentInfoContainerID }
+                                  ContainerID = this.CurrentInfoContainerID
+                                  LazyVisibleBound = None }
 
 
                             match pathRenderInfo.IsPathModifiesClippingPath() with 
@@ -602,6 +603,7 @@ module internal Listeners =
                               OperatorRange = None
                               GsStates = this.GsStates_invokeByGS
                               ContainerID = this.CurrentInfoContainerID
+                              LazyVisibleBound = None
                               }
                             :> IIntegratedRenderInfoIM
 
@@ -611,6 +613,7 @@ module internal Listeners =
                                     { XObjectClippingBoxState = currentXObjectClippingBox
                                       ClippingPathInfoState = currentClippingPathInfo }
                                   ImageRenderInfo = imageRenderInfo
+                                  LazyVisibleBound = None
                                   GsStates = this.GsStates_invokeByGS
                                   ContainerID = this.CurrentInfoContainerID
                                   LazyImageData = 

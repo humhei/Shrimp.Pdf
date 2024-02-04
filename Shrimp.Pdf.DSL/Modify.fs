@@ -593,7 +593,7 @@ type ResizingStyle [<JsonConstructor>] (v) =
                 
             }
         [
-            PdfCanvas.concatMatrixByTransform transform
+            PdfCanvas.concatMatrixByTransformRecord transform
         ]
 
 type FlipStyle [<JsonConstructor>] private (v) =
@@ -706,7 +706,7 @@ type FlipStyle [<JsonConstructor>] private (v) =
 
 
         [
-            PdfCanvas.concatMatrixByTransform transform
+            PdfCanvas.concatMatrixByTransformRecord transform
         ]
 
 
