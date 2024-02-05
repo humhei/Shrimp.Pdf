@@ -280,7 +280,7 @@ module _Renewable =
           AccumulatedPathOperatorRanges: seq<OperatorRange>
           LineShapingStyle: LineShapingStyle
           DashPattern: DashPattern
-          GsStates: list<FsParserGraphicsStateValue>
+          GsStates: InfoGsStateLists
           ClippingPathInfos: ClippingPathInfos
           IsShading: bool
           OriginInfo: IntegratedPathRenderInfo
@@ -394,7 +394,7 @@ module _Renewable =
            RawFontSize: float32
            Font: PdfFont
            //ExtGState: FsExtGState option
-           GsStates: list<FsParserGraphicsStateValue>
+           GsStates: InfoGsStateLists
            Ctm: Matrix
            FontName: DocumentFontName
            TextMatrix: Matrix
@@ -514,7 +514,7 @@ module _Renewable =
         { Image: ImageRenderInfo
           CurrentDocumentImage: CurrentDocumentImage option
           ClippingPathInfos: ClippingPathInfos
-          GsStates: list<FsParserGraphicsStateValue>
+          GsStates: InfoGsStateLists
           OriginInfo: IntegratedImageRenderInfo
           LazyBound: Rectangle option 
         }

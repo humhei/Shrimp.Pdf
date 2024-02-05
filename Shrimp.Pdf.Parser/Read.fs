@@ -196,6 +196,7 @@ type SelectorModiferToken =
 
 
 
+
 module internal Listeners =
     
     type CurrentRenderInfoStatus =
@@ -208,15 +209,27 @@ module internal Listeners =
     [<AllowNullLiteral>]
     type GSStateStackableEventListener() =
         let gsStack = new Stack<FsParserGraphicsState>()
-        let mutable gsStates_invokeByGS = []
+        let mutable gsStates_invokeByGS = InfoGsStateLists []
 
         let update_gsStates_invokeByGS() =
             let gsState = 
                 gsStack.ToArray()
-                |> Array.collect(fun m -> m.InnerStack.ToArray())
-                |> Array.filter(fun m -> m.InvokeByGS)
                 |> Array.toList
                 |> List.rev
+                |> List.map(fun m -> 
+                    {| ContainerID = m.ContainerID 
+                       Stack = m.InnerStack.ToArray() |> Array.toList |> List.rev |} )
+                |> List.splitIfChangedByKey(fun m -> m.ContainerID)
+                |> List.map(fun (id, gsStack) ->    
+                    let items = 
+                        gsStack.AsList
+                        |> List.collect(fun m -> m.Stack)
+                        |> List.filter(fun m -> m.InvokeByGS)
+
+                    InfoGsStates (id, items)
+                )
+
+                |> InfoGsStateLists
 
             gsStates_invokeByGS <- gsState
 
@@ -232,7 +245,7 @@ module internal Listeners =
         member internal x.ProcessGraphicsStateResource(containerID, gs) =
             match gsStack.Count with 
             | 0 -> x.SaveGS(containerID, gs, invokeByGS = true)
-            | _-> gsStack.Peek().ProcessGraphicsStateResource(containerID, gs)
+            | _-> gsStack.Peek().ProcessGraphicsStateResource(gs)
 
             update_gsStates_invokeByGS()
 
@@ -294,6 +307,7 @@ module internal Listeners =
 
         let mutable currentXObjectClippingBox = XObjectClippingBoxState.Init
         let mutable currentClippingPathInfo = ClippingPathInfoState.Init
+
         let currentClippingPathInfoElementsStack = Stack<ResizeArray<IntersectedClippingPathInfoElement>>()
         do currentClippingPathInfoElementsStack.Push(ResizeArray())
         let mutable currentRenderingClippingPathInfo_Integrated: IntegratedPathRenderInfo option = None
@@ -480,6 +494,7 @@ module internal Listeners =
 
         member this.CurrentRenderInfoToken = currentRenderInfoToken
 
+
         member this.ParsedRenderInfos = parsedRenderInfos :> seq<IIntegratedRenderInfoIM>
         member internal this.SaveGS(gs) = 
             base.SaveGS(infoContainerIDStack, gs)
@@ -559,7 +574,8 @@ module internal Listeners =
                                   AccumulatedPathOperatorRanges = accumulatedPathOperatorRanges
                                   GsStates = this.GsStates_invokeByGS
                                   ContainerID = this.CurrentInfoContainerID
-                                  LazyVisibleBound = None }
+                                  LazyVisibleBound = None
+                                  }
 
 
                             match pathRenderInfo.IsPathModifiesClippingPath() with 

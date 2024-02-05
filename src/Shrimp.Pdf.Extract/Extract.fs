@@ -271,35 +271,46 @@ module _Extract =
                                 |> List.splitIfChangedByKey(fun m ->
                                      m.ContainerID.[0..level+1]
                                 )
-                                |> List.iter(fun (containerID, infos) ->
-                                    let isXObject = containerID.Length = level + 2
+                                |> List.iter(fun ((containerID), infos) ->
+                                    let isXObject = containerID.Length = level + 2 
                                     match isXObject with 
                                     | true ->
                                         infos.AsList
                                         |> List.splitIfChangedByKey(fun m -> 
-                                            m.GsStates.[0..level]
-                                            |> List.map (fun m -> m.CustomHashCode)
+                                            m.GsStates.AsList.[level].CustomHashCode
                                         )
 
-                                        |> List.iter(fun (_, infos1) -> 
+                                        |> List.iter(fun (customHashCode, infos1) -> 
                                             let goToNext() =
                                                 let gsStates = 
-                                                    infos1.Head.GsStates.[0..level]
+                                                    infos1.Head.GsStates.AsList.[level].AsList
 
                                                 match gsStates with 
                                                 | [] -> loop writerCanvas (None) (level+1) infos1.AsList
                                                 | _ ->
-                                                    let gsStatesCtnIds = gsStates.[level].ContainerID
-                                                    match gsStatesCtnIds = containerID.[0..level] with 
-                                                    | true -> 
-                                                        let gsStates = 
-                                                            gsStates
-                                                            |> List.tryItem level
-                                                            |> Option.toList
+                                                    loop writerCanvas (AtLeastOneList.TryCreate gsStates) (level+1) infos1.AsList
 
-                                                        loop writerCanvas (AtLeastOneList.TryCreate gsStates) (level+1) infos1.AsList
+                                                    //failwithf ""
+                                                    //let gsStatesCtnIds = gsStates.[level].ContainerID
+                                                    //match gsStatesCtnIds = containerID.[0..level+1] with 
+                                                    //| true -> 
+                                                    //    let gsStates = 
+                                                    //        gsStates
+                                                    //        |> List.tryItem level
+                                                    //        |> Option.toList
 
-                                                    | false -> failwithf "Not implemented"
+                                                    //    loop writerCanvas (AtLeastOneList.TryCreate gsStates) (level+1) infos1.AsList
+
+                                                    //| false -> 
+                                                    //    match gsStatesCtnIds = containerID.[0..level] with
+                                                    //    | true ->
+                                                    //        let gsStates = 
+                                                    //            gsStates
+                                                    //            |> List.tryItem level
+                                                    //            |> Option.toList
+
+                                                    //        loop writerCanvas (AtLeastOneList.TryCreate gsStates) (level+1) infos1.AsList
+                                                    //    | false -> failwithf "Not implemented"
                                                 
 
                                             match infos1.Length = infos.Length with 

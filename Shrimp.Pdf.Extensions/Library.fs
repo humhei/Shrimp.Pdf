@@ -786,6 +786,8 @@ module iText =
                 { IsOverprint = gs.GetFillOverprint() 
                   Opacity = gs.GetFillOpacity() }
 
+              AIS = gs.GetAlphaIsShape()
+
               Stroke = 
                 { IsOverprint = gs.GetStrokeOverprint() 
                   Opacity = gs.GetStrokeOpacity() }

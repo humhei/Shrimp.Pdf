@@ -116,11 +116,11 @@ let extractTests =
         testCase "extract to two pages" <| fun _ -> 
             Flow.Reuse (
                 Reuses.ExtractToTwoPages(
-                    Selector.PathOrText(Info.StrokeColorIs (FsColor.RGB_BLUE))
+                    Selector.PathOrText(Info.StrokeColorIs (FsColor.CMYK_MAGENTA))
                 )
             )
              
-            |> runTest "datas/extract/extract to two pages.pdf" 
+            |> runTest @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\texass\.bk\GABBY'S DOLLHOUSE吊牌2.RasterizeBK.backgroundFile.cleared.pdf"
             |> ignore
 
         testCase "extract to two pages2" <| fun _ -> 
@@ -169,6 +169,16 @@ let extractTests =
                 Reuses.ExtractPaths(PageSelector.All, Info.IsVisible(), keepOriginPage = true)
             )
             |> runTest @"datas/extract/extract pdfShading.pdf" 
+            |> ignore
+
+        testCase "extract pattern tests" <| fun _ -> 
+            Flow.Reuse (
+                Reuses.ExtractIM(
+                    PageSelector.All,
+                    Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                )
+            )
+            |> runTest "datas/extract/extract pattern.pdf" 
             |> ignore
 
         testCase "extract vectors tests" <| fun _ -> 
@@ -667,14 +677,14 @@ let extractTests =
             |> runTest "datas/extract/extract objects17.pdf" 
             |> ignore 
              
-        ftestCase "extract objects tests18" <| fun _ -> 
+        testCase "extract objects tests18" <| fun _ -> 
             Flow.Reuse (
                 Reuses.ExtractIM(
                     PageSelector.All,
                     Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
                 )
-            )
-            |> runTest "datas/extract/extract objects18.pdf" 
+            ) 
+            |> runTest @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\texass\.bk\GABBY'S DOLLHOUSE吊牌2.RasterizeBK.backgroundFile.cleared.pdf"
             |> ignore 
 
         testCase "extract objects tests19" <| fun _ -> 

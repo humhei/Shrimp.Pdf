@@ -20,7 +20,7 @@ open Shrimp.Pdf.Constants.Operators
 
 [<Struct>]
 type InfoContainerID =
-    | Page 
+    | Page
     | XObject of int * int
 
 [<AutoOpen>]
@@ -36,7 +36,7 @@ module _FsParserGraphicsStateValueUtils =
                 defalutValue2.GetCustomHashCode()
             ]
 
-type FsParserGraphicsStateValue(containerID: InfoContainerID list, gs: ParserGraphicsState, invokeByGS: bool) =
+type FsParserGraphicsStateValue(gs: ParserGraphicsState, invokeByGS: bool) =
     let fsExtState =
         let softMask =
             match invokeByGS with 
@@ -109,24 +109,45 @@ type FsParserGraphicsStateValue(containerID: InfoContainerID list, gs: ParserGra
 
     member x.FsExtState = fsExtState
 
-    member x.ContainerID = containerID
-
-type FsParserGraphicsState private (gs: FsParserGraphicsStateValue) =
+type FsParserGraphicsState private (containerID: InfoContainerID list, gs: FsParserGraphicsStateValue) =
 
     let innerStack = 
         let stack = Stack()
         stack.Push(gs)
         stack
 
+    member x.ContainerID = containerID
+
     member x.InnerStack = innerStack
 
-    member x.ProcessGraphicsStateResource(containerID, gs: ParserGraphicsState) =
-        let gs = FsParserGraphicsStateValue(containerID, gs, invokeByGS = true)
+    member x.ProcessGraphicsStateResource(gs: ParserGraphicsState) =
+        let gs = FsParserGraphicsStateValue(gs, invokeByGS = true)
         innerStack.Push(gs)
         
     new (containerID, gs: ParserGraphicsState, invokeByGS) =
-        let value = FsParserGraphicsStateValue(containerID, gs, invokeByGS = invokeByGS)
-        new FsParserGraphicsState(value)
+        let value = FsParserGraphicsStateValue(gs, invokeByGS = invokeByGS)
+        new FsParserGraphicsState(containerID, value)
+
+type InfoGsStates = InfoGsStates of InfoContainerID list * FsParserGraphicsStateValue list
+with 
+    member x.AsList =
+        let (InfoGsStates (_, values)) = x
+        values
+
+
+    member x.InfoContainerID =
+        let (InfoGsStates (id, _)) = x
+        id
+
+    member x.CustomHashCode =
+        x.AsList
+        |> List.map(fun m -> m.CustomHashCode)
+
+type InfoGsStateLists = InfoGsStateLists of InfoGsStates list
+with 
+    member x.AsList = 
+        let (InfoGsStateLists v) = x
+        v
 
 
 [<AutoOpen>]
@@ -197,7 +218,7 @@ module IntegratedInfos =
         { PathRenderInfo: PathRenderInfo 
           ClippingPathInfos: ClippingPathInfos
           AccumulatedPathOperatorRanges: seq<OperatorRange>
-          GsStates: list<FsParserGraphicsStateValue>
+          GsStates: InfoGsStateLists
           ContainerID: InfoContainerID list
           LazyVisibleBound: Rectangle option
         }
@@ -272,7 +293,7 @@ module IntegratedInfos =
           EndTextState: EndTextState
           ConcatedTextInfo: ConcatedTextInfo
           OperatorRange: OperatorRange option
-          GsStates: list<FsParserGraphicsStateValue>
+          GsStates: InfoGsStateLists
           ContainerID: InfoContainerID list
           LazyVisibleBound: Rectangle option
           }
@@ -451,7 +472,7 @@ module IntegratedInfos =
           ClippingPathInfos: ClippingPathInfos
           LazyImageData: Lazy<FsImageData>
           LazyColorSpace: Lazy<ImageColorSpaceData option> 
-          GsStates: list<FsParserGraphicsStateValue>
+          GsStates: InfoGsStateLists
           ContainerID: InfoContainerID list
           LazyVisibleBound: Rectangle option
         }

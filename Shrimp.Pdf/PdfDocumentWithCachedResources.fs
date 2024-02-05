@@ -236,25 +236,23 @@ type private PdfDocumentCache private
             | :? PdfSpecialCs.Pattern as colorSpace ->
                 match colorSpace.GetPdfObject() with 
                 | :? PdfName as pdfName ->  
-                    let patternColorID = 
-                        patternColor.GetPattern().GetPdfObject().GetIndirectReference()
+                    let pdfObject = patternColor.GetPattern().GetPdfObject()
+                    let number = 
+                        pdfObject.GetIndirectReference()
                         |> hashNumberOfPdfIndirectReference
 
-                    let resource = otherDocumentPage.GetResources()
-                    let pattern = 
-                        let pdfObject = resource.GetPdfObject()
-                        pdfObject.GetAsDictionary(pdfName)
+                    //let pattern = pdfObject
 
-                    let number, pdfObject = 
-                        let entrySets = pattern.EntrySet() 
-                        entrySets 
-                        |> List.ofSeq
-                        |> List.map (fun pair -> 
-                            hashNumberOfPdfIndirectReference (pair.Value.GetIndirectReference()), pair.Value
-                        )
-                        |> List.find(fun (hashNumber, pdfObject) ->
-                            hashNumber = patternColorID
-                        )
+                    //let number, pdfObject = 
+                    //    let entrySets = pattern.EntrySet() 
+                    //    entrySets 
+                    //    |> List.ofSeq
+                    //    |> List.map (fun pair -> 
+                    //        hashNumberOfPdfIndirectReference (pair.Value.GetIndirectReference()), pair.Value
+                    //    )
+                    //    |> List.find(fun (hashNumber, pdfObject) ->
+                    //        hashNumber = patternColorID
+                    //    )
 
                     //let pair = snd pairs.[0]
 
@@ -398,6 +396,10 @@ type private PdfDocumentCache private
             let maskInfo = x.GetOrCreateSMask_FromOtherDocument(softMask)
             pdfExtGState.SetSoftMask(maskInfo.SoftMask.PdfObject)
             |> ignore
+
+        match extGState.AIS with 
+        | true -> pdfExtGState.SetAlphaSourceFlag(true) |> ignore
+        | false -> ()
 
         match extGState.BlendModes with 
         | [] -> pdfExtGState

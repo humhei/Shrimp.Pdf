@@ -1684,6 +1684,7 @@ module ExtensionTypes =
     type FsExtGState =
         { 
             OPM: FsOPM
+            AIS: bool
             Fill: ExtGStateAppereance
             Stroke: ExtGStateAppereance
             BlendModes: BlendMode list
@@ -1694,7 +1695,7 @@ module ExtensionTypes =
             let softMask =
                 match x.SoftMask with 
                 | None -> None
-                | Some v -> Some (v.SoftMask.ID, v.RawBBox, v.Ctm)
+                | Some v -> Some (x.AIS, v.SoftMask.ID, v.RawBBox, v.Ctm)
 
             (x.OPM, x.BlendModes, x.Fill, x.Stroke, softMask)
 
@@ -1737,6 +1738,7 @@ module ExtensionTypes =
 
         static member DefaultValue =
             { OPM = FsOPM.Illustractor 
+              AIS = false
               Fill = ExtGStateAppereance.DefaultValue
               Stroke = ExtGStateAppereance.DefaultValue
               BlendModes = []
@@ -1781,6 +1783,7 @@ module ExtensionTypes =
             x.SoftMask.IsNone
             && not x.IsFillOverprint
             && not x.IsStrokeOverprint
+            && not x.AIS
             && x.IsBlendMode_Normal
             
         static member Concat(values: al1List<FsExtGState>) =
@@ -1795,6 +1798,7 @@ module ExtensionTypes =
                             | true, true ->
                                 { SoftMask = None 
                                   BlendModes = []
+                                  AIS = false
                                   Fill = 
                                     { IsOverprint = false 
                                       Opacity = accum.Fill.Opacity * h.Fill.Opacity }
@@ -1810,6 +1814,7 @@ module ExtensionTypes =
                             | true, false ->
                                 { SoftMask = accum.SoftMask |> Option.orElse h.SoftMask
                                   BlendModes = List.distinct (accum.BlendModes @ h.BlendModes)
+                                  AIS = accum.AIS || h.AIS 
                                   Fill = 
                                     { IsOverprint = accum.IsFillOverprint || h.IsFillOverprint
                                       Opacity = accum.Fill.Opacity * h.Fill.Opacity }
