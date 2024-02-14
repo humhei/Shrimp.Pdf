@@ -11,11 +11,19 @@ type NameAndParameters =
       Parameters: list<string * string>}
 
 
+[<RequireQualifiedAccess>]
+type SlimableFlowLoggingOptions =
+    | SlimParent 
+    | Slim
+    | Normal
+
 type Configuration =
     { LoggerLevel: PdfLoggerLevel
-      PdfModifyOptions: PdfModifyOptions option }
+      PdfModifyOptions: PdfModifyOptions option
+      SlimableFlowLoggingOptions: SlimableFlowLoggingOptions
+      }
 with 
-    static member DefaultValue = { LoggerLevel = PdfLoggerLevel.Info; PdfModifyOptions = None }
+    static member DefaultValue = { LoggerLevel = PdfLoggerLevel.Info; PdfModifyOptions = None; SlimableFlowLoggingOptions = SlimableFlowLoggingOptions.Normal }
 
 type PdfConfiguration = Configuration
 
@@ -136,6 +144,8 @@ type FlowName private (flowNameKind: FlowNameKind, ?parentFlowName) =
         | None -> "<null>"
         | Some v -> v.ToString()
 
+
+
 [<RequireQualifiedAccess>]
 module internal FlowName =
     let (|Override|New|Disable|) (flowName: FlowName) =
@@ -247,16 +257,25 @@ type InternalFlowModelWrapper<'userState> internal (internalFlowModel: InternalF
     member internal x.Value = internalFlowModel
 
 [<AutoOpen>]
-module internal Logger_FlowModel =
+module internal Logger_FlowModel =  
+
+
+
     type PdfLogger =
         static member TryInfoWithFlowModel (flowNameIndex, flowModel: InternalFlowModel<_>, f) =
+            let loggingOptions = flowModel.Configuration.SlimableFlowLoggingOptions
             match flowModel.FlowName with 
             | Some flowName ->
                 match flowModel.LoggerLevel with 
                 | PdfLoggerLevel.Info ->
                     match flowName.FlowNameKind.NameAndParameters with 
                     | Some (name, parameters) ->
-                        let indentsCount = flowName.RelativeDirectoryNames.Length
+                        
+                        let indentsCount = 
+                            match loggingOptions with
+                            | SlimableFlowLoggingOptions.SlimParent 
+                            | SlimableFlowLoggingOptions.Normal -> flowName.RelativeDirectoryNames.Length 
+                            | SlimableFlowLoggingOptions.Slim -> flowName.RelativeDirectoryNames.Length + 1
 
                         let indentText =
                             List.replicate indentsCount "    "
@@ -264,9 +283,11 @@ module internal Logger_FlowModel =
 
                         let beginMessage =
                             let splitLine = 
-                                if indentsCount = 0
+                                if indentsCount = 0 
                                 then
                                     sprintf "[%d]------------------------------------------------------------------\n" flowNameIndex
+                                elif (indentsCount = 1 && loggingOptions = SlimableFlowLoggingOptions.Slim)
+                                then sprintf "    \n\n    [%d]----------------" flowNameIndex
                                 else ""
 
 
@@ -287,13 +308,9 @@ module internal Logger_FlowModel =
                             sprintf "%s\n%sBEGIN\n%s" splitLine indentText message
 
                         let endMessage (elapsed: System.TimeSpan) =
-
-
-
                             let message = sprintf "\n%sEND %s" indentText name
                             sprintf "%s in %O \n" message elapsed
 
-                        let (result, message) = PdfLogger.infoWithStopWatchAndReturnFinalMessage (beginMessage) endMessage f
                     
                         match flowModel.TryGetBackupDirectory() with 
                         | Some directory ->
@@ -301,11 +318,33 @@ module internal Logger_FlowModel =
                             match flowNameIndex with 
                             | 0 -> File.delete file
                             | _ -> ()
-                            File.AppendAllText(file, message + "\n", System.Text.Encoding.UTF8)
-                    
-                        | None -> ()
 
-                        result
+                            match loggingOptions with 
+                            | SlimableFlowLoggingOptions.SlimParent ->
+                                File.AppendAllText(file, beginMessage + "\n", System.Text.Encoding.UTF8)
+                                let (result, beginMessage, endMessage) = PdfLogger.infoWithStopWatchAndReturnFinalMessage (beginMessage) endMessage f
+                                File.AppendAllText(file, endMessage + "\n", System.Text.Encoding.UTF8)
+                                result
+
+                            | SlimableFlowLoggingOptions.Slim 
+                            | SlimableFlowLoggingOptions.Normal ->
+                                match name with 
+                                | "Slim Flows" ->
+                                    File.AppendAllText(file, beginMessage + "\n", System.Text.Encoding.UTF8)
+                                    let (result, beginMessage, endMessage) = PdfLogger.infoWithStopWatchAndReturnFinalMessage (beginMessage) endMessage f
+                                    File.AppendAllText(file, endMessage + "\n", System.Text.Encoding.UTF8)
+                                    result
+
+                                | _ ->
+                                
+                                    let (result, beginMessage, endMessage) = PdfLogger.infoWithStopWatchAndReturnFinalMessage (beginMessage) endMessage f
+                                    let message = beginMessage + "\n" + endMessage
+                                    File.AppendAllText(file, message + "\n", System.Text.Encoding.UTF8)
+                                    result
+
+                        | None -> 
+                            let (result, beginMessage, endMessage) = PdfLogger.infoWithStopWatchAndReturnFinalMessage (beginMessage) endMessage f
+                            result
 
                     | None -> f ()
 

@@ -615,23 +615,7 @@ module _Colors =
         member x.IsEqualTo(y: FsValueColor, ?valueEqualOptions: ValueEqualOptions) =
             FsValueColor.IsEqual (x, y, defaultArg valueEqualOptions ValueEqualOptions.DefaultRoundedValue) 
 
-        static member BLACK = FsGray.BLACK |> FsValueColor.Gray
-        static member WHITE = FsGray.WHITE |> FsValueColor.Gray
-        static member GRAY = FsGray.GRAY |> FsValueColor.Gray
 
- 
-        static member RGB_BLACK = FsDeviceRgb.BLACK |> FsValueColor.Rgb
-        static member RGB_WHITE = FsDeviceRgb.WHITE |> FsValueColor.Rgb
-        static member RGB_RED = FsDeviceRgb.RED |> FsValueColor.Rgb
-        static member RGB_BLUE = FsDeviceRgb.BLUE |> FsValueColor.Rgb
-        static member RGB_MAGENTA = FsDeviceRgb.MAGENTA |> FsValueColor.Rgb
-
-
-        static member CMYK_WHITE = FsDeviceCmyk.WHITE |>     FsValueColor.Cmyk
-        static member CMYK_CYAN = FsDeviceCmyk.CYAN |>     FsValueColor.Cmyk
-        static member CMYK_BLACK = FsDeviceCmyk.BLACK |>   FsValueColor.Cmyk
-        static member CMYK_MAGENTA = FsDeviceCmyk.MAGENTA |> FsValueColor.Cmyk
-        static member CMYK_YELLOW = FsDeviceCmyk.YELLOW |> FsValueColor.Cmyk
 
         static member IsEqual (color1: FsValueColor, color2: FsValueColor, valueEqualOptions: ValueEqualOptions) =
             let colorSpaces =
@@ -765,6 +749,25 @@ module _Colors =
 
     [<RequireQualifiedAccess>]
     module FsValueColor =
+
+        let BLACK = FsGray.BLACK |> FsValueColor.Gray
+        let WHITE = FsGray.WHITE |> FsValueColor.Gray
+        let GRAY = FsGray.GRAY |> FsValueColor.Gray
+
+ 
+        let RGB_BLACK = FsDeviceRgb.BLACK |> FsValueColor.Rgb
+        let RGB_WHITE = FsDeviceRgb.WHITE |> FsValueColor.Rgb
+        let RGB_RED = FsDeviceRgb.RED |> FsValueColor.Rgb
+        let RGB_BLUE = FsDeviceRgb.BLUE |> FsValueColor.Rgb
+        let RGB_MAGENTA = FsDeviceRgb.MAGENTA |> FsValueColor.Rgb
+
+
+        let CMYK_WHITE = FsDeviceCmyk.WHITE |>     FsValueColor.Cmyk
+        let CMYK_CYAN = FsDeviceCmyk.CYAN |>     FsValueColor.Cmyk
+        let CMYK_BLACK = FsDeviceCmyk.BLACK |>   FsValueColor.Cmyk
+        let CMYK_MAGENTA = FsDeviceCmyk.MAGENTA |> FsValueColor.Cmyk
+        let CMYK_YELLOW = FsDeviceCmyk.YELLOW |> FsValueColor.Cmyk
+
         let fromKnownColor (knownColor: KnownColor) =
             match knownColor with 
             | KnownColor.Black -> (FsGray.BLACK) |> FsValueColor.Gray
@@ -1658,22 +1661,7 @@ module _Colors =
                 | true -> 0
                 | _ -> -1
 
-        static member RGB_BLACK = FsValueColor.RGB_BLACK  |> FsColor.ValueColor
-        static member RGB_WHITE = FsValueColor.RGB_WHITE  |> FsColor.ValueColor
-        static member RGB_RED = FsValueColor.RGB_RED  |> FsColor.ValueColor
-        static member RGB_BLUE = FsValueColor.RGB_BLUE  |> FsColor.ValueColor
-        static member RGB_MAGENTA = FsValueColor.RGB_MAGENTA  |> FsColor.ValueColor
 
-        static member CMYK_WHITE = FsValueColor.CMYK_WHITE  |> FsColor.ValueColor
-        static member CMYK_BLACK = FsValueColor.CMYK_BLACK  |> FsColor.ValueColor
-        static member CMYK_CYAN = FsValueColor.CMYK_CYAN  |> FsColor.ValueColor
-        static member CMYK_MAGENTA = FsValueColor.CMYK_MAGENTA  |> FsColor.ValueColor
-        static member CMYK_YELLOW = FsValueColor.CMYK_YELLOW  |> FsColor.ValueColor
-
-
-        static member BLACK = FsValueColor.BLACK |> FsColor.ValueColor
-        static member WHITE = FsValueColor.WHITE |> FsColor.ValueColor
-        static member GRAY = FsValueColor.GRAY |> FsColor.ValueColor
 
         static member CreateRGB(r, g, b: int) =
             FsValueColor.CreateRGB(r, g, b)
@@ -1742,6 +1730,8 @@ module _Colors =
         //        | _ -> failwithf "Cannot compare diffrent type %A" (x.GetType(), y.GetType())
 
 
+
+
     type FsSeparation with 
         member x.IsEqualTo(color, valueEqualOptions) =
             match color with 
@@ -1758,6 +1748,23 @@ module _Colors =
 
     [<RequireQualifiedAccess>]
     module FsColor =
+        let RGB_BLACK = FsValueColor.RGB_BLACK  |> FsColor.ValueColor
+        let RGB_WHITE = FsValueColor.RGB_WHITE  |> FsColor.ValueColor
+        let RGB_RED = FsValueColor.RGB_RED  |> FsColor.ValueColor
+        let RGB_BLUE = FsValueColor.RGB_BLUE  |> FsColor.ValueColor
+        let RGB_MAGENTA = FsValueColor.RGB_MAGENTA  |> FsColor.ValueColor
+
+        let CMYK_WHITE = FsValueColor.CMYK_WHITE  |> FsColor.ValueColor
+        let CMYK_BLACK = FsValueColor.CMYK_BLACK  |> FsColor.ValueColor
+        let CMYK_CYAN = FsValueColor.CMYK_CYAN  |> FsColor.ValueColor
+        let CMYK_MAGENTA = FsValueColor.CMYK_MAGENTA  |> FsColor.ValueColor
+        let CMYK_YELLOW = FsValueColor.CMYK_YELLOW  |> FsColor.ValueColor
+
+
+        let BLACK = FsValueColor.BLACK |> FsColor.ValueColor
+        let WHITE = FsValueColor.WHITE |> FsColor.ValueColor
+        let GRAY = FsValueColor.GRAY |> FsColor.ValueColor
+
         let private fsColorCache = new ConcurrentDictionary<SerializableCustomComparable<Color, int>, FsColor>()
 
         let OfItextColor(color: Color) =

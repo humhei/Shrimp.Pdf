@@ -79,5 +79,5 @@ module PdfLogger =
         stopWatch.Stop()
         let endMessage =  endMessage stopWatch.Elapsed
         info endMessage
-        result, beginMessage + "\n" + endMessage
+        result, beginMessage, endMessage
         

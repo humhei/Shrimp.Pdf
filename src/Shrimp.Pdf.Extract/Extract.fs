@@ -14,6 +14,7 @@ open Akkling
 open iText.Kernel.Geom
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf.Xobject
+open Shrimp.Pdf.SlimFlow
 
 
 
@@ -81,11 +82,15 @@ module _Extract =
     [<RequireQualifiedAccess>]
     type internal TargetRenewablePageInfo<'userState> =
         | EmptyPage of TargetPageBox
-        | NewPage of TargetPageBox * TargetRenewableNewPageInfoElement
+        | NewPageCase of TargetPageBox * TargetRenewableNewPageInfoElement * writerPageSetter: (SlimWriterPageSetter)
         | Non
         | NewInfosInOriginPage of TargetNewInfosInOriginPageElement list
         | SplitToTwoPages of 
              RenewableInfo list * Selector<'userState> * pageboxSetter: ExtractToTwoPages_PageBoxSetter * secondarySelector: (Rectangle -> Selector<'userState>) option
+
+    type internal TargetRenewablePageInfo =
+        static member NewPage(targetPageBox, targetElement, ?writerPageSetter) =
+            TargetRenewablePageInfo.NewPageCase(targetPageBox, targetElement, defaultArg writerPageSetter SlimWriterPageSetter.Ignore)
 
     let internal extractVisibleRenewableInfosToWriter 
         (configuration: Configuration)
@@ -124,7 +129,7 @@ module _Extract =
             let infos = 
                 infos
                 |> List.ofSeq
-                |> List.map(fun m -> m.AsUnion.SetVisibleBound(BoundGettingStrokeOptions.WithStrokeWidth))
+                |> List.map(fun m -> m.AsUnion.SetVisibleBound(BoundGettingStrokeOptions.WithoutStrokeWidth))
                 |> List.filter(fun m -> m.LazyVisibleBound.IsSome)
 
             infos
@@ -244,7 +249,7 @@ module _Extract =
                                 //)
                                 let rect = 
                                     infos
-                                    |> List.map(fun m -> m.LazyVisibleBound.Value)
+                                    |> List.map(fun m -> m.VisibleBound)
                                     |> AtLeastOneList.Create
                                     |> Rectangle.ofRectangles
 
@@ -524,7 +529,7 @@ module _Extract =
                               BorderKeepingPageNumbers = borderKeepingPageNumbers }
 
 
-                        TargetRenewablePageInfo.NewPage(targetPageBox, element)
+                        TargetRenewablePageInfo.NewPage(targetPageBox, element, SlimWriterPageSetter.Ignore)
 
                     loop (asTargetPageInfo infos1)
                     loop (asTargetPageInfo infos2)
@@ -543,11 +548,10 @@ module _Extract =
                         |> ignore
 
                 | TargetRenewablePageInfo.Non -> ()
-                | TargetRenewablePageInfo.NewPage (targetPageBox, infos) ->
+                | TargetRenewablePageInfo.NewPageCase (targetPageBox, infos, writerPageSetter) ->
 
-                    let writerPage = writer.AddNewPage(PageSize(readerPage.GetActualBox()))
-
-                    let writerCanvas = new OffsetablePdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
+                    let writerPage, writerCanvas = writerPageSetter.GenerateWriterPageAndCanvas(readerPage, writer)
+                            
                     PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
                         writerCanvas
                             .WriteLiteral("0 G\n")
@@ -562,17 +566,25 @@ module _Extract =
 
                     //writerPage.SetPageBoxToPage(readerPage) |> ignore
 
-                    match targetPageBox.Value with 
-                    | Some (pageBoxKind, pageBox) -> 
-                        writerPage.SetPageBoxToPage(readerPage)
-                        |> ignore<PdfPage>
 
-                        writerPage.SetPageBox(pageBoxKind, pageBox) 
-                        |> ignore<PdfPage>
 
-                    | None -> 
-                        writerPage.SetPageBoxToPage(readerPage)
-                        |> ignore<PdfPage>
+                    match writerPageSetter, infos.RenewableInfos with 
+                    | SlimWriterPageSetter.Ignore, _ 
+                    | _, [] -> 
+                        match targetPageBox.Value with 
+                        | Some (pageBoxKind, pageBox) -> 
+                            writerPage.SetPageBoxToPage(readerPage)
+                            |> ignore<PdfPage>
+
+                            writerPage.SetPageBox(pageBoxKind, pageBox) 
+                            |> ignore<PdfPage>
+
+                        | None -> 
+                            writerPage.SetPageBoxToPage(readerPage)
+                            |> ignore<PdfPage>
+
+                    | SlimWriterPageSetter.Some setter, _ ->
+                        setter.InvokePage (readerPage, writerPage, writer)
 
                 | TargetRenewablePageInfo.NewInfosInOriginPage (infos) ->
                     let writerPage = writer.AddNewPage(PageSize(readerPage.GetActualBox()))
@@ -606,11 +618,15 @@ module _Extract =
         splittedInfos
 
 
-
     type Reuses with
-        static member ExtractIM(pageSelector: PageSelector, selector, ?keepOriginPage) =    
+        static member ExtractIM(pageSelector: PageSelector, selector, ?slimFlow: SlimFlowUnion<_, _>,?keepOriginPage) =    
             let keepOriginPage = defaultArg keepOriginPage false
             fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
+                let flowModel =
+                    { flowModel with 
+                        Configuration = 
+                            { flowModel.Configuration with SlimableFlowLoggingOptions = SlimableFlowLoggingOptions.Slim }
+                    }
                 let reader = splitDocument.Reader
                 let totalNumberOfPages = reader.GetNumberOfPages()
                 let pageNumbers = reader.GetPageNumbers(pageSelector)
@@ -630,7 +646,15 @@ module _Extract =
                         flowModel.Configuration
                         args
                         selector
-                        (fun infos -> [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers))])
+                        (fun infos -> 
+                            match slimFlow with 
+                            | None -> [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers), SlimWriterPageSetter.Ignore)]
+                            | Some slimFlow ->
+                                let r = slimFlow.Invoke flowModel args (RenewableInfos.Create infos) SlimWriterPageSetter.Ignore
+                                let infos = r.Infos.AsList
+                                let writerPageSetter = r.WriterPageSetter
+                                [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers), writerPageSetter)]
+                        )
                         keepOriginPage
                         ignore
                         borderKeepingPageNumbers
@@ -646,6 +670,15 @@ module _Extract =
                  "keepOriginPage" => keepOriginPage.ToString() ]
 
 
+        static member SlimFlows(pageSelector: PageSelector, slimFlow) =
+            Reuses.ExtractIM(
+                pageSelector,
+                Selector.All(fun _ _ -> true),
+                slimFlow = slimFlow,
+                keepOriginPage = false )
+            |> Reuse.rename 
+                "Slim Flows"
+                []
 
         static member ExtractPaths(pageSelector, pathSelector, ?keepOriginPage) =
             Reuses.ExtractIM(pageSelector, Selector.Path pathSelector, ?keepOriginPage = keepOriginPage)

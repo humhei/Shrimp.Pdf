@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Shrimp.Pdf.Image\Shrimp.Pdf.Image.fsproj" />
+    <ProjectReference Include="..\..\Shrimp.Pdf.NewFlow\Shrimp.Pdf.SlimFlow.fsproj" />
   </ItemGroup>
 
     <ItemGroup>

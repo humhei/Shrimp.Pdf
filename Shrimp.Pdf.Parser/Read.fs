@@ -210,6 +210,7 @@ module internal Listeners =
     type GSStateStackableEventListener() =
         let gsStack = new Stack<FsParserGraphicsState>()
         let mutable gsStates_invokeByGS = InfoGsStateLists []
+        let mutable is_gsStates_invokeByGS_updated = false
 
         let update_gsStates_invokeByGS() =
             let gsState = 
@@ -232,22 +233,21 @@ module internal Listeners =
                 |> InfoGsStateLists
 
             gsStates_invokeByGS <- gsState
+            is_gsStates_invokeByGS_updated <- true
 
         member internal x.SaveGS(containerID, gs: ParserGraphicsState, ?invokeByGS) =
             let invokeByGS = defaultArg invokeByGS false
             let gs = FsParserGraphicsState(containerID, gs, invokeByGS)
             gsStack.Push(gs)
-            match invokeByGS with 
-            | true -> update_gsStates_invokeByGS()
-            | false -> ()
+            is_gsStates_invokeByGS_updated <- false
 
 
         member internal x.ProcessGraphicsStateResource(containerID, gs) =
             match gsStack.Count with 
             | 0 -> x.SaveGS(containerID, gs, invokeByGS = true)
             | _-> gsStack.Peek().ProcessGraphicsStateResource(gs)
+            is_gsStates_invokeByGS_updated <- false
 
-            update_gsStates_invokeByGS()
 
         //member internal x.FillOpacity =
         //    match gsStack.Count with 
@@ -267,7 +267,11 @@ module internal Listeners =
         //    | _ -> gsStack.Peek().StrokeOpacity
 
         member internal x.GsStates_invokeByGS =
-            gsStates_invokeByGS
+            match is_gsStates_invokeByGS_updated with 
+            | true -> gsStates_invokeByGS
+            | false -> 
+                update_gsStates_invokeByGS()
+                gsStates_invokeByGS
 
         member internal x.RestoreGS() = 
             gsStack.Pop()

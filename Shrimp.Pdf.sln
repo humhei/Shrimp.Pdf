@@ -41,9 +41,11 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.Extract", "src\S
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.DtronixPdf", "Shrimp.Pdf.ImageConverter.Server.Lib\Shrimp.DtronixPdf.fsproj", "{968261F4-D704-4A20-9A19-7BA9241BC168}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Shrimp.Pdf.PostScript", "Shrimp.Pdf.PostScript\Shrimp.Pdf.PostScript.fsproj", "{EE6949AA-40A9-4436-9F65-5A205DF85491}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.PostScript", "Shrimp.Pdf.PostScript\Shrimp.Pdf.PostScript.fsproj", "{EE6949AA-40A9-4436-9F65-5A205DF85491}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Shrimp.Pdf.PostScriptTests", "Shrimp.Pdf.PostScriptTests\Shrimp.Pdf.PostScriptTests.fsproj", "{DB014E91-A2F7-4A01-8338-14B6DEB85726}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.PostScriptTests", "Shrimp.Pdf.PostScriptTests\Shrimp.Pdf.PostScriptTests.fsproj", "{DB014E91-A2F7-4A01-8338-14B6DEB85726}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Shrimp.Pdf.SlimFlow", "Shrimp.Pdf.NewFlow\Shrimp.Pdf.SlimFlow.fsproj", "{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -436,6 +438,24 @@ Global
 		{DB014E91-A2F7-4A01-8338-14B6DEB85726}.Release|x64.Build.0 = Release|Any CPU
 		{DB014E91-A2F7-4A01-8338-14B6DEB85726}.Release|x86.ActiveCfg = Release|Any CPU
 		{DB014E91-A2F7-4A01-8338-14B6DEB85726}.Release|x86.Build.0 = Release|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.Debug|x64.Build.0 = Debug|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.Debug|x86.Build.0 = Debug|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.MiniBuild|Any CPU.ActiveCfg = Debug|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.MiniBuild|Any CPU.Build.0 = Debug|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.MiniBuild|x64.ActiveCfg = Debug|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.MiniBuild|x64.Build.0 = Debug|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.MiniBuild|x86.ActiveCfg = Debug|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.MiniBuild|x86.Build.0 = Debug|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.Release|x64.ActiveCfg = Release|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.Release|x64.Build.0 = Release|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.Release|x86.ActiveCfg = Release|Any CPU
+		{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

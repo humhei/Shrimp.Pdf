@@ -652,6 +652,12 @@ module iText =
         let applyMargin (margin:Margin) (rect: Rectangle) =
             rect.applyMargin(margin)
 
+        let calcMargin (insideRect: Rectangle) (rect: Rectangle) =
+            { Left = insideRect.GetXF() - rect.GetXF() 
+              Top  = rect.GetTopF() - insideRect.GetTopF() 
+              Right = rect.GetRightF() - insideRect.GetRightF()
+              Bottom = insideRect.GetBottomF() - rect.GetBottomF()  }
+
     [<RequireQualifiedAccess>]
     module AffineTransform = 
 
@@ -872,6 +878,21 @@ module iText =
 
         let [<Literal>] FILLANDSTROKE = PathRenderInfo.FILL ||| PathRenderInfo.STROKE
 
+        [<RequireQualifiedAccess>]
+        module Operation =
+            
+            let (|HasFill|NoFill|)(operation: int) =
+                match operation with 
+                | PathRenderInfo.FILL
+                | FILLANDSTROKE -> HasFill()
+                | _ -> NoFill()
+
+            let (|HasStroke|NoStroke|)(operation: int) =
+                match operation with 
+                | PathRenderInfo.STROKE
+                | FILLANDSTROKE -> HasStroke()
+                | _ -> NoStroke()
+
 
         let getLineShapingStyle (info: IPathRenderInfo): LineShapingStyle =
             info.Value.GetGraphicsState()
@@ -895,18 +916,16 @@ module iText =
             info.GetPath().GetSubpaths().Count > 0
             && 
                 match info.GetOperation() with 
-                | PathRenderInfo.STROKE
-                | FILLANDSTROKE -> true
-                | _ -> false
+                | Operation.HasStroke -> true
+                | Operation.NoStroke -> false
 
         let hasFill (info: IPathRenderInfo) =
             let info = info.Value
             info.GetPath().GetSubpaths().Count > 0
             &&
                 match info.GetOperation() with 
-                | PathRenderInfo.FILL 
-                | FILLANDSTROKE -> true
-                | _ -> false
+                | Operation.HasFill -> true
+                | Operation.NoFill -> false
 
         let hasFillOrStroke (info: IPathRenderInfo) =
             hasFill info || hasStroke info
@@ -950,6 +969,26 @@ module iText =
 
     [<RequireQualifiedAccess>]
     module TextRenderInfo =
+        [<RequireQualifiedAccess>]
+        module TextRenderingMode =
+            let (|HasFill|NoFill|) (textRenderMode: int) =
+                match textRenderMode with 
+                | TextRenderingMode.FILL 
+                | TextRenderingMode.FILL_STROKE -> HasFill()
+                | TextRenderingMode.STROKE -> NoFill()
+                | _ -> 
+                    PdfLogger.unSupportedTextRenderMode textRenderMode
+                    NoFill()
+
+            let (|HasStroke|NoStroke|) (textRenderMode: int) =
+                match textRenderMode with 
+                | TextRenderingMode.STROKE
+                | TextRenderingMode.FILL_STROKE -> HasStroke()
+                | TextRenderingMode.FILL -> NoStroke()
+                | _ -> 
+                    PdfLogger.unSupportedTextRenderMode textRenderMode
+                    NoStroke()
+
         let getY (info: TextRenderInfo) =
             let descent = info.GetDescentLine()
             descent.GetStartPoint().Get(1)
@@ -1021,12 +1060,8 @@ module iText =
         let hasStroke (info: TextRenderInfo) =             
             let textRenderMode = info.GetTextRenderMode()
             match textRenderMode with 
-            | TextRenderingMode.STROKE
-            | TextRenderingMode.FILL_STROKE -> true  
-            | TextRenderingMode.FILL -> false
-            | _ -> 
-                PdfLogger.unSupportedTextRenderMode textRenderMode
-                false
+            | TextRenderingMode.HasStroke -> true  
+            | TextRenderingMode.NoStroke -> false
 
         let getBound (boundGettingStrokeOptions: BoundGettingStrokeOptions) (info: TextRenderInfo) =
             
@@ -1156,15 +1191,12 @@ module iText =
             |> TextRenderInfo.getX
 
 
+
         let hasFill (info: ITextRenderInfo) =             
             let textRenderMode = info.Value.GetTextRenderMode()
             match textRenderMode with 
-            | TextRenderingMode.FILL 
-            | TextRenderingMode.FILL_STROKE -> true
-            | TextRenderingMode.STROKE -> false
-            | _ -> 
-                PdfLogger.unSupportedTextRenderMode textRenderMode
-                false
+            | TextRenderInfo.TextRenderingMode.HasFill -> true
+            | TextRenderInfo.TextRenderingMode.NoFill -> false
 
         let hasStroke (info: ITextRenderInfo) =             
             info.Value

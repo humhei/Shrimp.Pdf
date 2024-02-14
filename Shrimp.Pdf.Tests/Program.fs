@@ -44,6 +44,7 @@ let allTests =
             ParsingTests.parsingTests
             ExtractTests.extractTests
             PerformanceTests.performanceTests
+            SlimFlowTests.manipulatesTests
         ]
 
 [<EntryPoint>]

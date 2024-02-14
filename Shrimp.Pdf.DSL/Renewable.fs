@@ -1,6 +1,7 @@
 ﻿namespace Shrimp.Pdf
 
 open System.Collections.Generic
+open Shrimp.Pdf.Colors
 
 #nowarn "0104"
 open Shrimp.Pdf.Constants.Operators
@@ -22,6 +23,9 @@ module _Renewable =
         inherit PdfCanvas(contentStream, resources, pdfDocument)
         let xOffset = defaultArg xOffset 0.f
         let yOffset = defaultArg yOffset 0.f
+        do 
+            let stream = contentStream.GetOutputStream()
+            stream.SetLocalHighPrecision(true)
 
         member x.XOffset = xOffset
 
@@ -265,7 +269,9 @@ module _Renewable =
         
 
 
-
+    type RenewablePathInfoTag =
+        | Normal = 0
+        | CuttingDie = 1
 
 
     type RenewablePathInfo =
@@ -284,7 +290,9 @@ module _Renewable =
           ClippingPathInfos: ClippingPathInfos
           IsShading: bool
           OriginInfo: IntegratedPathRenderInfo
-          LazyBound: Rectangle option 
+          LazyFillColor: FsColor option
+          LazyStrokeColor: FsColor option
+          Tag: RenewablePathInfoTag
         }
     with 
         member x.ApplyCtm_To_AccumulatedPathOperatorRanges() =
@@ -376,7 +384,9 @@ module _Renewable =
                 IsShading = x.IsShading
                 GsStates = x.GsStates
                 OriginInfo = x
-                LazyBound = None
+                LazyFillColor = None
+                LazyStrokeColor = None
+                Tag = RenewablePathInfoTag.Normal
             }
 
     [<RequireQualifiedAccess>]
@@ -407,7 +417,8 @@ module _Renewable =
            HeaderTextRenderInfo: TextRenderInfo
            ClippingPathInfos: ClippingPathInfos
            OriginInfo: IntegratedTextRenderInfo
-           LazyBound: Rectangle option 
+           LazyFillColor: FsColor option
+           LazyStrokeColor: FsColor option
            }
      with 
         member x.ApplyCtm_WriteToCanvas(pdfCanvas: OffsetablePdfCanvas) =
@@ -506,7 +517,8 @@ module _Renewable =
               FillShading = None
               StrokeShading = None
               OriginInfo = x
-              LazyBound = None
+              LazyFillColor = None
+              LazyStrokeColor = None
             }
 
 
@@ -579,11 +591,71 @@ module _Renewable =
         | Text of RenewableTextInfo
         | Image of RenewableImageInfo
     with 
-        member x.LazyVisibleBound = 
+        member private x.LazyVisibleBound = 
             match x with 
             | Path info -> info.OriginInfo.LazyVisibleBound
             | Text info -> info.OriginInfo.LazyVisibleBound
             | Image info -> info.OriginInfo.LazyVisibleBound
+
+        member x.VisibleBound =
+            match x.LazyVisibleBound with 
+            | Some bound -> bound
+            | None -> failwithf "LazyVisibleBound is None"
+
+        member x.SetColor() =
+            match x with 
+            | Path info ->
+                { info with 
+                    LazyFillColor = 
+                        match info.LazyFillColor with 
+                        | Some _ -> info.LazyFillColor
+                        | None -> 
+                            match info.Operation with 
+                            | IPathRenderInfo.Operation.HasFill ->
+                                FsColor.OfItextColor info.FillColor
+                                |> Some
+                            | IPathRenderInfo.Operation.NoFill -> None
+
+                    LazyStrokeColor = 
+                        match info.LazyStrokeColor with 
+                        | Some _ -> info.LazyStrokeColor
+                        | None ->
+                            match info.Operation with 
+                            | IPathRenderInfo.Operation.HasStroke ->
+                                FsColor.OfItextColor info.StrokeColor
+                                |> Some
+
+                            | IPathRenderInfo.Operation.NoStroke -> None
+                }
+
+                |> RenewableInfo.Path
+
+            | Text info ->
+                { info with 
+                    LazyFillColor = 
+                        match info.LazyFillColor with 
+                        | Some _ -> info.LazyFillColor
+                        | None -> 
+                            match info.TextRenderingMode with 
+                            | TextRenderInfo.TextRenderingMode.HasFill ->
+                                FsColor.OfItextColor info.FillColor
+                                |> Some
+                            | TextRenderInfo.TextRenderingMode.NoFill -> None
+
+                    LazyStrokeColor = 
+                        match info.LazyStrokeColor with 
+                        | Some _ -> info.LazyStrokeColor
+                        | None ->
+                            match info.TextRenderingMode with 
+                            | TextRenderInfo.TextRenderingMode.HasStroke ->
+                                FsColor.OfItextColor info.StrokeColor
+                                |> Some
+
+                            | TextRenderInfo.TextRenderingMode.NoStroke -> None
+                }
+                |> RenewableInfo.Text
+
+            | Image info -> x
 
         //member private x.Bound =
         //    match x with 
@@ -591,11 +663,11 @@ module _Renewable =
         //    | Text info ->  info.OriginInfo.RecordValue.Bound |> Some
         //    | Image info -> info.OriginInfo.VisibleBound() |> Option.map FsRectangle.OfRectangle
 
-        member x.LazyBound =
-            match x with 
-            | Path info -> info.LazyBound
-            | Text info -> info.LazyBound
-            | Image info -> info.LazyBound
+        //member x.LazyBound =
+        //    match x with 
+        //    | Path info -> info.LazyBound
+        //    | Text info -> info.LazyBound
+        //    | Image info -> info.LazyBound
 
         //member x.SetBound(boundGettingStrokeOptions) =
         //    match x with 
