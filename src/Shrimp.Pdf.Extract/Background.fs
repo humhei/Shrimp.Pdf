@@ -2,6 +2,7 @@
 namespace Shrimp.Pdf
 open Shrimp.FSharp.Plus
 open Shrimp.Pdf
+open Shrimp.Pdf.SlimFlow
 open Shrimp.Pdf.Extract
 open Shrimp.LiteDB
 open System.IO
@@ -23,7 +24,7 @@ open iText.Kernel.Geom
 
 [<AutoOpen>]
 module _Extract_BackgroundOrForeground =
-
+    
     let private applyName name (text: string) =
         match name with 
         | String.EqualIC UNTITLED ->
@@ -36,6 +37,7 @@ module _Extract_BackgroundOrForeground =
                 | None -> name
 
             sprintf "%s.%s" name text
+
 
     [<AutoOpen>]
     module private _BackgroundFileCache =
@@ -52,22 +54,6 @@ module _Extract_BackgroundOrForeground =
                 valueFilesGetter = (fun m -> [m.FileInfo]),
                 primaryKeyGetter = (fun (m, name) -> primaryKey (m.PdfPath, name))
             )
-
-    [<RequireQualifiedAccess>]
-    type BackgoundAddtionFlow =
-        | Keep 
-        | ExtractObjects 
-        | CustomCase of name: string * Flow<unit, unit>
-    with 
-        static member Custom(name, flow: Flow<_, _>) =
-            let flow = flow ||>> ignore
-            BackgoundAddtionFlow.CustomCase(name, flow)
-
-        member x.Name =
-            match x with 
-            | Keep -> UNTITLED
-            | ExtractObjects -> "ExtractObjects"
-            | CustomCase (name, _) -> name
 
     type BackgroundFile with 
         static member Create(pdfFile: PdfFile, addtionalFlow: BackgoundAddtionFlow) =
@@ -121,332 +107,21 @@ module _Extract_BackgroundOrForeground =
         static member Create(path: string, addtionalFlow) =
             BackgroundFile.Create(PdfFile path, addtionalFlow)
 
-    
-    [<RequireQualifiedAccess>]
-    type BackgroundImageFileValue = 
-        | Singleton of FsFullPath
-        | Multiple  of FsFullPath list
-
-    type BackgroundImageFile =
-        { Value: BackgroundImageFileValue
-          Pdf_AddtionalFlowAndName: BackgoundAddtionFlow}
-    with 
-        static member Singleton(path, ?addtionalFlow) =
-            { Value = BackgroundImageFileValue.Singleton path 
-              Pdf_AddtionalFlowAndName = defaultArg addtionalFlow BackgoundAddtionFlow.Keep
-            }
-
-        static member Multiple(paths, ?addtionalFlow) =
-            { Value = BackgroundImageFileValue.Multiple paths 
-              Pdf_AddtionalFlowAndName = defaultArg addtionalFlow BackgoundAddtionFlow.Keep
-            }
-
-    let private reuse name parameters f = Reuse(f = f, flowName = FlowName.Override(name, parameters))
-
-
-    [<RequireQualifiedAccess>]
-    type BackgroundPositionTweak =    
-        | OfPageBox of offsetX: float * offsetY: float
-        | SpecficRect of FsRectangle
-    with 
-        static member DefaultValue = OfPageBox(0, 0)
-
-    type PdfCanvas with 
-        member private x.AddImageFittedIntoRectangleDSL(image, pageSize, asInline) =
-            x.AddImageFittedIntoRectangle(image, pageSize, asInline)
-            |> ignore
-            x
-
-        member x.AddImageFittedIntoRectangleDSLEx(image, pageSize, asInline, extGSState: FsExtGState option) =
-            match extGSState with 
-            | None -> x.AddImageFittedIntoRectangleDSL(image, pageSize, asInline)
-            | Some extGSState -> 
-                x
-                    .SaveState()
-                    .SetExtGState(extGSState)
-                    .AddImageFittedIntoRectangleDSL(image, pageSize, asInline)
-                    .RestoreState()
-                    
-
-        member private x.AddPdfXObjectDSLEx(backgroundPageBox: Rectangle, backgroundXObject: PdfXObject, readerPageBox: Rectangle, xEffect, yEffect, positionTweak: BackgroundPositionTweak, extGSState: FsExtGState option) =
-            let readerPageBox =
-                match positionTweak with 
-                | BackgroundPositionTweak.SpecficRect rect -> rect.AsRectangle
-                | BackgroundPositionTweak.OfPageBox (_) -> readerPageBox
-
-            let bk_x =  
-                let baseX =  readerPageBox.GetX() - backgroundPageBox.GetX() 
-                let lengthDiff = readerPageBox.GetWidth() - backgroundPageBox.GetWidth()
-                match xEffect with 
-                | XEffort.Left -> baseX
-                | XEffort.Middle ->
-                    baseX + lengthDiff / 2.f
-                | XEffort.Right -> baseX + lengthDiff
-                |> float
-
-            let bk_x =
-                match positionTweak with 
-                | BackgroundPositionTweak.SpecficRect _ -> bk_x
-                | BackgroundPositionTweak.OfPageBox (xOffset, yOffset) -> bk_x + xOffset
-
-            let bk_y = 
-                let baseY = readerPageBox.GetY() - backgroundPageBox.GetY() 
-                let lengthDiff = readerPageBox.GetHeight() - backgroundPageBox.GetHeight()
-                match yEffect with 
-                | YEffort.Bottom -> baseY
-                | YEffort.Middle ->
-                    baseY + lengthDiff / 2.f
-                | YEffort.Top -> baseY + lengthDiff
-                |> float
-                
-            
-            let bk_y =
-                match positionTweak with 
-                | BackgroundPositionTweak.SpecficRect _ -> bk_y
-                | BackgroundPositionTweak.OfPageBox (xOffset, yOffset) -> bk_y + yOffset
-
-            let affineTransform: AffineTransformRecord =
-                let affineTransform =
-                    { AffineTransformRecord.DefaultValue
-                        with 
-                            TranslateX = bk_x
-                            TranslateY = bk_y
-                    }
-                    
-                match backgroundXObject with 
-                | :? PdfImageXObject ->
-                    { affineTransform with 
-                        ScaleX = 
-                            backgroundPageBox.GetWidthF()
-
-                        ScaleY = 
-                            backgroundPageBox.GetHeightF()
-                    }
-
-                | _ -> affineTransform
-
-            match extGSState with 
-            | None -> 
-                x
-                    .AddXObject(backgroundXObject, affineTransform)
-
-            | Some extGSState -> 
-                x
-                    .SaveState()
-                    .SetExtGState(extGSState)
-                    .AddXObject(backgroundXObject, affineTransform)
-                    .RestoreState()
-               
-                   
-                    
-    
-
-
-    type PdfPage with 
-        member page.AddBackgroundOrForegroundImage 
-            (i: int,
-             imageCache: System.Collections.Concurrent.ConcurrentDictionary<_, _>,
-             image: BackgroundImageFile,
-             choice: BackgroundOrForeground,
-             ?addSelf,
-             ?shadowColor,
-             ?xEffect,
-             ?yEffect,
-             ?backgroundPositionTweak: PageNumber -> BackgroundPositionTweak,
-             ?layerName: BackgroundAddingLayerOptions,
-             ?extGSState: FsExtGState
-            ) =
-            let pageBox = 
-                page.GetActualBox()
-
-            let pageSize = 
-                pageBox
-                |> PageSize
-
-            let writerDoc = page.GetDocument()
-            let xEffect = defaultArg xEffect XEffort.Middle
-            let yEffect = defaultArg yEffect YEffort.Middle
-            let addShadowColor pageSize (pdfCanvas: PdfCanvas) =
-                match shadowColor with 
-                | None -> pdfCanvas
-                | Some (pdfFileShadow: NullablePdfCanvasColor) ->
-                    pdfCanvas
-                        .SaveState()
-                        .SetFillColor(pdfFileShadow)
-                        .Rectangle(pageSize)
-                        .Fill()
-                        .RestoreState()
-
-            let pageNumber = i + 1
-
-            let typedPageNumber = PageNumber pageNumber
-
-            let pdfCanvas = 
-                match choice with 
-                | BackgroundOrForeground.Background ->
-                    new PdfCanvas(page.NewContentStreamBefore(), page.GetResources(), writerDoc)
-
-                | BackgroundOrForeground.Foreground ->
-                    new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), writerDoc)
-                    
-
-
-            let image = 
-                let createImage (imageFile: FsFullPath) (pdf_addtionFlow: BackgoundAddtionFlow) =
-                    let name = pdf_addtionFlow.Name
-
-                    imageCache.GetOrAdd((imageFile, name), valueFactory = fun (imageFile, name) ->
-                        match imageFile.Path.ToLower() with 
-                        | String.EndsWith ".pdf" -> 
-                            let backgroundFile = BackgroundFile.Create(PdfFile imageFile, pdf_addtionFlow)
-
-
-                            let backgroundInfos =
-
-                                let pageBoxs = BackgroundFile.getPageBoxes backgroundFile
-                                let totalPageNumber = pageBoxs.Length
-                                let reader = new PdfDocument(new PdfReader(backgroundFile.ClearedPdfFile.Path))
-          
-                                {|  
-                                    Close = fun () -> reader.Close()
-                                    PageBoxAndXObject = 
-                                        match image.Value with 
-                                        | BackgroundImageFileValue.Singleton _ ->
-                                            let index = (pageNumber-1) % totalPageNumber
-                                            pageBoxs.[index], (reader.GetPage(index+1).CopyAsFormXObject(writerDoc) :> PdfXObject)
-
-                                        | BackgroundImageFileValue.Multiple _ ->
-                                            pageBoxs.[0], (reader.GetPage(1).CopyAsFormXObject(writerDoc) :> PdfXObject)
-                                |}
-
-                            backgroundInfos
-
-                        | _ -> 
-                            let imageData = ImageDataFactory.Create(imageFile.Path)
-                            let xobject = PdfImageXObject(imageData)
-                            {|
-                                Close = ignore 
-                                PageBoxAndXObject = 
-                                    let width = 
-                                        xobject.GetWidth() 
-                                        |> float
-                                        |> fun m -> m / float (imageData.GetDpiX())
-                                        |> inch
-
-                                    let height = 
-                                        xobject.GetHeight() 
-                                        |> float
-                                        |> fun m -> m / float (imageData.GetDpiY())
-                                        |> inch
-
-                                    let pageBox = Rectangle.create 0 0 (width) (height)
-                                    //let fsRect = FsRectangle.OfRectangle pageBox
-                                    pageBox, xobject :> PdfXObject
-                            |}
-                    )
-
-                match image.Value with 
-                | BackgroundImageFileValue.Singleton image2 -> createImage image2 image.Pdf_AddtionalFlowAndName
-                | BackgroundImageFileValue.Multiple images2 -> createImage (images2.[i]) image.Pdf_AddtionalFlowAndName
-
-            let addImage() =    
-                pdfCanvas.AddPdfXObjectDSLEx(
-                    backgroundPageBox = fst image.PageBoxAndXObject,
-                    backgroundXObject  = snd image.PageBoxAndXObject,
-                    readerPageBox = pageBox,
-                    xEffect = xEffect,
-                    yEffect = yEffect,
-                    positionTweak = (
-                        match backgroundPositionTweak with 
-                        | None -> BackgroundPositionTweak.DefaultValue
-                        | Some backgroundPositionTweak -> backgroundPositionTweak typedPageNumber
-                    ),
-                    extGSState = extGSState
-                )
-                |> ignore
-                
-
-            match layerName with 
-            | None ->
-                let addSelf() =
-                    match addSelf with 
-                    | None -> ()
-                    | Some addSelf -> addSelf pdfCanvas
-
-                match choice with 
-                | BackgroundOrForeground.Background ->
-                    addImage()
-
-                    pdfCanvas
-                    |> addShadowColor pageSize
-                    |> ignore
-
-                    addSelf()
-
-                | BackgroundOrForeground.Foreground -> 
-                    addSelf()
-                    addImage()
-
-            | Some layerName ->
-                let bklayer = 
-                    layerName.BackgroundLayer.CreateLayer(writerDoc)
-
-                let addSelf() =
-                    match addSelf with 
-                    | None -> ()
-                    | Some addSelf -> 
-                        let currentLayer = layerName.CurrentLayer.CreateLayer(writerDoc)
-                        pdfCanvas.BeginLayerUnion(currentLayer) |> ignore<PdfCanvas>
-                        addSelf pdfCanvas
-                        pdfCanvas.EndLayerUnion(currentLayer) |> ignore<PdfCanvas>
-
-                match choice with 
-                | BackgroundOrForeground.Background ->
-                    let _addBKContents =
-                        pdfCanvas.BeginLayerUnion(bklayer) |> ignore<PdfCanvas>
-                        addImage()
-                        pdfCanvas
-                        |> addShadowColor pageSize
-                        |> ignore
-
-                        pdfCanvas.EndLayerUnion(bklayer) |> ignore<PdfCanvas>
-
-                    addSelf()
-
-
-                | BackgroundOrForeground.Foreground -> 
-                    addSelf()
-
-                    let __addBKContents = 
-                        pdfCanvas.BeginLayerUnion(bklayer) |> ignore<PdfCanvas>
-                        addImage()
-                        pdfCanvas.EndLayerUnion(bklayer) |> ignore<PdfCanvas>
-
-                    ()
-
-
-
-
-
-
-
-
-
     type Reuses with 
         
         static member private AddBackgroundOrForegroundImage(image: BackgroundImageFile, choice: BackgroundOrForeground, ?shadowColor, ?xEffect, ?yEffect, ?backgroundPositionTweak: PageNumber -> BackgroundPositionTweak, ?pageSelector, ?layerName: BackgroundAddingLayerOptions, ?extGSState: FsExtGState) =
             let xEffect = defaultArg xEffect XEffort.Middle
             let yEffect = defaultArg yEffect YEffort.Middle
-            let addShadowColor pageSize (pdfCanvas: PdfCanvas) =
-                match shadowColor with 
-                | None -> pdfCanvas
-                | Some (pdfFileShadow: NullablePdfCanvasColor) ->
-                    pdfCanvas
-                        .SaveState()
-                        .SetFillColor(pdfFileShadow)
-                        .Rectangle(pageSize)
-                        .Fill()
-                        .RestoreState()
+            //let addShadowColor pageSize (pdfCanvas: PdfCanvas) =
+            //    match shadowColor with 
+            //    | None -> pdfCanvas
+            //    | Some (pdfFileShadow: NullablePdfCanvasColor) ->
+            //        pdfCanvas
+            //            .SaveState()
+            //            .SetFillColor(pdfFileShadow)
+            //            .Rectangle(pageSize)
+            //            .Fill()
+            //            .RestoreState()
 
 
             let pageSelector = defaultArg pageSelector PageSelector.All
@@ -473,8 +148,8 @@ module _Extract_BackgroundOrForeground =
                         writerPage.AddBackgroundOrForegroundImage(
                             i,
                             imageCache,
-                            image,
-                            choice,
+                            RenewableBackgroundImageFile.BackgroundImageFile (image, BackgroundFile.Create),
+                            choice, 
                             addSelf = (fun canvas -> canvas.AddXObjectAbs(readerXObject, 0.f, 0.f) |> ignore<PdfCanvas>),
                             ?shadowColor = shadowColor,
                             xEffect = xEffect,
@@ -741,3 +416,36 @@ module _Extract_BackgroundOrForeground =
 
 
 
+    type MultipleSlimBackground with 
+        static member Create(
+            backgroundFiles: PdfFile list,
+            choice,
+            configuration,
+            ?layerName,
+            ?xEffect,
+            ?yEffect,
+            ?shadowColor,
+            ?extGsState,
+            ?backgroundPositionTweak
+            ) =
+            let cache = new System.Collections.Concurrent.ConcurrentDictionary<_, _>()
+            let backgroundFiles = 
+                backgroundFiles
+                |> List.map(fun bk ->
+                    cache.GetOrAdd(bk.FullPath, valueFactory = fun _ ->
+                        BackgroundFile.Create(bk)
+                    )
+                )
+
+
+            MultipleSlimBackground(
+                backgroundFiles,
+                choice,
+                configuration,
+                ?layerName               = layerName,
+                ?xEffect                 = xEffect,
+                ?yEffect                 = yEffect,
+                ?shadowColor             = shadowColor,
+                ?extGsState              = extGsState,
+                ?backgroundPositionTweak = backgroundPositionTweak
+            )

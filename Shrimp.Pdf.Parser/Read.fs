@@ -41,6 +41,13 @@ type RenderInfoSelector =
     | AND of RenderInfoSelector list
     | OR of RenderInfoSelector list
     | Not of RenderInfoSelector
+with 
+    static member All(f) =
+        RenderInfoSelector.OR [
+            RenderInfoSelector.Image(fun info -> f (info :> IIntegratedRenderInfoIM))
+            RenderInfoSelector.Path(fun info -> f (info :> IIntegratedRenderInfoIM))
+            RenderInfoSelector.Text(fun info -> f (info :> IIntegratedRenderInfoIM))
+        ]
 
 [<RequireQualifiedAccess>]
 module RenderInfoSelector =
@@ -91,7 +98,7 @@ module RenderInfoSelector =
                     match renderInfo with 
                     | IIntegratedRenderInfo.Text _ -> false
                     | IIntegratedRenderInfo.Path renderInfo -> 
-                        match Seq.length(IPathRenderInfo.toActualPoints renderInfo) with 
+                        match Seq.length(IPathRenderInfo.toRawPoints renderInfo) with 
                         | 0 -> false
                         | _ -> predicate renderInfo
 
@@ -106,7 +113,7 @@ module RenderInfoSelector =
                     match renderInfo with 
                     | IIntegratedRenderInfo.Path renderInfo -> 
                         //loop (RenderInfoSelector.Text (fun info -> predicate(info :> IIntegratedRenderInfo))) (renderInfo :> IIntegratedRenderInfo)
-                        match Seq.length(IPathRenderInfo.toActualPoints renderInfo) with 
+                        match Seq.length(IPathRenderInfo.toRawPoints renderInfo) with 
                         | 0 -> false    
                         | _ -> predicate renderInfo
 

@@ -215,7 +215,7 @@ type private PdfDocumentCache private
             )
             |> CurrentDocumentImage.XObject
 
-    member internal x.GetOrCreatePatternColor_FromOtherDocument(otherDocumentPage: PdfPage, patternColor: PatternColor) =
+    member internal x.GetOrCreatePatternColor_FromOtherDocument(patternColor: PatternColor) =
             match patternColor.GetColorSpace() with 
             | :? PdfSpecialCs.UncoloredTilingPattern as colorSpace ->
                 match colorSpace.GetPdfObject() with 
@@ -271,7 +271,7 @@ type private PdfDocumentCache private
                     )
 
 
-    member internal x.GetOrCreateDeviceN_FromOtherDocument(otherDocumentPage: PdfPage, colorspace: PdfSpecialCs.DeviceN, color: FsDeviceN) =
+    member internal x.GetOrCreateDeviceN_FromOtherDocument(colorspace: PdfSpecialCs.DeviceN, color: FsDeviceN) =
         deviceNCache_hashable_fromOtherDocument.GetOrAdd(color, fun _ ->
             let pdfObject = colorspace.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false) :?> PdfArray
             let cs = PdfSpecialCs.DeviceN(pdfObject)
@@ -522,7 +522,7 @@ and PdfDocumentWithCachedResources =
             |> Some
         | _ -> None
 
-    member x.Renew_OtherDocument_Color(otherDocumentPage: PdfPage, otherDocumentColor: Color) =
+    member x.Renew_OtherDocument_Color(otherDocumentColor: Color) =
         match (FsColor.OfItextColor otherDocumentColor) with
         | FsColor.Separation v ->
             x.GetOrCreateColor(PdfCanvasColor.Separation v)
@@ -531,7 +531,7 @@ and PdfDocumentWithCachedResources =
         | FsColor.ValueColor color -> color.ToItextColor()
 
         | FsColor.PatternColor patternColor ->
-            x.cache.GetOrCreatePatternColor_FromOtherDocument(otherDocumentPage, patternColor) :> Color
+            x.cache.GetOrCreatePatternColor_FromOtherDocument(patternColor) :> Color
 
         | FsColor.ShadingColor shadingColor -> 
             //failwithf "Invalid token, this feature was defined in Renew_OtherDocument_PdfShading"
@@ -540,7 +540,7 @@ and PdfDocumentWithCachedResources =
             otherDocumentColor
             
         | FsColor.DeviceN (colorspace, deviceN) -> 
-            x.cache.GetOrCreateDeviceN_FromOtherDocument(otherDocumentPage, colorspace, deviceN) :> Color
+            x.cache.GetOrCreateDeviceN_FromOtherDocument(colorspace, deviceN) :> Color
 
     member x.Renew_OtherDocument_Image(otherDocumentImage: ImageRenderInfo) =
         x.cache.GetOrCreateImage_FromOtherDocument(otherDocumentImage)

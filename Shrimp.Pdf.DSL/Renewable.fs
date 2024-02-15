@@ -347,10 +347,10 @@ module _Renewable =
                     canvas
             )
 
-        member info.CopyToDocument(document: PdfDocumentWithCachedResources, writerResources, readerPage) =
+        member info.CopyToDocument(document: PdfDocumentWithCachedResources, writerResources) =
             { info with 
-                FillColor = document.Renew_OtherDocument_Color (readerPage, info.FillColor)
-                StrokeColor = document.Renew_OtherDocument_Color (readerPage, info.StrokeColor)
+                FillColor = document.Renew_OtherDocument_Color (info.FillColor)
+                StrokeColor = document.Renew_OtherDocument_Color (info.StrokeColor)
                 FillShading = 
                     document.Renew_OtherDocument_PdfShading(writerResources, info.FillColor)
                 StrokeShading =
@@ -464,10 +464,10 @@ module _Renewable =
                 |> PdfCanvas.endText
             )
         
-        member info.CopyToDocument(document: PdfDocumentWithCachedResources, writerResources,  readerPage) =
+        member info.CopyToDocument(document: PdfDocumentWithCachedResources, writerResources) =
             { info with 
-                FillColor = document.Renew_OtherDocument_Color (readerPage, info.FillColor)
-                StrokeColor = document.Renew_OtherDocument_Color (readerPage, info.StrokeColor)
+                FillColor = document.Renew_OtherDocument_Color (info.FillColor)
+                StrokeColor = document.Renew_OtherDocument_Color (info.StrokeColor)
                 Font = document.Renew_OtherDocument_Font(info.Font)
                 FillShading = 
                     document.Renew_OtherDocument_PdfShading(writerResources, info.FillColor)
@@ -728,14 +728,14 @@ module _Renewable =
             | RenewableInfo.Image info -> info.GsStates
 
 
-        member info.CopyToDocument(document, writerResources, readerPage: PdfPage) =
+        member info.CopyToDocument(document, writerResources) =
             match info with 
             | RenewableInfo.Path info -> 
-                info.CopyToDocument(document, writerResources, readerPage)
+                info.CopyToDocument(document, writerResources)
                 |> RenewableInfo.Path
 
             | RenewableInfo.Text info -> 
-                info.CopyToDocument(document, writerResources, readerPage)
+                info.CopyToDocument(document, writerResources)
                 |> RenewableInfo.Text
 
             | RenewableInfo.Image info ->
@@ -771,3 +771,21 @@ module _Renewable =
         let asPath = function
             | RenewableInfo.Path v -> Some v
             | _ -> None
+
+    type IntegratedRenderInfoIM with
+        member info.Renewable() =
+            match info with 
+            | IntegratedRenderInfoIM.Vector info ->
+                match info with 
+                | IIntegratedRenderInfo.Path pathInfo -> 
+                    let pathInfo = pathInfo.Renewable()
+                    pathInfo
+                    |> RenewableInfo.Path
+
+                | IIntegratedRenderInfo.Text textInfo -> 
+                    textInfo.Renewable()
+                    |> RenewableInfo.Text
+
+            | IntegratedRenderInfoIM.Pixel image ->
+                image.Renewable()
+                |> RenewableInfo.Image

@@ -82,15 +82,178 @@ module _Extract =
     [<RequireQualifiedAccess>]
     type internal TargetRenewablePageInfo<'userState> =
         | EmptyPage of TargetPageBox
-        | NewPageCase of TargetPageBox * TargetRenewableNewPageInfoElement * writerPageSetter: (SlimWriterPageSetter)
+        | NewPageCase of TargetPageBox * TargetRenewableNewPageInfoElement * writerPageSetter: (SlimWriterPageSetter) * background: SlimBackground option
         | Non
         | NewInfosInOriginPage of TargetNewInfosInOriginPageElement list
         | SplitToTwoPages of 
              RenewableInfo list * Selector<'userState> * pageboxSetter: ExtractToTwoPages_PageBoxSetter * secondarySelector: (Rectangle -> Selector<'userState>) option
 
     type internal TargetRenewablePageInfo =
-        static member NewPage(targetPageBox, targetElement, ?writerPageSetter) =
-            TargetRenewablePageInfo.NewPageCase(targetPageBox, targetElement, defaultArg writerPageSetter SlimWriterPageSetter.Ignore)
+        static member NewPage(targetPageBox, targetElement, ?writerPageSetter, ?background) =
+            TargetRenewablePageInfo.NewPageCase(
+                targetPageBox,
+                targetElement,
+                defaultArg writerPageSetter SlimWriterPageSetter.Ignore,
+                background
+            )
+
+
+    let internal writeInfos writer (writerPageBox: Rectangle) writerCanvas (infos: RenewableInfo list) =
+        let maxLevel = 
+            infos
+            |> List.map(fun m -> m.ContainerID.Length)
+            |> List.max
+            |> fun m -> m - 1
+
+        let rec loop (writerCanvas: OffsetablePdfCanvas) (xobjectGsState: al1List<FsParserGraphicsStateValue> option) (level: int) (infos: RenewableInfo list) =
+            match level = maxLevel, xobjectGsState with 
+            | true, None -> 
+                infos
+                |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.XObjectClippingBoxState.Serializable)
+                |> List.iter(fun (xobjectRect, infos) ->
+                    let infos = infos.AsList
+                    let writeInfos() =
+                        infos
+                        |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.ClippingPathInfoState)
+                        |> List.iter(fun (clippingPathInfo, infos) ->   
+                            let infos = infos.AsList
+                            let writeInfos() =
+                                for info in infos do
+                                    info.CopyToDocument(writer, writerCanvas.GetResources()).ApplyCtm_WriteToCanvas(writerCanvas)
+    
+                            match clippingPathInfo with 
+                            | ClippingPathInfoState.Init -> writeInfos()
+                            | ClippingPathInfoState.Intersected (clippingPathInfo) -> 
+                                clippingPathInfo.Renewable().ApplyCtm_WriteToCanvas(writerCanvas, (fun writerCanvas ->
+                                    writeInfos()
+                                    writerCanvas
+                                ))
+                        )
+
+                    match xobjectRect with 
+                    | SerializableXObjectClippingBoxState.IntersectedNone -> failwith "Invalid token: visble render info XObjectClippingBoxState cannot be IntersectedNone"
+                    | SerializableXObjectClippingBoxState.Init -> writeInfos() 
+                    | SerializableXObjectClippingBoxState.IntersectedSome rect ->
+                        match rect.Width, rect.Height with 
+                        | BiggerThan MAXIMUM_MM_WIDTH, BiggerThan MAXIMUM_MM_WIDTH -> writeInfos()
+                        | _ ->
+                            PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
+                                writerCanvas
+                                    .Rectangle(rect.AsRectangle)
+                                    .Clip()
+                                    .EndPath()
+                                    |> ignore
+
+                                writeInfos()
+
+                                writerCanvas
+
+                            )
+                    )
+            | _ ->
+
+                match xobjectGsState with 
+                | Some gsStates ->
+                    let gsState =
+                        gsStates
+                        |> AtLeastOneList.map(fun m -> m.FsExtState)
+                        |> FsExtGState.Concat
+
+                    writerCanvas.SaveState() |> ignore
+
+                    gsState.Renewable().ApplyCtm_WriteToCanvas(writerCanvas)
+                    //gsState.AsList
+                    //|> List.iter(fun gsState ->
+                    //    gsState.Renewable().ApplyCtm_WriteToCanvas(writerCanvas)
+                    //)
+                    let rect = 
+                        infos
+                        |> List.map(fun m -> m.VisibleBound)
+                        |> AtLeastOneList.Create
+                        |> Rectangle.ofRectangles
+
+                    let writerCanvas2 = 
+                        let offset_X = writerCanvas.XOffset + rect.GetX() - writerPageBox.GetX()
+                        let offset_Y = writerCanvas.YOffset + rect.GetY() - writerPageBox.GetY()
+           
+                        let xobject = PdfFormXObject(rect)
+                        writerCanvas.AddXObject(xobject) |> ignore
+                        let group = PdfTransparencyGroup()
+                        group.SetIsolated(false)
+                        group.SetKnockout(false)
+                        xobject.SetGroup(group) |> ignore
+                        OffsetablePdfCanvas(xobject, writer, offset_X, offset_Y)
+                
+                    loop writerCanvas2 None level infos
+
+                    writerCanvas.RestoreState()
+                    |> ignore
+
+
+                | None ->
+                    infos
+                    |> List.splitIfChangedByKey(fun m ->
+                         m.ContainerID.[0..level+1]
+                    )
+                    |> List.iter(fun ((containerID), infos) ->
+                        let isXObject = containerID.Length = level + 2 
+                        match isXObject with 
+                        | true ->
+                            infos.AsList
+                            |> List.splitIfChangedByKey(fun m -> 
+                                m.GsStates.AsList.[level].CustomHashCode
+                            )
+
+                            |> List.iter(fun (customHashCode, infos1) -> 
+                                let goToNext() =
+                                    let gsStates = 
+                                        infos1.Head.GsStates.AsList.[level].AsList
+
+                                    match gsStates with 
+                                    | [] -> loop writerCanvas (None) (level+1) infos1.AsList
+                                    | _ ->
+                                        loop writerCanvas (AtLeastOneList.TryCreate gsStates) (level+1) infos1.AsList
+
+                                        //failwithf ""
+                                        //let gsStatesCtnIds = gsStates.[level].ContainerID
+                                        //match gsStatesCtnIds = containerID.[0..level+1] with 
+                                        //| true -> 
+                                        //    let gsStates = 
+                                        //        gsStates
+                                        //        |> List.tryItem level
+                                        //        |> Option.toList
+
+                                        //    loop writerCanvas (AtLeastOneList.TryCreate gsStates) (level+1) infos1.AsList
+
+                                        //| false -> 
+                                        //    match gsStatesCtnIds = containerID.[0..level] with
+                                        //    | true ->
+                                        //        let gsStates = 
+                                        //            gsStates
+                                        //            |> List.tryItem level
+                                        //            |> Option.toList
+
+                                        //        loop writerCanvas (AtLeastOneList.TryCreate gsStates) (level+1) infos1.AsList
+                                        //    | false -> failwithf "Not implemented"
+                                    
+
+                                match infos1.Length = infos.Length with 
+                                | true -> goToNext()
+                                | false -> goToNext()
+                                    //let r = 
+                                    //    infos.AsList
+                                    //    |> List.map(fun m -> m.ContainerID, m.GsStates.[0..level])
+                                    //    |> List.distinctBy snd
+                                    //failwithf "Not implemented %A" r
+                            )
+                        | false -> loop writerCanvas None (level+1) infos.AsList
+
+                    )
+
+
+        loop writerCanvas None 0 infos
+
+
 
     let internal extractVisibleRenewableInfosToWriter 
         (configuration: Configuration)
@@ -134,21 +297,7 @@ module _Extract =
 
             infos
             |> List.map(fun info ->
-                match info with 
-                | IntegratedRenderInfoIM.Vector info ->
-                    match info with 
-                    | IIntegratedRenderInfo.Path pathInfo -> 
-                        let pathInfo = pathInfo.Renewable()
-                        pathInfo
-                        |> RenewableInfo.Path
-
-                    | IIntegratedRenderInfo.Text textInfo -> 
-                        textInfo.Renewable()
-                        |> RenewableInfo.Text
-
-                | IntegratedRenderInfoIM.Pixel image ->
-                    image.Renewable()
-                    |> RenewableInfo.Image
+                info.Renewable()
             )
 
         stopWatch.Stop()
@@ -179,161 +328,8 @@ module _Extract =
             let writeAreaInfos (element: TargetNewInfosElementUnion) (writerCanvas: OffsetablePdfCanvas) (writerPage: PdfPage) =
                 let pageBox = writerPage.GetActualBox()
                 let infos = element.Infos
-                let writeInfos(infos: RenewableInfo list) =
-                    let maxLevel = 
-                        infos
-                        |> List.map(fun m -> m.ContainerID.Length)
-                        |> List.max
-                        |> fun m -> m - 1
 
-                    let rec loop (writerCanvas: OffsetablePdfCanvas) (xobjectGsState: al1List<FsParserGraphicsStateValue> option) (level: int) (infos: RenewableInfo list) =
-                        match level = maxLevel, xobjectGsState with 
-                        | true, None -> 
-                            infos
-                            |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.XObjectClippingBoxState.Serializable)
-                            |> List.iter(fun (xobjectRect, infos) ->
-                                let infos = infos.AsList
-                                let writeInfos() =
-                                    infos
-                                    |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.ClippingPathInfoState)
-                                    |> List.iter(fun (clippingPathInfo, infos) ->   
-                                        let infos = infos.AsList
-                                        let writeInfos() =
-                                            for info in infos do
-                                                info.CopyToDocument(writer, writerCanvas.GetResources(), readerPage).ApplyCtm_WriteToCanvas(writerCanvas)
-                
-                                        match clippingPathInfo with 
-                                        | ClippingPathInfoState.Init -> writeInfos()
-                                        | ClippingPathInfoState.Intersected (clippingPathInfo) -> 
-                                            clippingPathInfo.Renewable().ApplyCtm_WriteToCanvas(writerCanvas, (fun writerCanvas ->
-                                                writeInfos()
-                                                writerCanvas
-                                            ))
-                                    )
-
-                                match xobjectRect with 
-                                | SerializableXObjectClippingBoxState.IntersectedNone -> failwith "Invalid token: visble render info XObjectClippingBoxState cannot be IntersectedNone"
-                                | SerializableXObjectClippingBoxState.Init -> writeInfos() 
-                                | SerializableXObjectClippingBoxState.IntersectedSome rect ->
-                                    match rect.Width, rect.Height with 
-                                    | BiggerThan MAXIMUM_MM_WIDTH, BiggerThan MAXIMUM_MM_WIDTH -> writeInfos()
-                                    | _ ->
-                                        PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
-                                            writerCanvas
-                                                .Rectangle(rect.AsRectangle)
-                                                .Clip()
-                                                .EndPath()
-                                                |> ignore
-
-                                            writeInfos()
-
-                                            writerCanvas
-
-                                        )
-                                )
-                        | _ ->
-
-                            match xobjectGsState with 
-                            | Some gsStates ->
-                                let gsState =
-                                    gsStates
-                                    |> AtLeastOneList.map(fun m -> m.FsExtState)
-                                    |> FsExtGState.Concat
-
-                                writerCanvas.SaveState() |> ignore
-
-                                gsState.Renewable().ApplyCtm_WriteToCanvas(writerCanvas)
-                                //gsState.AsList
-                                //|> List.iter(fun gsState ->
-                                //    gsState.Renewable().ApplyCtm_WriteToCanvas(writerCanvas)
-                                //)
-                                let rect = 
-                                    infos
-                                    |> List.map(fun m -> m.VisibleBound)
-                                    |> AtLeastOneList.Create
-                                    |> Rectangle.ofRectangles
-
-                                let writerCanvas2 = 
-                                    let offset_X = writerCanvas.XOffset + rect.GetX() - pageBox.GetX()
-                                    let offset_Y = writerCanvas.YOffset + rect.GetY() - pageBox.GetY()
-                       
-                                    let xobject = PdfFormXObject(rect)
-                                    writerCanvas.AddXObject(xobject) |> ignore
-                                    let group = PdfTransparencyGroup()
-                                    group.SetIsolated(false)
-                                    group.SetKnockout(false)
-                                    xobject.SetGroup(group) |> ignore
-                                    OffsetablePdfCanvas(xobject, writer, offset_X, offset_Y)
-                            
-                                loop writerCanvas2 None level infos
-
-                                writerCanvas.RestoreState()
-                                |> ignore
-
-
-                            | None ->
-                                infos
-                                |> List.splitIfChangedByKey(fun m ->
-                                     m.ContainerID.[0..level+1]
-                                )
-                                |> List.iter(fun ((containerID), infos) ->
-                                    let isXObject = containerID.Length = level + 2 
-                                    match isXObject with 
-                                    | true ->
-                                        infos.AsList
-                                        |> List.splitIfChangedByKey(fun m -> 
-                                            m.GsStates.AsList.[level].CustomHashCode
-                                        )
-
-                                        |> List.iter(fun (customHashCode, infos1) -> 
-                                            let goToNext() =
-                                                let gsStates = 
-                                                    infos1.Head.GsStates.AsList.[level].AsList
-
-                                                match gsStates with 
-                                                | [] -> loop writerCanvas (None) (level+1) infos1.AsList
-                                                | _ ->
-                                                    loop writerCanvas (AtLeastOneList.TryCreate gsStates) (level+1) infos1.AsList
-
-                                                    //failwithf ""
-                                                    //let gsStatesCtnIds = gsStates.[level].ContainerID
-                                                    //match gsStatesCtnIds = containerID.[0..level+1] with 
-                                                    //| true -> 
-                                                    //    let gsStates = 
-                                                    //        gsStates
-                                                    //        |> List.tryItem level
-                                                    //        |> Option.toList
-
-                                                    //    loop writerCanvas (AtLeastOneList.TryCreate gsStates) (level+1) infos1.AsList
-
-                                                    //| false -> 
-                                                    //    match gsStatesCtnIds = containerID.[0..level] with
-                                                    //    | true ->
-                                                    //        let gsStates = 
-                                                    //            gsStates
-                                                    //            |> List.tryItem level
-                                                    //            |> Option.toList
-
-                                                    //        loop writerCanvas (AtLeastOneList.TryCreate gsStates) (level+1) infos1.AsList
-                                                    //    | false -> failwithf "Not implemented"
-                                                
-
-                                            match infos1.Length = infos.Length with 
-                                            | true -> goToNext()
-                                            | false -> goToNext()
-                                                //let r = 
-                                                //    infos.AsList
-                                                //    |> List.map(fun m -> m.ContainerID, m.GsStates.[0..level])
-                                                //    |> List.distinctBy snd
-                                                //failwithf "Not implemented %A" r
-                                        )
-                                    | false -> loop writerCanvas None (level+1) infos.AsList
-
-                                )
-
-
-                    loop writerCanvas None 0 infos
-
+                let writeInfos infos = writeInfos writer pageBox writerCanvas infos
 
                 let infoChoices(boundPredicate) =   
                     let infoChoices =
@@ -548,17 +544,36 @@ module _Extract =
                         |> ignore
 
                 | TargetRenewablePageInfo.Non -> ()
-                | TargetRenewablePageInfo.NewPageCase (targetPageBox, infos, writerPageSetter) ->
-
-                    let writerPage, writerCanvas = writerPageSetter.GenerateWriterPageAndCanvas(readerPage, writer)
+                | TargetRenewablePageInfo.NewPageCase (targetPageBox, infos, writerPageSetter, background) ->
+                    let writerPage, writerCanvas = writerPageSetter.GenerateWriterPageAndCanvas(readerPage, writer, background, writeInfos)
                             
+                    let layerOptions =
+                        match background with 
+                        | None -> None
+                        | Some background -> background.LayerName
+
                     PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
-                        writerCanvas
-                            .WriteLiteral("0 G\n")
-                            .WriteLiteral("0 g\n")
+                        let writeInfos() = 
+                            writerCanvas
+                                .WriteLiteral("0 G\n")
+                                .WriteLiteral("0 g\n")
+                                |> ignore
+
+                            writeAreaInfos (TargetNewInfosElementUnion.NewPageInfo infos) writerCanvas writerPage
+
+                        match layerOptions with 
+                        | None -> writeInfos()
+                        | Some layerName -> 
+                            let currentLayer = layerName.CurrentLayer.CreateLayer(writer)
+                            writerCanvas.BeginLayerUnion(currentLayer)
                             |> ignore
 
-                        writeAreaInfos (TargetNewInfosElementUnion.NewPageInfo infos) writerCanvas writerPage
+                            writeInfos()
+
+                            writerCanvas.EndLayerUnion(currentLayer)
+                            |> ignore
+
+                        
                         writerCanvas
 
                     ) |> ignore
@@ -619,7 +634,7 @@ module _Extract =
 
 
     type Reuses with
-        static member ExtractIM(pageSelector: PageSelector, selector, ?slimFlow: SlimFlowUnion<_, _>,?keepOriginPage) =    
+        static member ExtractIM(pageSelector: PageSelector, selector, ?slimFlow: SlimFlowUnion<_, _>, ?keepOriginPage) =    
             let keepOriginPage = defaultArg keepOriginPage false
             fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
                 let flowModel =
@@ -631,6 +646,8 @@ module _Extract =
                 let totalNumberOfPages = reader.GetNumberOfPages()
                 let pageNumbers = reader.GetPageNumbers(pageSelector)
                 let borderKeepingPageNumbers = [1..totalNumberOfPages]
+
+
 
                 pageNumbers
                 |> List.iter(fun pageNumber ->
@@ -653,7 +670,9 @@ module _Extract =
                                 let r = slimFlow.Invoke flowModel args (RenewableInfos.Create infos) SlimWriterPageSetter.Ignore
                                 let infos = r.Infos.AsList
                                 let writerPageSetter = r.WriterPageSetter
-                                [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers), writerPageSetter)]
+                                let background = r.Infos.Background
+
+                                [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers), writerPageSetter, ?background = background)]
                         )
                         keepOriginPage
                         ignore

@@ -2884,10 +2884,10 @@ type Modify =
 
                                     let doc = (args.Page.GetDocument() :?> PdfDocumentWithCachedResources)
                                     let fillColor = 
-                                        doc.Renew_OtherDocument_Color(args.Page, head.FillColor)
+                                        doc.Renew_OtherDocument_Color(head.FillColor)
 
                                     let strokeColor = 
-                                        doc.Renew_OtherDocument_Color(args.Page, head.StrokeColor)
+                                        doc.Renew_OtherDocument_Color(head.StrokeColor)
 
                                     PdfCanvas.setPathRenderColorByOperation head.Operation fillColor strokeColor pdfCanvas |> ignore
                                     pdfCanvas.EoFill() |> ignore

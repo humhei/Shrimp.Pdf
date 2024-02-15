@@ -1,5 +1,6 @@
 ﻿namespace Shrimp.Pdf.SlimFlow
 #nowarn "0104"
+open System.Collections
 open Shrimp.Pdf
 open Shrimp.Pdf.Colors
 open Shrimp.Pdf.Extensions
@@ -78,6 +79,22 @@ with
                     | None -> margin.Value
                     | Some rotation -> margin.Value.Rotate(rotation)
 
+                let margin = 
+                    match x.Scale with 
+                    | None -> margin
+                    | Some (scaleX, scaleY) -> 
+                        //let halfWidth = (1. - scaleX) * (margin.Right - margin.Left) / 2.
+                        //let halfHeight = (1. - scaleY) * (margin.Top - margin.Bottom) / 2.
+                        //{ Left = margin.Left - halfWidth
+                        //  Right = margin.Right + halfWidth
+                        //  Top = margin.Top + halfHeight
+                        //  Bottom = margin.Bottom - halfHeight }
+
+                        { Left = margin.Left * scaleX 
+                          Right = margin.Right * scaleX 
+                          Top = margin.Top * scaleY
+                          Bottom = margin.Bottom * scaleY }
+
                 let pageBox = writerPage.GetActualBox()
                 match x.Origin with 
                 | None ->
@@ -112,32 +129,69 @@ type SlimWriterPageSetter =
       Index: int }
 with 
 
-    member writerPageSetter.GenerateWriterPageAndCanvas(readerPage: PdfPage, writer: PdfDocument) =
-        let writerPage, writerCanvas = 
-            let actualBox = readerPage.GetActualBox()
+    member writerPageSetter.GenerateWriterPageAndCanvas(readerPage: PdfPage, writer: PdfDocument, background: SlimBackground option, writeInfos) =
+        let actualBox = readerPage.GetActualBox()
 
-            let rec writeInPage (transforms: AffineTransformRecord list) =
+        let writerPage = writer.AddNewPage(PageSize(actualBox))
+
+        let writerCanvas = 
+            let writerCanvas = new OffsetablePdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
+            
+            match background with 
+            | None -> ()
+            | Some background ->
+                let backgroundPositionTweak = 
+                    background.BackgroundPositionTweak
+                    |> Option.defaultValue ((fun _ -> BackgroundPositionTweak.DefaultValue) )
+                    >> fun tweak ->     
+                        let tweak = 
+                            match writerPageSetter.SetPageBox_Origin with 
+                            | None -> tweak
+                            | Some origin ->
+                                match origin with 
+                                | PageBoxOrigin.LeftBottom -> 
+                                    let pageBox = writerPage.GetActualBox()
+                                    tweak.Offset(-pageBox.GetXF(), -pageBox.GetYF())
+
+                        let tweak = 
+                            match writerPageSetter.PageBoxSetter with 
+                            | None -> tweak
+                            | Some pageBoxSetter ->
+                                match pageBoxSetter.Scale with 
+                                | None -> tweak
+                                | Some scale -> tweak.SetScale(Some scale)
+
+                        tweak
+
+
+                writerPage.AddBackgroundOrForegroundImage(
+                    1,
+                    new Concurrent.ConcurrentDictionary<_, _>(),
+                    RenewableBackgroundImageFile.SlimBackground (writeInfos, background),
+                    background.Choice,
+                    ?layerName               = background.LayerName,
+                    ?xEffect                 = background.XEffect,
+                    ?yEffect                 = background.YEffect,
+                    ?shadowColor             = background.ShadowColor,
+                    ?extGSState              = background.ExtGsState,
+                    backgroundPositionTweak  = backgroundPositionTweak
+                )
+
+            let writeInPage (transforms: AffineTransformRecord list) =
                 match transforms with 
-                | [] ->
-                    let writerPage = writer.AddNewPage(PageSize(actualBox))
-
-                    let writerCanvas = new OffsetablePdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
-                    writerPage, writerCanvas
+                | [] -> writerCanvas
 
                 | transforms ->
                     let transform = 
                         transforms
                         |> List.reduce(fun a b -> a.Concatenate(b))
 
-                    let writerPage = writer.AddNewPage(PageSize actualBox)
-
-                    let writerCanvas = new OffsetablePdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
                     let xobject = PdfFormXObject(actualBox)
                     PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
                         writerCanvas.AddXObject(xobject, transform)
                     ) |> ignore
 
-                    writerPage, new OffsetablePdfCanvas(xobject, writer)
+                    new OffsetablePdfCanvas(xobject, writer)
 
             let transforms = 
                 match writerPageSetter.PageBoxSetter with 
@@ -178,12 +232,12 @@ with
                                         )
                                     | Rotation.None -> failwithf "Invalid token" 
 
-                                let offset2 =
-                                    AffineTransformRecord.ofAffineTransform(
-                                        AffineTransform.GetTranslateInstance(
-                                        -actualBox.GetXF(),
-                                        -actualBox.GetYF())
-                                    )
+                                //let offset2 =
+                                //    AffineTransformRecord.ofAffineTransform(
+                                //        AffineTransform.GetTranslateInstance(
+                                //        -actualBox.GetXF(),
+                                //        -actualBox.GetYF())
+                                //    )
                                     //match rotation with 
                                     //| Rotation.Clockwise -> 
                                     //    AffineTransformRecord.ofAffineTransform(
@@ -259,6 +313,8 @@ with
 
             writeInPage transforms
 
+
+
         writerPage, writerCanvas
 
     member x.IsIgnore = 
@@ -283,6 +339,9 @@ module SlimWriterPageSetter =
         | true -> Ignore ()
         | false -> Some setter
 
+
+
+
 type SlimFlowResult<'userState> =
     { Infos: RenewableInfos 
       WriterPageSetter: SlimWriterPageSetter
@@ -295,10 +354,11 @@ with
 
 type SlimFlowFunc<'userState, 'newUserState> = FlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>
 
-type SlimFlow<'userState, 'newUserState>(f: FlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>, ?flowName: FlowName) =
+type SlimFlow<'userState, 'newUserState>(f: FlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>, ?flowName: FlowName, ?background) =
     member internal x.SetFlowName(flowName: FlowName) =
         SlimFlow(f, flowName)
 
+    member x.Background: SlimBackground option = background
 
     member x.FlowName = flowName
 

@@ -29,6 +29,8 @@ with
         let (BackgroundFile (_, v, _)) = x
         v
 
+    member x.Name = Path.GetFileNameWithoutExtension x.Value.Path
+
     member internal x.CurrentRotation = 
         let (BackgroundFile (_, _, value)) = x
         value

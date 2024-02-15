@@ -1,38 +1,72 @@
 ﻿namespace Shrimp.Pdf.SlimFlow
+
 #nowarn "0104"
 open Shrimp.Pdf
 open Shrimp.Pdf.Colors
-open Shrimp.Pdf.Extensions
-open Shrimp.Pdf.DSL
-open iText.Kernel.Pdf
-open iText.Kernel.Pdf.Xobject
-open iText.Kernel.Geom
-open iText.Kernel.Pdf.Canvas
-open System
 open Shrimp.FSharp.Plus
+open Shrimp.Pdf.Extensions
+open iText.Kernel.Geom
+
+
 
 type RenewableInfos = 
     { Infos: RenewableInfo list 
-      IsCuttingDieSetted: bool }
+      IsCuttingDieSetted: bool
+      Background: SlimBackground option }
 with 
     static member Create(infos) =
         { Infos = infos 
-          IsCuttingDieSetted = false }
+          IsCuttingDieSetted = false
+          Background = None }
 
     member x.AsList = x.Infos
 
-    member x.MapInfos(f) =
-        {x with Infos = f x.Infos }
+    member x.MapInfos(name, f) =
+        match x.Background with 
+        | None -> ()
+        | Some bk -> 
+            bk.ModifyInfos(name, f)
+
+        {x with 
+            Infos = f x.Infos
+        }
+
+    member x.FilterInfos(name, f) =
+        let bkInfos = 
+            match x.Background with 
+            | None -> []
+            | Some bk -> 
+                bk.FilterInfos(name, f)
+
+        let infos = List.filter f x.Infos
+        infos @ bkInfos
+
+    member x.ChooseInfos(name, f) =
+        let bkInfos = 
+            match x.Background with 
+            | None -> []
+            | Some bk -> 
+                bk.ChooseInfos(name, f)
+
+        let infos = List.choose f x.Infos
+        infos @ bkInfos
+
+    member x.CollectInfos(name, f) =
+        let bkInfos = 
+            match x.Background with 
+            | None -> []
+            | Some bk -> 
+                bk.CollectInfos(name, f)
+
+        let infos = f x.Infos
+        infos @ bkInfos
 
     member x.AllPaths() =
-        x.MapInfos(fun infos ->
-            infos
-            |> List.filter(fun m -> 
-                match m with 
-                | RenewableInfo.Image _ -> false
-                | RenewableInfo.Path info -> true
-                | RenewableInfo.Text info -> false
-            )
+        x.FilterInfos("AllPaths", fun m -> 
+            match m with 
+            | RenewableInfo.Image _ -> false
+            | RenewableInfo.Path info -> true
+            | RenewableInfo.Text info -> false
         )
 
 
@@ -41,7 +75,7 @@ with
         | true -> x
         | false ->
             let r = 
-                x.MapInfos(List.map(fun m ->
+                x.MapInfos("SetCuttingDie", List.map(fun m ->
                     match m with 
                     | RenewableInfo.Path info ->
                         match info.LazyStrokeColor with 
@@ -62,59 +96,47 @@ with
 
 
     member x.CuttingDieInfos() =
-        x.MapInfos(List.filter(fun m ->
+        x.FilterInfos("CuttingDieInfos", fun m ->
             match m with 
             | RenewableInfo.Path info -> info.Tag = RenewablePathInfoTag.CuttingDie
             | RenewableInfo.Image _
             | RenewableInfo.Text _ -> false
-        ))
+        )
+
+    member x.CuttingDieInfosBound() =
+        x.CuttingDieInfos()
+        |> List.map(fun m -> m.VisibleBound)
+        |> AtLeastOneList.TryCreate
+        |> Option.map Rectangle.ofRectangles
         
 
     member x.AllColors() =
-        x.AsList
-        |> List.collect(fun m -> 
-            match m with 
-            | RenewableInfo.Image _ -> []
-            | RenewableInfo.Path info -> [info.LazyFillColor; info.LazyStrokeColor]
-            | RenewableInfo.Text info -> [info.LazyFillColor; info.LazyStrokeColor]
+        x.CollectInfos("AllColors", fun infos ->
+            infos
+            |> List.collect(fun info -> 
+                match info with 
+                | RenewableInfo.Image _ -> []
+                | RenewableInfo.Path info -> [info.LazyFillColor; info.LazyStrokeColor]
+                | RenewableInfo.Text info -> [info.LazyFillColor; info.LazyStrokeColor]
+            )
+            |> List.choose id
+            |> FsColors.distinct
+            |> List.ofSeq
         )
-        |> List.choose id
         |> FsColors.distinct
         |> List.ofSeq
 
     member x.SetColor() =
-        x.MapInfos(List.map(fun m -> m.SetColor()))
-
-    member x.Select(f) =
-        x.MapInfos(List.filter(fun m -> f m))
-
-    member x.SelectPath(f) =
-        x.MapInfos(List.filter(fun m -> 
-            match m with 
-            | RenewableInfo.Path info -> f info
-            | RenewableInfo.Text _ -> false
-            | RenewableInfo.Image _ -> false
-
-        ))
-
-    member x.SelectText(f) =
-        x.MapInfos(List.filter(fun m -> 
-            match m with 
-            | RenewableInfo.Text info -> f info
-            | RenewableInfo.Path _ -> false
-            | RenewableInfo.Image _ -> false
-        ))
-
+        x.MapInfos("SetColor", List.map(fun m -> m.SetColor()))
 
 
     member x.VisibleBound() =
-        match AtLeastOneList.TryCreate x.AsList with 
-        | None -> None
-        | Some infos ->
-            infos
-            |> AtLeastOneList.map(fun m -> m.VisibleBound)
-            |> Rectangle.ofRectangles
-            |> Some
+        x.ChooseInfos("GetVisibleBound", fun info ->
+            Some info.VisibleBound
+        )
+        |> AtLeastOneList.TryCreate
+        |> Option.map Rectangle.ofRectangles
+      
 
 [<RequireQualifiedAccess>]
 type PageBoxOrigin =

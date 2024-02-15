@@ -1,14 +1,8 @@
 ﻿namespace Shrimp.Pdf.SlimFlow
 #nowarn "0104"
 open Shrimp.Pdf
-open Shrimp.Pdf.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
-open iText.Kernel.Pdf
-open iText.Kernel.Pdf.Xobject
-open iText.Kernel.Geom
-open iText.Kernel.Pdf.Canvas
-open System
 open Shrimp.FSharp.Plus
 
 
@@ -19,21 +13,15 @@ type SlimModifyPage =
         let margin = defaultArg margin Margin.Zero
         SlimFlow(fun flowModel args infos pageSetter ->
             let visibleBound = 
-                infos.AsList
-                |> List.map(fun m -> m.VisibleBound)
-                |> List.ofSeq
+                infos.VisibleBound()
 
-            match AtLeastOneList.TryCreate visibleBound with 
+            match visibleBound with 
             | None -> 
                 { Infos = infos 
                   WriterPageSetter = SlimWriterPageSetter.Ignore
                   UserState = () }
                    
-            | Some bounds ->
-                let rect = 
-                    Rectangle.ofRectangles bounds
-                    |> Rectangle.applyMargin margin
-
+            | Some rect ->
                 { Infos = infos 
                   UserState = ()
                   WriterPageSetter = 
@@ -61,6 +49,14 @@ type SlimModifyPage =
         |> SlimFlow.rename 
             "TrimToVisible" 
             [ "margin" => margin.LoggingText ]
+        |> SlimFlowUnion.Flow
+
+    static member AddBackgroundOrForeground(background: SlimBackgroundUnion) =
+        SlimFlow(fun flowModel args infos pageSetter ->
+            { Infos = { infos with Background = Some (background.GetByPageNumber(PageNumber args.PageNum)) } 
+              WriterPageSetter = pageSetter 
+              UserState = flowModel.UserState }
+        )
         |> SlimFlowUnion.Flow
 
     static member MovePageBoxToOrigin() =

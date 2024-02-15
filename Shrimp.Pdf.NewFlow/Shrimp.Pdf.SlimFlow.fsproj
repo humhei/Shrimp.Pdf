@@ -6,6 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="SlimBackground.fs" />
+    <Compile Include="Background.fs" />
     <Compile Include="RenewableInfos.fs" />
     <Compile Include="Invoke.fs" />
     <Compile Include="FlowUnion.fs" />

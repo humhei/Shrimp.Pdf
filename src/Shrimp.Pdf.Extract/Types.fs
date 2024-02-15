@@ -19,7 +19,7 @@ module internal Config =
             |> Configuration.fallBackByApplicationConf
 
 
-    let internal loggingPageCountInterval = 
+    let loggingPageCountInterval = 
         lazy config.Value.GetInt("Shrimp.Pdf.Extract.LoggingPageCountInterval")
 
 //[<AutoOpen>]
