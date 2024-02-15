@@ -2,6 +2,7 @@
 
 #nowarn "0104"
 open Shrimp.Pdf
+open Shrimp.Pdf.DSL
 open Shrimp.Pdf.Colors
 open Shrimp.FSharp.Plus
 open Shrimp.Pdf.Extensions
@@ -137,6 +138,32 @@ with
         |> AtLeastOneList.TryCreate
         |> Option.map Rectangle.ofRectangles
       
+
+    member x.ReplaceColors(colorMappings: ColorMappings) =
+        let text = colorMappings.LoggingText
+        let picker = colorMappings.AsPicker()
+        x.MapInfos("ReplaceColors_ColorMapping:" + text, List.map(fun info ->
+            info.MapColor(fun color ->
+                match picker color with 
+                | Some newColor -> (newColor.ToFsColor())
+                | None -> None
+            )
+        ))
+
+    member x.ReplaceColors(originColors: FsColor list, newColor: FsColor) =
+        let originColorText = 
+            originColors
+            |> List.map(fun m -> m.LoggingText_Raw)
+            |> String.concat "\n"
+
+        let name = sprintf "ReplaceColors_tuple: %A" (originColorText, newColor.LoggingText_Raw)
+        x.MapInfos(name, List.map(fun info ->
+            info.MapColor(fun color ->  
+                match FsColors.contains color originColors with 
+                | true -> Some newColor
+                | false -> None
+            )
+        ))
 
 [<RequireQualifiedAccess>]
 type PageBoxOrigin =

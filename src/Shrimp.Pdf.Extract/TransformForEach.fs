@@ -148,7 +148,10 @@ module _TransformForEach =
                                           Bound = indexedBound 
                                           NewBound = 
                                             { indexedBound with Bound = transform indexedBound }
-                                          BoundPredicate = boundPredicate
+                                          BoundPredicate = fun info ->
+                                            info.Tag = RenewablePathInfoTag.CuttingDie
+                                            || boundPredicate info.OriginInfo
+
                                           BorderKeepingPageNumbers = borderKeepingPageNumbers
                                           TextPickerTagColor =
                                             match textPicker with 

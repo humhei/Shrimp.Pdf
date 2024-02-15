@@ -134,6 +134,8 @@ type SlimModifyPage =
             []
         |> SlimFlowUnion.Flow
 
+        
+
     static member Scale(scaleX, scaleY) =
         SlimFlow(fun flowModel args infos pageSetter ->
             { Infos = infos 

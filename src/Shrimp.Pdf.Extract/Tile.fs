@@ -971,7 +971,10 @@ module _Tile =
                                                             infos,
                                                             borderKeepingPageNumbers,
                                                             ?tagColor = distincterOrTextPicker.TagColor,
-                                                            boundPredicate = boundGroups.[0].BoundPredicate,
+                                                            boundPredicate = fun info ->
+                                                                info.Tag = RenewablePathInfoTag.CuttingDie
+                                                                || boundGroups.[0].BoundPredicate info.OriginInfo
+                                                            ,
                                                             ?rectangleTransform = 
                                                                 match transform with 
                                                                 | None -> None

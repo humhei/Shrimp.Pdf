@@ -1,6 +1,7 @@
 ﻿module SlimFlowTests
 open Expecto
 open Shrimp.Pdf
+open Shrimp.Pdf.DSL
 open Shrimp.Pdf.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Extract
@@ -321,7 +322,35 @@ let manipulatesTests =
 
         pass()
 
-    ftestCase "compose flow test" <| fun _ ->
+    testCase "replace colors" <| fun _ ->
+        let color = FsColor.valueColor (FsDeviceCmyk.Create(0.35f, 0f, 0f, 0f))
+        let replacement = FsColor.CMYK_MAGENTA
+
+        let flow =
+                
+            Flow.Reuse (
+                Reuses.SlimFlows(
+                    PageSelector.All,
+                    slimFlow = (
+                        SlimModifyPage.MapInfos(fun args infos ->
+                            infos
+                                .SetColor()
+                                .SetCuttingDie([FsColor.RGB_BLUE])
+                                .ReplaceColors([color], replacement)
+                        )
+                        <+>
+                        SlimModifyPage.ClearDirtyInfos() 
+                    )
+                )    
+            )   
+
+        flow
+        |> runTest "datas/slimFlow/replace Colors1.pdf" 
+        |> ignore
+
+        pass()
+
+    testCase "compose flow test" <| fun _ ->
         let flow =
             let background = 
                 new SlimBackground(
@@ -338,7 +367,11 @@ let manipulatesTests =
                     slimFlow = (
                         SlimModifyPage.AddBackgroundOrForeground(background)
                         <+>
-                        SlimModifyPage.MapInfos(fun args infos -> infos.SetColor().SetCuttingDie([FsColor.RGB_BLUE]))
+                        SlimModifyPage.MapInfos(fun args infos -> 
+                            infos
+                                .SetColor()
+                                .SetCuttingDie([FsColor.RGB_BLUE])
+                        )
                         <+>
                         SlimModifyPage.ClearDirtyInfos()
                         <+>

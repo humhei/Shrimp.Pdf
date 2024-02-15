@@ -338,7 +338,7 @@ with
         |> AtLeastOneList.Create
         |> ColorMappings
 
-    member internal x.AsPicker() =
+    member x.AsPicker() =
         let (ColorMappings colorMappings) = x
         fun (fsColor: FsColor) ->
             colorMappings.AsList
@@ -350,6 +350,11 @@ with
                 | false -> None
             )
 
+
+    member x.LoggingText =
+        x.AsList
+        |> List.map(fun m -> m.LoggingText)
+        |> String.concat "\n"
 
 
 [<RequireQualifiedAccess>]

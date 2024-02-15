@@ -8,8 +8,13 @@ open System
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
 open iText.Kernel.Pdf
 
+
 module Constants =
+    [<RequireQualifiedAccess>]
+    module PdfName =
+        let CuttingDie = PdfName "CuttingDie"
     
+
     type private AssemblyFinder = AssemblyFinder
 
     let private config = 

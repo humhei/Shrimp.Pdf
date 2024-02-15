@@ -1184,6 +1184,8 @@ module PdfPage =
 
             editor.ParsedRenderInfos
 
+
+
     let removeLayer layerName (page: PdfPage) =
         let ops =   
             { PdfModifyOptions.DefaultValue with RemovingLayer = Some layerName }
@@ -1200,6 +1202,9 @@ module PdfPage =
 
         modifyIM ops selectorModifierMapping page
         |> Seq.map (fun m -> m :?> IIntegratedRenderInfo)
+
+
+
 
          
 

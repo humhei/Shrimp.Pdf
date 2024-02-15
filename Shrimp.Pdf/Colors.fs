@@ -846,16 +846,7 @@ module _Colors =
               BaseColor = color
               Transparency = defaultArg transparency 1. }
 
-        static member Registration =
-            { Name = "All";
-              BaseColor = 
-                FsValueColor.Cmyk 
-                    { C = 1.f 
-                      M = 1.f 
-                      Y = 1.f 
-                      K = 1.f  }
-              Transparency = 1.
-            }
+
 
         static member IsEqual(color1: FsSeparation, color2: FsSeparation, valueEqualOptions: ValueEqualOptions) =
             color1.Name.EqualIC color2.Name
@@ -896,6 +887,19 @@ module _Colors =
             { BaseColor = FsValueColor.Lab fsValueColor
               Name = separationName1
               Transparency = 1. }
+
+    [<RequireQualifiedAccess>]
+    module FsSeparation =
+        let Registration =
+            { Name = "All";
+              BaseColor = 
+                FsValueColor.Cmyk 
+                    { C = 1.f 
+                      M = 1.f 
+                      Y = 1.f 
+                      K = 1.f  }
+              Transparency = 1.
+            }
 
     [<RequireQualifiedAccess>]
     module DeviceRgb =
@@ -2032,6 +2036,28 @@ module _Colors =
         | Registration
 
     with 
+        member x.ToFsColor() =
+            match x with 
+            | PdfCanvasColor.Value      color -> FsColor.ValueColor color
+            | PdfCanvasColor.Separation color -> FsColor.Separation color
+            | PdfCanvasColor.ColorCard  color -> 
+                match color with 
+                | ColorCard.Pantone color -> 
+                    FsSeparation.OfPantone color
+                    |> FsColor.Separation
+
+                | ColorCard.TPX color ->
+                    FsSeparation.OfTpx color
+                    |> FsColor.Separation
+                    
+                | ColorCard.KnownColor color ->
+                    FsValueColor.fromKnownColor color
+                    |> FsColor.ValueColor
+
+            | PdfCanvasColor.Registration -> 
+                FsSeparation.Registration
+                |> FsColor.Separation
+
         member x.LoggingText =
             match x with 
             | PdfCanvasColor.Value v -> v.LoggingText
@@ -2226,6 +2252,11 @@ module _Colors =
 
 
     type NullablePdfCanvasColor with 
+        member x.ToFsColor() =
+            match x with 
+            | NullablePdfCanvasColor.Non -> None
+            | NullablePdfCanvasColor.PdfCanvasColor v -> Some (v.ToFsColor())
+
         member x.LoggingText =
             match x with 
             | NullablePdfCanvasColor.Non -> "N"

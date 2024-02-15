@@ -273,6 +273,49 @@ module _Renewable =
         | Normal = 0
         | CuttingDie = 1
 
+    [<RequireQualifiedAccess>]
+    type RenewableModifableColor =  
+        | Initial of FsColor
+        | Modified of FsColor
+    with 
+        member x.Color =
+            match x with 
+            | Initial  color
+            | Modified color -> color
+
+    [<RequireQualifiedAccess>]
+    module PdfCanvas =
+        let private getOrCreateColor (originColor) color (pdfCanvas: PdfCanvas) =
+            let color =
+                match color with
+                | None -> originColor
+                | Some color ->
+                    match color with
+                    | RenewableModifableColor.Initial _ -> originColor
+                    | RenewableModifableColor.Modified color ->
+                        match color with 
+                        | FsColor.ValueColor valueColor -> 
+                            match valueColor with 
+                            | FsValueColor.Lab _ ->
+                                let document = pdfCanvas.GetDocument() :?> PdfDocumentWithCachedResources
+                                document.GetOrCreateColor(PdfCanvasColor.OfFsColor color)
+
+                            | _ -> valueColor.ToItextColor()
+                        | _ ->
+                            let document = pdfCanvas.GetDocument() :?> PdfDocumentWithCachedResources
+                            document.GetOrCreateColor(PdfCanvasColor.OfFsColor color)
+
+            color
+
+        let setFillColor_Modifable (originFillColor) fillColor (pdfCanvas: PdfCanvas) =
+            let color = getOrCreateColor originFillColor fillColor pdfCanvas
+            PdfCanvas.setFillColor color pdfCanvas
+
+
+        let setStrokeColor_Modifable (originStrokeColor) strokeColor (pdfCanvas: PdfCanvas) =
+            let color = getOrCreateColor originStrokeColor strokeColor pdfCanvas
+            PdfCanvas.setStrokeColor color pdfCanvas
+             
 
     type RenewablePathInfo =
         { FillColor: iText.Kernel.Colors.Color 
@@ -290,11 +333,19 @@ module _Renewable =
           ClippingPathInfos: ClippingPathInfos
           IsShading: bool
           OriginInfo: IntegratedPathRenderInfo
-          LazyFillColor: FsColor option
-          LazyStrokeColor: FsColor option
+          LazyFillColor_Modifiable: RenewableModifableColor option
+          LazyStrokeColor_Modifiable: RenewableModifableColor option
           Tag: RenewablePathInfoTag
         }
     with 
+        member x.LazyFillColor =
+            x.LazyFillColor_Modifiable
+            |> Option.map(fun m -> m.Color)
+
+        member x.LazyStrokeColor =
+            x.LazyStrokeColor_Modifiable
+            |> Option.map(fun m -> m.Color)
+
         member x.ApplyCtm_To_AccumulatedPathOperatorRanges() =
             { Ctm = x.Ctm 
               AccumulatedPathOperatorRanges = x.AccumulatedPathOperatorRanges }
@@ -332,9 +383,26 @@ module _Renewable =
                     //| None -> ()
                     //| Some extGState -> PdfCanvas.setExtGState extGState canvas |> ignore
 
-                    canvas
-                    |> PdfCanvas.setFillColor x.FillColor
-                    |> PdfCanvas.setStrokeColor x.StrokeColor
+                    match x.Operation with 
+                    | PathRenderInfo.FILL ->
+                        canvas
+                        |> PdfCanvas.setFillColor_Modifable x.FillColor x.LazyFillColor_Modifiable
+
+                    | IPathRenderInfo.FILLANDSTROKE ->
+                        canvas
+                        |> PdfCanvas.setFillColor_Modifable x.FillColor x.LazyFillColor_Modifiable
+                        |> PdfCanvas.setStrokeColor_Modifable x.StrokeColor x.LazyStrokeColor_Modifiable
+
+                    | PathRenderInfo.STROKE ->
+                        canvas
+                        |> PdfCanvas.setStrokeColor_Modifable x.StrokeColor x.LazyStrokeColor_Modifiable
+
+                    | _ -> 
+                        canvas
+                        |> PdfCanvas.setFillColor_Modifable x.FillColor x.LazyFillColor_Modifiable
+                        |> PdfCanvas.setStrokeColor_Modifable x.StrokeColor x.LazyStrokeColor_Modifiable
+
+                    |> PdfCanvas.setStrokeColor_Modifable x.StrokeColor x.LazyStrokeColor_Modifiable
                     |> PdfCanvas.concatMatrixByTransform (canvas.ApplyOffsetToCtm(x.Ctm))
                     |> PdfCanvas.setLineShapingStyle x.LineShapingStyle
                     |> PdfCanvas.setDashpattern x.DashPattern
@@ -384,8 +452,8 @@ module _Renewable =
                 IsShading = x.IsShading
                 GsStates = x.GsStates
                 OriginInfo = x
-                LazyFillColor = None
-                LazyStrokeColor = None
+                LazyFillColor_Modifiable = None
+                LazyStrokeColor_Modifiable = None
                 Tag = RenewablePathInfoTag.Normal
             }
 
@@ -393,6 +461,8 @@ module _Renewable =
     type RenewableTextInfoKind =
         | Word of string
         | ConcatedText of OperatorRange
+
+
 
     type RenewableTextInfo =
          { FillColor: iText.Kernel.Colors.Color 
@@ -417,10 +487,18 @@ module _Renewable =
            HeaderTextRenderInfo: TextRenderInfo
            ClippingPathInfos: ClippingPathInfos
            OriginInfo: IntegratedTextRenderInfo
-           LazyFillColor: FsColor option
-           LazyStrokeColor: FsColor option
+           LazyFillColor_Modifiable: RenewableModifableColor option
+           LazyStrokeColor_Modifiable: RenewableModifableColor option
            }
      with 
+        member x.LazyFillColor =
+            x.LazyFillColor_Modifiable
+            |> Option.map(fun m -> m.Color)
+
+        member x.LazyStrokeColor =
+            x.LazyStrokeColor_Modifiable
+            |> Option.map(fun m -> m.Color)
+
         member x.ApplyCtm_WriteToCanvas(pdfCanvas: OffsetablePdfCanvas) =
             match x.FillShading, x.StrokeShading with 
             | None, None -> ()
@@ -433,11 +511,26 @@ module _Renewable =
                 //| None -> ()
                 //| Some extGState -> PdfCanvas.setExtGState extGState pdfCanvas |> ignore
 
+                match x.TextRenderingMode with 
+                | TextRenderingMode.FILL_STROKE ->
 
-                pdfCanvas
-                |> PdfCanvas.setFillColor x.FillColor
-                |> PdfCanvas.setStrokeColor x.StrokeColor
+                    pdfCanvas
+                    |> PdfCanvas.setFillColor_Modifable x.FillColor x.LazyFillColor_Modifiable
+                    |> PdfCanvas.setStrokeColor_Modifable x.StrokeColor x.LazyStrokeColor_Modifiable
                 
+                | TextRenderingMode.FILL ->
+                    pdfCanvas
+                    |> PdfCanvas.setFillColor_Modifable x.FillColor x.LazyFillColor_Modifiable
+                    
+                | TextRenderingMode.STROKE ->
+                    pdfCanvas
+                    |> PdfCanvas.setStrokeColor_Modifable x.StrokeColor x.LazyStrokeColor_Modifiable
+
+                | _ ->
+                    pdfCanvas
+                    |> PdfCanvas.setFillColor_Modifable x.FillColor x.LazyFillColor_Modifiable
+                    |> PdfCanvas.setStrokeColor_Modifable x.StrokeColor x.LazyStrokeColor_Modifiable
+
                 |> PdfCanvas.concatMatrixByTransform (pdfCanvas.ApplyOffsetToCtm x.Ctm)
                 |> PdfCanvas.setLineShapingStyle x.LineShapingStyle
      
@@ -517,8 +610,8 @@ module _Renewable =
               FillShading = None
               StrokeShading = None
               OriginInfo = x
-              LazyFillColor = None
-              LazyStrokeColor = None
+              LazyFillColor_Modifiable = None
+              LazyStrokeColor_Modifiable = None
             }
 
 
@@ -602,23 +695,68 @@ module _Renewable =
             | Some bound -> bound
             | None -> failwithf "LazyVisibleBound is None"
 
+        member x.MapColor(f) =
+            match x with 
+            | Path info ->
+                { info with 
+                    LazyFillColor_Modifiable = 
+                        match info.LazyFillColor with 
+                        | Some color -> 
+                            f color
+                            |> Option.map RenewableModifableColor.Modified
+                        | None -> None
+
+                    LazyStrokeColor_Modifiable = 
+                        match info.LazyStrokeColor with 
+                        | Some color -> 
+                            f color
+                            |> Option.map RenewableModifableColor.Modified
+
+                        | None -> None
+                }
+                |> RenewableInfo.Path
+
+            | Text info ->
+                { info with 
+                    LazyFillColor_Modifiable = 
+                        match info.LazyFillColor with 
+                        | Some color -> 
+                            f color
+                            |> Option.map RenewableModifableColor.Modified
+
+                        | None   -> None
+
+                    LazyStrokeColor_Modifiable = 
+                        match info.LazyStrokeColor with 
+                        | Some color -> 
+                            f color
+                            |> Option.map RenewableModifableColor.Modified
+
+                        | None   -> None
+                }
+                |> RenewableInfo.Text
+
+            | Image info -> x
+            
         member x.SetColor() =
             match x with 
             | Path info ->
                 { info with 
-                    LazyFillColor = 
+                    LazyFillColor_Modifiable = 
                         match info.LazyFillColor with 
-                        | Some _ -> info.LazyFillColor
+                        | Some _ -> info.LazyFillColor_Modifiable
                         | None -> 
                             match info.Operation with 
                             | IPathRenderInfo.Operation.HasFill ->
                                 FsColor.OfItextColor info.FillColor
                                 |> Some
                             | IPathRenderInfo.Operation.NoFill -> None
+                            |> Option.map RenewableModifableColor.Initial
 
-                    LazyStrokeColor = 
+
+                    LazyStrokeColor_Modifiable = 
                         match info.LazyStrokeColor with 
-                        | Some _ -> info.LazyStrokeColor
+                        | Some _ -> info.LazyStrokeColor_Modifiable
                         | None ->
                             match info.Operation with 
                             | IPathRenderInfo.Operation.HasStroke ->
@@ -626,25 +764,27 @@ module _Renewable =
                                 |> Some
 
                             | IPathRenderInfo.Operation.NoStroke -> None
+                            |> Option.map RenewableModifableColor.Initial
                 }
 
                 |> RenewableInfo.Path
 
             | Text info ->
                 { info with 
-                    LazyFillColor = 
+                    LazyFillColor_Modifiable = 
                         match info.LazyFillColor with 
-                        | Some _ -> info.LazyFillColor
+                        | Some _ -> info.LazyFillColor_Modifiable
                         | None -> 
                             match info.TextRenderingMode with 
                             | TextRenderInfo.TextRenderingMode.HasFill ->
                                 FsColor.OfItextColor info.FillColor
                                 |> Some
                             | TextRenderInfo.TextRenderingMode.NoFill -> None
+                            |> Option.map RenewableModifableColor.Initial
 
-                    LazyStrokeColor = 
+                    LazyStrokeColor_Modifiable = 
                         match info.LazyStrokeColor with 
-                        | Some _ -> info.LazyStrokeColor
+                        | Some _ -> info.LazyStrokeColor_Modifiable
                         | None ->
                             match info.TextRenderingMode with 
                             | TextRenderInfo.TextRenderingMode.HasStroke ->
@@ -652,6 +792,7 @@ module _Renewable =
                                 |> Some
 
                             | TextRenderInfo.TextRenderingMode.NoStroke -> None
+                            |> Option.map RenewableModifableColor.Initial
                 }
                 |> RenewableInfo.Text
 
@@ -714,6 +855,24 @@ module _Renewable =
             | Text info ->  info.OriginInfo.ContainerID
             | Image info -> info.OriginInfo.ContainerID
 
+        member x.SetContainerToPage() =
+            match x with 
+            | Path info ->  
+                { info with 
+                    OriginInfo.ContainerID = [InfoContainerID.Page] 
+                }
+                |> Path
+            | Text info ->  
+                { info with 
+                    OriginInfo.ContainerID = [InfoContainerID.Page]  
+                }
+                |> Text
+
+            | Image info -> 
+                { info with 
+                    OriginInfo.ContainerID = [InfoContainerID.Page] 
+                }
+                |> Image
 
         member x.OriginInfo =
             match x with 
