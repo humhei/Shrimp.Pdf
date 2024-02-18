@@ -63,7 +63,7 @@ module _SlimFlow_BackgroundOrForeground =
 
 
     type WriteInfosFunc = 
-        PdfDocumentWithCachedResources -> Rectangle -> OffsetablePdfCanvas -> RenewableInfo list -> unit
+        (*level_plus*)int -> PdfDocumentWithCachedResources -> Rectangle -> OffsetablePdfCanvas -> RenewableInfo list -> unit
     
     
     
@@ -111,13 +111,14 @@ module _SlimFlow_BackgroundOrForeground =
                 let infos = 
                     infos
                     |> List.ofSeq
-                    |> List.map(fun m -> m.AsUnion.SetVisibleBound(BoundGettingStrokeOptions.WithoutStrokeWidth))
-                    |> List.filter(fun m -> m.LazyVisibleBound.IsSome)
+                    |> List.map(fun m -> m.AsUnion.SetVisibleBound0())
+                    |> List.filter(fun m -> m.LazyVisibleBound0.IsSome)
     
                 infos
                 |> List.map(fun info ->
                     info.Renewable()
                 )
+                |> List.map(fun m -> m.UpdateVisibleBound1())
     
             stopWatch.Stop()
             logInfo(fun () ->
@@ -169,6 +170,15 @@ module _SlimFlow_BackgroundOrForeground =
                 |> List.map(fun m -> m.SetColor())
             )
 
+        member x.Internal_RecoverVisibleBound_ForWrite() =
+            x.ModifyInfos("Internal_RecoverVisibleBound_ForWrite", fun infos ->
+                infos
+                |> List.map(fun m ->
+                    m.Internal_RecoverVisibleBound_ForWrite().UpdateVisibleBound1()
+                )
+
+            )
+
         member x.Choice = choice
     
         member x.Infos = infos
@@ -194,7 +204,7 @@ module _SlimFlow_BackgroundOrForeground =
             cache.GetOrAdd(point, valueFactory = fun _ ->
                 let xobject = PdfFormXObject(pageBox) 
                 let canvas = OffsetablePdfCanvas(xobject, writerDocument)
-                writeInfosFunc writerDocument writePageBox canvas infos
+                writeInfosFunc 1 writerDocument writePageBox canvas infos
                 pageBox, xobject :> PdfXObject
             )
     

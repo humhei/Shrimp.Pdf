@@ -171,7 +171,7 @@ type internal FlowNameTupleBindedStatus =
 
 
 
-type internal InternalFlowModel<'userState> =
+type InternalFlowModel<'userState> =
     { File: string 
       UserState: 'userState 
       FlowName: FlowName option
@@ -180,6 +180,13 @@ type internal InternalFlowModel<'userState> =
 
 with
     member x.LoggerLevel = x.Configuration.LoggerLevel
+
+    member x.MapUserState(f) =
+        { File = x.File 
+          UserState = f x.UserState
+          FlowName = x.FlowName
+          OperatedFlowNames = x.OperatedFlowNames
+          Configuration = x.Configuration }
 
     member internal flowModel.TryGetBackupDirectory() =
         match flowModel.FlowName with 

@@ -198,7 +198,7 @@ let extractTests =
                     PageSelector.All,
                     Selector.PathOrText(Info.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
                 )
-            )
+            ) 
             |> runTest "datas/extract/extract vectors.pdf" 
             |> ignore
 
@@ -696,7 +696,8 @@ let extractTests =
                         Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
                     )
                 ) 
-                |> runTest @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\texass\.bk\GABBY'S DOLLHOUSE吊牌2.RasterizeBK.backgroundFile.cleared.pdf"
+                |> runTest "datas/extract/extract objects18.pdf" 
+                //|> runTest @"D:\Users\Jia\Documents\MyData\Docs\2017\健耐\texass\.bk\GABBY'S DOLLHOUSE吊牌2.RasterizeBK.backgroundFile.cleared.pdf"
                 |> ignore 
 
             testCase "extract objects tests19" <| fun _ -> 
@@ -727,7 +728,19 @@ let extractTests =
                     )
                 )
                 |> runTest "datas/extract/extract objects22.pdf" 
+                |> ignore 
+
+            testCase "extract objects tests23" <| fun _ -> 
+                Flow.Reuse (
+                    Reuses.ExtractIM(
+                        PageSelector.All,
+                        Selector.All(InfoIM.BoundIs_InsideOrCross_Of (AreaGettingOptions.PageBox PageBoxKind.ActualBox))
+                    )
+                )
+                |> runTest "datas/extract/extract objects23.pdf" 
                 |> ignore
+
+
         ]
 
 

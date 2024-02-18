@@ -328,7 +328,8 @@ module PdfDocumentWithCachedResources =
 
             addRectangles [rect] mapping canvas
 
-
+        let addRectOrEllipse (rect: Rectangle) (mapping: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments) (canvas: PdfCanvas) =
+            addRectangles [rect] mapping canvas
             
 
     type PdfCanvas with 

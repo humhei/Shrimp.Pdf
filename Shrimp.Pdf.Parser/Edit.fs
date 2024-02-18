@@ -675,14 +675,18 @@ with
 type internal ModifierPdfCanvas(contentStream, resources: FsPdfResources, document) =
     inherit CanvasGraphicsStateSettablePdfCanvas(contentStream, resources.PdfResources, document)
 
+    do 
+        let outputStream = contentStream.GetOutputStream()
+        outputStream.SetLocalHighPrecision(true)
+
     override x.Rectangle(rect) =
         let affineTransform = AffineTransform.ofMatrix(x.GetGraphicsState().GetCtm())
         let rect = affineTransform.InverseTransform(rect)
         base.Rectangle(rect)
 
 
-and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * ModifierUnion>, ops: PdfModifyOptions, document: PdfDocument) =
-    inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(Map.map (fun _ -> fst) selectorModifierMapping))
+and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * ModifierUnion>, ops: PdfModifyOptions, page: PdfPage, document: PdfDocument) =
+    inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(page.GetActualBox(), Map.map (fun _ -> fst) selectorModifierMapping))
     let fsDocumentResources = (box document :?> IFsPdfDocumentEditor).Resources
     let removingLayer = ops.RemovingLayer
     let exists_ClippingPath_Shading_Modifier =
@@ -1163,7 +1167,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 module PdfPage =
     let modifyIM ops (selectorModifierMapping) (page: PdfPage) =
         let document = page.GetDocument()
-        let editor = new PdfCanvasEditor(selectorModifierMapping, ops, document)
+        let editor = new PdfCanvasEditor(selectorModifierMapping, ops, page, document)
         let pageContents = 
             match ops.XObjectReference with 
             | XObjectReference.ByCopied -> page.GetPdfObject().Get(PdfName.Contents).Clone()

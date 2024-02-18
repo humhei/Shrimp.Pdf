@@ -41,6 +41,7 @@ namespace Shrimp.Pdf.Parser.Helper
 
         public CanvasGraphicsStateSettablePdfCanvas(PdfStream contentStream, PdfResources resources, PdfDocument document) : base(contentStream, resources, document)
         {
+
         }
 
         public void SetCanvasGraphicsState(CanvasGraphicsState gs)

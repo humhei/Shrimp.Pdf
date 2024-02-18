@@ -1,44 +1,25 @@
 ﻿namespace Shrimp.Pdf
 
 open System.Collections.Generic
+open Shrimp.Pdf.Parser
 open Shrimp.Pdf.Colors
 
 #nowarn "0104"
 open Shrimp.Pdf.Constants.Operators
 open Shrimp.Pdf.Extensions
+open Shrimp.Pdf.DSL
 open iText.Kernel.Geom
 open iText.Kernel.Font
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf
-open iText.Kernel.Pdf.Xobject
 open Shrimp.FSharp.Plus
 open iText.Kernel.Pdf.Canvas.Parser.Data
-open iText.IO.Image
 
 
 [<AutoOpen>]
 module _Renewable =
     
-    type OffsetablePdfCanvas(contentStream: PdfStream, resources, pdfDocument, ?xOffset, ?yOffset) =
-        inherit PdfCanvas(contentStream, resources, pdfDocument)
-        let xOffset = defaultArg xOffset 0.f
-        let yOffset = defaultArg yOffset 0.f
-        do 
-            let stream = contentStream.GetOutputStream()
-            stream.SetLocalHighPrecision(true)
 
-        member x.XOffset = xOffset
-
-        member x.YOffset = yOffset
-
-        new (xobject: PdfFormXObject, pdfDocument, ?xOffset, ?yOffset) =
-            new OffsetablePdfCanvas(xobject.GetPdfObject(), xobject.GetResources(), pdfDocument, ?xOffset = xOffset, ?yOffset = yOffset)
-
-
-        member internal x.ApplyOffsetToCtm(ctm: Matrix) =
-            let ctm = AffineTransform.ofMatrix ctm
-            //ctm.Translate(float xOffset, float yOffset)
-            ctm
 
     type private RenewablePathInfoCommon = 
         { AccumulatedPathOperatorRanges: seq<OperatorRange>
@@ -316,6 +297,86 @@ module _Renewable =
             let color = getOrCreateColor originStrokeColor strokeColor pdfCanvas
             PdfCanvas.setStrokeColor color pdfCanvas
              
+    type private LazyColor =
+        { Fill: RenewableModifableColor option  
+          Stroke: RenewableModifableColor option }
+    with 
+        member x.LazyFillColor =
+            x.Fill
+            |> Option.map(fun m -> m.Color)
+
+        member x.LazyStrokeColor =
+            x.Stroke
+            |> Option.map(fun m -> m.Color)
+
+        member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: PdfCanvasColor) =
+            match fillOrStrokeOptions with 
+            | FillOrStrokeOptions.Fill ->
+                match x.LazyFillColor with 
+                | None -> false
+                | Some fillColor -> fillColor.IsEqualTo(color)
+
+            | FillOrStrokeOptions.Stroke ->
+                match x.LazyStrokeColor with 
+                | None -> false
+                | Some strokeColor -> strokeColor.IsEqualTo(color)
+
+            | FillOrStrokeOptions.FillOrStroke ->
+                match x.LazyStrokeColor with 
+                | None -> false
+                | Some strokeColor -> strokeColor.IsEqualTo(color)
+
+                || (
+                    match x.LazyFillColor with 
+                    | None -> false
+                    | Some fillColor -> fillColor.IsEqualTo(color)
+                )
+
+            | FillOrStrokeOptions.FillAndStroke ->
+                match x.LazyStrokeColor with 
+                | None -> false
+                | Some strokeColor -> strokeColor.IsEqualTo(color)
+
+                && (
+                    match x.LazyFillColor with 
+                    | None -> false
+                    | Some fillColor -> fillColor.IsEqualTo(color)
+                )
+
+        member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: FsColor, ?valueEqualOptions) =
+            match fillOrStrokeOptions with 
+            | FillOrStrokeOptions.Fill ->
+                match x.LazyFillColor with 
+                | None -> false
+                | Some fillColor -> fillColor.IsEqualTo(color, ?valueEqualOptions = valueEqualOptions)
+
+            | FillOrStrokeOptions.Stroke ->
+                match x.LazyStrokeColor with 
+                | None -> false
+                | Some strokeColor -> strokeColor.IsEqualTo(color, ?valueEqualOptions = valueEqualOptions)
+
+            | FillOrStrokeOptions.FillOrStroke ->
+                match x.LazyStrokeColor with 
+                | None -> false
+                | Some strokeColor -> strokeColor.IsEqualTo(color, ?valueEqualOptions = valueEqualOptions)
+
+                || (
+                    match x.LazyFillColor with 
+                    | None -> false
+                    | Some fillColor -> fillColor.IsEqualTo(color, ?valueEqualOptions = valueEqualOptions)
+                )
+
+            | FillOrStrokeOptions.FillAndStroke ->
+                match x.LazyStrokeColor with 
+                | None -> false
+                | Some strokeColor -> strokeColor.IsEqualTo(color, ?valueEqualOptions = valueEqualOptions)
+
+                && (
+                    match x.LazyFillColor with 
+                    | None -> false
+                    | Some fillColor -> fillColor.IsEqualTo(color, ?valueEqualOptions = valueEqualOptions)
+                )
+
 
     type RenewablePathInfo =
         { FillColor: iText.Kernel.Colors.Color 
@@ -328,7 +389,6 @@ module _Renewable =
           Operation: int
           AccumulatedPathOperatorRanges: seq<OperatorRange>
           LineShapingStyle: LineShapingStyle
-          DashPattern: DashPattern
           GsStates: InfoGsStateLists
           ClippingPathInfos: ClippingPathInfos
           IsShading: bool
@@ -336,8 +396,195 @@ module _Renewable =
           LazyFillColor_Modifiable: RenewableModifableColor option
           LazyStrokeColor_Modifiable: RenewableModifableColor option
           Tag: RenewablePathInfoTag
+          LazyVisibleBound1: Rectangle option
         }
     with 
+        member x.UpdateVisibleBoundWithStrokeWidth() =
+            let bound = 
+                match x.OriginInfo.LazyVisibleBound0 with 
+                | None -> None
+                | Some bound ->
+                    match x.LazyStrokeColor_Modifiable, x.Operation with 
+                    | Some _, IPathRenderInfo.Operation.HasStroke ->
+                        let actualWidth = IPathRenderInfo.getActualLineWidth x.OriginInfo
+                        let margin  = actualWidth.AsWidthMargin()
+                        Rectangle.applyMargin margin bound
+                        |> Some
+                    
+
+                    | _ -> Some bound
+
+            { x with LazyVisibleBound1 = bound }
+
+
+
+        member x.CancelStroke() =
+            let newOperation = 
+                match x.Operation with 
+                | IPathRenderInfo.Operation.HasFill -> PathRenderInfo.FILL
+                | IPathRenderInfo.Operation.NoFill -> PathRenderInfo.NO_OP
+
+            { x with Operation = newOperation }
+
+        member x.CancelFill() =
+            let newOperation = 
+                match x.Operation with 
+                | IPathRenderInfo.Operation.HasStroke -> PathRenderInfo.STROKE
+                | IPathRenderInfo.Operation.NoStroke -> PathRenderInfo.NO_OP
+
+            { x with Operation = newOperation }
+
+        member x.CancelFillAndStroke() =
+            { x with Operation = PathRenderInfo.NO_OP }
+
+        member x.IsCuttingDie = 
+            x.Tag = RenewablePathInfoTag.CuttingDie
+
+        member x.ApplyStrokeStyle(strokeStyle: StrokeStyle) =
+            let x = 
+                { x with 
+                    LineShapingStyle = 
+                        { CapStyle = strokeStyle.CapStyle |> Option.defaultValue x.LineShapingStyle.CapStyle
+                          JoinStyle = strokeStyle.LineJoinStyle |> Option.defaultValue x.LineShapingStyle.JoinStyle
+                          DashPattern = strokeStyle.DashPattern |> Option.defaultValue x.LineShapingStyle.DashPattern
+                          ActualLineWidth = 
+                            match strokeStyle.Width with 
+                            | None -> x.LineShapingStyle.ActualLineWidth
+                            | Some width -> 
+                                match x.LineShapingStyle.ActualLineWidth with 
+                                | ActualLineWidth.Exactly (raw, scale) ->
+                                    ActualLineWidth.Exactly(width.Value / scale, scale)
+                            
+                                | ActualLineWidth.Unbalance (raw, scaleX, scaleY) ->
+                                    let scale = max scaleX scaleY
+                                    ActualLineWidth.Exactly(width.Value / scale, scale)
+                        }
+                }
+
+            match strokeStyle.ColorStyle with 
+            | None -> x
+            | Some colorStyle ->
+                { x with 
+                    Operation = 
+                        match colorStyle.NullablePdfCanvasColor with
+                        | Some (NullablePdfCanvasColor.N) ->
+                            match x.Operation with 
+                            | IPathRenderInfo.Operation.HasFill -> PathRenderInfo.FILL
+                            | IPathRenderInfo.Operation.NoFill -> PathRenderInfo.NO_OP
+
+                        | _ ->
+                            match colorStyle.CloseOperator with 
+                            | None -> x.Operation
+                            | Some closeOperator -> 
+                                match closeOperator with 
+                                | CloseOperator.Open ->
+                                    match x.Operation with 
+                                    | IPathRenderInfo.Operation.HasFill -> IPathRenderInfo.FILLANDSTROKE
+                                    | IPathRenderInfo.Operation.NoFill -> PathRenderInfo.STROKE
+
+                                | CloseOperator.Close ->
+                                    match x.Operation with 
+                                    | IPathRenderInfo.Operation.HasFill -> PathRenderInfo.FILL
+                                    | IPathRenderInfo.Operation.NoFill -> PathRenderInfo.NO_OP
+
+                                | CloseOperator.Keep -> x.Operation
+
+                    LazyStrokeColor_Modifiable =
+                        match colorStyle.NullablePdfCanvasColor with 
+                        | None -> x.LazyStrokeColor_Modifiable
+                        | Some color ->
+                            match color with 
+                            | NullablePdfCanvasColor.Non -> x.LazyStrokeColor_Modifiable
+                            | NullablePdfCanvasColor.PdfCanvasColor color ->
+                                color.ToFsColor()
+                                |> RenewableModifableColor.Modified
+                                |> Some
+
+
+                    GsStates =
+                        match colorStyle.Opacity, colorStyle.Overprint with 
+                        | None, None -> x.GsStates
+                        | Some opacity, Some overprint ->
+                            x.GsStates.MapFsExtGsState(fun m ->
+                                m.SetStrokeOpactity(opacity).SetStrokeOverprint(overprint)
+                            )
+
+                        | Some opacity, None ->
+                            x.GsStates.MapFsExtGsState(fun m ->
+                                m.SetStrokeOpactity(opacity)
+
+                            )
+
+                        | None, Some overprint ->
+                            x.GsStates.MapFsExtGsState(fun m ->
+                                m.SetStrokeOverprint(overprint)
+                            )
+                }
+
+
+        member x.ApplyFillStyle(fillStyle: FillStyle) =
+            match fillStyle.ColorStyle with 
+            | None -> x
+            | Some colorStyle ->
+                { x with 
+                    Operation = 
+                        match colorStyle.NullablePdfCanvasColor with
+                        | Some (NullablePdfCanvasColor.N) ->
+                            match x.Operation with 
+                            | IPathRenderInfo.Operation.HasStroke -> PathRenderInfo.STROKE
+                            | IPathRenderInfo.Operation.NoStroke -> PathRenderInfo.NO_OP
+
+                        | _ ->
+                            match colorStyle.CloseOperator with 
+                            | None -> x.Operation
+                            | Some closeOperator -> 
+                                match closeOperator with 
+                                | CloseOperator.Open ->
+                                    match x.Operation with 
+                                    | IPathRenderInfo.Operation.HasStroke -> IPathRenderInfo.FILLANDSTROKE
+                                    | IPathRenderInfo.Operation.NoStroke -> PathRenderInfo.FILL
+
+                                | CloseOperator.Close ->
+                                    match x.Operation with 
+                                    | IPathRenderInfo.Operation.HasStroke -> PathRenderInfo.STROKE
+                                    | IPathRenderInfo.Operation.NoStroke -> PathRenderInfo.NO_OP
+
+                                | CloseOperator.Keep -> x.Operation
+
+                    LazyFillColor_Modifiable =
+                        match colorStyle.NullablePdfCanvasColor with 
+                        | None -> x.LazyFillColor_Modifiable
+                        | Some color ->
+                            match color with 
+                            | NullablePdfCanvasColor.Non -> x.LazyFillColor_Modifiable
+                            | NullablePdfCanvasColor.PdfCanvasColor color ->
+                                color.ToFsColor()
+                                |> RenewableModifableColor.Modified
+                                |> Some
+
+
+                    GsStates =
+                        match colorStyle.Opacity, colorStyle.Overprint with 
+                        | None, None -> x.GsStates
+                        | Some opacity, Some overprint ->
+                            x.GsStates.MapFsExtGsState(fun m ->
+                                m.SetFillOpactity(opacity).SetFillOverprint(overprint)
+                            )
+
+                        | Some opacity, None ->
+                            x.GsStates.MapFsExtGsState(fun m ->
+                                m.SetFillOpactity(opacity)
+
+                            )
+
+                        | None, Some overprint ->
+                            x.GsStates.MapFsExtGsState(fun m ->
+                                m.SetFillOverprint(overprint)
+                            )
+                }
+
+
+
         member x.LazyFillColor =
             x.LazyFillColor_Modifiable
             |> Option.map(fun m -> m.Color)
@@ -346,13 +593,42 @@ module _Renewable =
             x.LazyStrokeColor_Modifiable
             |> Option.map(fun m -> m.Color)
 
+        member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: FsColor) =
+            { Fill = x.LazyFillColor_Modifiable 
+              Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIs(fillOrStrokeOptions, color)
+
+        member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: PdfCanvasColor) =
+            { Fill = x.LazyFillColor_Modifiable 
+              Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIs(fillOrStrokeOptions, color)
+
+
         member x.ApplyCtm_To_AccumulatedPathOperatorRanges() =
             { Ctm = x.Ctm 
               AccumulatedPathOperatorRanges = x.AccumulatedPathOperatorRanges }
                 .ApplyCtm_To_AccumulatedPathOperatorRanges()
 
         member x.ApplyCtm_WriteToCanvas(canvas: OffsetablePdfCanvas) = 
-            PdfCanvas.useCanvas canvas (fun canvas ->
+            let set_inPage_extGsState() =
+                match x.OriginInfo.ContainerID with 
+                | [InfoContainerID.Page] -> 
+                    match x.GsStates.AsList with 
+                    | [gsState] -> 
+                        match AtLeastOneList.TryCreate gsState.AsList with 
+                        | None -> ()
+                        | Some gsStates ->
+                            let extState = 
+                                gsStates
+                                |> AtLeastOneList.map(fun m -> m.FsExtState)
+                                |> FsExtGState.Concat
+
+                            PdfCanvas.setExtGState extState canvas
+                            |> ignore
+                        
+                    | _ -> ()
+                    ()
+                | _ -> ()
+
+            PdfCanvas.useCanvas canvas (fun (canvas: OffsetablePdfCanvas) ->
                 match x.IsShading with 
                 | true -> 
                     let shading, ctm = 
@@ -363,9 +639,10 @@ module _Renewable =
                         |> List.exactlyOne_DetailFailingText
                     let outputStream = canvas.GetContentStream().GetOutputStream()
 
-                    //match x.ExtGState with 
+                    //match x.GsStates with 
                     //| None -> ()
                     //| Some extGState -> PdfCanvas.setExtGState extGState canvas |> ignore
+                    set_inPage_extGsState()
 
                     canvas.ConcatMatrix(canvas.ApplyOffsetToCtm ctm) |> ignore
 
@@ -379,9 +656,7 @@ module _Renewable =
                     //let operatorRanges = x.ApplyCtm_To_AccumulatedPathOperatorRanges()
                     let operatorRanges = x.AccumulatedPathOperatorRanges
                     //canvas.ConcatMatrix(AffineTransform.ofMatrix x.Ctm) |> ignore
-                    //match x.ExtGState with 
-                    //| None -> ()
-                    //| Some extGState -> PdfCanvas.setExtGState extGState canvas |> ignore
+                    set_inPage_extGsState()
 
                     match x.Operation with 
                     | PathRenderInfo.FILL ->
@@ -405,7 +680,6 @@ module _Renewable =
                     |> PdfCanvas.setStrokeColor_Modifable x.StrokeColor x.LazyStrokeColor_Modifiable
                     |> PdfCanvas.concatMatrixByTransform (canvas.ApplyOffsetToCtm(x.Ctm))
                     |> PdfCanvas.setLineShapingStyle x.LineShapingStyle
-                    |> PdfCanvas.setDashpattern x.DashPattern
                     |> ignore
 
                     for operatorRange in operatorRanges do
@@ -445,7 +719,6 @@ module _Renewable =
                 Path = info.GetPath()
                 AccumulatedPathOperatorRanges = x.AccumulatedPathOperatorRanges
                 LineShapingStyle = IPathRenderInfo.getLineShapingStyle x
-                DashPattern = CanvasGraphicsState.getDashPattern gs
                 ClippingPathInfos = x.ClippingPathInfos
                 FillShading = None
                 StrokeShading = None
@@ -455,6 +728,7 @@ module _Renewable =
                 LazyFillColor_Modifiable = None
                 LazyStrokeColor_Modifiable = None
                 Tag = RenewablePathInfoTag.Normal
+                LazyVisibleBound1 = None
             }
 
     [<RequireQualifiedAccess>]
@@ -491,6 +765,39 @@ module _Renewable =
            LazyStrokeColor_Modifiable: RenewableModifableColor option
            }
      with 
+        member x.CancelFill() =
+            let newTextRenderingMode = 
+                let operator: TextCloseOperator =
+                    { Fill = CloseOperator.Close 
+                      Stroke = CloseOperator.Keep
+                      Text = None }
+
+                operator.Apply(x.TextRenderingMode)
+
+            { x with TextRenderingMode = newTextRenderingMode }
+
+        member x.CancelStroke() =
+            let newTextRenderingMode = 
+                let operator: TextCloseOperator =
+                    { Fill = CloseOperator.Keep 
+                      Stroke = CloseOperator.Close
+                      Text = None }
+
+                operator.Apply(x.TextRenderingMode)
+
+            { x with TextRenderingMode = newTextRenderingMode }
+
+        member x.CancelFillAndStroke() =
+            let newTextRenderingMode = 
+                let operator: TextCloseOperator =
+                    { Fill = CloseOperator.Close
+                      Stroke = CloseOperator.Close
+                      Text = None }
+
+                operator.Apply(x.TextRenderingMode)
+
+            { x with TextRenderingMode = newTextRenderingMode }
+
         member x.LazyFillColor =
             x.LazyFillColor_Modifiable
             |> Option.map(fun m -> m.Color)
@@ -499,17 +806,43 @@ module _Renewable =
             x.LazyStrokeColor_Modifiable
             |> Option.map(fun m -> m.Color)
 
+        member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: FsColor) =
+            { Fill = x.LazyFillColor_Modifiable 
+              Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIs(fillOrStrokeOptions, color)
+
+        member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: PdfCanvasColor) =
+            { Fill = x.LazyFillColor_Modifiable 
+              Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIs(fillOrStrokeOptions, color)
+
         member x.ApplyCtm_WriteToCanvas(pdfCanvas: OffsetablePdfCanvas) =
             match x.FillShading, x.StrokeShading with 
             | None, None -> ()
             | _ -> failwithf "Not implemented when renewing text with shading color"
 
+            let set_inPage_extGsState() =
+                match x.OriginInfo.ContainerID with 
+                | [InfoContainerID.Page] -> 
+                    match x.GsStates.AsList with 
+                    | [gsState] -> 
+                        match AtLeastOneList.TryCreate gsState.AsList with 
+                        | None -> ()
+                        | Some gsStates ->
+                            let extState = 
+                                gsStates
+                                |> AtLeastOneList.map(fun m -> m.FsExtState)
+                                |> FsExtGState.Concat
+
+                            PdfCanvas.setExtGState extState pdfCanvas
+                            |> ignore
+                        
+                    | _ -> ()
+                    ()
+                | _ -> ()
+
             PdfCanvas.useCanvas pdfCanvas (fun pdfCanvas ->
                 let textMatrix = x.HeaderTextRenderInfo.GetTextMatrix()
 
-                //match x.ExtGState with 
-                //| None -> ()
-                //| Some extGState -> PdfCanvas.setExtGState extGState pdfCanvas |> ignore
+                set_inPage_extGsState()
 
                 match x.TextRenderingMode with 
                 | TextRenderingMode.FILL_STROKE ->
@@ -621,7 +954,6 @@ module _Renewable =
           ClippingPathInfos: ClippingPathInfos
           GsStates: InfoGsStateLists
           OriginInfo: IntegratedImageRenderInfo
-          LazyBound: Rectangle option 
         }
     with 
         member x.CopyToDocument(document: PdfDocumentWithCachedResources) =
@@ -674,7 +1006,6 @@ module _Renewable =
               ClippingPathInfos = x.ClippingPathInfos
               OriginInfo = x
               GsStates = x.GsStates
-              LazyBound = None
             }
 
 
@@ -684,16 +1015,93 @@ module _Renewable =
         | Text of RenewableTextInfo
         | Image of RenewableImageInfo
     with 
-        member private x.LazyVisibleBound = 
+        member x.UpdateVisibleBound1() =
             match x with 
-            | Path info -> info.OriginInfo.LazyVisibleBound
-            | Text info -> info.OriginInfo.LazyVisibleBound
+            | Path info -> info.UpdateVisibleBoundWithStrokeWidth() |> Path
+            | Text info -> x
+            | Image _ -> x
+
+        member x.Internal_RecoverVisibleBound_ForWrite() =
+            match x with 
+            | Path info -> 
+                { info with 
+                    OriginInfo.LazyVisibleBound0 = info.OriginInfo.LazyVisibleBound0_Backup
+                    OriginInfo.LazyVisibleBound0_Backup = None }
+                |> Path
+
+            | Text info -> 
+                { info with 
+                    OriginInfo.LazyVisibleBound0 = info.OriginInfo.LazyVisibleBound0_Backup
+                    OriginInfo.LazyVisibleBound0_Backup = None }
+                |> Text
+
+
+            | Image info -> 
+                { info with 
+                    OriginInfo.LazyVisibleBound = info.OriginInfo.LazyVisibleBound_Backup
+                    OriginInfo.LazyVisibleBound_Backup = None }
+                |> Image
+
+        member x.CancelFill() =
+            match x with 
+            | Path info -> info.CancelFill() |> Path
+            | Text info -> info.CancelFill() |> Text
+            | Image _ -> x
+
+        member x.CancelStroke() =
+            match x with 
+            | Path info -> info.CancelStroke() |> Path
+            | Text info -> info.CancelStroke() |> Text
+            | Image _ -> x
+
+        member x.CancelFillAndStroke() =
+            match x with 
+            | Path info -> info.CancelFillAndStroke() |> Path
+            | Text info -> info.CancelFillAndStroke() |> Text
+            | Image _ -> x
+
+        member x.IsCuttingDie =
+            match x with 
+            | Path info -> info.IsCuttingDie
+            | _ -> false
+
+        member x.MapPath(f) =
+            match x with 
+            | Path info -> f info |> Path
+            | _ -> x
+
+        member x.MapText(f) =
+            match x with 
+            | Text info -> f info |> Text
+            | _ -> x
+
+        member x.MapImage(f) =
+            match x with 
+            | Image info -> f info |> Image
+            | _ -> x
+
+        member private x.LazyVisibleBound0 = 
+            match x with 
+            | Path info -> info.OriginInfo.LazyVisibleBound0
+            | Text info -> info.OriginInfo.LazyVisibleBound0
             | Image info -> info.OriginInfo.LazyVisibleBound
 
-        member x.VisibleBound =
-            match x.LazyVisibleBound with 
+        member x.VisibleBound0 =
+            match x.LazyVisibleBound0 with 
             | Some bound -> bound
-            | None -> failwithf "LazyVisibleBound is None"
+            | None -> failwithf "LazyVisibleBound0 is None"
+
+        member x.LazyVisibleBound1 =
+            match x with 
+            | Path info    -> info.LazyVisibleBound1
+            | Text info    -> info.OriginInfo.LazyVisibleBound0
+            | Image info   -> info.OriginInfo.LazyVisibleBound
+
+        member x.VisibleBound1 =
+            match x.LazyVisibleBound1 with 
+            | Some bound -> bound
+            | None -> failwithf "LazyVisibleBound1 is None"
+
 
         member x.MapColor(f) =
             match x with 
@@ -948,3 +1356,228 @@ module _Renewable =
             | IntegratedRenderInfoIM.Pixel image ->
                 image.Renewable()
                 |> RenewableInfo.Image
+            
+
+namespace Shrimp.Pdf.DSL
+[<AutoOpen>]
+module _Modify_Renewable =
+    open Shrimp.Pdf
+    open Shrimp.Pdf.Colors
+    
+    open Shrimp.Pdf.Extensions
+    open iText.Kernel.Pdf.Canvas
+    
+
+    type Modify with 
+        static member internal ReadCompoundPath(selector) =
+            Manipulate.Func(fun userState ->
+                ModifyPage.Create
+                    ("read compound path infos",
+                      PageSelector.All,
+                      //Selector.Path(selector),
+                      Selector.Path(selector),
+                      (fun args infos ->
+                        let pathInfos = 
+                            infos
+                            |> List.ofSeq
+                            |> List.choose IIntegratedRenderInfo.asIPathRenderInfo
+
+                        pathInfos
+                        |> List.map(fun pathInfo -> pathInfo.Renewable())
+                      )
+                    )
+            )
+
+        static member private CancelCompoundPath(pageSelector, selector) =
+            Manipulate.Func(fun userState ->
+                (
+                    Modify.Create_Record
+                        ( pageSelector,
+                          [
+                            { 
+                                SelectorAndModifiersRecord.Name = "cancel compound paths"
+                                //Selector = Selector.Path(selector)
+                                Selector = Selector.Path(fun args info -> selector (args.MapUserState(fun _ -> userState)) info)
+                                Modifiers =[
+                                    Modifier.CancelFillAndStroke() 
+                                ]
+                            }
+                          ]
+                        )
+                )
+            )
+
+
+        static member private CreateCompoundPathCommon(selector: PageModifingArguments<_> -> _ -> bool, options: CompoundCreatingOptions) =
+
+            Manipulate.Func(fun userState ->
+                let selector (args: PageModifingArguments<_>) info =
+                    selector (args.MapUserState(fun _ -> userState)) info
+                    
+                (
+                    match options with 
+                    | CompoundCreatingOptions.CompoundPath -> 
+                        Modify.ReadCompoundPath(selector)
+                        <.+>
+                        Modify.CancelCompoundPath(PageSelector.All, selector)
+                    | CompoundCreatingOptions.ClippingPathAndCancel condition ->
+                        Modify.ReadCompoundPath(selector)
+                        <.+>
+                        Manipulate.Func(fun infoLists ->
+                            let pageNumbers =
+                                infoLists
+                                |> List.indexed
+                                |> List.choose(fun (i, infos: RenewablePathInfo list) ->
+                                    let infos = infos |> List.map(fun m -> m.Path)
+                                    match condition.IsClippable infos with 
+                                    | true -> Some (i+1)
+                                    | false -> None
+                                )
+
+                            match pageNumbers with 
+                            | [] -> Manipulate.dummy() ||>> ignore
+                            | _ ->
+                                let pageSelector =
+                                    pageNumbers
+                                    |> PageSelector.Numbers
+
+                                Modify.CancelCompoundPath(pageSelector, selector)
+
+                        )
+                    | CompoundCreatingOptions.ClippingPathAndKeep condition ->
+                        Modify.ReadCompoundPath(selector)
+                )
+                <+>
+                (Manipulate.Func (fun (infos: RenewablePathInfo list list) ->
+                    let isClippable =
+                        match options with 
+                        | CompoundCreatingOptions.ClippingPathAndCancel condition 
+                        | CompoundCreatingOptions.ClippingPathAndKeep condition ->
+                            infos
+                            |> List.exists(fun m -> 
+                                let infos = m |> List.map(fun m -> m.Path)
+                                condition.IsClippable infos
+                            )
+
+                        | CompoundCreatingOptions.CompoundPath -> 
+                            let length = infos |> List.sumBy(fun m -> m.Length)
+                            length > 0
+
+                    match isClippable with 
+                    | true ->
+
+                        ModifyPage.Create
+                            ("add compound path",
+                              PageSelector.All,
+                              Dummy,
+                              (fun (args: PageModifingArguments<RenewablePathInfo list list>) _ ->
+                                let renewablePathInfos = args.UserState.[args.PageNum-1]
+                                match renewablePathInfos with 
+                                | [] -> ()
+                                | _ ->
+                                
+                                    match options with 
+                                    | CompoundCreatingOptions.CompoundPath ->
+                                    
+                                        let pdfCanvas = new OffsetablePdfCanvas(args.Page)
+
+                                        let accumulatedPathOperatorRanges =
+                                            renewablePathInfos
+                                            |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
+
+                                        let head = renewablePathInfos.Head
+
+                                        for operatorRange in accumulatedPathOperatorRanges do
+                                            PdfCanvas.writeOperatorRange operatorRange pdfCanvas
+                                            |> ignore
+
+                                        let doc = (args.Page.GetDocument() :?> PdfDocumentWithCachedResources)
+                                        let fillColor = 
+                                            doc.Renew_OtherDocument_Color(head.FillColor)
+
+                                        let strokeColor = 
+                                            doc.Renew_OtherDocument_Color(head.StrokeColor)
+
+                                        PdfCanvas.setPathRenderColorByOperation head.Operation fillColor strokeColor pdfCanvas |> ignore
+                                        pdfCanvas.EoFill() |> ignore
+                                        //PdfCanvas.closePathByOperation head.Operation pdfCanvas |> ignore
+
+                                    | CompoundCreatingOptions.ClippingPathAndCancel condition 
+                                    | CompoundCreatingOptions.ClippingPathAndKeep   condition ->
+                                        let isClippable =
+                                            match condition with 
+                                            | ClippingCondition.Always -> true
+                                            | ClippingCondition.ClipIfPathCountSmallerOrEqualThan count ->
+                                                renewablePathInfos.Length <= count
+
+                                        match isClippable with 
+                                        | false -> ()
+                                        | true ->
+
+                                            let pdfCanvas = new OffsetablePdfCanvas(args.Page.NewContentStreamBefore(), args.Page.GetResources(), args.Page.GetDocument())
+
+                                            let accumulatedPathOperatorRanges =
+                                                renewablePathInfos
+                                                |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
+
+                                            for operatorRange in accumulatedPathOperatorRanges do
+                                                PdfCanvas.writeOperatorRange operatorRange pdfCanvas
+                                                |> ignore
+
+                                            pdfCanvas.EoClip().EndPath() |> ignore
+                                    
+                              )
+                            )
+                        ||>> ignore
+                    | false -> Manipulate.dummy() ||>> ignore
+                ))
+            )
+
+
+
+        static member CreateCompoundPath(selector: PageModifingArguments<_> -> _ -> bool) =
+            Modify.CreateCompoundPathCommon(selector, options = CompoundCreatingOptions.CompoundPath)
+            |> Manipulate.rename "Create Compound Path" []
+
+
+
+        static member ReleaseCompoundPath(selector: PageModifingArguments<_> -> _ -> bool) =
+            Modify.Create_Record
+                (
+                  PageSelector.All,
+                  [
+                    { SelectorAndModifiersRecord.Name = "release compound path"
+                      Selector = Selector.Path selector
+                      Modifiers = 
+                        [
+                            Modifier.ReleaseCompoundPath()
+                        ]
+                    }
+                  ]
+                )
+
+        static member RemoveICC() =
+            Modify.ReplaceColors(
+                picker = (fun color ->
+                    match color with 
+                    | FsColor.IccBased iccBased -> iccBased.Color.ToItextColor() |> Some
+                    | _ -> None
+                ),
+                nameAndParameters = 
+                    { Name = "RemoveICC" 
+                      Parameters = [] }
+            )
+
+        static member CreateClippingPath(selector: PageModifingArguments<_> -> _ -> bool, ?keepCompoundPath, ?condition) =
+            let options =
+                match defaultArg keepCompoundPath false with
+                | false -> CompoundCreatingOptions.ClippingPathAndCancel (defaultArg condition ClippingCondition.Always)
+                | true -> CompoundCreatingOptions.ClippingPathAndKeep (defaultArg condition ClippingCondition.Always)
+
+
+
+            Modify.CreateCompoundPathCommon(selector, options)
+            |> Manipulate.rename "Create Clipping Path" []
+
+
+

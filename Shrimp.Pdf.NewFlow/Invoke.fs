@@ -129,10 +129,135 @@ type SlimWriterPageSetter =
       Index: int }
 with 
 
+    member writerPageSetter.GenerateTransforms(readerPage: PdfPage) =
+            match writerPageSetter.PageBoxSetter with 
+            | None -> None
+            | Some pageBoxSetter ->
+                let rotates = 
+                    match pageBoxSetter.RemoveRotation with 
+                    | true -> 
+                        let rotation = readerPage.GetFsRotation()
+                        match rotation with 
+                        | Rotation.None -> []
+                        | _ -> 
+                            let angle = Rotation.getAngle rotation
+                            let offset1 =
+                                match rotation with 
+                                | Rotation.Clockwise -> 
+                                    let rect = pageBoxSetter.Rect
+                                    AffineTransformRecord.ofAffineTransform(
+                                        AffineTransform.GetTranslateInstance(
+                                        0,
+                                        rect.GetWidthF())
+                                    )
+                                | Rotation.Counterclockwise -> 
+                                    let rect = pageBoxSetter.Rect
+                                    AffineTransformRecord.ofAffineTransform(
+                                        AffineTransform.GetTranslateInstance(
+                                        rect.GetHeightF(),
+                                        0)
+                                    )
+
+
+                                | Rotation.R180 -> 
+                                    let rect = pageBoxSetter.Rect
+                                    AffineTransformRecord.ofAffineTransform(
+                                        AffineTransform.GetTranslateInstance(
+                                        rect.GetWidthF(),
+                                        rect.GetHeightF())
+                                    )
+                                | Rotation.None -> failwithf "Invalid token" 
+
+                            //let offset2 =
+                            //    AffineTransformRecord.ofAffineTransform(
+                            //        AffineTransform.GetTranslateInstance(
+                            //        -actualBox.GetXF(),
+                            //        -actualBox.GetYF())
+                            //    )
+                                //match rotation with 
+                                //| Rotation.Clockwise -> 
+                                //    AffineTransformRecord.ofAffineTransform(
+                                //        AffineTransform.GetTranslateInstance(
+                                //        -actualBox.GetXF(),
+                                //        -actualBox.GetYF())
+                                //    )
+                                //| Rotation.Counterclockwise -> 
+                                //    AffineTransformRecord.ofAffineTransform(
+                                //        AffineTransform.GetTranslateInstance(
+                                //        -actualBox.GetXF(),
+                                //        -actualBox.GetYF())
+                                //    )
+                                //| _ -> failwithf "Not implemented"
+
+                            [
+                                offset1
+                                AffineTransformRecord.ofAffineTransform(AffineTransform.GetRotateInstance(Math.PI / -180. * angle))
+                                //offset2
+                            ]
+                            
+
+                    | false -> []
+
+                let offset =
+                    match pageBoxSetter.Origin with 
+                    | None -> None
+                    | Some origin  ->
+                        match origin with 
+                        | PageBoxOrigin.LeftBottom ->
+                            let point = FsPoint.OfPoint pageBoxSetter.Rect.LeftBottom
+                            match point = { X = 0.; Y = 0.} with 
+                            | true ->  None
+                            | false ->
+                                AffineTransform.GetTranslateInstance(-point.X, -point.Y)
+                                |> AffineTransformRecord.ofAffineTransform
+                                |> Some
+
+                let scale =
+                    match pageBoxSetter.Scale with 
+                    | None -> []
+                    | Some (scaleX, scaleY) ->
+                        match pageBoxSetter.Origin with 
+                        | None ->
+                            AffineTransform.GetScaleInstance(scaleX, scaleY)
+                            |> AffineTransformRecord.ofAffineTransform
+                            |> List.singleton
+
+                        | Some origin ->
+                            match origin with 
+                            | PageBoxOrigin.LeftBottom ->
+                                let scale = 
+                                    AffineTransform.GetScaleInstance(scaleX, scaleY)
+                                    |> AffineTransformRecord.ofAffineTransform
+
+                                [scale]
+
+                                //match rotates with 
+                                //| [] ->
+                                //    let translate = 
+                                //        AffineTransformRecord.ofAffineTransform(
+                                //            AffineTransform.GetTranslateInstance(
+                                //            -actualBox.GetXF(),
+                                //            -actualBox.GetYF())
+                                //        )
+
+                                //    [scale; translate]
+
+                                //| _ -> [scale]
+
+
+                let transforms = scale @ rotates @ Option.toList offset
+                transforms
+                |> AtLeastOneList.TryCreate
+                |> Option.map(fun transforms ->
+                    transforms.AsList
+                    |> List.reduce(fun a b -> a.Concatenate(b))
+                )
+
     member writerPageSetter.GenerateWriterPageAndCanvas(readerPage: PdfPage, writer: PdfDocument, background: SlimBackground option, writeInfos) =
         let actualBox = readerPage.GetActualBox()
 
         let writerPage = writer.AddNewPage(PageSize(actualBox))
+        let transforms = writerPageSetter.GenerateTransforms(readerPage)
 
         let writerCanvas = 
             let writerCanvas = new OffsetablePdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
@@ -177,145 +302,25 @@ with
                     backgroundPositionTweak  = backgroundPositionTweak
                 )
 
-            let writeInPage (transforms: AffineTransformRecord list) =
+            let writeInPage (transforms: AffineTransformRecord option) =
                 match transforms with 
-                | [] -> writerCanvas
+                | None -> writerCanvas
 
-                | transforms ->
-                    let transform = 
-                        transforms
-                        |> List.reduce(fun a b -> a.Concatenate(b))
+                | Some transforms ->
 
                     let xobject = PdfFormXObject(actualBox)
                     PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
-                        writerCanvas.AddXObject(xobject, transform)
+                        writerCanvas.AddXObject(xobject, transforms)
                     ) |> ignore
 
                     new OffsetablePdfCanvas(xobject, writer)
 
-            let transforms = 
-                match writerPageSetter.PageBoxSetter with 
-                | None -> []
-                | Some pageBoxSetter ->
-                    let rotates = 
-                        match pageBoxSetter.RemoveRotation with 
-                        | true -> 
-                            let rotation = readerPage.GetFsRotation()
-                            match rotation with 
-                            | Rotation.None -> []
-                            | _ -> 
-                                let angle = Rotation.getAngle rotation
-                                let offset1 =
-                                    match rotation with 
-                                    | Rotation.Clockwise -> 
-                                        let rect = pageBoxSetter.Rect
-                                        AffineTransformRecord.ofAffineTransform(
-                                            AffineTransform.GetTranslateInstance(
-                                            0,
-                                            rect.GetWidthF())
-                                        )
-                                    | Rotation.Counterclockwise -> 
-                                        let rect = pageBoxSetter.Rect
-                                        AffineTransformRecord.ofAffineTransform(
-                                            AffineTransform.GetTranslateInstance(
-                                            rect.GetHeightF(),
-                                            0)
-                                        )
-
-
-                                    | Rotation.R180 -> 
-                                        let rect = pageBoxSetter.Rect
-                                        AffineTransformRecord.ofAffineTransform(
-                                            AffineTransform.GetTranslateInstance(
-                                            rect.GetWidthF(),
-                                            rect.GetHeightF())
-                                        )
-                                    | Rotation.None -> failwithf "Invalid token" 
-
-                                //let offset2 =
-                                //    AffineTransformRecord.ofAffineTransform(
-                                //        AffineTransform.GetTranslateInstance(
-                                //        -actualBox.GetXF(),
-                                //        -actualBox.GetYF())
-                                //    )
-                                    //match rotation with 
-                                    //| Rotation.Clockwise -> 
-                                    //    AffineTransformRecord.ofAffineTransform(
-                                    //        AffineTransform.GetTranslateInstance(
-                                    //        -actualBox.GetXF(),
-                                    //        -actualBox.GetYF())
-                                    //    )
-                                    //| Rotation.Counterclockwise -> 
-                                    //    AffineTransformRecord.ofAffineTransform(
-                                    //        AffineTransform.GetTranslateInstance(
-                                    //        -actualBox.GetXF(),
-                                    //        -actualBox.GetYF())
-                                    //    )
-                                    //| _ -> failwithf "Not implemented"
-
-                                [
-                                    offset1
-                                    AffineTransformRecord.ofAffineTransform(AffineTransform.GetRotateInstance(Math.PI / -180. * angle))
-                                    //offset2
-                                ]
-                                
-
-                        | false -> []
-
-                    let offset =
-                        match pageBoxSetter.Origin with 
-                        | None -> None
-                        | Some origin  ->
-                            match origin with 
-                            | PageBoxOrigin.LeftBottom ->
-                                let point = FsPoint.OfPoint pageBoxSetter.Rect.LeftBottom
-                                match point = { X = 0.; Y = 0.} with 
-                                | true ->  None
-                                | false ->
-                                    AffineTransform.GetTranslateInstance(-point.X, -point.Y)
-                                    |> AffineTransformRecord.ofAffineTransform
-                                    |> Some
-
-                    let scale =
-                        match pageBoxSetter.Scale with 
-                        | None -> []
-                        | Some (scaleX, scaleY) ->
-                            match pageBoxSetter.Origin with 
-                            | None ->
-                                AffineTransform.GetScaleInstance(scaleX, scaleY)
-                                |> AffineTransformRecord.ofAffineTransform
-                                |> List.singleton
-
-                            | Some origin ->
-                                match origin with 
-                                | PageBoxOrigin.LeftBottom ->
-                                    let scale = 
-                                        AffineTransform.GetScaleInstance(scaleX, scaleY)
-                                        |> AffineTransformRecord.ofAffineTransform
-
-                                    [scale]
-
-                                    //match rotates with 
-                                    //| [] ->
-                                    //    let translate = 
-                                    //        AffineTransformRecord.ofAffineTransform(
-                                    //            AffineTransform.GetTranslateInstance(
-                                    //            -actualBox.GetXF(),
-                                    //            -actualBox.GetYF())
-                                    //        )
-
-                                    //    [scale; translate]
-
-                                    //| _ -> [scale]
-
-
-                    scale @ rotates @ Option.toList offset
 
             writeInPage transforms
 
 
 
-        writerPage, writerCanvas
+        writerPage, writerCanvas, transforms
 
     member x.IsIgnore = 
         x.PageBoxSetter.IsNone
@@ -362,6 +367,8 @@ type SlimFlow<'userState, 'newUserState>(f: FlowModel<'userState> -> PageModifin
 
     member x.FlowName = flowName
 
+
+
     member internal x.Invoke (flowModel: FlowModel<'userState>) args infos setter = 
         match flowName with 
         | None -> f flowModel args infos setter
@@ -374,8 +381,10 @@ type SlimFlow<'userState, 'newUserState>(f: FlowModel<'userState> -> PageModifin
                       UserState = m.UserState 
                       FlowName = x.FlowName
                       OperatedFlowNames = []
-                      Configuration =m.Configuration }
+                      Configuration = m.Configuration }
 
+                let infos = 
+                    { infos with InternalFlowModel = Some (flowModel1.MapUserState (fun _ -> -1)) }
 
                 let r = PdfLogger.TryInfoWithFlowModel(setter.Index, flowModel1, fun () -> f flowModel args infos setter)
                 { r with WriterPageSetter = { r.WriterPageSetter with Index = r.WriterPageSetter.Index + 1} }
@@ -389,6 +398,26 @@ type SlimFlow<'userState, 'newUserState>(f: FlowModel<'userState> -> PageModifin
             let newFlowName =  flowName.SetParentFlowName(parentName)
             x.SetFlowName(newFlowName)
 
+
     static member rename name parameters =
         fun (slimFlow: SlimFlow<'userState, 'newUserState>) ->
             SlimFlow(slimFlow.Invoke, FlowName.Override(name, parameters = parameters))
+
+
+
+[<RequireQualifiedAccess>]
+module SlimFlow =
+    let dummy() = 
+        SlimFlow(fun flowModel args infos pageSetter ->
+            { Infos = infos 
+              UserState = ()
+              WriterPageSetter = pageSetter
+            }
+        )
+
+    let mapState(mapping) (x: SlimFlow<_, _>) =
+        let newF flowModel args infos pageSetter =
+            let r = x.Invoke flowModel args infos pageSetter
+            r.MapUserState(mapping)
+
+        new SlimFlow<_, _>(newF, ?flowName = x.FlowName, ?background = x.Background)

@@ -14,7 +14,7 @@ let fileOperationTests =
     testCase "split document" <| fun _ -> 
         Flow.FileOperation (
             FileOperations.splitDocumentToMany (fun args ->
-                { args with 
+                { args with  
                     ChunkSize = 2
                     Override = true }
             )

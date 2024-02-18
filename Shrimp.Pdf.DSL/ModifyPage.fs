@@ -107,6 +107,7 @@ type PageModifier =
             let canvas = 
                 new Canvas(page, rootArea)
 
+            canvas.GetPdfCanvas().GetContentStream().GetOutputStream().SetLocalHighPrecision(true)
 
             let canvasActions = canvasActionsBuilder args
 
@@ -119,7 +120,7 @@ type PageModifier =
     static member AddNew (canvasActionsBuilder) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
             let page = args.Page
-            let canvas = new PdfCanvas(page)
+            let canvas = new OffsetablePdfCanvas(page) :> PdfCanvas
 
             let canvasActions = canvasActionsBuilder args
 
@@ -514,7 +515,7 @@ type PageModifier =
             let pageBox = args.Page.GetActualBox()
             let contentBox = fRectangle pageBox
             let writerCanvas = 
-                new PdfCanvas(args.Page.NewContentStreamBefore(), args.Page.GetResources(), args.Page.GetDocument())
+                new OffsetablePdfCanvas(args.Page.NewContentStreamBefore(), args.Page.GetResources(), args.Page.GetDocument())
 
             let transform =
                 { OldRect = pageBox 

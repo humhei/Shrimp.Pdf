@@ -70,7 +70,7 @@ module _ImageConverter =
 
             let pdfPage = pdfDoc.AddNewPage(PageSize rect)
 
-            let canvas = new PdfCanvas(pdfPage)
+            let canvas = new OffsetablePdfCanvas(pdfPage)
 
             canvas.AddImageFittedIntoRectangle(image, rect, asInline = false)
             |> ignore

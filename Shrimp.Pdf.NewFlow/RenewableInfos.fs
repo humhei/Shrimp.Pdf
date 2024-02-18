@@ -13,24 +13,74 @@ open iText.Kernel.Geom
 type RenewableInfos = 
     { Infos: RenewableInfo list 
       IsCuttingDieSetted: bool
-      Background: SlimBackground option }
+      Background: SlimBackground option
+      InternalFlowModel: option<InternalFlowModel<int>> }
 with 
     static member Create(infos) =
         { Infos = infos 
           IsCuttingDieSetted = false
-          Background = None }
+          Background = None
+          InternalFlowModel = None }
 
     member x.AsList = x.Infos
 
     member x.MapInfos(name, f) =
-        match x.Background with 
-        | None -> ()
-        | Some bk -> 
-            bk.ModifyInfos(name, f)
+        let mapInfos() = 
+            match x.Background with 
+            | None -> ()
+            | Some bk -> 
+                bk.ModifyInfos(name, f)
 
-        {x with 
-            Infos = f x.Infos
-        }
+            {x with 
+                Infos = f x.Infos
+            }
+
+        match x.InternalFlowModel with 
+        | None -> mapInfos()
+        | Some flowModel1 ->
+            let flowModel1 =
+                { flowModel1 with 
+                    FlowName =
+                        match flowModel1.FlowName with 
+                        | None -> FlowName.New(name)
+                        | Some flowName ->
+                            FlowName.Override(name).SetParentFlowName(flowName)
+                        |> Some   
+                }
+
+            PdfLogger.TryInfoWithFlowModel(flowModel1.UserState, flowModel1, fun () -> mapInfos())
+
+    member x.MapInfo(name, f) =
+        x.MapInfos(name, fun infos ->
+            infos
+            |> List.map(fun m ->
+                f m
+            )
+        )
+
+    member x.MapPath(name, f) =
+        x.MapInfos(name, fun infos ->
+            infos
+            |> List.map(fun m ->
+                m.MapPath f
+            )
+        )
+
+    member x.MapText(name, f) =
+        x.MapInfos(name, fun infos ->
+            infos
+            |> List.map(fun m ->
+                m.MapText f
+            )
+        )
+
+    member x.MapImage(name, f) =
+        x.MapInfos(name, fun infos ->
+            infos
+            |> List.map(fun m ->
+                m.MapImage f
+            )
+        )
 
     member x.FilterInfos(name, f) =
         let bkInfos = 
@@ -106,7 +156,7 @@ with
 
     member x.CuttingDieInfosBound() =
         x.CuttingDieInfos()
-        |> List.map(fun m -> m.VisibleBound)
+        |> List.map(fun m -> m.VisibleBound0)
         |> AtLeastOneList.TryCreate
         |> Option.map Rectangle.ofRectangles
         
@@ -131,9 +181,9 @@ with
         x.MapInfos("SetColor", List.map(fun m -> m.SetColor()))
 
 
-    member x.VisibleBound() =
+    member x.VisibleBound1() =
         x.ChooseInfos("GetVisibleBound", fun info ->
-            Some info.VisibleBound
+            Some info.VisibleBound1
         )
         |> AtLeastOneList.TryCreate
         |> Option.map Rectangle.ofRectangles
@@ -164,6 +214,12 @@ with
                 | false -> None
             )
         ))
+
+    member x.ReplaceColors(name, picker: FsColor -> FsColor option) =
+        x.MapInfos(name, List.map(fun info ->
+            info.MapColor(picker)
+        ))
+ 
 
 [<RequireQualifiedAccess>]
 type PageBoxOrigin =

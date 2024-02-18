@@ -45,9 +45,9 @@ let createTestPath file =
 let runTest file flow =
     let newPath = createTestPath file
     File.Copy(file, newPath, true)
-       
-    let r = run newPath flow  
-    r                            
+        
+    let r = run newPath flow   
+    r                              
      
 let runManyWithBackup (files: string list) outputDir flow =
     Directory.ensure outputDir

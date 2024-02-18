@@ -600,7 +600,7 @@ module _Reuses =
                             )
 
 
-                        let canvas = new PdfCanvas(newPage)
+                        let canvas = new OffsetablePdfCanvas(newPage)
                         canvas.AddXObject(xobject, affineTransform)
                         |> ignore
 
@@ -752,7 +752,7 @@ module _Reuses =
 
                                     affineTransform.PreConcatenate(affineTransform_Translate_Center)
 
-                                    let canvas = new PdfCanvas(newPage)
+                                    let canvas = new OffsetablePdfCanvas(newPage)
                                     canvas.AddXObject(xobject, affineTransform)
                                     |> ignore
                                 else 
@@ -822,7 +822,7 @@ module _Reuses =
                  "size" => size.ToString() ]
 
         /// keepDirection => bkSize.AlignDirection(pageBox)
-        static member SetBackgroundSize (pageSelector: PageSelector, bkSize: FsSize, ?position: Position, ?pageBoxSetter: SetBackgroundSize_PageBoxSetter, ?keepDirection) =
+        static member SetBackgroundPaperSize (pageSelector: PageSelector, bkSize: FsSize, ?position: Position, ?pageBoxSetter: SetBackgroundSize_PageBoxSetter, ?keepDirection) =
             let position = defaultArg position Position.PreciseCenter
             let pageBoxSetter = defaultArg pageBoxSetter SetBackgroundSize_PageBoxSetter.SetArtBoxToContents
             let keepDirection = defaultArg keepDirection false
@@ -857,7 +857,7 @@ module _Reuses =
                         | Position.Top _ -> baseY + lengthDiff
                         |> fun m -> m + position.Y
 
-                    let canvas = PdfCanvas(writerPage)
+                    let canvas = OffsetablePdfCanvas(writerPage)
                     canvas.AddXObjectAt(xobject, float32 x, float32 y)
                     |> ignore
 
@@ -1099,7 +1099,7 @@ module _Reuses =
                         )
 
 
-                    let canvas = new PdfCanvas(newPage)
+                    let canvas = new OffsetablePdfCanvas(newPage)
                     newPage.SetPageBoxToPage(page) |> ignore
                     //let clippingBoxToActualPage =  - clippingPageBox.GetX()
                         
@@ -1681,10 +1681,10 @@ module _Reuses =
                         let pdfCanvas = 
                             match backgroundOrForeground with 
                             | BackgroundOrForeground.Background ->
-                                new PdfCanvas(writerPage.NewContentStreamBefore(), writerPage.GetResources(), doc.Writer)
+                                new OffsetablePdfCanvas(writerPage.NewContentStreamBefore(), writerPage.GetResources(), doc.Writer)
 
                             | BackgroundOrForeground.Foreground ->
-                                new PdfCanvas(writerPage.NewContentStreamAfter(), writerPage.GetResources(), doc.Writer)
+                                new OffsetablePdfCanvas(writerPage.NewContentStreamAfter(), writerPage.GetResources(), doc.Writer)
                             
 
                         PdfCanvas.useCanvas pdfCanvas (
@@ -1767,7 +1767,7 @@ module _Reuses =
 
                         let writerPage = doc.Writer.AddNewPage(pageSize)
                         writerPage.SetPageBoxToPage(readerPage) |> ignore
-                        let pdfCanvas = new PdfCanvas(writerPage)
+                        let pdfCanvas = new OffsetablePdfCanvas(writerPage)
                         let bk_x = 
                             let baseX =  readerPageBox.GetX() - backgroundPageBox.GetX() 
                             let lengthDiff = readerPageBox.GetWidth() - backgroundPageBox.GetWidth()
@@ -1886,7 +1886,7 @@ module _Reuses =
 
                     let writerPage = doc.Writer.AddNewPage(pageSize)
                     writerPage.SetPageBoxToPage(readerPage) |> ignore
-                    let pdfCanvas = new PdfCanvas(writerPage)
+                    let pdfCanvas = new OffsetablePdfCanvas(writerPage)
 
                     pdfCanvas
                         .BeginLayer(layer)

@@ -214,10 +214,10 @@ module _SlimFlow_Common_BackgroundOrForeground =
             let pdfCanvas = 
                 match choice with 
                 | BackgroundOrForeground.Background ->
-                    new PdfCanvas(writerPage.NewContentStreamBefore(), writerPage.GetResources(), writerDoc)
+                    new OffsetablePdfCanvas(writerPage.NewContentStreamBefore(), writerPage.GetResources(), writerDoc)
 
                 | BackgroundOrForeground.Foreground ->
-                    new PdfCanvas(writerPage.NewContentStreamAfter(), writerPage.GetResources(), writerDoc)
+                    new OffsetablePdfCanvas(writerPage.NewContentStreamAfter(), writerPage.GetResources(), writerDoc)
                     
 
 

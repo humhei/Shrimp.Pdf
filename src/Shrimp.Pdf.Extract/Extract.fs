@@ -31,14 +31,16 @@ module _Extract =
           TagColor: FsColor option
           BoundPredicate: (RenewablePathInfo -> bool) option
           RectangleTransform: RectangleTransform option
-          BorderKeepingPageNumbers: int list }
+          BorderKeepingPageNumbers: int list
+          TagInfosTransform: AffineTransformRecord option }
     with    
         static member Create(infos: RenewableInfo list, borderKeppingPageNumbers, ?tagColor, ?boundPredicate, ?rectangleTransform) =
             { RenewableInfos = infos
               TagColor = tagColor
               BorderKeepingPageNumbers = borderKeppingPageNumbers
               BoundPredicate = boundPredicate
-              RectangleTransform = rectangleTransform }
+              RectangleTransform = rectangleTransform 
+              TagInfosTransform = None }
 
     type internal TargetNewInfosInOriginPageElement =
         { RenewableInfos: RenewableInfo list
@@ -98,7 +100,7 @@ module _Extract =
             )
 
 
-    let internal writeInfos writer (writerPageBox: Rectangle) writerCanvas (infos: RenewableInfo list) =
+    let internal writeInfos maxLevel_plus writer (writerPageBox: Rectangle) writerCanvas (infos: RenewableInfo list) =
         match infos with 
         | [] -> ()
         | _ ->
@@ -108,51 +110,93 @@ module _Extract =
                 |> List.max
                 |> fun m -> m - 1 
 
+            let maxLevel = maxLevel
+
             let rec loop (writerCanvas: OffsetablePdfCanvas) (xobjectGsState: al1List<FsParserGraphicsStateValue> option) (level: int) (infos: RenewableInfo list) =
                 match level = maxLevel, xobjectGsState with 
                 | true, None -> 
-                    infos
-                    |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.XObjectClippingBoxState.Serializable)
-                    |> List.iter(fun (xobjectRect, infos) ->
-                        let infos = infos.AsList
-                        let writeInfos() =
-                            infos
-                            |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.ClippingPathInfoState)
-                            |> List.iter(fun (clippingPathInfo, infos) ->   
-                                let infos = infos.AsList
-                                let writeInfos() =
-                                    for info in infos do
-                                        info.CopyToDocument(writer, writerCanvas.GetResources()).ApplyCtm_WriteToCanvas(writerCanvas)
-    
-                                match clippingPathInfo with 
-                                | ClippingPathInfoState.Init -> writeInfos()
-                                | ClippingPathInfoState.Intersected (clippingPathInfo) -> 
-                                    clippingPathInfo.Renewable().ApplyCtm_WriteToCanvas(writerCanvas, (fun writerCanvas ->
-                                        writeInfos()
-                                        writerCanvas
-                                    ))
-                            )
+                    infos 
+                    |> List.splitIfChangedByKey(fun m -> 
+                        List.tryItem level m.GsStates.AsList
+                        |> Option.map(fun m -> m.CustomHashCode)
+                    )
+                    |> List.iter(fun (customHashCode, infos) ->
+                        let gs = 
+                            match customHashCode with 
+                            | None -> None
+                            | Some _ -> 
+                                let gs = infos.Head.GsStates.AsList.[level]
+                                let gs = 
+                                    gs.AsList
+                                    |> AtLeastOneList.TryCreate
 
-                        match xobjectRect with 
-                        | SerializableXObjectClippingBoxState.IntersectedNone -> failwith "Invalid token: visble render info XObjectClippingBoxState cannot be IntersectedNone"
-                        | SerializableXObjectClippingBoxState.Init -> writeInfos() 
-                        | SerializableXObjectClippingBoxState.IntersectedSome rect ->
-                            match rect.Width, rect.Height with 
-                            | BiggerThan MAXIMUM_MM_WIDTH, BiggerThan MAXIMUM_MM_WIDTH -> writeInfos()
-                            | _ ->
-                                PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
-                                    writerCanvas
-                                        .Rectangle(rect.AsRectangle)
-                                        .Clip()
-                                        .EndPath()
-                                        |> ignore
-
-                                    writeInfos()
-
-                                    writerCanvas
-
+                                gs
+                                |> Option.map(fun gs ->
+                                    gs
+                                    |> AtLeastOneList.map(fun m -> m.FsExtState)
+                                    |> FsExtGState.Concat
                                 )
+
+                        match gs with 
+                        | None -> ()
+                        | Some gsState ->
+                            writerCanvas.SaveState() |> ignore
+                            gsState.Renewable().ApplyCtm_WriteToCanvas(writerCanvas)
+                            
+
+                        let infos = infos.AsList
+                        infos
+                        |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.XObjectClippingBoxState.Serializable)
+                        |> List.iter(fun (xobjectRect, infos) ->
+                            let infos = infos.AsList
+                            let writeInfos() =
+                                infos
+                                |> List.splitIfChangedByKey(fun m -> m.ClippingPathInfos.ClippingPathInfoState)
+                                |> List.iter(fun (clippingPathInfo, infos) ->   
+                                    let infos = infos.AsList
+                                    let writeInfos() =
+                                        for info in infos do
+                                            info.CopyToDocument(writer, writerCanvas.GetResources()).ApplyCtm_WriteToCanvas(writerCanvas)
+    
+                                    match clippingPathInfo with 
+                                    | ClippingPathInfoState.Init -> writeInfos()
+                                    | ClippingPathInfoState.Intersected (clippingPathInfo) -> 
+                                        clippingPathInfo.Renewable().ApplyCtm_WriteToCanvas(writerCanvas, (fun writerCanvas ->
+                                            writeInfos()
+                                            writerCanvas
+                                        ))
+                                )
+
+                            match xobjectRect with 
+                            | SerializableXObjectClippingBoxState.IntersectedNone -> failwith "Invalid token: visble render info XObjectClippingBoxState cannot be IntersectedNone"
+                            | SerializableXObjectClippingBoxState.Init -> writeInfos() 
+                            | SerializableXObjectClippingBoxState.IntersectedSome rect ->
+                                match rect.Width, rect.Height with 
+                                | BiggerThan MAXIMUM_MM_WIDTH, BiggerThan MAXIMUM_MM_WIDTH -> writeInfos()
+                                | _ ->
+                                    PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
+                                        writerCanvas
+                                            .Rectangle(rect.AsRectangle)
+                                            .Clip()
+                                            .EndPath()
+                                            |> ignore
+
+                                        writeInfos()
+
+                                        writerCanvas
+
+                                    )
                         )
+
+                        match gs with 
+                        | None -> ()
+                        | Some _ ->
+                            writerCanvas.RestoreState() |> ignore
+                            
+
+                    )
+
+
                 | _ ->
 
                     match xobjectGsState with 
@@ -170,12 +214,12 @@ module _Extract =
                         //    gsState.Renewable().ApplyCtm_WriteToCanvas(writerCanvas)
                         //)
                         let rect = 
-                            infos
-                            |> List.map(fun m -> m.VisibleBound)
+                            infos 
+                            |> List.map(fun m -> m.VisibleBound1)
                             |> AtLeastOneList.Create
                             |> Rectangle.ofRectangles
 
-                        let writerCanvas2 = 
+                        let writerCanvas2 =  
                             let offset_X = writerCanvas.XOffset + rect.GetX() - writerPageBox.GetX()
                             let offset_Y = writerCanvas.YOffset + rect.GetY() - writerPageBox.GetY()
            
@@ -295,13 +339,14 @@ module _Extract =
             let infos = 
                 infos
                 |> List.ofSeq
-                |> List.map(fun m -> m.AsUnion.SetVisibleBound(BoundGettingStrokeOptions.WithoutStrokeWidth))
-                |> List.filter(fun m -> m.LazyVisibleBound.IsSome)
+                |> List.map(fun m -> m.AsUnion.SetVisibleBound0())
+                |> List.filter(fun m -> m.LazyVisibleBound0.IsSome)
 
             infos
             |> List.map(fun info ->
                 info.Renewable()
             )
+            |> List.map(fun m -> m.UpdateVisibleBound1())
 
         stopWatch.Stop()
         logInfo(fun () ->
@@ -332,8 +377,9 @@ module _Extract =
                 let pageBox = writerPage.GetActualBox()
                 let infos = element.Infos
 
-                let writeInfos2 writerCanvas infos = writeInfos writer pageBox writerCanvas infos
-                let writeInfos infos = writeInfos writer pageBox writerCanvas infos
+                let writeInfos2 writerCanvas infos = writeInfos 0 writer pageBox writerCanvas infos
+                let writeInfos1 infos = writeInfos 1 writer pageBox writerCanvas infos
+                let writeInfos infos = writeInfos 0 writer pageBox writerCanvas infos
 
                 let infoChoices(boundPredicate) =   
                     let infoChoices =
@@ -453,13 +499,14 @@ module _Extract =
                         match element.RectangleTransform with 
                         | Some rect ->  
                             writeInfosWithTransform boundPredicate rect
-
-
                         | None ->
 
                             let infoChoices = infoChoices boundPredicate
                             PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
-                                writeInfos(infoChoices.Infos)
+                                match element.TagInfosTransform with 
+                                | None -> writeInfos(infoChoices.Infos)
+                                | Some _ -> writeInfos1 (infoChoices.Infos)
+
                                 let existsKeepBorderInfos =
                                     keepBorder &&
                                     (
@@ -478,11 +525,25 @@ module _Extract =
                                     let boundingCanvas = 
                                         OffsetablePdfCanvas(stream, writerPage.GetResources(), writer)
                                         
+                                    match element.TagInfosTransform with 
+                                    | None -> ()
+                                    | Some tagInfosTransform ->
+                                        boundingCanvas.SaveState() |> ignore
+                                        boundingCanvas
+                                        |> PdfCanvas.concatMatrixByTransformRecord tagInfosTransform
+                                        |> ignore
+
                                     let bounds = infoChoices.Bounds |> List.map(fun m -> m.SetContainerToPage())
                                     let tagInfos = infoChoices.TagInfos |> List.map(fun m -> m.SetContainerToPage())
 
                                     writeInfos2 boundingCanvas (bounds)
                                     writeInfos2 boundingCanvas (tagInfos)
+
+                                    match element.TagInfosTransform with 
+                                    | None -> ()
+                                    | Some _ ->
+                                        boundingCanvas.RestoreState() |> ignore
+
 
 
                                 writerCanvas
@@ -505,7 +566,7 @@ module _Extract =
                     let rect = 
                         let rects = 
                             infos1
-                            |> List.choose(fun m -> IIntegratedRenderInfoIM.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m.OriginInfo)
+                            |> List.choose(fun m -> IIntegratedRenderInfoIM.getBound BoundGettingStrokeOptions.WithStrokeWidth m.OriginInfo)
                             |> AtLeastOneList.TryCreate
                             
                         match rects with 
@@ -550,7 +611,8 @@ module _Extract =
                               TagColor = None 
                               BoundPredicate = None 
                               RectangleTransform = None 
-                              BorderKeepingPageNumbers = borderKeepingPageNumbers }
+                              BorderKeepingPageNumbers = borderKeepingPageNumbers
+                              TagInfosTransform = None }
 
 
                         TargetRenewablePageInfo.NewPage(targetPageBox, element, SlimWriterPageSetter.Ignore)
@@ -573,7 +635,7 @@ module _Extract =
 
                 | TargetRenewablePageInfo.Non -> ()
                 | TargetRenewablePageInfo.NewPageCase (targetPageBox, infos, writerPageSetter, background) ->
-                    let writerPage, writerCanvas = writerPageSetter.GenerateWriterPageAndCanvas(readerPage, writer, background, writeInfos)
+                    let writerPage, writerCanvas, tagInfosTransforms = writerPageSetter.GenerateWriterPageAndCanvas(readerPage, writer, background, writeInfos)
                             
                     let layerOptions =
                         match background with 
@@ -586,6 +648,8 @@ module _Extract =
                                 .WriteLiteral("0 G\n")
                                 .WriteLiteral("0 g\n")
                                 |> ignore
+
+                            let infos = { infos with TagInfosTransform = tagInfosTransforms }
 
                             writeAreaInfos (TargetNewInfosElementUnion.NewPageInfo infos) writerCanvas writerPage
 
@@ -663,19 +727,33 @@ module _Extract =
 
     type Reuses with
         static member ExtractIM(pageSelector: PageSelector, selector, ?slimFlow: SlimFlowUnion<_, _>, ?keepOriginPage) =    
+            let slimFlow =
+                match slimFlow with 
+                | None -> None
+                | Some slimFlow ->
+                    slimFlow
+                    <+>
+                    SlimModifyPage.MapInfos(fun args infos ->
+                        match infos.Background with 
+                        | None -> infos
+                        | Some background ->
+                            background.Internal_RecoverVisibleBound_ForWrite()
+                            infos
+                    )
+                    |> Some
             let keepOriginPage = defaultArg keepOriginPage false
             fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
                 let flowModel =
                     { flowModel with 
                         Configuration = 
                             { flowModel.Configuration with SlimableFlowLoggingOptions = SlimableFlowLoggingOptions.Slim }
-                    }
+                    } 
                 let reader = splitDocument.Reader
                 let totalNumberOfPages = reader.GetNumberOfPages()
                 let pageNumbers = reader.GetPageNumbers(pageSelector)
                 let borderKeepingPageNumbers = [1..totalNumberOfPages]
 
-
+                let bks = ResizeArray()
 
                 pageNumbers
                 |> List.iter(fun pageNumber ->
@@ -699,6 +777,7 @@ module _Extract =
                                 let infos = r.Infos.AsList
                                 let writerPageSetter = r.WriterPageSetter
                                 let background = r.Infos.Background
+                                bks.Add(background)
                                 let boundPredicate (info: RenewablePathInfo) =
                                     info.Tag = RenewablePathInfoTag.CuttingDie
 
@@ -711,6 +790,13 @@ module _Extract =
                         splitDocument.Writer
                     |> ignore
                 )
+
+                bks
+                |> List.ofSeq
+                |> List.choose id
+                |> List.distinctBy(fun m -> m.BackgroundFile.ClearedPdfFile.PdfPath)
+                |> List.iter(fun m -> (m :> System.IDisposable).Dispose())
+                
 
             |> reuse 
                 "Extract objects"

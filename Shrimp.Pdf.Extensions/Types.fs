@@ -20,6 +20,8 @@ open Shrimp.FSharp.Plus.Math
 
 [<AutoOpen>]
 module ExtensionTypes =
+
+
     [<AutoOpen>]
     module _Colors =
         open iText.Kernel.Colors
@@ -610,7 +612,7 @@ module ExtensionTypes =
 
 
             
-
+    [<Struct>]
     type FsPoint =
         { X: float 
           Y: float }

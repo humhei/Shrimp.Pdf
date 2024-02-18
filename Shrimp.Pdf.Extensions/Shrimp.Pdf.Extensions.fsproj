@@ -17,8 +17,8 @@
     <PackageReference Include="itext7" Version="99.99.4" />
     <PackageReference Include="itext7.font-asian" Version="7.2.2" />
     <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.100"/>
-    <PackageReference Include="Shrimp.FSharp.Plus" Version="5.99.491"/>
-    <PackageReference Include="Shrimp.LiteDB" Version="5.99.287"/>
+    <PackageReference Include="Shrimp.FSharp.Plus" Version="5.99.492"/>
+    <PackageReference Include="Shrimp.LiteDB" Version="5.99.294"/>
     <PackageReference Include="System.ValueTuple" Version="4.5.0" />
   </ItemGroup>
 

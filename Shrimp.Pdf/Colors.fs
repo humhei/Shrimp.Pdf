@@ -2195,6 +2195,9 @@ module _Colors =
             |> PdfCanvasColor.Value
 
 
+    type FsColor with 
+        member x.IsEqualTo(pdfCanvasColor: PdfCanvasColor) =
+            pdfCanvasColor.IsEqualTo(x)
 
     [<RequireQualifiedAccess>]
     type NullablePdfCanvasColor =

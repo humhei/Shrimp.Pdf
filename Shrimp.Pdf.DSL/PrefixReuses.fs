@@ -394,7 +394,7 @@ module _PrefixReuses =
                 let xobject = readerPage.CopyAsFormXObject(x.Writer)
                 let pageSize = PageSize(readerPage.GetPageSize())
                 let writerPage = x.Writer.AddNewPage(pageSize)
-                let canvas = new PdfCanvas(writerPage)
+                let canvas = new OffsetablePdfCanvas(writerPage)
                 canvas.AddXObject(xobject)
                 |> ignore
                 writerPage
@@ -418,7 +418,7 @@ module _PrefixReuses =
 
                         let xobject = page.CopyAsFormXObject(splitDocument.Writer)
                         let newPage = splitDocument.Writer.AddNewPage(PageSize(Rectangle.create 0. 0. width height))
-                        let canvas = new PdfCanvas(newPage)
+                        let canvas = new OffsetablePdfCanvas(newPage)
 
 
 
@@ -618,7 +618,7 @@ module _PrefixReuses =
         
                                         splitDocument.Writer.AddNewPage(PageSize(newPageSize))
         
-                                    let canvas = new PdfCanvas(newPage)
+                                    let canvas = new OffsetablePdfCanvas(newPage)
         
                                     canvas.AddXObject(xobject,AffineTransformRecord.ofAffineTransform affineTransform) |> ignore
         

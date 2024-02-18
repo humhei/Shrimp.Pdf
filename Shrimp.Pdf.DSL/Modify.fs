@@ -386,15 +386,17 @@ type ColorStyle [<JsonConstructor>] private (v) =
 
 
 type StrokeStyle [<JsonConstructor>] private  (v) =
-    inherit POCOBaseV<ColorStyle option * ``ufloat>0`` option * int option * DashPattern option>(v)
+    inherit POCOBaseV<ColorStyle option * ``ufloat>0`` option * int option * DashPattern option * int option>(v)
 
-    member x.ColorStyle = x.VV.Item4_1()
+    member x.ColorStyle = x.VV.Item5_1()
 
-    member x.Width = x.VV.Item4_2() 
+    member x.Width = x.VV.Item5_2() 
 
-    member x.LineJoinStyle = x.VV.Item4_3()
+    member x.LineJoinStyle = x.VV.Item5_3()
 
-    member x.DashPattern = x.VV.Item4_4()
+    member x.DashPattern = x.VV.Item5_4()
+
+    member x.CapStyle = x.VV.Item5_5()
 
     member x.CloseOperator =
         match x.ColorStyle with 
@@ -465,9 +467,9 @@ type StrokeStyle [<JsonConstructor>] private  (v) =
           Close = CloseOperatorUnion.Create(args.Tag, stroke = x.CloseOperator) }
 
 
-    new (?targetColorStyle: ColorStyle, ?width: ``ufloat>0``, ?lineJoinStyle, ?dashPattern) =
-        DefaultArgs.CheckAllInputsAreNotEmpty(targetColorStyle, width, lineJoinStyle, dashPattern)
-        new StrokeStyle((targetColorStyle, width, lineJoinStyle, dashPattern))
+    new (?targetColorStyle: ColorStyle, ?width: ``ufloat>0``, ?lineJoinStyle, ?dashPattern, ?capStyle) =
+        DefaultArgs.CheckAllInputsAreNotEmpty(targetColorStyle, width, lineJoinStyle, dashPattern, capStyle)
+        new StrokeStyle((targetColorStyle, width, lineJoinStyle, dashPattern, capStyle))
 
     new (args: PdfCanvasAddLineArguments) =
         new StrokeStyle(
@@ -2764,216 +2766,4 @@ type Modify =
                   }
             ]
         )
-
-
-    static member internal ReadCompoundPath(selector) =
-        Manipulate.Func(fun userState ->
-            ModifyPage.Create
-                ("read compound path infos",
-                  PageSelector.All,
-                  //Selector.Path(selector),
-                  Selector.Path(selector),
-                  (fun args infos ->
-                    let pathInfos = 
-                        infos
-                        |> List.ofSeq
-                        |> List.choose IIntegratedRenderInfo.asIPathRenderInfo
-
-                    pathInfos
-                    |> List.map(fun pathInfo -> pathInfo.Renewable())
-                  )
-                )
-        )
-
-    static member private CancelCompoundPath(pageSelector, selector) =
-        Manipulate.Func(fun userState ->
-            (
-                Modify.Create_Record
-                    ( pageSelector,
-                      [
-                        { 
-                            SelectorAndModifiersRecord.Name = "cancel compound paths"
-                            //Selector = Selector.Path(selector)
-                            Selector = Selector.Path(fun args info -> selector (args.MapUserState(fun _ -> userState)) info)
-                            Modifiers =[
-                                Modifier.CancelFillAndStroke() 
-                            ]
-                        }
-                      ]
-                    )
-            )
-        )
-
-    static member private CreateCompoundPathCommon(selector: PageModifingArguments<_> -> _ -> bool, options: CompoundCreatingOptions) =
-
-        Manipulate.Func(fun userState ->
-            let selector (args: PageModifingArguments<_>) info =
-                selector (args.MapUserState(fun _ -> userState)) info
-                
-            (
-                match options with 
-                | CompoundCreatingOptions.CompoundPath -> 
-                    Modify.ReadCompoundPath(selector)
-                    <.+>
-                    Modify.CancelCompoundPath(PageSelector.All, selector)
-                | CompoundCreatingOptions.ClippingPathAndCancel condition ->
-                    Modify.ReadCompoundPath(selector)
-                    <.+>
-                    Manipulate.Func(fun infoLists ->
-                        let pageNumbers =
-                            infoLists
-                            |> List.indexed
-                            |> List.choose(fun (i, infos: RenewablePathInfo list) ->
-                                let infos = infos |> List.map(fun m -> m.Path)
-                                match condition.IsClippable infos with 
-                                | true -> Some (i+1)
-                                | false -> None
-                            )
-
-                        match pageNumbers with 
-                        | [] -> Manipulate.dummy() ||>> ignore
-                        | _ ->
-                            let pageSelector =
-                                pageNumbers
-                                |> PageSelector.Numbers
-
-                            Modify.CancelCompoundPath(pageSelector, selector)
-
-                    )
-                | CompoundCreatingOptions.ClippingPathAndKeep condition ->
-                    Modify.ReadCompoundPath(selector)
-            )
-            <+>
-            (Manipulate.Func (fun (infos: RenewablePathInfo list list) ->
-                let isClippable =
-                    match options with 
-                    | CompoundCreatingOptions.ClippingPathAndCancel condition 
-                    | CompoundCreatingOptions.ClippingPathAndKeep condition ->
-                        infos
-                        |> List.exists(fun m -> 
-                            let infos = m |> List.map(fun m -> m.Path)
-                            condition.IsClippable infos
-                        )
-
-                    | CompoundCreatingOptions.CompoundPath -> 
-                        let length = infos |> List.sumBy(fun m -> m.Length)
-                        length > 0
-
-                match isClippable with 
-                | true ->
-
-                    ModifyPage.Create
-                        ("add compound path",
-                          PageSelector.All,
-                          Dummy,
-                          (fun (args: PageModifingArguments<RenewablePathInfo list list>) _ ->
-                            let renewablePathInfos = args.UserState.[args.PageNum-1]
-                            match renewablePathInfos with 
-                            | [] -> ()
-                            | _ ->
-                            
-                                match options with 
-                                | CompoundCreatingOptions.CompoundPath ->
-                                
-                                    let pdfCanvas = new PdfCanvas(args.Page)
-
-                                    let accumulatedPathOperatorRanges =
-                                        renewablePathInfos
-                                        |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
-
-                                    let head = renewablePathInfos.Head
-
-                                    for operatorRange in accumulatedPathOperatorRanges do
-                                        PdfCanvas.writeOperatorRange operatorRange pdfCanvas
-                                        |> ignore
-
-                                    let doc = (args.Page.GetDocument() :?> PdfDocumentWithCachedResources)
-                                    let fillColor = 
-                                        doc.Renew_OtherDocument_Color(head.FillColor)
-
-                                    let strokeColor = 
-                                        doc.Renew_OtherDocument_Color(head.StrokeColor)
-
-                                    PdfCanvas.setPathRenderColorByOperation head.Operation fillColor strokeColor pdfCanvas |> ignore
-                                    pdfCanvas.EoFill() |> ignore
-                                    //PdfCanvas.closePathByOperation head.Operation pdfCanvas |> ignore
-
-                                | CompoundCreatingOptions.ClippingPathAndCancel condition 
-                                | CompoundCreatingOptions.ClippingPathAndKeep   condition ->
-                                    let isClippable =
-                                        match condition with 
-                                        | ClippingCondition.Always -> true
-                                        | ClippingCondition.ClipIfPathCountSmallerOrEqualThan count ->
-                                            renewablePathInfos.Length <= count
-
-                                    match isClippable with 
-                                    | false -> ()
-                                    | true ->
-
-                                        let pdfCanvas = new PdfCanvas(args.Page.NewContentStreamBefore(), args.Page.GetResources(), args.Page.GetDocument())
-
-                                        let accumulatedPathOperatorRanges =
-                                            renewablePathInfos
-                                            |> List.collect(fun m -> m.ApplyCtm_To_AccumulatedPathOperatorRanges())
-
-                                        for operatorRange in accumulatedPathOperatorRanges do
-                                            PdfCanvas.writeOperatorRange operatorRange pdfCanvas
-                                            |> ignore
-
-                                        pdfCanvas.EoClip().EndPath() |> ignore
-                                
-                          )
-                        )
-                    ||>> ignore
-                | false -> Manipulate.dummy() ||>> ignore
-            ))
-        )
-
-
-
-    static member CreateCompoundPath(selector: PageModifingArguments<_> -> _ -> bool) =
-        Modify.CreateCompoundPathCommon(selector, options = CompoundCreatingOptions.CompoundPath)
-        |> Manipulate.rename "Create Compound Path" []
-
-
-
-    static member ReleaseCompoundPath(selector: PageModifingArguments<_> -> _ -> bool) =
-        Modify.Create_Record
-            (
-              PageSelector.All,
-              [
-                { SelectorAndModifiersRecord.Name = "release compound path"
-                  Selector = Selector.Path selector
-                  Modifiers = 
-                    [
-                        Modifier.ReleaseCompoundPath()
-                    ]
-                }
-              ]
-            )
-
-    static member RemoveICC() =
-        Modify.ReplaceColors(
-            picker = (fun color ->
-                match color with 
-                | FsColor.IccBased iccBased -> iccBased.Color.ToItextColor() |> Some
-                | _ -> None
-            ),
-            nameAndParameters = 
-                { Name = "RemoveICC" 
-                  Parameters = [] }
-        )
-
-    static member CreateClippingPath(selector: PageModifingArguments<_> -> _ -> bool, ?keepCompoundPath, ?condition) =
-        let options =
-            match defaultArg keepCompoundPath false with
-            | false -> CompoundCreatingOptions.ClippingPathAndCancel (defaultArg condition ClippingCondition.Always)
-            | true -> CompoundCreatingOptions.ClippingPathAndKeep (defaultArg condition ClippingCondition.Always)
-
-
-
-        Modify.CreateCompoundPathCommon(selector, options)
-        |> Manipulate.rename "Create Clipping Path" []
-
-
 

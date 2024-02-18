@@ -36,63 +36,7 @@ module _FsParserGraphicsStateValueUtils =
                 defalutValue2.GetCustomHashCode()
             ]
 
-type FsParserGraphicsStateValue(gs: ParserGraphicsState, invokeByGS: bool) =
-    let fsExtState =
-        let softMask =
-            match invokeByGS with 
-            | true ->
-                match gs.GetSoftMask() with 
-                | :? PdfName as pdfName ->
-                    match pdfName with 
-                    | EqualTo PdfName.None -> None
-                    | _ -> failwithf "Cannot parse %A to SoftMask" pdfName
-
-                | null -> None
-                | mask ->
-                    let hash = hashNumberOfPdfIndirectReference <| mask.GetIndirectReference()
-                    let ref = 
-                        (mask :?> PdfDictionary)
-                            .Get(PdfName "G")
-                            .GetIndirectReference()
-                            .GetRefersTo()
-                            :?> PdfDictionary
-                    let rawBBox = 
-                        let floatArray = 
-                            ref
-                                    .GetAsArray(PdfName.BBox)
-                                    .ToDoubleArray()
-                        FsRectangle.create floatArray[0] floatArray[1] floatArray[2] floatArray[3]
-
-                    let ctm1 = AffineTransformRecord.ofMatrix (gs.GetCtm())
-                    let ctm2 = 
-                        ref.GetAsArray(PdfName.Matrix)
-                        |> AffineTransformRecord.ofPdfArray
-
-                    let ctm = ctm1.Concatenate(ctm2)
-
-                    let actualBox = 
-                        let ctm = AffineTransformRecord.toAffineTransform ctm
-                        ctm.Transform(rawBBox.AsRectangle)
-                        |> FsRectangle.OfRectangle
-
-                    {
-                        SoftMask = 
-                            {
-                                ID = hash
-                                PdfObject_SkipComparation = SkipComparation mask
-                            }
-
-                        Ctm = (ctm)
-                        RawBBox = rawBBox
-                        ActualBBox = actualBox
-                    }
-
-                    |> Some
-
-            | false -> None
-
-        let extState = CanvasGraphicsState.getExtGState gs
-        { extState with SoftMask = softMask }
+type FsParserGraphicsStateValue(fsExtState: FsExtGState, invokeByGS: bool) =
 
     let customHashCode = fsExtState.GetCustomHashCode()
 
@@ -108,6 +52,67 @@ type FsParserGraphicsStateValue(gs: ParserGraphicsState, invokeByGS: bool) =
     member x.InvokeByGS = invokeByGS
 
     member x.FsExtState = fsExtState
+
+    new (gs: ParserGraphicsState, invokeByGS: bool) =
+        let fsExtState =
+            let softMask =
+                match invokeByGS with 
+                | true ->
+                    match gs.GetSoftMask() with 
+                    | :? PdfName as pdfName ->
+                        match pdfName with 
+                        | EqualTo PdfName.None -> None
+                        | _ -> failwithf "Cannot parse %A to SoftMask" pdfName
+
+                    | null -> None
+                    | mask ->
+                        let hash = hashNumberOfPdfIndirectReference <| mask.GetIndirectReference()
+                        let ref = 
+                            (mask :?> PdfDictionary)
+                                .Get(PdfName "G")
+                                .GetIndirectReference()
+                                .GetRefersTo()
+                                :?> PdfDictionary
+                        let rawBBox = 
+                            let floatArray = 
+                                ref
+                                        .GetAsArray(PdfName.BBox)
+                                        .ToDoubleArray()
+                            FsRectangle.create floatArray[0] floatArray[1] floatArray[2] floatArray[3]
+
+                        let ctm1 = AffineTransformRecord.ofMatrix (gs.GetCtm())
+                        let ctm2 = 
+                            ref.GetAsArray(PdfName.Matrix)
+                            |> AffineTransformRecord.ofPdfArray
+
+                        let ctm = ctm1.Concatenate(ctm2)
+
+                        let actualBox = 
+                            let ctm = AffineTransformRecord.toAffineTransform ctm
+                            ctm.Transform(rawBBox.AsRectangle)
+                            |> FsRectangle.OfRectangle
+
+                        {
+                            SoftMask = 
+                                {
+                                    ID = hash
+                                    PdfObject_SkipComparation = SkipComparation mask
+                                }
+
+                            Ctm = (ctm)
+                            RawBBox = rawBBox
+                            ActualBBox = actualBox
+                        }
+
+                        |> Some
+
+                | false -> None
+
+            let extState = CanvasGraphicsState.getExtGState gs
+            { extState with SoftMask = softMask }
+
+        new FsParserGraphicsStateValue(fsExtState, invokeByGS)
+
 
 type FsParserGraphicsState private (containerID: InfoContainerID list, gs: FsParserGraphicsStateValue) =
 
@@ -143,11 +148,118 @@ with
         x.AsList
         |> List.map(fun m -> m.CustomHashCode)
 
+    member x.MapExtGState(f1, f2) =
+        let (InfoGsStates (id, values)) = x
+        let last = List.tryLast values
+        match last with 
+        | None -> 
+            let fsExtState, _: FsExtGState * _ = f1 [] FsExtGState.DefaultValue
+            InfoGsStates(id, [FsParserGraphicsStateValue(fsExtState, invokeByGS = true)]) 
+
+        | Some last ->
+            let headers = List.take (values.Length-1) values
+            let fsExtState, userState: FsExtGState * _ = f1 headers (last.FsExtState)
+            let headers = f2 userState headers
+
+            InfoGsStates(id, headers @ [FsParserGraphicsStateValue(fsExtState, invokeByGS = true)]) 
+
+    member x.SetStrokeOpactity(opacity) =
+        x.MapExtGState(
+            (fun headers gsState ->
+                let strokeOpacity, setHeadersOpacityToOne = 
+                    let headerStrokeOpacity =
+                        (1.0f, headers)
+                        ||> List.fold(fun opacity m1 -> m1.FsExtState.Stroke.Opacity * opacity)
+                    
+                    match opacity with 
+                    | SmallerOrEqual headerStrokeOpacity ->
+                        opacity / headerStrokeOpacity, false
+
+                    | _ -> opacity, true
+
+                gsState.SetStrokeOpacity(strokeOpacity), setHeadersOpacityToOne
+            ),
+            (fun setHeadersOpacityToOne headers ->
+                match setHeadersOpacityToOne with 
+                | true -> 
+                    headers
+                    |> List.map(fun gsState ->
+                        match gsState.InvokeByGS with 
+                        | true -> ()
+                        | false -> failwithf "Not implemented as invokeByGs is false here"
+                        FsParserGraphicsStateValue(gsState.FsExtState.SetStrokeOpacity(1.0f), gsState.InvokeByGS)
+                    )
+                | false -> headers
+            )
+        )
+
+    member x.SetStrokeOverprint(isOverprint) =
+        x.MapExtGState(
+            (fun headers gsState ->
+                gsState.SetStrokeIsOverprint isOverprint, ()
+            ),
+            (fun () headers ->
+                headers
+            )
+        )
+
+    member x.SetFillOpactity(opacity) =
+        x.MapExtGState(
+            (fun headers gsState ->
+                let fillOpacity, setHeadersOpacityToOne = 
+                    let headerFillOpacity =
+                        (1.0f, headers)
+                        ||> List.fold(fun opacity m1 -> m1.FsExtState.Fill.Opacity * opacity)
+                    
+                    match opacity with 
+                    | SmallerOrEqual headerFillOpacity ->
+                        opacity / headerFillOpacity, false
+
+                    | _ -> opacity, true
+
+                gsState.SetFillOpacity(fillOpacity), setHeadersOpacityToOne
+            ),
+            (fun setHeadersOpacityToOne headers ->
+                match setHeadersOpacityToOne with 
+                | true -> 
+                    headers
+                    |> List.map(fun gsState ->
+                        match gsState.InvokeByGS with 
+                        | true -> ()
+                        | false -> failwithf "Not implemented as invokeByGs is false here"
+                        FsParserGraphicsStateValue(gsState.FsExtState.SetFillOpacity(1.0f), gsState.InvokeByGS)
+                    )
+                | false -> headers
+            )
+        )
+
+    member x.SetFillOverprint(isOverprint) =
+        x.MapExtGState(
+            (fun headers gsState ->
+                gsState.SetFillIsOverprint isOverprint, ()
+            ),
+            (fun () headers ->
+                headers
+            )
+        )
+
+
+
 type InfoGsStateLists = InfoGsStateLists of InfoGsStates list
 with 
     member x.AsList = 
         let (InfoGsStateLists v) = x
         v
+
+    member x.MapFsExtGsState(f) =
+        let x = x.AsList
+        match List.tryLast x with 
+        | None -> failwithf "Cannot MapFsExtGsState by empty gsStates"
+        | Some last ->
+            let headers = List.take (x.Length-1) x
+            headers @ [f last]
+            |> InfoGsStateLists
+
 
 
 [<AutoOpen>]
@@ -220,7 +332,9 @@ module IntegratedInfos =
           AccumulatedPathOperatorRanges: seq<OperatorRange>
           GsStates: InfoGsStateLists
           ContainerID: InfoContainerID list
-          LazyVisibleBound: Rectangle option
+          LazyVisibleBound0_Backup: Rectangle option
+          LazyVisibleBound0: Rectangle option
+          PageBox: Rectangle
         }
     with 
         member x.IsShading = 
@@ -295,7 +409,9 @@ module IntegratedInfos =
           OperatorRange: OperatorRange option
           GsStates: InfoGsStateLists
           ContainerID: InfoContainerID list
-          LazyVisibleBound: Rectangle option
+          LazyVisibleBound0_Backup: Rectangle option
+          LazyVisibleBound0: Rectangle option
+          PageBox: Rectangle
           }
 
     with 
@@ -304,7 +420,9 @@ module IntegratedInfos =
         member x.SplitToWords() =
             let gsStates = x.GsStates
             let containderID = x.ContainerID
-            let lazyVisibleBound = x.LazyVisibleBound
+            let lazyVisibleBound = x.LazyVisibleBound0
+            let lazyVisibleBound_backup = x.LazyVisibleBound0_Backup
+            let pageBox = x.PageBox
 
             match x.EndTextState with 
             | EndTextState.No
@@ -321,7 +439,9 @@ module IntegratedInfos =
                         ClippingPathInfos = clippingPathInfos
                         GsStates = gsStates
                         ContainerID = containderID
-                        LazyVisibleBound = lazyVisibleBound
+                        LazyVisibleBound0 = lazyVisibleBound
+                        PageBox = pageBox
+                        LazyVisibleBound0_Backup = lazyVisibleBound_backup
                     }
                 )
 
@@ -474,7 +594,9 @@ module IntegratedInfos =
           LazyColorSpace: Lazy<ImageColorSpaceData option> 
           GsStates: InfoGsStateLists
           ContainerID: InfoContainerID list
+          LazyVisibleBound_Backup: Rectangle option
           LazyVisibleBound: Rectangle option
+          PageBox: Rectangle
         }
 
     with 
@@ -660,19 +782,20 @@ module IntegratedInfos =
         | Text of IntegratedTextRenderInfo
         | Image of IntegratedImageRenderInfo
     with 
-        member x.LazyVisibleBound =
+        member x.LazyVisibleBound0 =
             match x with 
-            | Path  info -> info.LazyVisibleBound
-            | Text  info -> info.LazyVisibleBound
+            | Path  info -> info.LazyVisibleBound0
+            | Text  info -> info.LazyVisibleBound0
             | Image info -> info.LazyVisibleBound
 
-        member x.SetVisibleBound(boundGettingStrokeOptions) =
+        member x.SetVisibleBound0() =
+            let boundGettingStrokeOptions = BoundGettingStrokeOptions.WithoutStrokeWidth
             match x with 
             | Path info ->
-                match info.LazyVisibleBound with 
+                match info.LazyVisibleBound0 with 
                 | None ->
                     { info with 
-                        LazyVisibleBound = 
+                        LazyVisibleBound0 = 
                             IIntegratedRenderInfoIM.tryGetVisibleBound boundGettingStrokeOptions info
                     }
 
@@ -680,10 +803,10 @@ module IntegratedInfos =
                 |> Path
 
             | Text info ->
-                match info.LazyVisibleBound with 
+                match info.LazyVisibleBound0 with 
                 | None ->
                     { info with 
-                        LazyVisibleBound = 
+                        LazyVisibleBound0 = 
                             IIntegratedRenderInfoIM.tryGetVisibleBound boundGettingStrokeOptions info
                     }
 

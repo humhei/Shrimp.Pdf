@@ -1429,7 +1429,7 @@ module Imposing =
 
             let newPage = this.SplitDocument.Writer.AddNewPage()
             
-            let pdfCanvas = PdfCanvas(newPage)
+            let pdfCanvas = OffsetablePdfCanvas(newPage) :> PdfCanvas
 
             let height = this.Height
             let width = this.Width

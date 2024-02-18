@@ -41,7 +41,7 @@ let reuseTests =
 
     testCase "set background size" <| fun _ -> 
         Flow.Reuse (
-            Reuses.SetBackgroundSize(
+            Reuses.SetBackgroundPaperSize(
                 PageSelector.All,
                 FsSize.A3,
                 position = Position.LeftMiddle(mm 20, 0)

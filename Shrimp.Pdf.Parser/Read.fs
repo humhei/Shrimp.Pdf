@@ -292,7 +292,7 @@ module internal Listeners =
     [<AllowNullLiteral>]
     /// a type named FilteredEventListener is already defined in itext7
     /// renderInfoSelectorMapping bitwise relation: OR 
-    type FilteredEventListenerEx(renderInfoSelectorMapping: Map<SelectorModiferToken, RenderInfoSelector>) =
+    type FilteredEventListenerEx(pageBox: Rectangle, renderInfoSelectorMapping: Map<SelectorModiferToken, RenderInfoSelector>) =
         inherit GSStateStackableEventListener()
         let et = 
             renderInfoSelectorMapping
@@ -585,7 +585,9 @@ module internal Listeners =
                                   AccumulatedPathOperatorRanges = accumulatedPathOperatorRanges
                                   GsStates = this.GsStates_invokeByGS
                                   ContainerID = this.CurrentInfoContainerID
-                                  LazyVisibleBound = None
+                                  LazyVisibleBound0_Backup = None
+                                  LazyVisibleBound0 = None
+                                  PageBox = pageBox
                                   }
 
 
@@ -630,7 +632,9 @@ module internal Listeners =
                               OperatorRange = None
                               GsStates = this.GsStates_invokeByGS
                               ContainerID = this.CurrentInfoContainerID
-                              LazyVisibleBound = None
+                              LazyVisibleBound0 = None
+                              LazyVisibleBound0_Backup = None
+                              PageBox = pageBox
                               }
                             :> IIntegratedRenderInfoIM
 
@@ -641,8 +645,10 @@ module internal Listeners =
                                       ClippingPathInfoState = currentClippingPathInfo }
                                   ImageRenderInfo = imageRenderInfo
                                   LazyVisibleBound = None
+                                  LazyVisibleBound_Backup = None
                                   GsStates = this.GsStates_invokeByGS
                                   ContainerID = this.CurrentInfoContainerID
+                                  PageBox = pageBox
                                   LazyImageData = 
                                     lazy 
                                         let rgbIndexedColorSpace =
@@ -1117,6 +1123,8 @@ type internal ReaderPdfCanvasProcessor(listener: FilteredEventListenerEx, additi
 type NonInitialClippingPathPdfDocumentContentParser(pdfDocument) =
     inherit PdfDocumentContentParser(pdfDocument)
 
+    member x.PdfDocument = pdfDocument
+
     override this.ProcessContent(pageNumber, renderListener, additionalContentOperators) =  
         
         let listener = (renderListener :> IEventListener) :?> FilteredEventListenerEx
@@ -1148,7 +1156,8 @@ module NonInitialClippingPathPdfDocumentContentParser =
             let infos = 
                 RenderInfoSelector.checkNonImageSelectorExists [renderInfoSelector]
                 let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled" }, renderInfoSelector]
-                let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
+                let actualPageBox = parser.PdfDocument.GetPage(pageNum).GetActualBox()
+                let listener = new FilteredEventListenerEx(actualPageBox, renderInfoSelectorMapping)
                 parser.ProcessContent(pageNum, listener).ParsedRenderInfos
                 |> Seq.map(fun m -> m :?> IIntegratedRenderInfo)
 
@@ -1162,7 +1171,8 @@ module NonInitialClippingPathPdfDocumentContentParser =
         | [] -> [] :> seq<IIntegratedRenderInfoIM>
         | _ ->
             let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled" }, renderInfoSelector]
-            let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
+            let actualPageBox = parser.PdfDocument.GetPage(pageNum).GetActualBox()
+            let listener = new FilteredEventListenerEx(actualPageBox, renderInfoSelectorMapping)
             parser.ProcessContent(pageNum, listener).ParsedRenderInfos
         
     let parseIMStoppable (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: NonInitialClippingPathPdfDocumentContentParser) =
@@ -1172,7 +1182,8 @@ module NonInitialClippingPathPdfDocumentContentParser =
         | [] -> [] :> seq<IIntegratedRenderInfoIM> |>StoppableParsedRenderInfoIMs.NonStopped
         | _ ->
             let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled" }, renderInfoSelector]
-            let listener = new FilteredEventListenerEx(renderInfoSelectorMapping)
+            let actualPageBox = parser.PdfDocument.GetPage(pageNum).GetActualBox()
+            let listener = new FilteredEventListenerEx(actualPageBox, renderInfoSelectorMapping)
             try
                 parser.ProcessContent(pageNum, listener).ParsedRenderInfos
                 |> StoppableParsedRenderInfoIMs.NonStopped

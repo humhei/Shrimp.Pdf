@@ -37,6 +37,8 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.DtronixPdf", "Shrimp
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.PostScript", "Shrimp.Pdf.PostScript\Shrimp.Pdf.PostScript.fsproj", "{844C2533-7852-495C-8D90-9DD351A99C8E}"
 EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.SlimFlow", "Shrimp.Pdf.NewFlow\Shrimp.Pdf.SlimFlow.fsproj", "{D998AA72-8CC3-451F-8176-065411B031AA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -356,6 +358,24 @@ Global
 		{844C2533-7852-495C-8D90-9DD351A99C8E}.Release|x64.Build.0 = Release|Any CPU
 		{844C2533-7852-495C-8D90-9DD351A99C8E}.Release|x86.ActiveCfg = Release|Any CPU
 		{844C2533-7852-495C-8D90-9DD351A99C8E}.Release|x86.Build.0 = Release|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.Debug|x64.Build.0 = Debug|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.Debug|x86.Build.0 = Debug|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.MiniBuild|Any CPU.ActiveCfg = Debug|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.MiniBuild|Any CPU.Build.0 = Debug|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.MiniBuild|x64.ActiveCfg = Debug|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.MiniBuild|x64.Build.0 = Debug|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.MiniBuild|x86.ActiveCfg = Debug|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.MiniBuild|x86.Build.0 = Debug|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.Release|x64.ActiveCfg = Release|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.Release|x64.Build.0 = Release|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.Release|x86.ActiveCfg = Release|Any CPU
+		{D998AA72-8CC3-451F-8176-065411B031AA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

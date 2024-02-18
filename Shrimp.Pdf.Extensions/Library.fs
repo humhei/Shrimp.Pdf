@@ -26,17 +26,35 @@ module iText =
     [<RequireQualifiedAccess>]
     type ActualLineWidth =
         | Exactly of  rawLineWidth: float * scale: float
-        | Unbalance of rawLineWidth: float * widthX: float * widthY: float
+        | Unbalance of rawLineWidth: float * scaleX: float * scaleY: float
     with 
         member x.CalculatedWidth = 
             match x with 
             | Exactly (w, s) -> w * s
-            | Unbalance (w, sx, sy) -> w * (min sx sy)
+            | Unbalance (w, sx, sy) -> w * (max sx sy)
+
+            
+
+        member x.CalculatedWidth_Horizontal = 
+            match x with 
+            | Exactly (w, s) -> w * s
+            | Unbalance (w, sx, sy) -> w * sx
+
+
+        member x.CalculatedWidth_Vertical = 
+            match x with 
+            | Exactly (w, s) -> w * s
+            | Unbalance (w, sx, sy) -> w * sy
 
         member x.RawLineWidth =
             match x with 
             | Exactly (w, _) 
             | Unbalance (w, _, _) -> w
+
+        member x.AsWidthMargin() =
+            let horizontal = x.CalculatedWidth_Horizontal / 2.
+            let vertical = x.CalculatedWidth_Vertical / 2.
+            Margin.Create(left = horizontal, right = horizontal, top = vertical, bottom = vertical)
 
     type LineShapingStyle =
         { JoinStyle: int 
@@ -148,12 +166,13 @@ module iText =
 
             Rectangle(float32 newPoint.X, float32 newPoint.Y, width, height)
 
-        member this.MoveRightUp(right, up) =
+        member this.moveRightUp(right, up) =
             let width = this.GetWidth()
             let height = this.GetHeight()
             let newX = this.GetX() + right
             let newY = this.GetY() + up
             Rectangle(newX, newY, width, height)
+
 
         member this.GetWidthF() = this.GetWidth() |> float
         member this.GetHeightF() = this.GetHeight() |> float
@@ -829,7 +848,7 @@ module iText =
             {
                 JoinStyle    = gs.GetLineJoinStyle()
                 CapStyle     = gs.GetLineCapStyle()
-                DashPattern  = gs.GetDashPattern() |> DashPattern.OfPdfArray
+                DashPattern  = gs |> getDashPattern
                 ActualLineWidth = getActualLineWidth gs
             }
 
@@ -944,24 +963,29 @@ module iText =
                     failwithf "unSupported path render operation %d" others
             else []
 
-        let getBound (boundGettingStrokeOptions: BoundGettingStrokeOptions) (info: IPathRenderInfo) = 
-            let boundWithoutWidth = info |> toActualPoints |> AtLeastTwoList.Create |> Rectangle.ofPoints
-            match boundGettingStrokeOptions with 
-            | BoundGettingStrokeOptions.WithoutStrokeWidth -> boundWithoutWidth
-            | BoundGettingStrokeOptions.WithStrokeWidth ->
-                if hasStroke info then
-                    let grahpicsState = info.Value.GetGraphicsState()
-                    let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
-                    Rectangle.applyMargin widthMargin boundWithoutWidth
-                else boundWithoutWidth
 
-            | _ -> failwith "Invalid token"
 
         let getLineWidth (info: IPathRenderInfo) = 
             info.Value.GetLineWidth()
 
         let getActualLineWidth (info: IPathRenderInfo) = 
             CanvasGraphicsState.getActualLineWidth <| info.Value.GetGraphicsState()
+
+
+        let getBound (boundGettingStrokeOptions: BoundGettingStrokeOptions) (info: IPathRenderInfo) = 
+            let boundWithoutWidth = info |> toActualPoints |> AtLeastTwoList.Create |> Rectangle.ofPoints
+            match boundGettingStrokeOptions with 
+            | BoundGettingStrokeOptions.WithoutStrokeWidth -> boundWithoutWidth
+            | BoundGettingStrokeOptions.WithStrokeWidth ->
+                if hasStroke info then
+                    let widthMargin = 
+                        let actualWidth = getActualLineWidth info
+                        actualWidth.AsWidthMargin()
+
+                    Rectangle.applyMargin widthMargin boundWithoutWidth
+                else boundWithoutWidth
+
+            | _ -> failwith "Invalid token"
 
         let getExtGState (info: IPathRenderInfo) = 
             info.Value.GetGraphicsState()
@@ -1069,12 +1093,13 @@ module iText =
 
             match boundGettingStrokeOptions with 
             | BoundGettingStrokeOptions.WithoutStrokeWidth -> boundWithoutWidth
-            | BoundGettingStrokeOptions.WithStrokeWidth ->
-                if hasStroke info then 
-                    let grahpicsState = info.GetGraphicsState()
-                    let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
-                    Rectangle.applyMargin widthMargin boundWithoutWidth
-                else boundWithoutWidth
+            | BoundGettingStrokeOptions.WithStrokeWidth -> 
+                boundWithoutWidth
+                //if hasStroke info then 
+                //    let grahpicsState = info.GetGraphicsState()
+                //    let widthMargin = Margin.Create(float (grahpicsState.GetLineWidth()) / 2.)
+                //    Rectangle.applyMargin widthMargin boundWithoutWidth
+                //else boundWithoutWidth
             | _ -> failwith "Invalid token"
 
 
@@ -1918,6 +1943,10 @@ module iText =
             let writerCanvas = 
                 new PdfCanvas(page.NewContentStreamBefore(), page.GetResources(), page.GetDocument())
 
+            do 
+                let stream = writerCanvas.GetContentStream().GetOutputStream()
+                stream.SetLocalHighPrecision(true)
+
             writerCanvas
                 .SaveState()
                 .Rectangle(contentBox)
@@ -2007,4 +2036,26 @@ module iText =
 
 
 
+    type OffsetablePdfCanvas(contentStream: PdfStream, resources, pdfDocument, ?xOffset, ?yOffset) =
+        inherit PdfCanvas(contentStream, resources, pdfDocument)
+        let xOffset = defaultArg xOffset 0.f
+        let yOffset = defaultArg yOffset 0.f
+        do 
+            let stream = contentStream.GetOutputStream()
+            stream.SetLocalHighPrecision(true)
 
+        member x.XOffset = xOffset
+
+        member x.YOffset = yOffset
+
+        new (xobject: PdfFormXObject, pdfDocument, ?xOffset, ?yOffset) =
+            new OffsetablePdfCanvas(xobject.GetPdfObject(), xobject.GetResources(), pdfDocument, ?xOffset = xOffset, ?yOffset = yOffset)
+
+        new (pdfPage: PdfPage, ?xOffset, ?yOffset) =
+            let canvas = new PdfCanvas(pdfPage)
+            new OffsetablePdfCanvas(canvas.GetContentStream(), pdfPage.GetResources(), pdfPage.GetDocument(), ?xOffset = xOffset, ?yOffset = yOffset)
+
+        member x.ApplyOffsetToCtm(ctm: Matrix) =
+            let ctm = AffineTransform.ofMatrix ctm
+            //ctm.Translate(float xOffset, float yOffset)
+            ctm

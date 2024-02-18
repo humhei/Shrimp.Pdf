@@ -33,7 +33,7 @@ type PdfUtils =
                 | Some boundOptions ->
                     let canvas = new PdfCanvas(page)
                     let pageBox = page.GetActualBox()
-                    PdfCanvas.addEllipse pageBox (fun _ -> boundOptions) canvas
+                    PdfCanvas.addRectOrEllipse pageBox (fun _ -> boundOptions) canvas
                     |> ignore
 
             doc.Close()

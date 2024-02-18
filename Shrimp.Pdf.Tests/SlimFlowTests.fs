@@ -293,8 +293,8 @@ let manipulatesTests =
         |> ignore
 
         pass()
-
-    testCase "add background test4" <| fun _ ->
+         
+    ftestCase "add background test4" <| fun _ ->
         let flow =
             let background = 
                 new SlimBackground(
@@ -305,13 +305,17 @@ let manipulatesTests =
                 ) 
                 |> SlimBackgroundUnion.Singleton
                  
-            Flow.Reuse (
+            Flow.Reuse ( 
                 Reuses.SlimFlows(
                     PageSelector.All,
                     slimFlow = (
                         SlimModifyPage.AddBackgroundOrForeground(background)
                         <+>
                         SlimModifyPage.ClearDirtyInfos() 
+                        <+>
+                        SlimModifyPage.MapInfos(fun args infos ->
+                            infos
+                        )
                     )
                 )    
             )   
@@ -360,7 +364,7 @@ let manipulatesTests =
                     layerName = BackgroundAddingLayerOptions.Create("current", "background")
                 ) 
                 |> SlimBackgroundUnion.Singleton
-
+                 
             Flow.Reuse (
                 Reuses.SlimFlows(
                     PageSelector.All,
@@ -377,7 +381,7 @@ let manipulatesTests =
                         <+>
                         SlimModifyPage.Func(fun args infos0 ->
                             let targetSize = 
-                                { Width = mm 100 
+                                { Width = mm 150
                                   Height = mm 100 }
 
                             SlimModifyPage.SetPageBox(fun pageBoxSetter ->
