@@ -52,7 +52,7 @@ type SlimModifyPage =
             [ "margin" => margin.LoggingText ]
         |> SlimFlowUnion.Flow
 
-    static member AddBackgroundOrForeground(background: SlimBackgroundUnion) =
+    static member internal AddBackgroundOrForeground(background: SlimBackgroundUnion) =
         SlimFlow(fun flowModel args infos pageSetter ->
             let actualBox = args.Page.GetActualBox()
             { Infos = 
@@ -160,6 +160,9 @@ type SlimModifyPage =
                     
             ]
         |> SlimFlowUnion.Flow
+
+
+
 
     static member MovePageBoxToOrigin() =
         SlimFlow(fun flowModel args infos pageSetter ->
@@ -289,11 +292,18 @@ type SlimModifyPage =
             []
         |> SlimFlowUnion.Flow
 
+    static member AddBackgound(pageBoxKind: PageBoxKind, rectOps: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin) =
+        failwithf ""
+
     static member Func(f) =
         SlimFlowUnion.Func(
             f
         )
 
+    static member Func2(f) =
+        SlimFlowUnion.Func2(
+            f
+        )
 
 [<RequireQualifiedAccess>]
 module SlimModifyPage =

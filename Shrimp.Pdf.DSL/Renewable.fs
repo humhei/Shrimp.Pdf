@@ -404,13 +404,12 @@ module _Renewable =
                 match x.OriginInfo.LazyVisibleBound0 with 
                 | None -> None
                 | Some bound ->
-                    match x.LazyStrokeColor_Modifiable, x.Operation with 
-                    | Some _, IPathRenderInfo.Operation.HasStroke ->
+                    match x.Operation with 
+                    | IPathRenderInfo.Operation.HasStroke ->
                         let actualWidth = IPathRenderInfo.getActualLineWidth x.OriginInfo
                         let margin  = actualWidth.AsWidthMargin()
                         Rectangle.applyMargin margin bound
                         |> Some
-                    
 
                     | _ -> Some bound
 

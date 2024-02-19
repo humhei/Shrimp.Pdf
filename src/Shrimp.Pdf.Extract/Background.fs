@@ -427,7 +427,7 @@ module _Extract_BackgroundOrForeground =
             ?shadowColor,
             ?extGsState,
             ?backgroundPositionTweak,
-            ?xobjectOnly
+            ?refOptions
             ) =
             let cache = new System.Collections.Concurrent.ConcurrentDictionary<_, _>()
             let backgroundFiles = 
@@ -449,5 +449,65 @@ module _Extract_BackgroundOrForeground =
                     ?shadowColor             = shadowColor,
                     ?extGsState              = extGsState,
                     ?backgroundPositionTweak = backgroundPositionTweak,
-                    ?xobjectOnly             = xobjectOnly
+                    ?refOptions             = refOptions
                 )
+
+
+    type SlimModifyPage with 
+        static member AddBackgroundOrForeground(background: BackgroundFile, ?choice, ?layerName, ?xEffect, ?yEffect, ?shadowColor, ?extGsState, ?backgroundPositionTweak, ?refOptions) =
+            let choice = defaultArg choice BackgroundOrForeground.Background
+            SlimModifyPage.Func2(fun flowModel args infos ->
+                let background = 
+                    flowModel.BackgroundFactory.GetOrAdd([background.ClearedPdfFile.PdfPath], valueFactory = fun _ ->
+                        new SlimBackground(
+                            background,
+                            choice = choice,
+                            configuration = flowModel.Configuration,
+                            ?layerName = layerName,
+                            ?xEffect = xEffect,
+                            ?yEffect = yEffect,
+                            ?shadowColor = shadowColor,
+                            ?extGsState = extGsState,
+                            ?backgroundPositionTweak = backgroundPositionTweak,
+                            ?refOptions = refOptions
+                        )
+                        |> SlimBackgroundUnion.Singleton
+                    )
+
+                SlimModifyPage.AddBackgroundOrForeground(background)
+            )
+
+
+        static member AddBackgroundOrForeground(
+            backgroundFiles: PdfFile list,
+            ?choice,
+            ?layerName,
+            ?xEffect,
+            ?yEffect,
+            ?shadowColor,
+            ?extGsState,
+            ?backgroundPositionTweak,
+            ?refOptions
+            ) =
+            let choice = defaultArg choice BackgroundOrForeground.Background
+            SlimModifyPage.Func2(fun flowModel args infos ->
+                let background = 
+                    let backgroundPaths = backgroundFiles |> List.map(fun m -> m.PdfPath)
+                    flowModel.BackgroundFactory.GetOrAdd(backgroundPaths, valueFactory = fun _ ->
+                        MultipleSlimBackground.Create(
+                            backgroundFiles,
+                            choice = choice,
+                            configuration = flowModel.Configuration,
+                            ?layerName = layerName,
+                            ?xEffect = xEffect,
+                            ?yEffect = yEffect,
+                            ?shadowColor = shadowColor,
+                            ?extGsState = extGsState,
+                            ?backgroundPositionTweak = backgroundPositionTweak,
+                            ?refOptions = refOptions
+                        )
+                        |> SlimBackgroundUnion.Multiple
+                    )
+
+                SlimModifyPage.AddBackgroundOrForeground(background)
+            )

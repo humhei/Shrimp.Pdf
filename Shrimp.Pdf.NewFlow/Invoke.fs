@@ -383,9 +383,24 @@ with
           WriterPageSetter = x.WriterPageSetter
           UserState = f x.UserState }
 
-type SlimFlowFunc<'userState, 'newUserState> = FlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>
+type SlimFlowModel<'userState> =    
+    { BackgroundFactory: System.Collections.Concurrent.ConcurrentDictionary<PdfPath list, SlimBackgroundUnion>
+      FlowModel: FlowModel<'userState> }
+with 
+    member x.PdfFile = x.FlowModel.PdfFile
 
-type SlimFlow<'userState, 'newUserState>(f: FlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>, ?flowName: FlowName, ?background) =
+    member x.UserState = x.FlowModel.UserState
+
+    member x.Configuration = x.FlowModel.Configuration
+
+    member x.MapUserState(f) =
+        { BackgroundFactory = x.BackgroundFactory 
+          FlowModel = x.FlowModel.MapUserState f }
+
+
+type SlimFlowFunc<'userState, 'newUserState> = SlimFlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>
+
+type SlimFlow<'userState, 'newUserState>(f: SlimFlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>, ?flowName: FlowName, ?background) =
     member internal x.SetFlowName(flowName: FlowName) =
         SlimFlow(f, flowName)
 
@@ -395,7 +410,7 @@ type SlimFlow<'userState, 'newUserState>(f: FlowModel<'userState> -> PageModifin
 
 
 
-    member internal x.Invoke (flowModel: FlowModel<'userState>) args infos setter = 
+    member internal x.Invoke (flowModel: SlimFlowModel<'userState>) args infos setter = 
         match flowName with 
         | None -> f flowModel args infos setter
         | Some flowName ->  

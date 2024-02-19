@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="SlimBackground.fs" />
     <Compile Include="Background.fs" />
     <Compile Include="RenewableInfos.fs" />

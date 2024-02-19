@@ -15,26 +15,31 @@ module _SlimFlowUnion =
     type SlimFlowUnion<'userState, 'newUserState> =
         | Flow of SlimFlow<'userState, 'newUserState>
         | TupledFlow of ISlimTupleFlow<'userState, 'newUserState>
-        | Func of (PageModifingArguments<'userState> -> RenewableInfos -> SlimFlowUnion<'userState, 'newUserState>)
+        | Func2 of (SlimFlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos -> SlimFlowUnion<'userState, 'newUserState>)
     with 
 
         member x.SetParentFlowName(flowName: FlowName) =
             match x with 
             | Flow flow -> flow.SetParentFlowName(flowName) |> Flow
             | TupledFlow tupleFlow -> tupleFlow.SetParentFlowName(flowName) |> TupledFlow
-            | Func (f) ->
-                Func(
-                    fun args infos ->
-                        (f args infos).SetParentFlowName(flowName)
+            | Func2 (f) ->
+                Func2(
+                    fun flowModel args infos ->
+                        (f flowModel args infos).SetParentFlowName(flowName)
                 )
+
+        static member Func(f: PageModifingArguments<'userState> -> RenewableInfos -> SlimFlowUnion<'userState, 'newUserState>) =
+            SlimFlowUnion.Func2(fun flowModel args infos ->
+                f args infos
+            )
 
         member x.Invoke: SlimFlowFunc<'userState, 'newUserState> =
             match x with 
             | Flow v -> v.Invoke
             | TupledFlow v -> v.Invoke
-            | Func f -> 
+            | Func2 f -> 
                 fun flowModel args infos ->
-                    let flow = f args infos
+                    let flow = f flowModel args infos
                     flow.Invoke flowModel args infos
 
 

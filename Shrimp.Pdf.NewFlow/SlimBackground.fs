@@ -65,8 +65,12 @@ module _SlimFlow_BackgroundOrForeground =
     type WriteInfosFunc = 
         (*level_plus*)int -> PdfDocumentWithCachedResources -> Rectangle -> OffsetablePdfCanvas -> RenewableInfo list -> unit
     
-    
-    
+    /// DefaultValue: SlimBackgroundRefOptions.Infos
+    type SlimBackgroundRefOptions = 
+        | Infos         = 0
+        | XObject       = 1
+        | XObject_Simply = 2
+
     type SlimBackground
         (backgroundFile: BackgroundFile,
          choice: BackgroundOrForeground,
@@ -77,7 +81,7 @@ module _SlimFlow_BackgroundOrForeground =
          ?shadowColor: NullablePdfCanvasColor,
          ?extGsState: FsExtGState,
          ?backgroundPositionTweak: PageNumber -> BackgroundPositionTweak,
-         ?xobjectOnly: bool) =
+         ?refOptions: SlimBackgroundRefOptions) =
         
         let cache = System.Collections.Concurrent.ConcurrentDictionary()
     
@@ -86,7 +90,7 @@ module _SlimFlow_BackgroundOrForeground =
             | Some layerName -> layerName.BackgroundLayer.Name
             | None -> backgroundFile.Name
 
-
+        let mutable isDisposed = false
 
         let tmpFile = Path.GetTempFileNameEx() |> Path.changeExtension ".pdf"
         do File.Copy(backgroundFile.ClearedPdfFile.Path, tmpFile, true)
@@ -97,26 +101,28 @@ module _SlimFlow_BackgroundOrForeground =
         let page = pdfDocument.GetPage(1)
         let pageBox = page.GetActualBox()
     
-        let xobjectOnly = defaultArg xobjectOnly false
+        let refOptions = defaultArg refOptions SlimBackgroundRefOptions.Infos
 
         let shpLayerPdfName =   
-            match xobjectOnly with 
-            | false ->
+            match refOptions with 
+            | SlimBackgroundRefOptions.Infos ->
                 match choice with 
                 | BackgroundOrForeground.Background -> PdfName.ShpLayerBK
                 | BackgroundOrForeground.Foreground -> PdfName.ShpLayerForeground
 
-            | true ->
+            | SlimBackgroundRefOptions.XObject 
+            | SlimBackgroundRefOptions.XObject_Simply ->
                 match choice with 
                    | BackgroundOrForeground.Background -> PdfName.ShpLayerBk_XObjectOnly
                    | BackgroundOrForeground.Foreground -> PdfName.ShpLayerFr_XObjectOnly
 
                 
+        let mutable infos = []
+        let readInfos() =
+            match infos.IsEmpty, refOptions with 
+            | false, SlimBackgroundRefOptions.XObject_Simply -> ()
+            | _ ->
 
-        let mutable infos =
-            match xobjectOnly with 
-            | true -> []
-            | false ->
                 let logInfo (text) = 
                     let logger: PageLogger =
                         { LoggerLevel = configuration.LoggerLevel 
@@ -126,15 +132,15 @@ module _SlimFlow_BackgroundOrForeground =
     
                 let stopWatch = System.Diagnostics.Stopwatch.StartNew()
                 let parser = NonInitialClippingPathPdfDocumentContentParser(pdfDocument)
-                let infos = 
+                let newInfos = 
                     NonInitialClippingPathPdfDocumentContentParser.parseIM
                         1
                         (RenderInfoSelector.All(fun _ -> true))
                         parser
     
-                let infos = 
+                let newInfos = 
                     let infos = 
-                        infos
+                        newInfos
                         |> List.ofSeq
                         |> List.map(fun m -> m.AsUnion.SetVisibleBound0())
                         |> List.filter(fun m -> m.LazyVisibleBound0.IsSome)
@@ -147,10 +153,17 @@ module _SlimFlow_BackgroundOrForeground =
     
                 stopWatch.Stop()
                 logInfo(fun () ->
-                    sprintf "    [SlimBackground][%s] extracting slim background in %d/%d, found infos %d in %O" backgroundFile.Name 1 1 infos.Length stopWatch.Elapsed
+                    sprintf "    [SlimBackground][%s] extracting slim background in %d/%d, found infos %d in %O" backgroundFile.Name 1 1 newInfos.Length stopWatch.Elapsed
                 ) 1
     
-                infos
+                infos <- newInfos
+
+        do
+            match refOptions with 
+            | SlimBackgroundRefOptions.XObject 
+            | SlimBackgroundRefOptions.XObject_Simply -> ()
+            | SlimBackgroundRefOptions.Infos -> readInfos()
+                
 
         let modifyFlowNames = HashSet<string * list<string * string>>()
         let filterInfosCache = new System.Collections.Concurrent.ConcurrentDictionary<_, obj list>()
@@ -196,13 +209,15 @@ module _SlimFlow_BackgroundOrForeground =
             )
 
         member x.Internal_RecoverVisibleBound_ForWrite() =
-            x.ModifyInfos("Internal_RecoverVisibleBound_ForWrite", [], fun infos ->
-                infos
-                |> List.map(fun m ->
-                    m.Internal_RecoverVisibleBound_ForWrite().UpdateVisibleBound1()
+            match refOptions with 
+            | SlimBackgroundRefOptions.XObject_Simply -> readInfos()
+            | _ ->
+                x.ModifyInfos("Internal_RecoverVisibleBound_ForWrite", [], fun infos ->
+                    infos
+                    |> List.map(fun m ->
+                        m.Internal_RecoverVisibleBound_ForWrite().UpdateVisibleBound1()
+                    )
                 )
-
-            )
 
         member x.Choice = choice
     
@@ -231,14 +246,15 @@ module _SlimFlow_BackgroundOrForeground =
         member x.GeneratePageBoxAndXObject(writeInfosFunc: WriteInfosFunc, writerDocument, writePageBox: Rectangle) =
             let point = FsPoint.OfPoint writePageBox.LeftBottom 
             cache.GetOrAdd(point, valueFactory = fun _ ->
-                match xobjectOnly with 
-                | false ->
+                match refOptions with 
+                | SlimBackgroundRefOptions.Infos
+                | SlimBackgroundRefOptions.XObject_Simply ->
                     let xobject = PdfFormXObject(pageBox) 
                     let canvas = OffsetablePdfCanvas(xobject, writerDocument)
                     writeInfosFunc 1 writerDocument writePageBox canvas infos
                     pageBox, xobject :> PdfXObject
 
-                | true ->
+                | SlimBackgroundRefOptions.XObject ->
                     let xobject = page.CopyAsFormXObject(writerDocument)
                     pageBox, xobject :> PdfXObject
             )
@@ -246,9 +262,14 @@ module _SlimFlow_BackgroundOrForeground =
     
         interface System.IDisposable with 
             member x.Dispose() =
-                pdfDocument.Close()
-                cache.Clear()
-                File.delete tmpFile
+                match isDisposed with 
+                | false ->
+                    pdfDocument.Close()
+                    cache.Clear()
+                    File.delete tmpFile
+                    isDisposed <- true
+
+                | true -> ()
     
     type MultipleSlimBackground
         (backgroundFiles: BackgroundFile list,
@@ -260,7 +281,7 @@ module _SlimFlow_BackgroundOrForeground =
          ?shadowColor,
          ?extGsState,
          ?backgroundPositionTweak,
-         ?xobjectOnly) =
+         ?refOptions) =
     
         let cache = new System.Collections.Concurrent.ConcurrentDictionary<_, _>()
         let slimBackgrounds =
@@ -277,7 +298,7 @@ module _SlimFlow_BackgroundOrForeground =
                         ?shadowColor = shadowColor,
                         ?extGsState = extGsState,
                         ?backgroundPositionTweak = backgroundPositionTweak,
-                        ?xobjectOnly = xobjectOnly)
+                        ?refOptions = refOptions)
                 )
             )
     
@@ -313,9 +334,22 @@ module _SlimFlow_BackgroundOrForeground =
                     (pair.Value :> System.IDisposable).Dispose()                
                 cache.Clear()
     
+    type SolidSlimBackground(color: PdfCanvasColor, ?args: PdfCanvasAddRectangleArguments, ?pageBoxKind: PageBoxKind, ?margin: Margin) =
+        let pageBoxKind = defaultArg pageBoxKind PageBoxKind.ActualBox
+        let args = defaultArg args PdfCanvasAddRectangleArguments.DefaultValue
+
+        member x.Margin = margin
+
+
+    [<RequireQualifiedAccess>]
+    type SolidableSlimBackground =
+        | SlimBackground of SlimBackground
+        | Solid          of SolidSlimBackground
+
+
     [<RequireQualifiedAccess>]
     type SlimBackgroundUnion =
-        | Multiple of MultipleSlimBackground
+        | Multiple  of MultipleSlimBackground
         | Singleton of SlimBackground
     with 
         member x.Names() =

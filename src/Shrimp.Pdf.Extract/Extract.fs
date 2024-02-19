@@ -732,6 +732,7 @@ module _Extract =
         splittedInfos
 
 
+
     type Reuses with
         static member ExtractIM(pageSelector: PageSelector, selector, ?slimFlow: SlimFlowUnion<_, _>, ?keepOriginPage) =    
             let slimFlow =
@@ -749,17 +750,23 @@ module _Extract =
                     |> Some
             let keepOriginPage = defaultArg keepOriginPage false
             fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
+                let backgroundFactory = new System.Collections.Concurrent.ConcurrentDictionary<_, _>()
                 let flowModel =
                     { flowModel with 
                         Configuration = 
                             { flowModel.Configuration with SlimableFlowLoggingOptions = SlimableFlowLoggingOptions.Slim }
                     } 
+
+                let flowModel =
+                    { BackgroundFactory = backgroundFactory 
+                      FlowModel = flowModel }
+
+
                 let reader = splitDocument.Reader
                 let totalNumberOfPages = reader.GetNumberOfPages()
                 let pageNumbers = reader.GetPageNumbers(pageSelector)
                 let borderKeepingPageNumbers = [1..totalNumberOfPages]
 
-                let bks = ResizeArray()
 
                 pageNumbers
                 |> List.iter(fun pageNumber ->
@@ -783,7 +790,6 @@ module _Extract =
                                 let infos = r.Infos.AsList
                                 let writerPageSetter = r.WriterPageSetter
                                 let background = r.Infos.Background
-                                bks.Add(background)
                                 let boundPredicate (info: RenewablePathInfo) =
                                     info.Tag = RenewablePathInfoTag.CuttingDie
 
@@ -797,11 +803,8 @@ module _Extract =
                     |> ignore
                 )
 
-                bks
-                |> List.ofSeq
-                |> List.concat
-                |> List.distinctBy(fun m -> m.BackgroundFile.ClearedPdfFile.PdfPath)
-                |> List.iter(fun m -> (m :> System.IDisposable).Dispose())
+                for bk in flowModel.BackgroundFactory do
+                    (bk.Value :> System.IDisposable).Dispose()
                 
 
             |> reuse 

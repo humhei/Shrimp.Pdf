@@ -12,7 +12,7 @@ open Shrimp.FSharp.Plus
 
 
 let manipulatesTests =
-  ftestList "slimflow manipulate tests" [
+  testList "slimflow manipulate tests" [
     testCase "move pageBox to origin test1" <| fun _ ->
         let flow =
             Flow.Reuse (
@@ -57,12 +57,12 @@ let manipulatesTests =
 
         pass()
 
-    testCase "TrimToVisible test" <| fun _ ->
+    ftestCase "TrimToVisible test" <| fun _ ->
         let flow =
             Flow.Reuse (
                 Reuses.SlimFlows(
                     PageSelector.All,
-                    slimFlow = (
+                    slimFlow = ( 
                         SlimModifyPage.TrimToVisible()
                         <+>
                         SlimModifyPage.MovePageBoxToOrigin()
@@ -216,20 +216,14 @@ let manipulatesTests =
 
     testCase "add background test1" <| fun _ ->
         let flow =
-            let background = 
-                new SlimBackground(
-                    BackgroundFile.Create(@"datas/slimFlow/add background1.bk.pdf"),
-                    BackgroundOrForeground.Background,
-                    PdfConfiguration.DefaultValue,
-                    layerName = BackgroundAddingLayerOptions.Create("current", "background"),
-                    xobjectOnly = true
-                ) 
-                |> SlimBackgroundUnion.Singleton
-                 
             Flow.Reuse (
                 Reuses.SlimFlows(
                     PageSelector.All,
-                    slimFlow = SlimModifyPage.AddBackgroundOrForeground(background)
+                    slimFlow = 
+                        SlimModifyPage.AddBackgroundOrForeground(
+                            BackgroundFile.Create(@"datas/slimFlow/add background1.bk.pdf"),
+                            layerName = BackgroundAddingLayerOptions.Create("current", "background")
+                        )
                 )  
             )  
 
@@ -241,20 +235,15 @@ let manipulatesTests =
 
     testCase "add background test2" <| fun _ ->
         let flow =
-            let background = 
-                new SlimBackground(
-                    BackgroundFile.Create(@"datas/slimFlow/add background2.bk.pdf"),
-                    BackgroundOrForeground.Background,
-                    PdfConfiguration.DefaultValue,
-                    layerName = BackgroundAddingLayerOptions.Create("current", "background"),
-                    xobjectOnly = true
-                ) 
-                |> SlimBackgroundUnion.Singleton
-                 
             Flow.Reuse (
                 Reuses.SlimFlows(
                     PageSelector.All,
-                    slimFlow = SlimModifyPage.AddBackgroundOrForeground(background)
+                    slimFlow = 
+                        SlimModifyPage.AddBackgroundOrForeground(
+                            BackgroundFile.Create(@"datas/slimFlow/add background2.bk.pdf"),
+                            layerName = BackgroundAddingLayerOptions.Create("current", "background"),
+                            refOptions = SlimBackgroundRefOptions.XObject_Simply
+                        )
                 )  
             )  
 
@@ -266,28 +255,22 @@ let manipulatesTests =
 
     testCase "add background test3" <| fun _ ->
         let flow =
-            let background = 
-                let files = 
-                    [
-                        @"datas/slimFlow/add background3.bk-1,3.pdf"
-                        @"datas/slimFlow/add background3.bk-2.pdf"
-                        @"datas/slimFlow/add background3.bk-1,3.pdf"
-                    ]
-                    |> List.map PdfFile
-                     
-                MultipleSlimBackground.Create(
-                    files,
-                    BackgroundOrForeground.Background,
-                    PdfConfiguration.DefaultValue,
-                    layerName = BackgroundAddingLayerOptions.Create("current", "background"),
-                    xobjectOnly = true
-                ) 
-                |> SlimBackgroundUnion.Multiple
-                 
+            let files = 
+                [
+                    @"datas/slimFlow/add background3.bk-1,3.pdf"
+                    @"datas/slimFlow/add background3.bk-2.pdf"
+                    @"datas/slimFlow/add background3.bk-1,3.pdf"
+                ]
+                |> List.map PdfFile
             Flow.Reuse (
                 Reuses.SlimFlows(
                     PageSelector.All,
-                    slimFlow = SlimModifyPage.AddBackgroundOrForeground(background)
+                    slimFlow = SlimModifyPage.AddBackgroundOrForeground(
+                        files,
+                        layerName = BackgroundAddingLayerOptions.Create("current", "background"),
+                        refOptions = SlimBackgroundRefOptions.XObject_Simply
+
+                    )
                 )  
             )  
 
@@ -299,22 +282,15 @@ let manipulatesTests =
          
     testCase "add background test4" <| fun _ ->
         let flow =
-            let background = 
-                new SlimBackground(
-                    BackgroundFile.Create(@"datas/slimFlow/add background4.bk.pdf"),
-                    BackgroundOrForeground.Background,
-                    PdfConfiguration.DefaultValue,
-                    layerName = BackgroundAddingLayerOptions.Create("current", "background"),
-                    xobjectOnly = true
-
-                ) 
-                |> SlimBackgroundUnion.Singleton
-                 
             Flow.Reuse ( 
                 Reuses.SlimFlows(
                     PageSelector.All,
                     slimFlow = (
-                        SlimModifyPage.AddBackgroundOrForeground(background)
+                        SlimModifyPage.AddBackgroundOrForeground(
+                            BackgroundFile.Create(@"datas/slimFlow/add background4.bk.pdf"),
+                            layerName = BackgroundAddingLayerOptions.Create("current", "background"),
+                            refOptions = SlimBackgroundRefOptions.XObject_Simply
+                        )
                         <+>
                         SlimModifyPage.ClearDirtyInfos() 
                         <+>
@@ -333,41 +309,22 @@ let manipulatesTests =
 
     testCase "add background test5" <| fun _ ->
         let flow =
-            let background1 = 
-                new SlimBackground(
-                    BackgroundFile.Create(@"datas/slimFlow/add background5.bk1.pdf"),
-                    BackgroundOrForeground.Background,
-                    PdfConfiguration.DefaultValue,
-                    layerName = BackgroundAddingLayerOptions.Create("current", "background1"),
-                    xobjectOnly = true
-                ) 
-                |> SlimBackgroundUnion.Singleton
-                 
-            let background2 = 
-                new SlimBackground(
-                    BackgroundFile.Create(@"datas/slimFlow/add background5.bk2.pdf"),
-                    BackgroundOrForeground.Background,
-                    PdfConfiguration.DefaultValue,
-                    layerName = BackgroundAddingLayerOptions.Create("current", "background2")
-                ) 
-                |> SlimBackgroundUnion.Singleton
-
-            let foreground1 = 
-                new SlimBackground(
-                    BackgroundFile.Create(@"datas/slimFlow/add background5.fr.pdf"),
-                    BackgroundOrForeground.Foreground,
-                    PdfConfiguration.DefaultValue,
-                    layerName = BackgroundAddingLayerOptions.Create("current", "fr")
-                ) 
-                |> SlimBackgroundUnion.Singleton
-
             Flow.Reuse ( 
                 Reuses.SlimFlows(
                     PageSelector.All,
                     slimFlow = (
-                        SlimModifyPage.AddBackgroundOrForeground(background1)
+                        SlimModifyPage.AddBackgroundOrForeground(
+                            BackgroundFile.Create(@"datas/slimFlow/add background5.bk1.pdf"),
+                            layerName = BackgroundAddingLayerOptions.Create("current", "background1"),
+                            refOptions = SlimBackgroundRefOptions.XObject_Simply
+
+                        )
                         <+>
-                        SlimModifyPage.AddBackgroundOrForeground(background2)
+                        SlimModifyPage.AddBackgroundOrForeground(
+                            BackgroundFile.Create(@"datas/slimFlow/add background5.bk2.pdf"),
+                            layerName = BackgroundAddingLayerOptions.Create("current", "background2"),
+                            refOptions = SlimBackgroundRefOptions.XObject_Simply
+                        )
                         <+>
                         SlimModifyPage.ClearDirtyInfos() 
                         <+>
@@ -375,7 +332,10 @@ let manipulatesTests =
                             infos
                         )
                         <+>
-                        SlimModifyPage.AddBackgroundOrForeground(foreground1)
+                        SlimModifyPage.AddBackgroundOrForeground(
+                            BackgroundFile.Create(@"datas/slimFlow/add background5.fr.pdf"),
+                            layerName = BackgroundAddingLayerOptions.Create("current", "fr")
+                        )
                     )
                 )    
             )   
@@ -416,20 +376,15 @@ let manipulatesTests =
 
     testCase "compose flow test" <| fun _ ->
         let flow =
-            let background = 
-                new SlimBackground(
-                    BackgroundFile.Create(@"datas/slimFlow/compose flow.bk.pdf"),
-                    BackgroundOrForeground.Background,
-                    PdfConfiguration.DefaultValue,
-                    layerName = BackgroundAddingLayerOptions.Create("current", "background")
-                ) 
-                |> SlimBackgroundUnion.Singleton
-                 
             Flow.Reuse (
                 Reuses.SlimFlows(
                     PageSelector.All,
                     slimFlow = (
-                        SlimModifyPage.AddBackgroundOrForeground(background)
+                        SlimModifyPage.AddBackgroundOrForeground(
+                            BackgroundFile.Create(@"datas/slimFlow/compose flow.bk.pdf"),
+                            layerName = BackgroundAddingLayerOptions.Create("current", "background"),
+                            refOptions = SlimBackgroundRefOptions.XObject_Simply
+                        )
                         <+>
                         SlimModifyPage.MapInfos(fun args infos -> 
                             infos
@@ -456,7 +411,7 @@ let manipulatesTests =
                                     let scaleY = targetSize.Height / (bound.GetHeightF())
 
                                     { pageBoxSetter with 
-                                        TrimBoxMargin = 
+                                        TrimBoxMargin =  
                                             margin
                                             |> NegativeMargin.Create
                                             |> Some
