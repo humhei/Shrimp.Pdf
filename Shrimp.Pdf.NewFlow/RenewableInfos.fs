@@ -13,23 +13,21 @@ open iText.Kernel.Geom
 type RenewableInfos = 
     { Infos: RenewableInfo list 
       IsCuttingDieSetted: bool
-      Background: SlimBackground option
+      Background: SlimBackground list
       InternalFlowModel: option<InternalFlowModel<int>> }
 with 
     static member Create(infos) =
         { Infos = infos 
           IsCuttingDieSetted = false
-          Background = None
+          Background = []
           InternalFlowModel = None }
 
     member x.AsList = x.Infos
 
-    member x.MapInfos(name, f) =
+    member x.MapInfos(name, parameters, f) =
         let mapInfos() = 
-            match x.Background with 
-            | None -> ()
-            | Some bk -> 
-                bk.ModifyInfos(name, f)
+            x.Background
+            |> List.iter(fun bk -> bk.ModifyInfos(name, parameters, f))
 
             {x with 
                 Infos = f x.Infos
@@ -50,32 +48,32 @@ with
 
             PdfLogger.TryInfoWithFlowModel(flowModel1.UserState, flowModel1, fun () -> mapInfos())
 
-    member x.MapInfo(name, f) =
-        x.MapInfos(name, fun infos ->
+    member x.MapInfo(name, parameters, f) =
+        x.MapInfos(name, parameters, fun infos ->
             infos
             |> List.map(fun m ->
                 f m
             )
         )
 
-    member x.MapPath(name, f) =
-        x.MapInfos(name, fun infos ->
+    member x.MapPath(name, parameters, f) =
+        x.MapInfos(name, parameters, fun infos ->
             infos
             |> List.map(fun m ->
                 m.MapPath f
             )
         )
 
-    member x.MapText(name, f) =
-        x.MapInfos(name, fun infos ->
+    member x.MapText(name, parameters, f) =
+        x.MapInfos(name, parameters, fun infos ->
             infos
             |> List.map(fun m ->
                 m.MapText f
             )
         )
 
-    member x.MapImage(name, f) =
-        x.MapInfos(name, fun infos ->
+    member x.MapImage(name, parameters, f) =
+        x.MapInfos(name, parameters, fun infos ->
             infos
             |> List.map(fun m ->
                 m.MapImage f
@@ -84,30 +82,25 @@ with
 
     member x.FilterInfos(name, f) =
         let bkInfos = 
-            match x.Background with 
-            | None -> []
-            | Some bk -> 
-                bk.FilterInfos(name, f)
+            x.Background
+            |> List.collect(fun bk -> bk.FilterInfos(name, f))
 
         let infos = List.filter f x.Infos
         infos @ bkInfos
 
     member x.ChooseInfos(name, f) =
         let bkInfos = 
-            match x.Background with 
-            | None -> []
-            | Some bk -> 
-                bk.ChooseInfos(name, f)
+            x.Background
+            |> List.collect(fun bk -> bk.ChooseInfos(name, f))
+          
 
         let infos = List.choose f x.Infos
         infos @ bkInfos
 
     member x.CollectInfos(name, f) =
         let bkInfos = 
-            match x.Background with 
-            | None -> []
-            | Some bk -> 
-                bk.CollectInfos(name, f)
+            x.Background
+            |> List.collect(fun bk -> bk.CollectInfos(name, f))
 
         let infos = f x.Infos
         infos @ bkInfos
@@ -126,7 +119,7 @@ with
         | true -> x
         | false ->
             let r = 
-                x.MapInfos("SetCuttingDie", List.map(fun m ->
+                x.MapInfos("SetCuttingDie", [], List.map(fun m ->
                     match m with 
                     | RenewableInfo.Path info ->
                         match info.LazyStrokeColor with 
@@ -178,7 +171,7 @@ with
         |> List.ofSeq
 
     member x.SetColor() =
-        x.MapInfos("SetColor", List.map(fun m -> m.SetColor()))
+        x.MapInfos("SetColor", [], List.map(fun m -> m.SetColor()))
 
 
     member x.VisibleBound1() =
@@ -192,7 +185,7 @@ with
     member x.ReplaceColors(colorMappings: ColorMappings) =
         let text = colorMappings.LoggingText
         let picker = colorMappings.AsPicker()
-        x.MapInfos("ReplaceColors_ColorMapping:" + text, List.map(fun info ->
+        x.MapInfos("ReplaceColors_ColorMapping", ["ColorMapping" => text], List.map(fun info ->
             info.MapColor(fun color ->
                 match picker color with 
                 | Some newColor -> (newColor.ToFsColor())
@@ -206,8 +199,13 @@ with
             |> List.map(fun m -> m.LoggingText_Raw)
             |> String.concat "\n"
 
-        let name = sprintf "ReplaceColors_tuple: %A" (originColorText, newColor.LoggingText_Raw)
-        x.MapInfos(name, List.map(fun info ->
+        let name = "ReplaceColors_tuple" 
+        let paramters =
+            [
+                "OriginColor" => originColorText
+                "NewColor" => newColor.LoggingText_Raw
+            ] 
+        x.MapInfos(name, paramters, List.map(fun info ->
             info.MapColor(fun color ->  
                 match FsColors.contains color originColors with 
                 | true -> Some newColor
@@ -215,8 +213,8 @@ with
             )
         ))
 
-    member x.ReplaceColors(name, picker: FsColor -> FsColor option) =
-        x.MapInfos(name, List.map(fun info ->
+    member x.ReplaceColors(name, paramters, picker: FsColor -> FsColor option) =
+        x.MapInfos(name, paramters, List.map(fun info ->
             info.MapColor(picker)
         ))
  

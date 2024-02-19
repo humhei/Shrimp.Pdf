@@ -2,6 +2,7 @@
 namespace Shrimp.Pdf
 open Shrimp.FSharp.Plus
 open Shrimp.Pdf
+open Shrimp.Pdf.PdfNames
 open System.IO
 #nowarn "0104"
 open Shrimp.Pdf.Constants
@@ -219,7 +220,25 @@ module _SlimFlow_Common_BackgroundOrForeground =
                 | BackgroundOrForeground.Foreground ->
                     new OffsetablePdfCanvas(writerPage.NewContentStreamAfter(), writerPage.GetResources(), writerDoc)
                     
+            let shpLayerName =
+                match image with 
+                | RenewableBackgroundImageFile.BackgroundImageFile (image, createBackground) ->
+                    layerName
+                    |> Option.map(fun m -> m.BackgroundLayer.Name)
 
+                | RenewableBackgroundImageFile.SlimBackground (writeInfosFunc, slimBackground) ->
+                    slimBackground.ShpLayerName
+                    |> Some
+
+            let shpLayerPdfName =
+                match image with 
+                | RenewableBackgroundImageFile.BackgroundImageFile (image, createBackground) ->
+                    match choice with 
+                    | BackgroundOrForeground.Background -> PdfName.ShpLayerBK
+                    | BackgroundOrForeground.Foreground -> PdfName.ShpLayerForeground
+
+                | RenewableBackgroundImageFile.SlimBackground (writeInfosFunc, slimBackground) ->
+                    slimBackground.ShpLayerPdfName
 
             let image = 
                 let createImage createBackground (image: BackgroundImageFile) (imageFile: FsFullPath) (pdf_addtionFlow: BackgoundAddtionFlow) =
@@ -290,6 +309,15 @@ module _SlimFlow_Common_BackgroundOrForeground =
 
 
             let addImage() =    
+                    
+                match shpLayerName with 
+                | None -> ()
+                | Some shpLayerName ->
+                    let stream = pdfCanvas.GetContentStream()
+                    stream.Put(shpLayerPdfName, PdfString shpLayerName)
+                    |> ignore
+
+
                 pdfCanvas.AddPdfXObjectDSLEx(
                     backgroundPageBox = fst image.PageBoxAndXObject,
                     backgroundXObject  = snd image.PageBoxAndXObject,

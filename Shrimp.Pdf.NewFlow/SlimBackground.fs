@@ -6,7 +6,7 @@ open System.IO
 open System.Collections.Generic
 
 #nowarn "0104"
-open Shrimp.Pdf.Constants
+open Shrimp.Pdf.PdfNames
 open Shrimp.Pdf.Extensions
 open Akkling
 open Fake.IO
@@ -67,7 +67,6 @@ module _SlimFlow_BackgroundOrForeground =
     
     
     
-    
     type SlimBackground
         (backgroundFile: BackgroundFile,
          choice: BackgroundOrForeground,
@@ -77,10 +76,17 @@ module _SlimFlow_BackgroundOrForeground =
          ?yEffect: YEffort,
          ?shadowColor: NullablePdfCanvasColor,
          ?extGsState: FsExtGState,
-         ?backgroundPositionTweak: PageNumber -> BackgroundPositionTweak) =
+         ?backgroundPositionTweak: PageNumber -> BackgroundPositionTweak,
+         ?xobjectOnly: bool) =
         
         let cache = System.Collections.Concurrent.ConcurrentDictionary()
     
+        let shpLayerName =
+            match layerName with 
+            | Some layerName -> layerName.BackgroundLayer.Name
+            | None -> backgroundFile.Name
+
+
 
         let tmpFile = Path.GetTempFileNameEx() |> Path.changeExtension ".pdf"
         do File.Copy(backgroundFile.ClearedPdfFile.Path, tmpFile, true)
@@ -88,57 +94,76 @@ module _SlimFlow_BackgroundOrForeground =
         let pdfDocument = 
             new PdfDocument(new PdfReader(tmpFile))
     
-        let pageBox = pdfDocument.GetPage(1).GetActualBox()
+        let page = pdfDocument.GetPage(1)
+        let pageBox = page.GetActualBox()
     
+        let xobjectOnly = defaultArg xobjectOnly false
+
+        let shpLayerPdfName =   
+            match xobjectOnly with 
+            | false ->
+                match choice with 
+                | BackgroundOrForeground.Background -> PdfName.ShpLayerBK
+                | BackgroundOrForeground.Foreground -> PdfName.ShpLayerForeground
+
+            | true ->
+                match choice with 
+                   | BackgroundOrForeground.Background -> PdfName.ShpLayerBk_XObjectOnly
+                   | BackgroundOrForeground.Foreground -> PdfName.ShpLayerFr_XObjectOnly
+
+                
+
         let mutable infos =
+            match xobjectOnly with 
+            | true -> []
+            | false ->
+                let logInfo (text) = 
+                    let logger: PageLogger =
+                        { LoggerLevel = configuration.LoggerLevel 
+                          LoggingPageCountInterval = 10 }
     
-            let logInfo (text) = 
-                let logger: PageLogger =
-                    { LoggerLevel = configuration.LoggerLevel 
-                      LoggingPageCountInterval = 10 }
+                    logger.Log(text, alwaysPrintingConsole_If_Info = true)
     
-                logger.Log(text, alwaysPrintingConsole_If_Info = true)
-    
-            let stopWatch = System.Diagnostics.Stopwatch.StartNew()
-            let parser = NonInitialClippingPathPdfDocumentContentParser(pdfDocument)
-            let infos = 
-                NonInitialClippingPathPdfDocumentContentParser.parseIM
-                    1
-                    (RenderInfoSelector.All(fun _ -> true))
-                    parser
-    
-            let infos = 
+                let stopWatch = System.Diagnostics.Stopwatch.StartNew()
+                let parser = NonInitialClippingPathPdfDocumentContentParser(pdfDocument)
                 let infos = 
+                    NonInitialClippingPathPdfDocumentContentParser.parseIM
+                        1
+                        (RenderInfoSelector.All(fun _ -> true))
+                        parser
+    
+                let infos = 
+                    let infos = 
+                        infos
+                        |> List.ofSeq
+                        |> List.map(fun m -> m.AsUnion.SetVisibleBound0())
+                        |> List.filter(fun m -> m.LazyVisibleBound0.IsSome)
+    
                     infos
-                    |> List.ofSeq
-                    |> List.map(fun m -> m.AsUnion.SetVisibleBound0())
-                    |> List.filter(fun m -> m.LazyVisibleBound0.IsSome)
+                    |> List.map(fun info ->
+                        info.Renewable()
+                    )
+                    |> List.map(fun m -> m.UpdateVisibleBound1())
+    
+                stopWatch.Stop()
+                logInfo(fun () ->
+                    sprintf "    [SlimBackground][%s] extracting slim background in %d/%d, found infos %d in %O" backgroundFile.Name 1 1 infos.Length stopWatch.Elapsed
+                ) 1
     
                 infos
-                |> List.map(fun info ->
-                    info.Renewable()
-                )
-                |> List.map(fun m -> m.UpdateVisibleBound1())
-    
-            stopWatch.Stop()
-            logInfo(fun () ->
-                sprintf "    [SlimBackground][%s] extracting slim background in %d/%d, found infos %d in %O" backgroundFile.Name 1 1 infos.Length stopWatch.Elapsed
-            ) 1
-    
-            infos
 
-        let modifyFlowNames = HashSet()
+        let modifyFlowNames = HashSet<string * list<string * string>>()
         let filterInfosCache = new System.Collections.Concurrent.ConcurrentDictionary<_, obj list>()
 
 
-        member x.ModifyInfos(name, f) =
-            match modifyFlowNames.Contains(name) with 
+        member x.ModifyInfos(name, paramters, f) =
+            match modifyFlowNames.Contains(name, paramters) with 
             | true -> ()
             | false ->
                 let newInfos: RenewableInfo list = f infos
                 infos <- newInfos
                 filterInfosCache.Clear()
-                modifyFlowNames.Add(name) |> ignore
+                modifyFlowNames.Add(name, paramters) |> ignore
 
         member x.CollectInfos<'T>(name: string, mapping: RenewableInfo list -> 'T list) =
             filterInfosCache.GetOrAdd(name, valueFactory = fun _ ->
@@ -165,13 +190,13 @@ module _SlimFlow_BackgroundOrForeground =
 
 
         member x.SetColor() =
-            x.ModifyInfos("SetColor", fun infos ->
+            x.ModifyInfos("SetColor", [], fun infos ->
                 infos
                 |> List.map(fun m -> m.SetColor())
             )
 
         member x.Internal_RecoverVisibleBound_ForWrite() =
-            x.ModifyInfos("Internal_RecoverVisibleBound_ForWrite", fun infos ->
+            x.ModifyInfos("Internal_RecoverVisibleBound_ForWrite", [], fun infos ->
                 infos
                 |> List.map(fun m ->
                     m.Internal_RecoverVisibleBound_ForWrite().UpdateVisibleBound1()
@@ -199,13 +224,23 @@ module _SlimFlow_BackgroundOrForeground =
     
         member x.BackgroundPositionTweak = backgroundPositionTweak
         
+        member x.ShpLayerName = shpLayerName
+
+        member x.ShpLayerPdfName = shpLayerPdfName
+
         member x.GeneratePageBoxAndXObject(writeInfosFunc: WriteInfosFunc, writerDocument, writePageBox: Rectangle) =
             let point = FsPoint.OfPoint writePageBox.LeftBottom 
             cache.GetOrAdd(point, valueFactory = fun _ ->
-                let xobject = PdfFormXObject(pageBox) 
-                let canvas = OffsetablePdfCanvas(xobject, writerDocument)
-                writeInfosFunc 1 writerDocument writePageBox canvas infos
-                pageBox, xobject :> PdfXObject
+                match xobjectOnly with 
+                | false ->
+                    let xobject = PdfFormXObject(pageBox) 
+                    let canvas = OffsetablePdfCanvas(xobject, writerDocument)
+                    writeInfosFunc 1 writerDocument writePageBox canvas infos
+                    pageBox, xobject :> PdfXObject
+
+                | true ->
+                    let xobject = page.CopyAsFormXObject(writerDocument)
+                    pageBox, xobject :> PdfXObject
             )
     
     
@@ -224,7 +259,8 @@ module _SlimFlow_BackgroundOrForeground =
          ?yEffect,
          ?shadowColor,
          ?extGsState,
-         ?backgroundPositionTweak) =
+         ?backgroundPositionTweak,
+         ?xobjectOnly) =
     
         let cache = new System.Collections.Concurrent.ConcurrentDictionary<_, _>()
         let slimBackgrounds =
@@ -240,7 +276,8 @@ module _SlimFlow_BackgroundOrForeground =
                         ?yEffect = yEffect,
                         ?shadowColor = shadowColor,
                         ?extGsState = extGsState,
-                        ?backgroundPositionTweak = backgroundPositionTweak)
+                        ?backgroundPositionTweak = backgroundPositionTweak,
+                        ?xobjectOnly = xobjectOnly)
                 )
             )
     
@@ -252,9 +289,9 @@ module _SlimFlow_BackgroundOrForeground =
 
 
     
-        member x.ModifyInfos(name, f) =
+        member x.ModifyInfos(name, paramters, f) =
             for pair in cache do 
-                pair.Value.ModifyInfos(name, f)
+                pair.Value.ModifyInfos(name, paramters, f)
 
         member x.SetColor() =
             for pair in cache do 
@@ -281,6 +318,11 @@ module _SlimFlow_BackgroundOrForeground =
         | Multiple of MultipleSlimBackground
         | Singleton of SlimBackground
     with 
+        member x.Names() =
+            match x with 
+            | Multiple v -> v.BackgroundFiles |> List.map(fun m -> m.Name)
+            | Singleton v -> [v.BackgroundFile.Name]
+
         member x.GetByPageNumber(pageNumber: PageNumber) =
             match x with 
             | Multiple v -> v.AsList.[pageNumber.Value-1]
@@ -292,10 +334,10 @@ module _SlimFlow_BackgroundOrForeground =
             | Singleton v -> v.SetColor()
             | Multiple v  -> v.SetColor()
 
-        member x.ModifyInfos(name, f) =
+        member x.ModifyInfos(name, paramters, f) =
             match x with 
-            | Singleton v -> v.ModifyInfos(name, f)
-            | Multiple v  -> v.ModifyInfos(name, f)
+            | Singleton v -> v.ModifyInfos(name, paramters, f)
+            | Multiple v  -> v.ModifyInfos(name, paramters, f)
 
         member x.FilterInfos(pageNumber, name, filter) =
             x.GetByPageNumber(pageNumber).FilterInfos(name, filter)

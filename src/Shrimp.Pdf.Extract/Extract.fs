@@ -8,6 +8,7 @@ open Shrimp.Pdf.Extensions
 open Shrimp.Pdf
 open Shrimp.Pdf.Colors
 open Shrimp.Pdf.Constants
+open Shrimp.Pdf.PdfNames
 open Shrimp.Pdf.Parser
 open Shrimp.FSharp.Plus
 open Akkling
@@ -84,7 +85,7 @@ module _Extract =
     [<RequireQualifiedAccess>]
     type internal TargetRenewablePageInfo<'userState> =
         | EmptyPage of TargetPageBox
-        | NewPageCase of TargetPageBox * TargetRenewableNewPageInfoElement * writerPageSetter: (SlimWriterPageSetter) * background: SlimBackground option
+        | NewPageCase of TargetPageBox * TargetRenewableNewPageInfoElement * writerPageSetter: (SlimWriterPageSetter) * background: SlimBackground list
         | Non
         | NewInfosInOriginPage of TargetNewInfosInOriginPageElement list
         | SplitToTwoPages of 
@@ -96,7 +97,7 @@ module _Extract =
                 targetPageBox,
                 targetElement,
                 defaultArg writerPageSetter SlimWriterPageSetter.Ignore,
-                background
+                defaultArg background []
             )
 
 
@@ -518,8 +519,14 @@ module _Extract =
                                 if existsKeepBorderInfos
                                 then 
                                     let stream = writerPage.NewContentStreamAfter()
+                                    let cuttingDieLayerEnum =
+                                        match infoChoices.Bounds.Length >= 1, infoChoices.TagInfos.Length >= 1 with 
+                                        | true, false -> CuttingDieShpLayerInfosEnum.CuttingDie
+                                        | false, true -> CuttingDieShpLayerInfosEnum.TagInfos
+                                        | true, true -> CuttingDieShpLayerInfosEnum.CuttingAndTagInfos
+                                        | false, false -> failwithf "Invalid token"
 
-                                    stream.Put(PdfName.CuttingDie, PdfBoolean true)
+                                    stream.Put(PdfName.ShpLayerCuttingDie, PdfString(cuttingDieLayerEnum.Text()))
                                     |> ignore
 
                                     let boundingCanvas = 
@@ -638,9 +645,9 @@ module _Extract =
                     let writerPage, writerCanvas, tagInfosTransforms = writerPageSetter.GenerateWriterPageAndCanvas(readerPage, writer, background, writeInfos)
                             
                     let layerOptions =
-                        match background with 
-                        | None -> None
-                        | Some background -> background.LayerName
+                        background
+                        |> List.choose(fun m -> m.LayerName)
+                        |> List.tryLast
 
                     PdfCanvas.useCanvas writerCanvas (fun writerCanvas ->
                         let writeInfos() = 
@@ -734,11 +741,10 @@ module _Extract =
                     slimFlow
                     <+>
                     SlimModifyPage.MapInfos(fun args infos ->
-                        match infos.Background with 
-                        | None -> infos
-                        | Some background ->
-                            background.Internal_RecoverVisibleBound_ForWrite()
-                            infos
+                        infos.Background
+                        |> List.iter(fun bk -> bk.Internal_RecoverVisibleBound_ForWrite())
+
+                        infos
                     )
                     |> Some
             let keepOriginPage = defaultArg keepOriginPage false
@@ -781,7 +787,7 @@ module _Extract =
                                 let boundPredicate (info: RenewablePathInfo) =
                                     info.Tag = RenewablePathInfoTag.CuttingDie
 
-                                [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers, boundPredicate = boundPredicate), writerPageSetter, ?background = background)]
+                                [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers, boundPredicate = boundPredicate), writerPageSetter, background = background)]
                         )
                         keepOriginPage
                         ignore
@@ -793,7 +799,7 @@ module _Extract =
 
                 bks
                 |> List.ofSeq
-                |> List.choose id
+                |> List.concat
                 |> List.distinctBy(fun m -> m.BackgroundFile.ClearedPdfFile.PdfPath)
                 |> List.iter(fun m -> (m :> System.IDisposable).Dispose())
                 

@@ -84,7 +84,7 @@ type SlimModifyPage =
                                 actualBox.GetYF() - heightDiff
 
 
-                        background.ModifyInfos("FixVisibleBound", fun infos ->
+                        background.ModifyInfos("FixVisibleBound", [], fun infos ->
                             infos
                             |> List.map(fun info0 ->
                                 match info0 with 
@@ -139,12 +139,26 @@ type SlimModifyPage =
                             )
                             |> List.map(fun m -> m.UpdateVisibleBound1())
                         )
-                        Some background
+                        let backgrounds = infos.Background @ [background]
+
+                        backgrounds
+                        |> List.choose(fun m -> m.LayerName)
+                        |> List.ensureNotDuplicatedWith(fun m -> StringIC m.BackgroundLayer.Name)
+                        |> ignore
+
+                        backgrounds
+                        |> List.ensureNotDuplicatedWith(fun m -> m.BackgroundFile.ClearedPdfFile.FullPath)
 
                 } 
               WriterPageSetter = pageSetter 
               UserState = flowModel.UserState }
         )
+        |> SlimFlow.rename 
+            "AddBackgroundOrForeground" 
+            [
+                "bkNames" => String.concat "; " (background.Names()) 
+                    
+            ]
         |> SlimFlowUnion.Flow
 
     static member MovePageBoxToOrigin() =
@@ -253,7 +267,7 @@ type SlimModifyPage =
             }
         )
         |> SlimFlow.rename 
-            "SetPageBox" 
+            "Scale" 
             []
         |> SlimFlowUnion.Flow
 

@@ -313,6 +313,11 @@ module _Reuses =
             | Pdf layerName -> PdfLayer(layerName, doc) |> LayerUnion.Pdf
             | AI ops ->        AiLayer.Create(doc, ops) |> LayerUnion.AI
 
+        member x.Name =
+            match x with 
+            | LayerOptions.Pdf name -> name
+            | LayerOptions.AI aiLayerOptions -> aiLayerOptions.Title
+
     [<RequireQualifiedAccess>]
     type BackgroundAddingLayerOptions =
         | Pdf of currentLayerName: string * backgroundLayerName: string

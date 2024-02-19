@@ -2,6 +2,7 @@
 #nowarn "0104"
 open System.Collections
 open Shrimp.Pdf
+open Shrimp.Pdf.PdfNames
 open Shrimp.Pdf.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
@@ -253,54 +254,79 @@ with
                     |> List.reduce(fun a b -> a.Concatenate(b))
                 )
 
-    member writerPageSetter.GenerateWriterPageAndCanvas(readerPage: PdfPage, writer: PdfDocument, background: SlimBackground option, writeInfos) =
+    member writerPageSetter.GenerateWriterPageAndCanvas(readerPage: PdfPage, writer: PdfDocument, background: SlimBackground list, writeInfos) =
         let actualBox = readerPage.GetActualBox()
 
         let writerPage = writer.AddNewPage(PageSize(actualBox))
         let transforms = writerPageSetter.GenerateTransforms(readerPage)
 
         let writerCanvas = 
-            let writerCanvas = new OffsetablePdfCanvas(writerPage.GetContentStream(0), writerPage.GetResources(), writer)
+            let contentStream = writerPage.GetContentStream(0)
+
+            let layerOptions =
+                background
+                |> List.choose(fun m -> m.LayerName)
+                |> List.tryLast
+
+            match layerOptions with 
+            | None -> 
+                match background with 
+                | [] -> ()
+                | _ ->
+                    contentStream.Put(PdfName.ShpLayerContent, PdfString "Content")
+                    |> ignore
+
+            | Some layerOptions -> 
+                let shpLayerName = layerOptions.CurrentLayer.Name
+                contentStream.Put(PdfName.ShpLayerContent, PdfString shpLayerName)
+                |> ignore
+
+            let writerCanvas = new OffsetablePdfCanvas(contentStream, writerPage.GetResources(), writer)
             
             match background with 
-            | None -> ()
-            | Some background ->
-                let backgroundPositionTweak = 
-                    background.BackgroundPositionTweak
-                    |> Option.defaultValue ((fun _ -> BackgroundPositionTweak.DefaultValue) )
-                    >> fun tweak ->     
-                        let tweak = 
-                            match writerPageSetter.SetPageBox_Origin with 
-                            | None -> tweak
-                            | Some origin ->
-                                match origin with 
-                                | PageBoxOrigin.LeftBottom -> 
-                                    let pageBox = writerPage.GetActualBox()
-                                    tweak.Offset(-pageBox.GetXF(), -pageBox.GetYF())
-
-                        let tweak = 
-                            match writerPageSetter.PageBoxSetter with 
-                            | None -> tweak
-                            | Some pageBoxSetter ->
-                                match pageBoxSetter.Scale with 
+            | [] -> ()
+            | backgrounds ->
+                backgrounds
+                |> List.iter(fun background ->
+                    let backgroundPositionTweak = 
+                        background.BackgroundPositionTweak
+                        |> Option.defaultValue ((fun _ -> BackgroundPositionTweak.DefaultValue) )
+                        >> fun tweak ->     
+                            let tweak = 
+                                match writerPageSetter.SetPageBox_Origin with 
                                 | None -> tweak
-                                | Some scale -> tweak.SetScale(Some scale)
+                                | Some origin ->
+                                    match origin with 
+                                    | PageBoxOrigin.LeftBottom -> 
+                                        let pageBox = writerPage.GetActualBox()
+                                        tweak.Offset(-pageBox.GetXF(), -pageBox.GetYF())
 
-                        tweak
+                            let tweak = 
+                                match writerPageSetter.PageBoxSetter with 
+                                | None -> tweak
+                                | Some pageBoxSetter ->
+                                    match pageBoxSetter.Scale with 
+                                    | None -> tweak
+                                    | Some scale -> tweak.SetScale(Some scale)
+
+                            tweak
 
 
-                writerPage.AddBackgroundOrForegroundImage(
-                    1,
-                    new Concurrent.ConcurrentDictionary<_, _>(),
-                    RenewableBackgroundImageFile.SlimBackground (writeInfos, background),
-                    background.Choice,
-                    ?layerName               = background.LayerName,
-                    ?xEffect                 = background.XEffect,
-                    ?yEffect                 = background.YEffect,
-                    ?shadowColor             = background.ShadowColor,
-                    ?extGSState              = background.ExtGsState,
-                    backgroundPositionTweak  = backgroundPositionTweak
+                    writerPage.AddBackgroundOrForegroundImage(
+                        1,
+                        new Concurrent.ConcurrentDictionary<_, _>(),
+                        RenewableBackgroundImageFile.SlimBackground (writeInfos, background),
+                        background.Choice,
+                        ?layerName               = background.LayerName,
+                        ?xEffect                 = background.XEffect,
+                        ?yEffect                 = background.YEffect,
+                        ?shadowColor             = background.ShadowColor,
+                        ?extGSState              = background.ExtGsState,
+                        backgroundPositionTweak  = backgroundPositionTweak
+                    )
                 )
+
+
 
             let writeInPage (transforms: AffineTransformRecord option) =
                 match transforms with 

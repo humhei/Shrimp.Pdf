@@ -8,12 +8,26 @@ open System
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
 open iText.Kernel.Pdf
 
-
-module Constants =
+module PdfNames =
     [<RequireQualifiedAccess>]
     module PdfName =
-        let CuttingDie = PdfName "CuttingDie"
-    
+        //let ShpLayer = PdfName "ShpLayer" 
+        let ShpLayerBk_XObjectOnly = PdfName "ShpLayerBk_XObjectOnly" 
+        let ShpLayerFr_XObjectOnly = PdfName "ShpLayerFr_XObjectOnly" 
+        let ShpLayerBK = PdfName "ShpLayerBK" 
+        let ShpLayerForeground = PdfName "ShpLayerForeground" 
+        let ShpLayerContent = PdfName "ShpLayerContent" 
+        let ShpLayerCuttingDie = PdfName "ShpLayerCuttingDie" 
+
+    type CuttingDieShpLayerInfosEnum =
+        | CuttingDie = 0
+        | TagInfos = 1
+        | CuttingAndTagInfos = 2
+
+module Constants =
+
+
+
 
     type private AssemblyFinder = AssemblyFinder
 

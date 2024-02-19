@@ -426,7 +426,8 @@ module _Extract_BackgroundOrForeground =
             ?yEffect,
             ?shadowColor,
             ?extGsState,
-            ?backgroundPositionTweak
+            ?backgroundPositionTweak,
+            ?xobjectOnly
             ) =
             let cache = new System.Collections.Concurrent.ConcurrentDictionary<_, _>()
             let backgroundFiles = 
@@ -437,15 +438,16 @@ module _Extract_BackgroundOrForeground =
                     )
                 )
 
-
-            MultipleSlimBackground(
-                backgroundFiles,
-                choice,
-                configuration,
-                ?layerName               = layerName,
-                ?xEffect                 = xEffect,
-                ?yEffect                 = yEffect,
-                ?shadowColor             = shadowColor,
-                ?extGsState              = extGsState,
-                ?backgroundPositionTweak = backgroundPositionTweak
-            )
+            new 
+                MultipleSlimBackground(
+                    backgroundFiles,
+                    choice,
+                    configuration,
+                    ?layerName               = layerName,
+                    ?xEffect                 = xEffect,
+                    ?yEffect                 = yEffect,
+                    ?shadowColor             = shadowColor,
+                    ?extGsState              = extGsState,
+                    ?backgroundPositionTweak = backgroundPositionTweak,
+                    ?xobjectOnly             = xobjectOnly
+                )
