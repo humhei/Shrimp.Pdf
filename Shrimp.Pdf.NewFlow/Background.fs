@@ -172,7 +172,7 @@ module _SlimFlow_Common_BackgroundOrForeground =
     [<RequireQualifiedAccess>]
     type RenewableBackgroundImageFile =
         | BackgroundImageFile of BackgroundImageFile * createBackground: (PdfFile * BackgoundAddtionFlow -> BackgroundFile)
-        | SlimBackground of WriteInfosFunc * SlimBackground
+        | SlimBackground of WriteInfosFunc * ImagableSlimBackground
 
     type PdfPage with 
         member writerPage.AddBackgroundOrForegroundImage 

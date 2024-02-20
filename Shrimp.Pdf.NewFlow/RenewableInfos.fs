@@ -12,15 +12,22 @@ open iText.Kernel.Geom
 
 type RenewableInfos = 
     { Infos: RenewableInfo list 
-      IsCuttingDieSetted: bool
-      Background: SlimBackground list
+      LazyCuttingDieBound0: Rectangle option
+      Background: SolidableSlimBackground list
       InternalFlowModel: option<InternalFlowModel<int>> }
 with 
+    member x.CuttingDieBound0 =
+        match x.LazyCuttingDieBound0 with 
+        | None -> failwithf "CuttingDie bound is None, please set cuttingDie bound first"
+        | Some bound -> bound
+
+    member x.IsCuttingDieSetted = x.LazyCuttingDieBound0.IsSome
+
     static member Create(infos) =
         { Infos = infos 
-          IsCuttingDieSetted = false
           Background = []
-          InternalFlowModel = None }
+          InternalFlowModel = None
+          LazyCuttingDieBound0 = None }
 
     member x.AsList = x.Infos
 
@@ -114,6 +121,26 @@ with
         )
 
 
+
+
+
+    member x.CuttingDieInfos() =
+        x.FilterInfos("CuttingDieInfos", fun m ->
+            match m with 
+            | RenewableInfo.Path info -> info.Tag = RenewablePathInfoTag.CuttingDie
+            | RenewableInfo.Image _
+            | RenewableInfo.Text _ -> false
+        )
+
+    member x.RefreshCuttingDieInfosBound() =
+        let bound = 
+            x.CuttingDieInfos()
+            |> List.map(fun m -> m.VisibleBound0)
+            |> AtLeastOneList.TryCreate
+            |> Option.map Rectangle.ofRectangles
+        
+        { x with LazyCuttingDieBound0 = bound }
+
     member x.SetCuttingDie(cuttingDieColors: FsColor list) =
         match x.IsCuttingDieSetted with 
         | true -> x
@@ -131,28 +158,12 @@ with
                                 { info with Tag = RenewablePathInfoTag.CuttingDie }
                                 |> RenewableInfo.Path
                             | false -> m
-
                     | RenewableInfo.Image _
                     | RenewableInfo.Text _ -> m
                 ))
 
-            { r with IsCuttingDieSetted = true }
+            r.RefreshCuttingDieInfosBound()
 
-
-    member x.CuttingDieInfos() =
-        x.FilterInfos("CuttingDieInfos", fun m ->
-            match m with 
-            | RenewableInfo.Path info -> info.Tag = RenewablePathInfoTag.CuttingDie
-            | RenewableInfo.Image _
-            | RenewableInfo.Text _ -> false
-        )
-
-    member x.CuttingDieInfosBound() =
-        x.CuttingDieInfos()
-        |> List.map(fun m -> m.VisibleBound0)
-        |> AtLeastOneList.TryCreate
-        |> Option.map Rectangle.ofRectangles
-        
 
     member x.AllColors() =
         x.CollectInfos("AllColors", fun infos ->

@@ -253,6 +253,8 @@ module _Renewable =
     type RenewablePathInfoTag =
         | Normal = 0
         | CuttingDie = 1
+        | PossibleTagInfo = 2
+        | TagInfo = 3
 
     [<RequireQualifiedAccess>]
     type RenewableModifableColor =  
@@ -399,6 +401,14 @@ module _Renewable =
           LazyVisibleBound1: Rectangle option
         }
     with 
+        member x.LazyVisibleBound0 = x.OriginInfo.LazyVisibleBound0
+
+        member x.VisibleBound0 = 
+            match x.LazyVisibleBound0 with 
+            | Some bound -> bound 
+            | None -> failwithf "LazyVisibleBound0 is None"
+
+
         member x.UpdateVisibleBoundWithStrokeWidth() =
             let bound = 
                 match x.OriginInfo.LazyVisibleBound0 with 
@@ -438,6 +448,10 @@ module _Renewable =
 
         member x.IsCuttingDie = 
             x.Tag = RenewablePathInfoTag.CuttingDie
+
+        member x.IsPossibleTagInfo =
+            x.Tag = RenewablePathInfoTag.PossibleTagInfo
+            || x.Tag = RenewablePathInfoTag.TagInfo
 
         member x.ApplyStrokeStyle(strokeStyle: StrokeStyle) =
             let x = 
@@ -764,6 +778,20 @@ module _Renewable =
            LazyStrokeColor_Modifiable: RenewableModifableColor option
            }
      with 
+        member x.ConcatedText(?wordSep) =
+            x.OriginInfo.ConcatedText(?wordSep = wordSep)
+
+        member x.LazyVisibleBound0 = x.OriginInfo.LazyVisibleBound0
+
+        member x.VisibleBound0 = 
+            match x.LazyVisibleBound0 with 
+            | Some bound -> bound 
+            | None -> failwithf "LazyVisibleBound0 is None"
+
+        member x.DenseVisibleBound0 = 
+            x.VisibleBound0.setHeight(YEffort.Middle, fun m -> m * 0.42)
+                
+
         member x.CancelFill() =
             let newTextRenderingMode = 
                 let operator: TextCloseOperator =
@@ -955,6 +983,13 @@ module _Renewable =
           OriginInfo: IntegratedImageRenderInfo
         }
     with 
+        member x.LazyVisibleBound0 = x.OriginInfo.LazyVisibleBound
+
+        member x.VisibleBound0 = 
+            match x.LazyVisibleBound0 with 
+            | Some bound -> bound 
+            | None -> failwithf "LazyVisibleBound0 is None"
+
         member x.CopyToDocument(document: PdfDocumentWithCachedResources) =
             { x with 
                 CurrentDocumentImage =
@@ -1064,6 +1099,11 @@ module _Renewable =
             | Path info -> info.IsCuttingDie
             | _ -> false
 
+        member x.IsPossibleTagInfo =
+            match x with 
+            | Path info -> info.IsPossibleTagInfo
+            | _ -> false
+
         member x.MapPath(f) =
             match x with 
             | Path info -> f info |> Path
@@ -1081,9 +1121,15 @@ module _Renewable =
 
         member private x.LazyVisibleBound0 = 
             match x with 
-            | Path info -> info.OriginInfo.LazyVisibleBound0
-            | Text info -> info.OriginInfo.LazyVisibleBound0
-            | Image info -> info.OriginInfo.LazyVisibleBound
+            | Path info -> info.LazyVisibleBound0
+            | Text info -> info.LazyVisibleBound0
+            | Image info -> info.LazyVisibleBound0
+
+        member x.DenseVisibleBound0 =
+            match x with 
+            | Path info -> info.VisibleBound0
+            | Text info -> info.DenseVisibleBound0
+            | Image info -> info.VisibleBound0
 
         member x.VisibleBound0 =
             match x.LazyVisibleBound0 with 
@@ -1093,8 +1139,8 @@ module _Renewable =
         member x.LazyVisibleBound1 =
             match x with 
             | Path info    -> info.LazyVisibleBound1
-            | Text info    -> info.OriginInfo.LazyVisibleBound0
-            | Image info   -> info.OriginInfo.LazyVisibleBound
+            | Text info    -> info.LazyVisibleBound0
+            | Image info   -> info.LazyVisibleBound0
 
         member x.VisibleBound1 =
             match x.LazyVisibleBound1 with 

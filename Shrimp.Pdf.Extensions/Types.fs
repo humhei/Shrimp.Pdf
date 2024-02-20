@@ -2073,6 +2073,57 @@ module ExtensionTypes =
             )
   
 
+        static member GetPageNumbers_Static (pageSelector: PageSelector) numberOfPages =
+            let allPageNumbers = [1..numberOfPages]
+
+            match pageSelector with 
+            | PageSelector.First -> [1]
+            | PageSelector.Last -> [numberOfPages]
+            | PageSelector.MultipleOf multiple -> 
+                allPageNumbers
+                |> List.filter(fun m ->
+                    m % multiple = 0
+                )
+            | PageSelector.Odd -> 
+                allPageNumbers
+                |> List.filter(isOdd)
+
+            | PageSelector.Even -> 
+                allPageNumbers
+                |> List.filter(isEven)
+
+            | PageSelector.Expr expr -> 
+                let indexExpr = expr.AsIndexExpr
+                allPageNumbers.GetByIndexExpr(indexExpr)
+
+            | PageSelector.All -> allPageNumbers
+            | PageSelector.NumbersCase numbers -> 
+                let intersectedNumbers =
+                    numbers.AsList
+                    |> List.map(fun m -> m.Value)
+                    |> List.filter(fun m ->
+                        m >= 1 && m <= numberOfPages
+                    )
+
+                intersectedNumbers
+
+            | PageSelector.And (pageSelectors: PageSelector list) ->
+                let pageNumberLists = 
+                    pageSelectors
+                    |> List.map(fun pageSelector ->
+                        PdfDocument.GetPageNumbers_Static pageSelector numberOfPages
+                    )
+
+                match pageNumberLists with 
+                | [] -> []
+                | _ ->
+                    pageNumberLists
+                    |> List.reduce(fun pageNumbers1 pageNumbers2 ->
+                        pageNumbers1
+                        |> List.filter(fun pageNumber1 ->
+                            List.contains pageNumber1 pageNumbers2
+                        )
+                    )
 
 
         member pdfDocument.GetPageNumbers(pageSelector) =

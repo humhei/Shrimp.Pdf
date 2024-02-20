@@ -623,8 +623,9 @@ module _Colors =
                   color2.ColorSpace ]
                 |> List.distinct
 
-            match colorSpaces with 
-            | [colorSpace] ->
+            match color1.ColorSpace = color2.ColorSpace with 
+            | true ->
+                let colorSpace = color1.ColorSpace
                 match valueEqualOptions with 
                 | ValueEqualOptions.Exactly -> 
                     let colorValue1 =
@@ -644,8 +645,7 @@ module _Colors =
                         color2.GetColorValue()
                         |> List.map (fun v -> NearbyColorValue(float v, fTolearance.[colorSpace]) )
                     colorValue1 = colorValue2
-            | _ :: _ -> false
-            | [] -> failwith "Invalid token"
+            | false -> false
 
 
         static member Invert = function
@@ -1398,11 +1398,149 @@ module _Colors =
 
 
     [<RequireQualifiedAccess>]
+    type SeparationOrValueColor =
+        | Separation of FsSeparation 
+        | ValueColor of FsValueColor
+
+    with 
+        member x.AlterColor =
+            match x with 
+            | SeparationOrValueColor.ValueColor v -> v
+            | SeparationOrValueColor.Separation v -> v.Color
+
+        member x.IsWhite() = x.AlterColor.IsWhite()
+
+        member x.IsBlack() = x.AlterColor.IsBlack()
+
+        member x.LoggingText =
+            match x with 
+            | SeparationOrValueColor.ValueColor v -> v.LoggingText
+            | SeparationOrValueColor.Separation v -> v.LoggingText
+
+        member x.LoggingText_Raw =
+            match x with 
+            | SeparationOrValueColor.ValueColor v -> v.LoggingText_Raw
+            | SeparationOrValueColor.Separation v -> v.LoggingText_Raw
+
+        static member OfLoggingText_Raw(text: string) =
+            match text.Contains "#" with 
+            | true -> 
+                FsSeparation.OfLoggingText_Raw text
+                |> SeparationOrValueColor.Separation
+
+            | false ->
+                FsValueColor.OfLoggingText_Raw text
+                |> SeparationOrValueColor.ValueColor
+
+        static member BLACK = FsValueColor.BLACK |> SeparationOrValueColor.ValueColor
+        
+        static member WHITE = FsValueColor.WHITE |> SeparationOrValueColor.ValueColor
+
+        static member RGB_BLACK = FsValueColor.RGB_BLACK  |> SeparationOrValueColor.ValueColor
+        static member RGB_WHITE = FsValueColor.RGB_WHITE  |> SeparationOrValueColor.ValueColor
+        static member RGB_RED = FsValueColor.RGB_RED  |> SeparationOrValueColor.ValueColor
+        static member RGB_BLUE = FsValueColor.RGB_BLUE  |> SeparationOrValueColor.ValueColor
+        static member RGB_MAGENTA = FsValueColor.RGB_MAGENTA  |> SeparationOrValueColor.ValueColor
+
+        static member CMYK_WHITE = FsValueColor.CMYK_WHITE  |> SeparationOrValueColor.ValueColor
+        static member CMYK_BLACK = FsValueColor.CMYK_BLACK  |> SeparationOrValueColor.ValueColor
+        static member CMYK_CYAN = FsValueColor.CMYK_CYAN  |> SeparationOrValueColor.ValueColor
+        static member CMYK_MAGENTA = FsValueColor.CMYK_MAGENTA  |> SeparationOrValueColor.ValueColor
+        static member CMYK_YELLOW = FsValueColor.CMYK_YELLOW  |> SeparationOrValueColor.ValueColor
+
+
+        static member GRAY = FsValueColor.GRAY |> SeparationOrValueColor.ValueColor
+
+        static member CreateRGB(r, g, b: int) =
+            FsValueColor.CreateRGB(r, g, b)
+            |> SeparationOrValueColor.ValueColor
+
+        static member CreateRGB(r, g, b: float32) =
+            FsValueColor.CreateRGB(r, g, b)
+            |> SeparationOrValueColor.ValueColor
+
+        static member valueColor(valueColor: FsValueColor) =
+            SeparationOrValueColor.ValueColor valueColor
+
+        static member valueColor(valueColor: FsDeviceRgb) =
+            SeparationOrValueColor.ValueColor (FsValueColor.Rgb valueColor)
+
+        static member valueColor(valueColor: FsDeviceCmyk) =
+            SeparationOrValueColor.ValueColor (FsValueColor.Cmyk valueColor)
+
+        static member valueColor(valueColor: FsGray) =
+            SeparationOrValueColor.ValueColor (FsValueColor.Gray valueColor)
+
+        static member Whites = 
+            [ FsValueColor.WHITE
+              FsValueColor.CMYK_WHITE
+              FsValueColor.RGB_WHITE ]
+            |> List.map SeparationOrValueColor.ValueColor
+
+        static member Blacks = 
+            [ FsValueColor.BLACK
+              FsValueColor.CMYK_BLACK
+              FsValueColor.RGB_BLACK ]
+            |> List.map SeparationOrValueColor.ValueColor
+
+
+        override x.ToString() = x.GetType().Name + " " + x.LoggingText
+
+        member x.IsEqualsTo(y, valueEqualOptions) =
+            let FALSE = false
+            match x with 
+            | SeparationOrValueColor.Separation x -> 
+                match y with 
+                | SeparationOrValueColor.Separation y -> x.IsEqualTo(y, valueEqualOptions)
+                | _ -> FALSE
+
+            | SeparationOrValueColor.ValueColor x -> 
+                match y with 
+                | SeparationOrValueColor.ValueColor y -> x.IsEqualTo(y, valueEqualOptions)
+                | _ -> FALSE
+
+    [<RequireQualifiedAccess>]
+    module SeparationOrValueColor =
+        let asSeparation = function 
+            | SeparationOrValueColor.Separation v -> Some v
+            | _ -> None
+
+        let asValue = function 
+            | SeparationOrValueColor.ValueColor v -> Some v
+            | _ -> None
+
+    [<RequireQualifiedAccess>]
+    module SeparationOrValueColors =
+        let contains (color: SeparationOrValueColor) colors =
+            let valueEqualOptions = ValueEqualOptions.DefaultValue
+            colors |> List.exists (fun color' -> color.IsEqualsTo(color', valueEqualOptions))
+
+
+        let private comparer =
+            { new IEqualityComparer<SeparationOrValueColor> with 
+                member __.Equals(x,y) = 
+                    x.IsEqualsTo(y, ValueEqualOptions.DefaultValue)
+    
+                member __.GetHashCode(_) = 0
+            }
+
+        let distinct (colors: SeparationOrValueColor list) =
+            colors.Distinct(comparer)
+
+
+    [<RequireQualifiedAccess>]
     type AlternativeFsColor =
         | Separation of FsSeparation
         | IccBased of FsIccBased
         | ValueColor of FsValueColor
     with 
+
+        member x.ToSeparationOrValueColor() =
+            match x with 
+            | AlternativeFsColor.Separation color -> SeparationOrValueColor.Separation color
+            | AlternativeFsColor.IccBased color -> SeparationOrValueColor.ValueColor color.Color
+            | AlternativeFsColor.ValueColor color -> SeparationOrValueColor.ValueColor color
+        
 
         member x.AlterColor =
             match x with 
@@ -1514,6 +1652,8 @@ module _Colors =
             | _ -> None
 
 
+
+
     [<RequireQualifiedAccess>]
     module AlternativeFsColors =
         let contains (color: AlternativeFsColor) colors =
@@ -1560,6 +1700,9 @@ module _Colors =
             )
             |> String.concat "; "
 
+    
+
+
     [<RequireQualifiedAccess; CustomEquality; CustomComparison>]
     type FsColor =
         | Separation of FsSeparation
@@ -1578,11 +1721,18 @@ module _Colors =
             | FsColor.ShadingColor _ 
             | FsColor.DeviceN _ -> None
 
+
         static member OfAlternativeFsColor color =
             match color with 
             | AlternativeFsColor.IccBased v -> FsColor.IccBased v
             | AlternativeFsColor.Separation v -> FsColor.Separation v
             | AlternativeFsColor.ValueColor v -> FsColor.ValueColor v
+
+        static member OfSeparationOrValueColor color =
+            match color with 
+            | SeparationOrValueColor.Separation v -> FsColor.Separation v
+            | SeparationOrValueColor.ValueColor v -> FsColor.ValueColor v
+
 
         member x.AlterColor = 
             x.AsAlternativeFsColor

@@ -1,5 +1,6 @@
 ﻿namespace Shrimp.Pdf.SlimFlow
 #nowarn "0104"
+open iText.Kernel.Pdf
 open Shrimp.Pdf
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
@@ -10,6 +11,7 @@ module _SlimFlowUnion =
     type ISlimTupleFlow<'userState, 'newUserState> =
         abstract member Invoke: SlimFlowFunc<'userState, 'newUserState>
         abstract member SetParentFlowName: FlowName -> ISlimTupleFlow<'userState, 'newUserState>
+        abstract member InPage: PageSelector -> ISlimTupleFlow<'userState, 'newUserState option>
 
     [<RequireQualifiedAccess>]
     type SlimFlowUnion<'userState, 'newUserState> =
@@ -17,6 +19,16 @@ module _SlimFlowUnion =
         | TupledFlow of ISlimTupleFlow<'userState, 'newUserState>
         | Func2 of (SlimFlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos -> SlimFlowUnion<'userState, 'newUserState>)
     with 
+        member x.InPage(pageSelector: PageSelector) =
+            match x with 
+            | Flow flow ->
+                SlimFlow.applyPageSelector pageSelector flow
+                |> Flow
+
+            | TupledFlow flow -> failwithf ""
+            | Func2 f -> failwithf ""
+                
+
 
         member x.SetParentFlowName(flowName: FlowName) =
             match x with 
@@ -62,7 +74,6 @@ module _SlimFlowUnion =
 
                 f middleResult result
 
- 
 
         static member Create(flow1: SlimFlowUnion<_, _>, flow2: SlimFlowUnion<_, _>, ?flowName) =
             let flow1 = 
@@ -132,7 +143,10 @@ module _SlimFlowUnion =
 
                 result
 
+            member x.InPage(pageSelector: PageSelector) =   
                 
+
+
 
     type SlimTupledFlow_FstUserState<'userState, 'middleUserState, 'newUserState>(innerFlow: SlimTupledFlow<'userState, 'middleUserState, 'newUserState>) =
 
@@ -154,7 +168,6 @@ module _SlimFlowUnion =
                     |> unbox
 
                 result
-
 
 
     type SlimFlowUnion<'userState, 'newUserState> with

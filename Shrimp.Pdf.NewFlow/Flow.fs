@@ -139,15 +139,24 @@ type SlimModifyPage =
                             )
                             |> List.map(fun m -> m.UpdateVisibleBound1())
                         )
-                        let backgrounds = infos.Background @ [background]
+                        let backgrounds = infos.Background @ [SolidableSlimBackground.SlimBackground background]
 
-                        backgrounds
+                        let slimBackgrounds = 
+                            backgrounds
+                            |> List.choose(fun m -> m.AsSlimBackground)
+
+
+                        slimBackgrounds
                         |> List.choose(fun m -> m.LayerName)
                         |> List.ensureNotDuplicatedWith(fun m -> StringIC m.BackgroundLayer.Name)
                         |> ignore
 
+                        slimBackgrounds
+                        |> List.ensureNotDuplicatedWith(fun m -> m.KeyPath)
+                        |> ignore
+
                         backgrounds
-                        |> List.ensureNotDuplicatedWith(fun m -> m.BackgroundFile.ClearedPdfFile.FullPath)
+
 
                 } 
               WriterPageSetter = pageSetter 
@@ -156,7 +165,7 @@ type SlimModifyPage =
         |> SlimFlow.rename 
             "AddBackgroundOrForeground" 
             [
-                "bkNames" => String.concat "; " (background.Names()) 
+                "bkNames" => String.concat "; " (background.FileNames()) 
                     
             ]
         |> SlimFlowUnion.Flow
@@ -249,6 +258,19 @@ type SlimModifyPage =
             []
         |> SlimFlowUnion.Flow
 
+    static member inPage (pageSelector) (flow: SlimFlowUnion<>)
+
+    static member ReadInfos(name, f) =
+        SlimFlow(fun flowModel args infos pageSetter ->
+            { Infos = infos
+              UserState = f infos
+              WriterPageSetter = pageSetter
+            }
+        )
+        |> SlimFlow.rename 
+            name 
+            []
+        |> SlimFlowUnion.Flow
 
 
     static member Scale(scaleX, scaleY) =
@@ -292,8 +314,27 @@ type SlimModifyPage =
             []
         |> SlimFlowUnion.Flow
 
-    static member AddBackgound(pageBoxKind: PageBoxKind, rectOps: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin) =
-        failwithf ""
+    static member AddSolidBackgound(pageBoxKind: PageBoxKind, rectOps: PdfCanvasAddRectangleArguments -> PdfCanvasAddRectangleArguments, ?margin) =
+        let args = rectOps PdfCanvasAddRectangleArguments.DefaultValue
+        let background = 
+            SolidSlimBackground(args, pageBoxKind, ?margin = margin)
+
+
+        SlimFlow(fun flowModel args infos pageSetter ->
+            { Infos = 
+                { infos with Background = infos.Background @ [SolidableSlimBackground.Solid background] } 
+              UserState = ()
+              WriterPageSetter = pageSetter
+            }
+        )
+        |> SlimFlow.rename 
+            "AddSolidBackgrouond" 
+            [
+                "PageBoxKind" => pageBoxKind.Text()
+                "RectOptions" => args.ToString()
+                "Margin"      => margin.Text()
+            ]
+        |> SlimFlowUnion.Flow
 
     static member Func(f) =
         SlimFlowUnion.Func(

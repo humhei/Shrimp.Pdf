@@ -6,6 +6,7 @@ open Shrimp.Pdf.PdfNames
 open Shrimp.Pdf.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
+open System.Collections.Generic
 open iText.Kernel.Pdf
 open iText.Kernel.Pdf.Xobject
 open iText.Kernel.Geom
@@ -254,7 +255,7 @@ with
                     |> List.reduce(fun a b -> a.Concatenate(b))
                 )
 
-    member writerPageSetter.GenerateWriterPageAndCanvas(readerPage: PdfPage, writer: PdfDocument, background: SlimBackground list, writeInfos) =
+    member writerPageSetter.GenerateWriterPageAndCanvas(readerPage: PdfPage, writer: PdfDocument, background: SolidableSlimBackground list, writeInfos) =
         let actualBox = readerPage.GetActualBox()
 
         let writerPage = writer.AddNewPage(PageSize(actualBox))
@@ -265,6 +266,7 @@ with
 
             let layerOptions =
                 background
+                |> List.choose(fun m -> m.AsSlimBackground)
                 |> List.choose(fun m -> m.LayerName)
                 |> List.tryLast
 
@@ -288,42 +290,67 @@ with
             | backgrounds ->
                 backgrounds
                 |> List.iter(fun background ->
-                    let backgroundPositionTweak = 
-                        background.BackgroundPositionTweak
-                        |> Option.defaultValue ((fun _ -> BackgroundPositionTweak.DefaultValue) )
-                        >> fun tweak ->     
-                            let tweak = 
-                                match writerPageSetter.SetPageBox_Origin with 
-                                | None -> tweak
-                                | Some origin ->
-                                    match origin with 
-                                    | PageBoxOrigin.LeftBottom -> 
-                                        let pageBox = writerPage.GetActualBox()
-                                        tweak.Offset(-pageBox.GetXF(), -pageBox.GetYF())
-
-                            let tweak = 
-                                match writerPageSetter.PageBoxSetter with 
-                                | None -> tweak
-                                | Some pageBoxSetter ->
-                                    match pageBoxSetter.Scale with 
+                    match background with 
+                    | SolidableSlimBackground.SlimBackground background ->
+                        let backgroundPositionTweak = 
+                            background.BackgroundPositionTweak
+                            |> Option.defaultValue ((fun _ -> BackgroundPositionTweak.DefaultValue) )
+                            >> fun tweak ->     
+                                let tweak = 
+                                    match writerPageSetter.SetPageBox_Origin with 
                                     | None -> tweak
-                                    | Some scale -> tweak.SetScale(Some scale)
+                                    | Some origin ->
+                                        match origin with 
+                                        | PageBoxOrigin.LeftBottom -> 
+                                            let pageBox = writerPage.GetActualBox()
+                                            tweak.Offset(-pageBox.GetXF(), -pageBox.GetYF())
 
-                            tweak
+                                let tweak = 
+                                    match writerPageSetter.PageBoxSetter with 
+                                    | None -> tweak
+                                    | Some pageBoxSetter ->
+                                        match pageBoxSetter.Scale with 
+                                        | None -> tweak
+                                        | Some scale -> tweak.SetScale(Some scale)
+
+                                tweak
 
 
-                    writerPage.AddBackgroundOrForegroundImage(
-                        1,
-                        new Concurrent.ConcurrentDictionary<_, _>(),
-                        RenewableBackgroundImageFile.SlimBackground (writeInfos, background),
-                        background.Choice,
-                        ?layerName               = background.LayerName,
-                        ?xEffect                 = background.XEffect,
-                        ?yEffect                 = background.YEffect,
-                        ?shadowColor             = background.ShadowColor,
-                        ?extGSState              = background.ExtGsState,
-                        backgroundPositionTweak  = backgroundPositionTweak
-                    )
+                        writerPage.AddBackgroundOrForegroundImage(
+                            1,
+                            new Concurrent.ConcurrentDictionary<_, _>(),
+                            RenewableBackgroundImageFile.SlimBackground (writeInfos, background),
+                            background.Choice,
+                            ?layerName               = background.LayerName,
+                            ?xEffect                 = background.XEffect,
+                            ?yEffect                 = background.YEffect,
+                            ?shadowColor             = background.ShadowColor,
+                            ?extGSState              = background.ExtGsState,
+                            backgroundPositionTweak  = backgroundPositionTweak
+                        )
+
+                    | SolidableSlimBackground.Solid solidBackground ->
+                        let stream = writerPage.NewContentStreamBefore()
+
+                        stream.Put(PdfName.ShpLayerBkSolid, PdfBoolean true)
+                        |> ignore
+
+                        let pdfCanvas = new OffsetablePdfCanvas(stream, writerPage.GetResources(), writer)
+                        pdfCanvas.SaveState() |> ignore
+                        let pageBox = writerPage.GetPageBox(solidBackground.PageBoxKind)
+
+                        match transforms with 
+                        | None -> ()
+                        | Some transforms ->
+                            PdfCanvas.concatMatrixByTransformRecord transforms pdfCanvas
+                            |> ignore
+
+                        PdfCanvas.addRectangle pageBox (fun _ -> solidBackground.RectOptions) pdfCanvas
+                        |> ignore
+
+                        pdfCanvas.RestoreState() |> ignore
+
+
                 )
 
 
@@ -371,6 +398,28 @@ module SlimWriterPageSetter =
         | false -> Some setter
 
 
+type CurrentSlimFlowCacheFactory() =
+    let mutable isDiposed = false
+    let dict = new System.Collections.Concurrent.ConcurrentDictionary<string, obj>()
+
+    member x.GetOrCreate<'T>(name: string, fCache: string -> 'T) =
+        dict.GetOrAdd(name, valueFactory = fun name ->
+            box(fCache name)
+        )
+        |> unbox<'T>
+
+    interface System.IDisposable with 
+        member x.Dispose() =
+            match isDiposed with 
+            | false ->
+                for pair in dict do
+                    match pair.Value with 
+                    | :? IDictionary as dict -> dict.Clear()
+                    | :? System.IDisposable as disposable -> disposable.Dispose()
+                    | _ -> ()
+
+            | true -> ()
+
 
 
 type SlimFlowResult<'userState> =
@@ -383,9 +432,18 @@ with
           WriterPageSetter = x.WriterPageSetter
           UserState = f x.UserState }
 
+
+type SlimFlowBackgroundFactory() =
+    let dict = System.Collections.Concurrent.ConcurrentDictionary<FsFullPath list, SlimBackgroundUnion>()
+
+    member internal x.Dict = dict
+
+
 type SlimFlowModel<'userState> =    
-    { BackgroundFactory: System.Collections.Concurrent.ConcurrentDictionary<PdfPath list, SlimBackgroundUnion>
-      FlowModel: FlowModel<'userState> }
+    { BackgroundFactory: SlimFlowBackgroundFactory
+      FlowModel: FlowModel<'userState>
+      CurrentSlimFlowCacheFactory: CurrentSlimFlowCacheFactory
+      AllSlimFlowCacheFactory: HashSet<System.IDisposable> }
 with 
     member x.PdfFile = x.FlowModel.PdfFile
 
@@ -395,24 +453,54 @@ with
 
     member x.MapUserState(f) =
         { BackgroundFactory = x.BackgroundFactory 
-          FlowModel = x.FlowModel.MapUserState f }
+          FlowModel = x.FlowModel.MapUserState f
+          CurrentSlimFlowCacheFactory = x.CurrentSlimFlowCacheFactory
+          AllSlimFlowCacheFactory = x.AllSlimFlowCacheFactory }
 
 
 type SlimFlowFunc<'userState, 'newUserState> = SlimFlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>
 
 type SlimFlow<'userState, 'newUserState>(f: SlimFlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>, ?flowName: FlowName, ?background) =
+
+    let cacheFactory = new CurrentSlimFlowCacheFactory()
+
     member internal x.SetFlowName(flowName: FlowName) =
         SlimFlow(f, flowName)
 
-    member x.Background: SlimBackground option = background
+    member x.Background: SolidableSlimBackground option = background
 
     member x.FlowName = flowName
 
+    member internal x.ClearCache() = (cacheFactory :> System.IDisposable).Dispose()
 
+    member internal x.Internal_Invoke_Origin = f
 
     member internal x.Invoke (flowModel: SlimFlowModel<'userState>) args infos setter = 
+        let flowModel = 
+            { flowModel with 
+                CurrentSlimFlowCacheFactory = cacheFactory
+            }
+
+        flowModel.AllSlimFlowCacheFactory.Add(cacheFactory)
+        |> ignore
+
+        let f flowModel args infos pageSetter =
+            let infos =
+                match infos.InternalFlowModel with 
+                | None -> infos
+                | Some flowModel ->
+                    { infos with 
+                        InternalFlowModel = 
+                            flowModel.MapUserState(fun _ -> pageSetter.Index)
+                            |> Some
+                    }
+
+            f flowModel args infos pageSetter
+
         match flowName with 
-        | None -> f flowModel args infos setter
+        | None -> 
+            f flowModel args infos setter
+
         | Some flowName ->  
             match args.PageNum with 
             | 1 -> 
@@ -442,7 +530,7 @@ type SlimFlow<'userState, 'newUserState>(f: SlimFlowModel<'userState> -> PageMod
 
     static member rename name parameters =
         fun (slimFlow: SlimFlow<'userState, 'newUserState>) ->
-            SlimFlow(slimFlow.Invoke, FlowName.Override(name, parameters = parameters))
+            SlimFlow(slimFlow.Internal_Invoke_Origin, FlowName.Override(name, parameters = parameters))
 
 
 
@@ -458,7 +546,35 @@ module SlimFlow =
 
     let mapState(mapping) (x: SlimFlow<_, _>) =
         let newF flowModel args infos pageSetter =
-            let r = x.Invoke flowModel args infos pageSetter
+            let r = x.Internal_Invoke_Origin flowModel args infos pageSetter
             r.MapUserState(mapping)
+
+        new SlimFlow<_, _>(newF, ?flowName = x.FlowName, ?background = x.Background)
+
+    let applyPageSelector (pageSelector: PageSelector) (x: SlimFlow<_, _>) =
+        let newF flowModel (args: PageModifingArguments<_>) infos pageSetter =
+            match pageSelector with 
+            | PageSelector.All -> 
+                let r = x.Internal_Invoke_Origin flowModel args infos pageSetter
+                r.MapUserState(Some)
+                
+            | _ ->
+                let pageNumbers = 
+                    PdfDocument.GetPageNumbers_Static pageSelector args.TotalNumberOfPages
+
+                match List.contains args.PageNum pageNumbers with 
+                | true -> 
+                    let r = x.Internal_Invoke_Origin flowModel args infos pageSetter
+                    r.MapUserState(Some)
+
+                | false ->  
+                    let r = 
+                        { Infos = infos 
+                          UserState = None
+                          WriterPageSetter = pageSetter
+                        }
+                    r
+
+
 
         new SlimFlow<_, _>(newF, ?flowName = x.FlowName, ?background = x.Background)

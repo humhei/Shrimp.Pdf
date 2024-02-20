@@ -15,9 +15,12 @@ module PdfNames =
         let ShpLayerBk_XObjectOnly = PdfName "ShpLayerBk_XObjectOnly" 
         let ShpLayerFr_XObjectOnly = PdfName "ShpLayerFr_XObjectOnly" 
         let ShpLayerBK = PdfName "ShpLayerBK" 
+        let ShpLayerPixel = PdfName "ShpLayerPixel" 
         let ShpLayerForeground = PdfName "ShpLayerForeground" 
         let ShpLayerContent = PdfName "ShpLayerContent" 
         let ShpLayerCuttingDie = PdfName "ShpLayerCuttingDie" 
+        let ShpLayerBkSolid = PdfName "ShpLayerBkSolid" 
+
 
     type CuttingDieShpLayerInfosEnum =
         | CuttingDie = 0

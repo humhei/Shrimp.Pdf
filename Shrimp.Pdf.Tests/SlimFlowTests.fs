@@ -42,7 +42,7 @@ let manipulatesTests =
                         <+>
                         SlimModifyPage.Func(fun args infos ->
                             SlimModifyPage.SetPageBox(fun m ->
-                                { m with Rect = infos.CuttingDieInfosBound().Value }
+                                { m with Rect = infos.CuttingDieBound0 }
                             )
                         )
 
@@ -57,7 +57,7 @@ let manipulatesTests =
 
         pass()
 
-    ftestCase "TrimToVisible test" <| fun _ ->
+    testCase "TrimToVisible test" <| fun _ ->
         let flow =
             Flow.Reuse (
                 Reuses.SlimFlows(
@@ -261,7 +261,7 @@ let manipulatesTests =
                     @"datas/slimFlow/add background3.bk-2.pdf"
                     @"datas/slimFlow/add background3.bk-1,3.pdf"
                 ]
-                |> List.map PdfFile
+                |> List.map FsFullPath
             Flow.Reuse (
                 Reuses.SlimFlows(
                     PageSelector.All,
@@ -307,7 +307,7 @@ let manipulatesTests =
 
         pass()
 
-    testCase "add background test5" <| fun _ ->
+    ftestCase "add background test5" <| fun _ ->
         let flow =
             Flow.Reuse ( 
                 Reuses.SlimFlows(
@@ -320,10 +320,11 @@ let manipulatesTests =
 
                         )
                         <+>
-                        SlimModifyPage.AddBackgroundOrForeground(
-                            BackgroundFile.Create(@"datas/slimFlow/add background5.bk2.pdf"),
-                            layerName = BackgroundAddingLayerOptions.Create("current", "background2"),
-                            refOptions = SlimBackgroundRefOptions.XObject_Simply
+                        SlimModifyPage.AddSolidBackgound(
+                            PageBoxKind.ActualBox,
+                            (fun ops ->
+                                { ops with FillColor = NullablePdfCanvasColor.valueColor FsDeviceCmyk.MAGENTA }
+                            )
                         )
                         <+>
                         SlimModifyPage.ClearDirtyInfos() 
@@ -334,6 +335,7 @@ let manipulatesTests =
                         <+>
                         SlimModifyPage.AddBackgroundOrForeground(
                             BackgroundFile.Create(@"datas/slimFlow/add background5.fr.pdf"),
+                            choice = BackgroundOrForeground.Foreground,
                             layerName = BackgroundAddingLayerOptions.Create("current", "fr")
                         )
                     )
@@ -400,24 +402,21 @@ let manipulatesTests =
                                   Height = mm 100 }
 
                             SlimModifyPage.SetPageBox(fun pageBoxSetter ->
-                                let bound = infos0.CuttingDieInfosBound()
-                                match bound with 
-                                | None -> failwithf "Cannot found any stroke color of BLUE, avaliable colors are %A" (infos0.AllColors())
-                                | Some bound ->
-                                    let margin = 
-                                        Rectangle.calcMargin bound pageBoxSetter.Rect
-                                         
-                                    let scaleX = targetSize.Width / (bound.GetWidthF())
-                                    let scaleY = targetSize.Height / (bound.GetHeightF())
+                                let bound = infos0.CuttingDieBound0
+                                let margin = 
+                                    Rectangle.calcMargin bound pageBoxSetter.Rect
+                                     
+                                let scaleX = targetSize.Width / (bound.GetWidthF())
+                                let scaleY = targetSize.Height / (bound.GetHeightF())
 
-                                    { pageBoxSetter with 
-                                        TrimBoxMargin =  
-                                            margin
-                                            |> NegativeMargin.Create
-                                            |> Some
+                                { pageBoxSetter with 
+                                    TrimBoxMargin =  
+                                        margin
+                                        |> NegativeMargin.Create
+                                        |> Some
 
-                                        Scale = Some (scaleX, scaleY)
-                                    }
+                                    Scale = Some (scaleX, scaleY)
+                                }
                             )
                         )
                     )

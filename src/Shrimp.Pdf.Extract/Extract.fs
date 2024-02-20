@@ -1,5 +1,6 @@
 ﻿namespace Shrimp.Pdf.Extract
 
+open System.Collections.Generic
 open iText.Kernel.Pdf
 
 #nowarn "0104"
@@ -31,13 +32,15 @@ module _Extract =
         { RenewableInfos: RenewableInfo list
           TagColor: FsColor option
           BoundPredicate: (RenewablePathInfo -> bool) option
+          AddtionalTagColorPredicate: (RenewablePathInfo -> bool) option
           RectangleTransform: RectangleTransform option
           BorderKeepingPageNumbers: int list
           TagInfosTransform: AffineTransformRecord option }
     with    
-        static member Create(infos: RenewableInfo list, borderKeppingPageNumbers, ?tagColor, ?boundPredicate, ?rectangleTransform) =
+        static member Create(infos: RenewableInfo list, borderKeppingPageNumbers, ?tagColor, ?boundPredicate, ?rectangleTransform, ?addtionalTagColorPredicate) =
             { RenewableInfos = infos
               TagColor = tagColor
+              AddtionalTagColorPredicate = addtionalTagColorPredicate
               BorderKeepingPageNumbers = borderKeppingPageNumbers
               BoundPredicate = boundPredicate
               RectangleTransform = rectangleTransform 
@@ -83,21 +86,22 @@ module _Extract =
 
 
     [<RequireQualifiedAccess>]
-    type internal TargetRenewablePageInfo<'userState> =
+    type internal TargetRenewablePageInfo<'userState, 'slimFlowUserState> =
         | EmptyPage of TargetPageBox
-        | NewPageCase of TargetPageBox * TargetRenewableNewPageInfoElement * writerPageSetter: (SlimWriterPageSetter) * background: SlimBackground list
+        | NewPageCase of TargetPageBox * TargetRenewableNewPageInfoElement * writerPageSetter: (SlimWriterPageSetter) * background: SolidableSlimBackground list * 'slimFlowUserState option
         | Non
         | NewInfosInOriginPage of TargetNewInfosInOriginPageElement list
         | SplitToTwoPages of 
              RenewableInfo list * Selector<'userState> * pageboxSetter: ExtractToTwoPages_PageBoxSetter * secondarySelector: (Rectangle -> Selector<'userState>) option
 
     type internal TargetRenewablePageInfo =
-        static member NewPage(targetPageBox, targetElement, ?writerPageSetter, ?background) =
+        static member NewPage(targetPageBox, targetElement, ?writerPageSetter, ?background, ?slimFlowUserState) =
             TargetRenewablePageInfo.NewPageCase(
                 targetPageBox,
                 targetElement,
                 defaultArg writerPageSetter SlimWriterPageSetter.Ignore,
-                defaultArg background []
+                defaultArg background [],
+                slimFlowUserState
             )
 
 
@@ -307,7 +311,7 @@ module _Extract =
         (configuration: Configuration)
         (args: PageModifingArguments<_>) 
         selector
-        (infosSplitter: RenewableInfo list -> list<TargetRenewablePageInfo<_>>)
+        (infosSplitter: RenewableInfo list -> list<TargetRenewablePageInfo<_, _>>)
         keepOriginPage
         suffixOperation
         (borderKeepingPageNumbers: int list)
@@ -619,7 +623,8 @@ module _Extract =
                               BoundPredicate = None 
                               RectangleTransform = None 
                               BorderKeepingPageNumbers = borderKeepingPageNumbers
-                              TagInfosTransform = None }
+                              TagInfosTransform = None
+                              AddtionalTagColorPredicate = None }
 
 
                         TargetRenewablePageInfo.NewPage(targetPageBox, element, SlimWriterPageSetter.Ignore)
@@ -641,11 +646,12 @@ module _Extract =
                         |> ignore
 
                 | TargetRenewablePageInfo.Non -> ()
-                | TargetRenewablePageInfo.NewPageCase (targetPageBox, infos, writerPageSetter, background) ->
+                | TargetRenewablePageInfo.NewPageCase (targetPageBox, infos, writerPageSetter, background, _) ->
                     let writerPage, writerCanvas, tagInfosTransforms = writerPageSetter.GenerateWriterPageAndCanvas(readerPage, writer, background, writeInfos)
                             
                     let layerOptions =
                         background
+                        |> List.choose(fun m -> m.AsSlimBackground)
                         |> List.choose(fun m -> m.LayerName)
                         |> List.tryLast
 
@@ -734,13 +740,13 @@ module _Extract =
 
 
     type Reuses with
-        static member ExtractIM(pageSelector: PageSelector, selector, ?slimFlow: SlimFlowUnion<_, _>, ?keepOriginPage) =    
+        static member private ExtractIM_Common(pageSelector: PageSelector, selector, ?slimFlow: SlimFlowUnion<_, _>, ?keepOriginPage) =    
             let slimFlow =
                 match slimFlow with 
                 | None -> None
                 | Some slimFlow ->
                     slimFlow
-                    <+>
+                    <.+>
                     SlimModifyPage.MapInfos(fun args infos ->
                         infos.Background
                         |> List.iter(fun bk -> bk.Internal_RecoverVisibleBound_ForWrite())
@@ -748,64 +754,84 @@ module _Extract =
                         infos
                     )
                     |> Some
+
             let keepOriginPage = defaultArg keepOriginPage false
             fun (flowModel: FlowModel<_>) (splitDocument: SplitDocument) ->
-                let backgroundFactory = new System.Collections.Concurrent.ConcurrentDictionary<_, _>()
+                let backgroundFactory = new SlimFlowBackgroundFactory()
                 let flowModel =
                     { flowModel with 
                         Configuration = 
                             { flowModel.Configuration with SlimableFlowLoggingOptions = SlimableFlowLoggingOptions.Slim }
                     } 
 
+
                 let flowModel =
                     { BackgroundFactory = backgroundFactory 
-                      FlowModel = flowModel }
-
+                      FlowModel = flowModel
+                      CurrentSlimFlowCacheFactory = new CurrentSlimFlowCacheFactory()
+                      AllSlimFlowCacheFactory = HashSet() }
+                       
 
                 let reader = splitDocument.Reader
                 let totalNumberOfPages = reader.GetNumberOfPages()
                 let pageNumbers = reader.GetPageNumbers(pageSelector)
                 let borderKeepingPageNumbers = [1..totalNumberOfPages]
 
+                let r = 
+                    pageNumbers
+                    |> List.mapi(fun i pageNumber ->
+                        let readerPage = reader.GetPage(pageNumber)
+                        let args: PageModifingArguments<_> = 
+                            { UserState = flowModel.UserState
+                              Page = readerPage
+                              TotalNumberOfPages = totalNumberOfPages
+                              PageNum = pageNumber
+                            }
 
-                pageNumbers
-                |> List.iter(fun pageNumber ->
-                    let readerPage = reader.GetPage(pageNumber)
-                    let args: PageModifingArguments<_> = 
-                        { UserState = flowModel.UserState
-                          Page = readerPage
-                          TotalNumberOfPages = totalNumberOfPages
-                          PageNum = pageNumber
-                        }
+                        extractVisibleRenewableInfosToWriter
+                            flowModel.Configuration
+                            args
+                            selector
+                            (fun infos -> 
+                                match slimFlow with 
+                                | None -> [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers), SlimWriterPageSetter.Ignore)]
+                                | Some slimFlow ->
+                                    let r = slimFlow.Invoke flowModel args (RenewableInfos.Create infos) SlimWriterPageSetter.Ignore
+                                    let infos = r.Infos.AsList
+                                    let writerPageSetter = r.WriterPageSetter
+                                    let background = r.Infos.Background
+                                    let boundPredicate (info: RenewablePathInfo) =
+                                        info.Tag = RenewablePathInfoTag.CuttingDie
 
-                    extractVisibleRenewableInfosToWriter
-                        flowModel.Configuration
-                        args
-                        selector
-                        (fun infos -> 
-                            match slimFlow with 
-                            | None -> [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers), SlimWriterPageSetter.Ignore)]
-                            | Some slimFlow ->
-                                let r = slimFlow.Invoke flowModel args (RenewableInfos.Create infos) SlimWriterPageSetter.Ignore
-                                let infos = r.Infos.AsList
-                                let writerPageSetter = r.WriterPageSetter
-                                let background = r.Infos.Background
-                                let boundPredicate (info: RenewablePathInfo) =
-                                    info.Tag = RenewablePathInfoTag.CuttingDie
+                                    let addtionalTagInfoPredicate (info: RenewablePathInfo) =
+                                        info.Tag = RenewablePathInfoTag.TagInfo
 
-                                [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers, boundPredicate = boundPredicate), writerPageSetter, background = background)]
-                        )
-                        keepOriginPage
-                        ignore
-                        borderKeepingPageNumbers
-                        reader
-                        splitDocument.Writer
-                    |> ignore
-                )
 
-                for bk in flowModel.BackgroundFactory do
+                                    [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers, boundPredicate = boundPredicate, addtionalTagColorPredicate = addtionalTagInfoPredicate), writerPageSetter, background = background, slimFlowUserState = r.UserState)]
+                            )
+                            keepOriginPage
+                            ignore
+                            borderKeepingPageNumbers
+                            reader
+                            splitDocument.Writer
+
+                        |> fun m ->
+                            match m with 
+                            | [TargetRenewablePageInfo.NewPageCase(_, _, _, _, slimFlowUserState)] -> slimFlowUserState
+                            | _ -> failwithf "Invalid token"
+
+                    )
+                    |> List.choose id
+
+
+                for item in flowModel.AllSlimFlowCacheFactory do 
+                    item.Dispose()
+
+
+                for bk in flowModel.BackgroundFactory.Dict do
                     (bk.Value :> System.IDisposable).Dispose()
                 
+                r
 
             |> reuse 
                 "Extract objects"
@@ -813,9 +839,12 @@ module _Extract =
                  "selector" => selector.ToString()
                  "keepOriginPage" => keepOriginPage.ToString() ]
 
+        static member ExtractIM(pageSelector: PageSelector, selector, ?keepOriginPage) =    
+            Reuses.ExtractIM_Common(pageSelector, selector, ?keepOriginPage = keepOriginPage)
+            ||>> ignore
 
         static member SlimFlows(pageSelector: PageSelector, slimFlow) =
-            Reuses.ExtractIM(
+            Reuses.ExtractIM_Common(
                 pageSelector,
                 Selector.All(fun _ _ -> true),
                 slimFlow = slimFlow,
