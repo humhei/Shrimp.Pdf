@@ -920,11 +920,16 @@ module ExtensionTypes =
                 |> List.map(fun m -> {Space = m.Space; Text = m.TextInfo.GetText()})
             }
 
+    type ISABTextRenderInfo = interface end
+
+
     type ITextRenderInfo =
+        inherit ISABTextRenderInfo
         inherit IAbstractRenderInfo
         abstract member Value: TextRenderInfo
         abstract member EndTextState: EndTextState
         abstract member ConcatedTextInfo: ConcatedTextInfo
+
 
     type IImageRenderInfo =
         inherit IAbstractRenderInfoIM

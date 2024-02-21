@@ -1006,7 +1006,7 @@ module _Tile =
                                               Bound = boundGroups.[i].IndexedBound.Serializable
                                               Value = value }
                                         match info with 
-                                        | TargetRenewablePageInfo.NewPageCase (bound, element, _, _) ->
+                                        | TargetRenewablePageInfo.NewPageCase (bound, element, _, _, _) ->
                                             match distincterOrTextPicker with 
                                             | PageTilingDistincterOrTextPicker.Distincter _ ->
                                                 PageTilingResultValue.Renew_Distincter boundGroups.[i].Distincter

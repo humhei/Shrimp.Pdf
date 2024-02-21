@@ -285,9 +285,11 @@ module internal rec ManipulateOrReuse =
 
                 | Flow.Factory factory ->
                     fun flowModel ->
-                        FlowModel.mapM mapping flowModel
-                        |> factory
-                        |> loop
+                        let flow = 
+                            FlowModel.mapM mapping flowModel
+                            |> factory
+
+                        loop flow
                     |> Flow.Factory
 
                 | Flow.TupledFlow (tupledFlow) ->

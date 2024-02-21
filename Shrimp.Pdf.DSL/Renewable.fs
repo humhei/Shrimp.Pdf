@@ -253,8 +253,9 @@ module _Renewable =
     type RenewablePathInfoTag =
         | Normal = 0
         | CuttingDie = 1
-        | PossibleTagInfo = 2
-        | TagInfo = 3
+        | CuttingDieDashLine = 3
+        | PossibleTagInfo = 4
+        | TagInfo = 5
 
     [<RequireQualifiedAccess>]
     type RenewableModifableColor =  
@@ -311,74 +312,88 @@ module _Renewable =
             x.Stroke
             |> Option.map(fun m -> m.Color)
 
-        member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: PdfCanvasColor) =
+        member x.LazyColorIsOneOf(fillOrStrokeOptions: FillOrStrokeOptions, colors: PdfCanvasColor list) =
+
+            let predicateColor (color: FsColor) =
+                colors
+                |> List.exists(fun color2 -> color.IsEqualTo(color2))
+
             match fillOrStrokeOptions with 
             | FillOrStrokeOptions.Fill ->
                 match x.LazyFillColor with 
                 | None -> false
-                | Some fillColor -> fillColor.IsEqualTo(color)
+                | Some fillColor -> predicateColor fillColor
 
             | FillOrStrokeOptions.Stroke ->
                 match x.LazyStrokeColor with 
                 | None -> false
-                | Some strokeColor -> strokeColor.IsEqualTo(color)
+                | Some strokeColor -> strokeColor |> predicateColor
 
             | FillOrStrokeOptions.FillOrStroke ->
                 match x.LazyStrokeColor with 
                 | None -> false
-                | Some strokeColor -> strokeColor.IsEqualTo(color)
+                | Some strokeColor -> strokeColor |> predicateColor
 
                 || (
                     match x.LazyFillColor with 
                     | None -> false
-                    | Some fillColor -> fillColor.IsEqualTo(color)
+                    | Some fillColor -> fillColor |> predicateColor
                 )
 
             | FillOrStrokeOptions.FillAndStroke ->
                 match x.LazyStrokeColor with 
                 | None -> false
-                | Some strokeColor -> strokeColor.IsEqualTo(color)
+                | Some strokeColor -> strokeColor |> predicateColor
 
                 && (
                     match x.LazyFillColor with 
                     | None -> false
-                    | Some fillColor -> fillColor.IsEqualTo(color)
+                    | Some fillColor -> fillColor |> predicateColor
+                )
+
+        member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: PdfCanvasColor) =
+            x.LazyColorIsOneOf(fillOrStrokeOptions, [color])
+
+        member x.LazyColorIsOneOf(fillOrStrokeOptions: FillOrStrokeOptions, colors: FsColor list, ?valueEqualOptions) =
+            let predicateColor (color: FsColor) =
+                colors
+                |> List.exists(fun color2 -> color.IsEqualTo(color2, ?valueEqualOptions = valueEqualOptions))
+                
+            match fillOrStrokeOptions with 
+            | FillOrStrokeOptions.Fill ->
+                match x.LazyFillColor with 
+                | None -> false
+                | Some fillColor -> fillColor |> predicateColor
+
+            | FillOrStrokeOptions.Stroke ->
+                match x.LazyStrokeColor with 
+                | None -> false
+                | Some strokeColor -> strokeColor |> predicateColor
+
+            | FillOrStrokeOptions.FillOrStroke ->
+                match x.LazyStrokeColor with 
+                | None -> false
+                | Some strokeColor -> strokeColor |> predicateColor
+
+                || (
+                    match x.LazyFillColor with 
+                    | None -> false
+                    | Some fillColor -> fillColor |> predicateColor
+                )
+
+            | FillOrStrokeOptions.FillAndStroke ->
+                match x.LazyStrokeColor with 
+                | None -> false
+                | Some strokeColor -> strokeColor |> predicateColor
+
+                && (
+                    match x.LazyFillColor with 
+                    | None -> false
+                    | Some fillColor -> fillColor|> predicateColor
                 )
 
         member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: FsColor, ?valueEqualOptions) =
-            match fillOrStrokeOptions with 
-            | FillOrStrokeOptions.Fill ->
-                match x.LazyFillColor with 
-                | None -> false
-                | Some fillColor -> fillColor.IsEqualTo(color, ?valueEqualOptions = valueEqualOptions)
-
-            | FillOrStrokeOptions.Stroke ->
-                match x.LazyStrokeColor with 
-                | None -> false
-                | Some strokeColor -> strokeColor.IsEqualTo(color, ?valueEqualOptions = valueEqualOptions)
-
-            | FillOrStrokeOptions.FillOrStroke ->
-                match x.LazyStrokeColor with 
-                | None -> false
-                | Some strokeColor -> strokeColor.IsEqualTo(color, ?valueEqualOptions = valueEqualOptions)
-
-                || (
-                    match x.LazyFillColor with 
-                    | None -> false
-                    | Some fillColor -> fillColor.IsEqualTo(color, ?valueEqualOptions = valueEqualOptions)
-                )
-
-            | FillOrStrokeOptions.FillAndStroke ->
-                match x.LazyStrokeColor with 
-                | None -> false
-                | Some strokeColor -> strokeColor.IsEqualTo(color, ?valueEqualOptions = valueEqualOptions)
-
-                && (
-                    match x.LazyFillColor with 
-                    | None -> false
-                    | Some fillColor -> fillColor.IsEqualTo(color, ?valueEqualOptions = valueEqualOptions)
-                )
-
+            x.LazyColorIsOneOf(fillOrStrokeOptions, [color], ?valueEqualOptions = valueEqualOptions)
 
     type RenewablePathInfo =
         { FillColor: iText.Kernel.Colors.Color 
@@ -401,6 +416,11 @@ module _Renewable =
           LazyVisibleBound1: Rectangle option
         }
     with 
+        member x.VisibleBound1 = 
+            match x.LazyVisibleBound1 with 
+            | Some bound -> bound 
+            | None -> failwithf "LazyVisibleBound1 is None"
+
         member x.LazyVisibleBound0 = x.OriginInfo.LazyVisibleBound0
 
         member x.VisibleBound0 = 
@@ -408,6 +428,23 @@ module _Renewable =
             | Some bound -> bound 
             | None -> failwithf "LazyVisibleBound0 is None"
 
+        member x.MapColor(f) =
+            { x with 
+                LazyFillColor_Modifiable = 
+                    match x.LazyFillColor with 
+                    | Some color -> 
+                        f color
+                        |> Option.map RenewableModifableColor.Modified
+                    | None -> None
+
+                LazyStrokeColor_Modifiable = 
+                    match x.LazyStrokeColor with 
+                    | Some color -> 
+                        f color
+                        |> Option.map RenewableModifableColor.Modified
+
+                    | None -> None
+            }
 
         member x.UpdateVisibleBoundWithStrokeWidth() =
             let bound = 
@@ -606,14 +643,22 @@ module _Renewable =
             x.LazyStrokeColor_Modifiable
             |> Option.map(fun m -> m.Color)
 
-        member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: FsColor) =
+        member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: FsColor, ?valueEqualOptions) =
             { Fill = x.LazyFillColor_Modifiable 
-              Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIs(fillOrStrokeOptions, color)
+              Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIs(fillOrStrokeOptions, color, ?valueEqualOptions = valueEqualOptions)
+
+        member x.LazyColorIsOneOf(fillOrStrokeOptions: FillOrStrokeOptions, colors: FsColor list, ?valueEqualOptions) =
+            { Fill = x.LazyFillColor_Modifiable 
+              Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIsOneOf(fillOrStrokeOptions, colors, ?valueEqualOptions = valueEqualOptions)
+
 
         member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: PdfCanvasColor) =
             { Fill = x.LazyFillColor_Modifiable 
               Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIs(fillOrStrokeOptions, color)
 
+        member x.LazyColorIsOneOf(fillOrStrokeOptions: FillOrStrokeOptions, colors: PdfCanvasColor list) =
+            { Fill = x.LazyFillColor_Modifiable 
+              Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIsOneOf(fillOrStrokeOptions, colors)
 
         member x.ApplyCtm_To_AccumulatedPathOperatorRanges() =
             { Ctm = x.Ctm 
@@ -778,8 +823,34 @@ module _Renewable =
            LazyStrokeColor_Modifiable: RenewableModifableColor option
            }
      with 
+        member x.MapFontAndSize(query: FontAndSizeQueryUnion, target: NewFontAndSize) =
+            
+            failwithf ""
+
+        member x.PdfConcatedWord() =
+            x.OriginInfo.PdfConcatedWord()
+
         member x.ConcatedText(?wordSep) =
             x.OriginInfo.ConcatedText(?wordSep = wordSep)
+
+        member info.MapColor(f) =
+            { info with 
+                LazyFillColor_Modifiable = 
+                    match info.LazyFillColor with 
+                    | Some color -> 
+                        f color
+                        |> Option.map RenewableModifableColor.Modified
+
+                    | None   -> None
+
+                LazyStrokeColor_Modifiable = 
+                    match info.LazyStrokeColor with 
+                    | Some color -> 
+                        f color
+                        |> Option.map RenewableModifableColor.Modified
+
+                    | None   -> None
+            }
 
         member x.LazyVisibleBound0 = x.OriginInfo.LazyVisibleBound0
 
@@ -833,13 +904,22 @@ module _Renewable =
             x.LazyStrokeColor_Modifiable
             |> Option.map(fun m -> m.Color)
 
-        member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: FsColor) =
+        member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: FsColor, ?valueEqualOptions) =
             { Fill = x.LazyFillColor_Modifiable 
-              Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIs(fillOrStrokeOptions, color)
+              Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIs(fillOrStrokeOptions, color, ?valueEqualOptions = valueEqualOptions)
+
+        member x.LazyColorIsOneOf(fillOrStrokeOptions: FillOrStrokeOptions, colors: FsColor list, ?valueEqualOptions) =
+            { Fill = x.LazyFillColor_Modifiable 
+              Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIsOneOf(fillOrStrokeOptions, colors, ?valueEqualOptions = valueEqualOptions)
+
 
         member x.LazyColorIs(fillOrStrokeOptions: FillOrStrokeOptions, color: PdfCanvasColor) =
             { Fill = x.LazyFillColor_Modifiable 
               Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIs(fillOrStrokeOptions, color)
+
+        member x.LazyColorIsOneOf(fillOrStrokeOptions: FillOrStrokeOptions, colors: PdfCanvasColor list) =
+            { Fill = x.LazyFillColor_Modifiable 
+              Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIsOneOf(fillOrStrokeOptions, colors)
 
         member x.ApplyCtm_WriteToCanvas(pdfCanvas: OffsetablePdfCanvas) =
             match x.FillShading, x.StrokeShading with 
@@ -1042,6 +1122,158 @@ module _Renewable =
               GsStates = x.GsStates
             }
 
+    [<RequireQualifiedAccess>]
+    type RenewableVectorInfo =
+        | Path of RenewablePathInfo
+        | Text of RenewableTextInfo
+    with 
+        member x.LazyFillColor =
+            match x with 
+            | Path info -> info.LazyFillColor
+            | Text info -> info.LazyFillColor
+
+        member x.LazyStrokeColor =
+            match x with 
+            | Path info -> info.LazyStrokeColor
+            | Text info -> info.LazyStrokeColor
+
+        member x.LazyColorIs(fillOrStrokeOptions, color: FsColor, ?valueEqualOptions) =
+            match x with 
+            | Path info -> info.LazyColorIs(fillOrStrokeOptions, color, ?valueEqualOptions = valueEqualOptions)
+            | Text info -> info.LazyColorIs(fillOrStrokeOptions, color, ?valueEqualOptions = valueEqualOptions)
+
+        member x.LazyColorIsOneOf(fillOrStrokeOptions, colors: FsColor list, ?valueEqualOptions) =
+            match x with 
+            | Path info -> info.LazyColorIsOneOf(fillOrStrokeOptions, colors, ?valueEqualOptions = valueEqualOptions)
+            | Text info -> info.LazyColorIsOneOf(fillOrStrokeOptions, colors, ?valueEqualOptions = valueEqualOptions)
+
+        member x.LazyColorIsOneOf(fillOrStrokeOptions, colors: PdfCanvasColor list) =
+            match x with 
+            | Path info -> info.LazyColorIsOneOf(fillOrStrokeOptions, colors)
+            | Text info -> info.LazyColorIsOneOf(fillOrStrokeOptions, colors)
+
+        member x.LazyColorIs(fillOrStrokeOptions, color: PdfCanvasColor) =
+            match x with 
+            | Path info -> info.LazyColorIs(fillOrStrokeOptions, color)
+            | Text info -> info.LazyColorIs(fillOrStrokeOptions, color)
+
+
+        member x.CancelFill() =
+            match x with 
+            | Path info -> info.CancelFill() |> Path
+            | Text info -> info.CancelFill() |> Text
+
+        member x.CancelStroke() =
+            match x with 
+            | Path info -> info.CancelStroke() |> Path
+            | Text info -> info.CancelStroke() |> Text
+
+        member x.CancelFillAndStroke() =
+            match x with 
+            | Path info -> info.CancelFillAndStroke() |> Path
+            | Text info -> info.CancelFillAndStroke() |> Text
+
+        member x.IsCuttingDie =
+            match x with 
+            | Path info -> info.IsCuttingDie
+            | _ -> false
+
+        member x.IsPossibleTagInfo =
+            match x with 
+            | Path info -> info.IsPossibleTagInfo
+            | _ -> false
+
+        member x.MapPath(f) =
+            match x with 
+            | Path info -> f info |> Path
+            | _ -> x
+
+        member x.MapText(f) =
+            match x with 
+            | Text info -> f info |> Text
+            | _ -> x
+
+        member x.MapColor(f) =
+            match x with 
+            | Path info ->
+                info.MapColor f
+                |> Path
+
+            | Text info ->
+                info.MapColor f
+                |> Text
+
+        member private x.LazyVisibleBound0 = 
+            match x with 
+            | Path info -> info.LazyVisibleBound0
+            | Text info -> info.LazyVisibleBound0
+
+        member x.DenseVisibleBound0 =
+            match x with 
+            | Path info -> info.VisibleBound0
+            | Text info -> info.DenseVisibleBound0
+
+        member x.VisibleBound0 =
+            match x.LazyVisibleBound0 with 
+            | Some bound -> bound
+            | None -> failwithf "LazyVisibleBound0 is None"
+
+        member private x.LazyVisibleBound1 =
+            match x with 
+            | Path info    -> info.LazyVisibleBound1
+            | Text info    -> info.LazyVisibleBound0
+
+        member x.DenseVisibleBound1 =
+            match x with 
+            | Path info -> info.VisibleBound1
+            | Text info -> info.DenseVisibleBound0
+
+
+        member x.VisibleBound1 =
+            match x.LazyVisibleBound1 with 
+            | Some bound -> bound
+            | None -> failwithf "LazyVisibleBound1 is None"
+
+        member x.GetVisibleBound(boundStrokeOptions) =
+            match boundStrokeOptions with 
+            | BoundGettingStrokeOptions.WithoutStrokeWidth -> x.VisibleBound0
+            | BoundGettingStrokeOptions.WithStrokeWidth    -> x.VisibleBound1
+
+        member x.GetDenseVisibleBound(boundStrokeOptions) =
+            match boundStrokeOptions with 
+            | BoundGettingStrokeOptions.WithoutStrokeWidth -> x.DenseVisibleBound1
+            | BoundGettingStrokeOptions.WithStrokeWidth    -> x.VisibleBound1
+
+        member x.ContainerID =
+            match x with 
+            | Path info ->  info.OriginInfo.ContainerID
+            | Text info ->  info.OriginInfo.ContainerID
+
+        member x.OriginInfo =
+            match x with 
+            | Path info -> info.OriginInfo :> IIntegratedRenderInfo
+            | Text info -> info.OriginInfo :> IIntegratedRenderInfo
+
+        member x.GsStates =
+            match x with 
+            | Path info -> info.GsStates
+            | Text info -> info.GsStates
+
+        member x.ClippingPathInfos =
+            match x with 
+            | Path info -> info.ClippingPathInfos
+            | Text info -> info.ClippingPathInfos
+
+
+    [<RequireQualifiedAccess>]
+    module RenewableVectorInfo =
+        let asText = function
+            | RenewableVectorInfo.Text info -> Some info
+            | _ -> None
+
+        let asPath = function
+            | RenewableVectorInfo.Path info -> Some info
+            | _ -> None
 
     [<RequireQualifiedAccess>]
     type RenewableInfo =
@@ -1136,7 +1368,7 @@ module _Renewable =
             | Some bound -> bound
             | None -> failwithf "LazyVisibleBound0 is None"
 
-        member x.LazyVisibleBound1 =
+        member private x.LazyVisibleBound1 =
             match x with 
             | Path info    -> info.LazyVisibleBound1
             | Text info    -> info.LazyVisibleBound0
@@ -1148,45 +1380,31 @@ module _Renewable =
             | None -> failwithf "LazyVisibleBound1 is None"
 
 
+        member x.DenseVisibleBound1 =
+            match x with 
+            | Path info -> info.VisibleBound1
+            | Text info -> info.DenseVisibleBound0
+            | Image info -> info.VisibleBound0
+
+        member x.GetVisibleBound(boundStrokeOptions) =
+            match boundStrokeOptions with 
+            | BoundGettingStrokeOptions.WithoutStrokeWidth -> x.VisibleBound0
+            | BoundGettingStrokeOptions.WithStrokeWidth    -> x.VisibleBound1
+
+        member x.GetDenseVisibleBound(boundStrokeOptions) =
+            match boundStrokeOptions with 
+            | BoundGettingStrokeOptions.WithoutStrokeWidth -> x.DenseVisibleBound1
+            | BoundGettingStrokeOptions.WithStrokeWidth    -> x.VisibleBound1
+
+
         member x.MapColor(f) =
             match x with 
             | Path info ->
-                { info with 
-                    LazyFillColor_Modifiable = 
-                        match info.LazyFillColor with 
-                        | Some color -> 
-                            f color
-                            |> Option.map RenewableModifableColor.Modified
-                        | None -> None
-
-                    LazyStrokeColor_Modifiable = 
-                        match info.LazyStrokeColor with 
-                        | Some color -> 
-                            f color
-                            |> Option.map RenewableModifableColor.Modified
-
-                        | None -> None
-                }
+                info.MapColor f
                 |> RenewableInfo.Path
 
             | Text info ->
-                { info with 
-                    LazyFillColor_Modifiable = 
-                        match info.LazyFillColor with 
-                        | Some color -> 
-                            f color
-                            |> Option.map RenewableModifableColor.Modified
-
-                        | None   -> None
-
-                    LazyStrokeColor_Modifiable = 
-                        match info.LazyStrokeColor with 
-                        | Some color -> 
-                            f color
-                            |> Option.map RenewableModifableColor.Modified
-
-                        | None   -> None
-                }
+                info.MapColor f
                 |> RenewableInfo.Text
 
             | Image info -> x
@@ -1302,11 +1520,7 @@ module _Renewable =
 
 
 
-        member x.ContainerID =
-            match x with 
-            | Path info ->  info.OriginInfo.ContainerID
-            | Text info ->  info.OriginInfo.ContainerID
-            | Image info -> info.OriginInfo.ContainerID
+
 
         member x.SetContainerToPage() =
             match x with 
@@ -1327,18 +1541,6 @@ module _Renewable =
                 }
                 |> Image
 
-        member x.OriginInfo =
-            match x with 
-            | RenewableInfo.Path info -> info.OriginInfo :> IIntegratedRenderInfoIM
-            | RenewableInfo.Text info -> info.OriginInfo :> IIntegratedRenderInfoIM
-            | RenewableInfo.Image info -> info.OriginInfo :> IIntegratedRenderInfoIM
-
-        member x.GsStates =
-            match x with 
-            | RenewableInfo.Path info -> info.GsStates
-            | RenewableInfo.Text info -> info.GsStates
-            | RenewableInfo.Image info -> info.GsStates
-
 
         member info.CopyToDocument(document, writerResources) =
             match info with 
@@ -1353,6 +1555,24 @@ module _Renewable =
             | RenewableInfo.Image info ->
                 info.CopyToDocument(document)
                 |> RenewableInfo.Image
+
+        member x.ContainerID =
+            match x with 
+            | Path info ->  info.OriginInfo.ContainerID
+            | Text info ->  info.OriginInfo.ContainerID
+            | Image info -> info.OriginInfo.ContainerID
+
+        member x.OriginInfo =
+            match x with 
+            | RenewableInfo.Path info -> info.OriginInfo :> IIntegratedRenderInfoIM
+            | RenewableInfo.Text info -> info.OriginInfo :> IIntegratedRenderInfoIM
+            | RenewableInfo.Image info -> info.OriginInfo :> IIntegratedRenderInfoIM
+
+        member x.GsStates =
+            match x with 
+            | RenewableInfo.Path info -> info.GsStates
+            | RenewableInfo.Text info -> info.GsStates
+            | RenewableInfo.Image info -> info.GsStates
 
         member x.ClippingPathInfos =
             match x with 
@@ -1373,16 +1593,40 @@ module _Renewable =
     [<RequireQualifiedAccess>]
     module RenewableInfo =
         let asText = function
-            | RenewableInfo.Text v -> Some v
+            | RenewableInfo.Text info -> Some info
             | _ -> None
 
         let asImage = function
-            | RenewableInfo.Image v -> Some v
+            | RenewableInfo.Image info -> Some info
             | _ -> None
 
         let asPath = function
-            | RenewableInfo.Path v -> Some v
+            | RenewableInfo.Path info -> Some info
             | _ -> None
+
+        let (|Vector|Pixel|) = function
+            | RenewableInfo.Text info -> Vector(info |> RenewableVectorInfo.Text)
+            | RenewableInfo.Path info -> Vector(info |> RenewableVectorInfo.Path)
+            | RenewableInfo.Image info -> Pixel info
+
+        let asVector = function 
+            | Vector info -> Some info
+            | Pixel _ -> None
+
+
+
+    type IntegratedRenderInfo with
+        member info.Renewable() =
+            match info with 
+            | IntegratedRenderInfo.Path pathInfo -> 
+                let pathInfo = pathInfo.Renewable()
+                pathInfo
+                |> RenewableVectorInfo.Path
+
+            | IntegratedRenderInfo.Text textInfo -> 
+                textInfo.Renewable()
+                |> RenewableVectorInfo.Text
+
 
     type IntegratedRenderInfoIM with
         member info.Renewable() =

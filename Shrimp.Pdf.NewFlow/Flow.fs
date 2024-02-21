@@ -37,6 +37,7 @@ type SlimModifyPage =
                                         RemoveRotation = false
                                         TrimBoxMargin = None
                                         Scale = None
+                                        Rotation = Rotation.None
                                     }
 
                             | Some pageBoxSetter ->
@@ -188,6 +189,7 @@ type SlimModifyPage =
                                 RemoveRotation = false
                                 TrimBoxMargin = None
                                 Scale = None
+                                Rotation = Rotation.None
                             }
                             |> Some
                         | Some pageBoxSetter ->
@@ -219,6 +221,7 @@ type SlimModifyPage =
                                 RemoveRotation = true
                                 TrimBoxMargin = None
                                 Scale = None
+                                Rotation = Rotation.None
                             }
                             |> Some
 
@@ -258,7 +261,12 @@ type SlimModifyPage =
             []
         |> SlimFlowUnion.Flow
 
-    static member inPage (pageSelector) (flow: SlimFlowUnion<>)
+    static member inPage pageSelector (flow: SlimFlowUnion<_, _>) =
+        flow.InPage(pageSelector)
+
+    static member InPage (pageSelector, flow: SlimFlowUnion<_, _>) =
+        flow.InPage(pageSelector)
+        
 
     static member ReadInfos(name, f) =
         SlimFlow(fun flowModel args infos pageSetter ->

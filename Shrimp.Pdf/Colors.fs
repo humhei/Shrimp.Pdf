@@ -106,18 +106,20 @@ module _Colors =
         | Exactly
         | RoundedValue of ValueEqualOptionsTolerance
 
-    with 
-        static member DefaultRoundedValue = 
+
+    [<RequireQualifiedAccess>]
+    module ValueEqualOptions =
+        let DefaultRoundedValue = 
             ValueEqualOptions.RoundedValue(ValueEqualOptionsTolerance.DefaultValue)
 
-        static member DefaultRough =
+        let DefaultRough =
             ValueEqualOptions.RoundedValue(ValueEqualOptionsTolerance.Rough)
             
         /// ValueEqualOptions.DefaultRoundedValue
-        static member DefaultValue = ValueEqualOptions.DefaultRoundedValue
+        let DefaultValue = DefaultRoundedValue
 
         /// ValueEqualOptions.DefaultRoundedValue with SeparationComparison = SeparationComparisonOptions.Name
-        static member DefaultValue_SeparationComparisonOptions_Name = 
+        let DefaultValue_SeparationComparisonOptions_Name = 
             ValueEqualOptions.RoundedValue
                 (
                     { ValueEqualOptionsTolerance.DefaultValue with 
@@ -2186,6 +2188,11 @@ module _Colors =
         | Registration
 
     with 
+        static member OfSeparationOrValueColor(color: SeparationOrValueColor) =
+            match color with 
+            | SeparationOrValueColor.ValueColor color -> PdfCanvasColor.Value color
+            | SeparationOrValueColor.Separation color -> PdfCanvasColor.Separation color
+
         member x.ToFsColor() =
             match x with 
             | PdfCanvasColor.Value      color -> FsColor.ValueColor color

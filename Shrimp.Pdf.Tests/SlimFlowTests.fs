@@ -376,7 +376,7 @@ let manipulatesTests =
 
         pass()
 
-    testCase "compose flow test" <| fun _ ->
+    ftestCase "compose flow test" <| fun _ ->
         let flow =
             Flow.Reuse (
                 Reuses.SlimFlows(
@@ -387,7 +387,7 @@ let manipulatesTests =
                             layerName = BackgroundAddingLayerOptions.Create("current", "background"),
                             refOptions = SlimBackgroundRefOptions.XObject_Simply
                         )
-                        <+>
+                        <+>  
                         SlimModifyPage.MapInfos(fun args infos -> 
                             infos
                                 .SetColor()

@@ -524,11 +524,43 @@ module _Extract =
                                 then 
                                     let stream = writerPage.NewContentStreamAfter()
                                     let cuttingDieLayerEnum =
-                                        match infoChoices.Bounds.Length >= 1, infoChoices.TagInfos.Length >= 1 with 
-                                        | true, false -> CuttingDieShpLayerInfosEnum.CuttingDie
-                                        | false, true -> CuttingDieShpLayerInfosEnum.TagInfos
-                                        | true, true -> CuttingDieShpLayerInfosEnum.CuttingAndTagInfos
-                                        | false, false -> failwithf "Invalid token"
+                                        let cuttindDieLayerEnum = ResizeArray()
+
+                                        match infoChoices.Bounds.Length >= 1 with 
+                                        | true -> cuttindDieLayerEnum.Add(CuttingDieShpLayerInfosEnum.CuttingDie)
+                                        | false -> ()
+
+                                        match infoChoices.TagInfos.Length >= 1 with 
+                                        | true -> 
+                                            let cuttingDieDashLine =
+                                                infoChoices.TagInfos
+                                                |> List.filter(fun m -> 
+                                                    match m with 
+                                                    | RenewableInfo.Path info -> info.Tag = RenewablePathInfoTag.CuttingDieDashLine
+                                                    | _ -> false 
+                                                )
+
+                                            match cuttingDieDashLine with 
+                                            | [] -> cuttindDieLayerEnum.Add(CuttingDieShpLayerInfosEnum.TagInfos)
+                                            | _ ->
+                                                match cuttingDieDashLine.Length = infoChoices.TagInfos.Length with 
+                                                | true -> cuttindDieLayerEnum.Add(CuttingDieShpLayerInfosEnum.CuttingDieDashLine)
+                                                | false ->
+                                                    cuttindDieLayerEnum.Add(CuttingDieShpLayerInfosEnum.TagInfos)
+                                                    cuttindDieLayerEnum.Add(CuttingDieShpLayerInfosEnum.CuttingDieDashLine)
+
+                                        | false -> ()
+                                            
+                                        let cuttindDieLayerEnum =
+                                            cuttindDieLayerEnum
+                                            |> List.ofSeq
+                                            
+
+                                        List.ensureNotDuplicated cuttindDieLayerEnum
+
+                                        cuttindDieLayerEnum
+                                        |> List.reduce (|||)
+
 
                                     stream.Put(PdfName.ShpLayerCuttingDie, PdfString(cuttingDieLayerEnum.Text()))
                                     |> ignore
@@ -805,6 +837,7 @@ module _Extract =
 
                                     let addtionalTagInfoPredicate (info: RenewablePathInfo) =
                                         info.Tag = RenewablePathInfoTag.TagInfo
+                                        || info.Tag = RenewablePathInfoTag.CuttingDieDashLine
 
 
                                     [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers, boundPredicate = boundPredicate, addtionalTagColorPredicate = addtionalTagInfoPredicate), writerPageSetter, background = background, slimFlowUserState = r.UserState)]

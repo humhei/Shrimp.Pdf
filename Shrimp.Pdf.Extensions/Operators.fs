@@ -22,15 +22,15 @@ module PdfNames =
         let ShpLayerBkSolid = PdfName "ShpLayerBkSolid" 
 
 
+    [<System.Flags>]
     type CuttingDieShpLayerInfosEnum =
-        | CuttingDie = 0
-        | TagInfos = 1
-        | CuttingAndTagInfos = 2
+        | CuttingDie = 1
+        | CuttingDieDashLine = 2
+        | TagInfos = 4
+
+
 
 module Constants =
-
-
-
 
     type private AssemblyFinder = AssemblyFinder
 

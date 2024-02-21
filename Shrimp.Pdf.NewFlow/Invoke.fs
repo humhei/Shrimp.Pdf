@@ -21,24 +21,29 @@ type SlimWriterPageBoxSetter =
       Origin: PageBoxOrigin option
       RemoveRotation: bool
       TrimBoxMargin: NegativeMargin option 
-      Scale: option<float * float> }
+      Scale: option<float * float>
+      Rotation: Rotation }
 with 
+    member internal pageBoxSetter.GetAppliedRotation(readerPage: PdfPage) =
+        let rotation = 
+            match pageBoxSetter.RemoveRotation with 
+            | false -> pageBoxSetter.Rotation
+            | true -> 
+                let rotation = readerPage.GetFsRotation()
+                Rotation.concatenate rotation pageBoxSetter.Rotation
+
+        rotation
+
     member x.InvokePage(readerPage: PdfPage, writerPage: PdfPage, writer) =
 
-        let rotation =
-            match x.RemoveRotation with 
-            | false -> None
-            | true -> Some (readerPage.GetFsRotation())
+        let rotation = x.GetAppliedRotation(readerPage)
 
         let isRotated =
             match rotation with 
-            | None -> false
-            | Some rotation ->
-                match rotation with 
-                | Rotation.None
-                | Rotation.R180 -> false
-                | Rotation.Clockwise
-                | Rotation.Counterclockwise -> true
+            | Rotation.None
+            | Rotation.R180 -> false
+            | Rotation.Clockwise
+            | Rotation.Counterclockwise -> true
 
 
         let __setPageBox = 
@@ -78,8 +83,8 @@ with
             | Some margin ->
                 let margin = 
                     match rotation with 
-                    | None -> margin.Value
-                    | Some rotation -> margin.Value.Rotate(rotation)
+                    | Rotation.None -> margin.Value
+                    | rotation -> margin.Value.Rotate(rotation)
 
                 let margin = 
                     match x.Scale with 
@@ -117,13 +122,14 @@ with
 
         ()
 
-    static member Create(readerPage: PdfPage, ?rect, ?origin, ?removeRotation, ?trimBoxMargin, ?scale) =
+    static member Create(readerPage: PdfPage, ?rect, ?origin, ?removeRotation, ?trimBoxMargin, ?scale, ?rotation) =
         { 
             Rect   = defaultArg rect (readerPage.GetActualBox())
             Origin = origin
             RemoveRotation = defaultArg removeRotation false
             TrimBoxMargin = trimBoxMargin
             Scale = scale
+            Rotation = defaultArg rotation Rotation.None
         }
 
 type SlimWriterPageSetter =
@@ -136,9 +142,12 @@ with
             | None -> None
             | Some pageBoxSetter ->
                 let rotates = 
-                    match pageBoxSetter.RemoveRotation with 
-                    | true -> 
-                        let rotation = readerPage.GetFsRotation()
+                    let rotation = 
+                        pageBoxSetter.GetAppliedRotation(readerPage)
+
+                    match rotation with 
+                    | Rotation.None -> []
+                    | _ -> 
                         match rotation with 
                         | Rotation.None -> []
                         | _ -> 
@@ -198,7 +207,6 @@ with
                             ]
                             
 
-                    | false -> []
 
                 let offset =
                     match pageBoxSetter.Origin with 
@@ -532,7 +540,17 @@ type SlimFlow<'userState, 'newUserState>(f: SlimFlowModel<'userState> -> PageMod
         fun (slimFlow: SlimFlow<'userState, 'newUserState>) ->
             SlimFlow(slimFlow.Internal_Invoke_Origin, FlowName.Override(name, parameters = parameters))
 
+[<RequireQualifiedAccess>]
+module PageModifingArguments =
+    let isCurrentPageSelected (pageSelector: PageSelector) (args: PageModifingArguments<_>) =
+        match pageSelector with 
+        | PageSelector.All -> true
+            
+        | _ ->
+            let pageNumbers = 
+                PdfDocument.GetPageNumbers_Static pageSelector args.TotalNumberOfPages
 
+            List.contains args.PageNum pageNumbers
 
 [<RequireQualifiedAccess>]
 module SlimFlow =
@@ -544,7 +562,16 @@ module SlimFlow =
             }
         )
 
-    let mapState(mapping) (x: SlimFlow<_, _>) =
+    let mapStateBack (mapping) (x: SlimFlow<_, _>) =
+        let newF (flowModel: SlimFlowModel<_>) (args: PageModifingArguments<_>) infos pageSetter =
+            let flowModel = flowModel.MapUserState mapping
+            let args = args.MapUserState mapping
+            x.Internal_Invoke_Origin flowModel args infos pageSetter
+
+        new SlimFlow<_, _>(newF, ?flowName = x.FlowName, ?background = x.Background)
+
+
+    let mapState (mapping) (x: SlimFlow<_, _>) =
         let newF flowModel args infos pageSetter =
             let r = x.Internal_Invoke_Origin flowModel args infos pageSetter
             r.MapUserState(mapping)
@@ -553,27 +580,18 @@ module SlimFlow =
 
     let applyPageSelector (pageSelector: PageSelector) (x: SlimFlow<_, _>) =
         let newF flowModel (args: PageModifingArguments<_>) infos pageSetter =
-            match pageSelector with 
-            | PageSelector.All -> 
+            match PageModifingArguments.isCurrentPageSelected pageSelector args with 
+            | true -> 
                 let r = x.Internal_Invoke_Origin flowModel args infos pageSetter
                 r.MapUserState(Some)
                 
-            | _ ->
-                let pageNumbers = 
-                    PdfDocument.GetPageNumbers_Static pageSelector args.TotalNumberOfPages
-
-                match List.contains args.PageNum pageNumbers with 
-                | true -> 
-                    let r = x.Internal_Invoke_Origin flowModel args infos pageSetter
-                    r.MapUserState(Some)
-
-                | false ->  
-                    let r = 
-                        { Infos = infos 
-                          UserState = None
-                          WriterPageSetter = pageSetter
-                        }
-                    r
+            | false ->
+                let r = 
+                    { Infos = infos 
+                      UserState = None
+                      WriterPageSetter = pageSetter
+                    }
+                r
 
 
 

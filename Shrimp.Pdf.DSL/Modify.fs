@@ -1923,6 +1923,11 @@ module ModifyOperators =
                 )
             modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList, ops)
 
+
+type  FontAndSizeInfoCommon =
+    { GetConcatedText: string option -> string
+      }
+
 type FontAndSizeQuery [<JsonConstructor>] (?fontNames, ?fontSize, ?fillColor, ?info_BoundIs_Args, ?textPattern, ?wordSep) =
     inherit POCOBaseEquatable<option<string list> * float option * FsColor option * Info_BoundIs_Args option * TextSelectorOrTransformExpr option * string option>(fontNames, fontSize, fillColor, info_BoundIs_Args, textPattern, wordSep)
     let fontNamesQuery =
@@ -2118,6 +2123,7 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontNames, ?fontSize, ?fillColor, ?i
             | AreaGettingOptions.FsSpecfic leftBottomBasedRect -> leftBottomBasedBound.IsInsideOf leftBottomBasedRect.AsRectangle
             | _ -> true
         | None -> true
+
 
 
     member x.AsSelector() = 
