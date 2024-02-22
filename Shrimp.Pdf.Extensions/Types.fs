@@ -920,11 +920,9 @@ module ExtensionTypes =
                 |> List.map(fun m -> {Space = m.Space; Text = m.TextInfo.GetText()})
             }
 
-    type ISABTextRenderInfo = interface end
 
 
     type ITextRenderInfo =
-        inherit ISABTextRenderInfo
         inherit IAbstractRenderInfo
         abstract member Value: TextRenderInfo
         abstract member EndTextState: EndTextState
@@ -1447,6 +1445,12 @@ module ExtensionTypes =
           TranslateX: float 
           TranslateY: float }
     with
+        member this.Translate(x, y) =
+            { this with 
+                TranslateX = this.TranslateX + x
+                TranslateY = this.TranslateY + y
+            }
+
         /// ScaleX
         member x.m00 = x.ScaleX
 

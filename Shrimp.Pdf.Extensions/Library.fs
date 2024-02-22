@@ -991,6 +991,51 @@ module iText =
             info.Value.GetGraphicsState()
             |> CanvasGraphicsState.getExtGState
 
+    type CtmAndTextCtm =
+        { Matrix: Matrix 
+          TextMatrix: Matrix }
+    with 
+        member x.AffineTransform() =
+            let matrix = 
+                x.Matrix
+                |> AffineTransform.ofMatrix
+
+            let textMatrix = 
+                x.TextMatrix
+                |> AffineTransform.ofMatrix
+
+            matrix.Concatenate textMatrix
+
+            matrix
+
+        member x.ScaleY() =
+            let matrix = 
+                x.Matrix
+                |> AffineTransformRecord.ofMatrix
+
+            let textMatrix = 
+                x.TextMatrix
+                |> AffineTransformRecord.ofMatrix
+
+            matrix.ScaleY * textMatrix.ScaleY
+
+        member x.GetActualFontSize(rawFontSize, textRotation) =
+            let affime = x.AffineTransform()
+            let baseFontSize = rawFontSize
+            
+            let direction = textRotation |> Rotation.toDirection
+
+            let rect = new Rectangle(1.f, baseFontSize)
+            let newRect = affime.Transform(rect)
+
+            match direction with 
+            | Direction.Vertical -> newRect.GetWidthF()
+            | Direction.Horizontal -> newRect.GetHeightF()
+
+        member x.ToTransformedSize(actualFontSize: float) =
+            actualFontSize / (x.ScaleY()) 
+            
+
     [<RequireQualifiedAccess>]
     module TextRenderInfo =
         [<RequireQualifiedAccess>]
@@ -1033,18 +1078,12 @@ module iText =
             | None -> DocumentFontName.Invalid
             | Some fontName -> DocumentFontName.Valid fontName
 
+        let getCtmAndTextCtm (info: TextRenderInfo) =
+            { Matrix = info.GetGraphicsState().GetCtm() 
+              TextMatrix = info.GetTextMatrix() }
+
         let getAffineTransfrom(info: TextRenderInfo) =
-            let matrix = 
-                info.GetGraphicsState().GetCtm()
-                |> AffineTransform.ofMatrix
-
-            let textMatrix = 
-                info.GetTextMatrix()
-                |> AffineTransform.ofMatrix
-
-            matrix.Concatenate textMatrix
-
-            matrix
+            getCtmAndTextCtm(info).AffineTransform()
 
         let getAffineTransfromRecord(info: TextRenderInfo) =
             getAffineTransfrom info
@@ -1104,32 +1143,21 @@ module iText =
 
 
 
+
+
     [<RequireQualifiedAccess>]
     module ITextRenderInfo =
+        
+
         type private TextRenderInfo with 
             member info.ScaleY() =      
-                let matrix = 
-                    info.GetGraphicsState().GetCtm()
-                    |> AffineTransformRecord.ofMatrix
+                let ctmAndTextCtm = TextRenderInfo.getCtmAndTextCtm info
+                ctmAndTextCtm.ScaleY()
 
-                let textMatrix = 
-                    info.GetTextMatrix()
-                    |> AffineTransformRecord.ofMatrix
-
-                matrix.ScaleY * textMatrix.ScaleY
 
             member private info.GetAffineTransfrom() =
-                let matrix = 
-                    info.GetGraphicsState().GetCtm()
-                    |> AffineTransform.ofMatrix
-
-                let textMatrix = 
-                    info.GetTextMatrix()
-                    |> AffineTransform.ofMatrix
-
-                matrix.Concatenate textMatrix
-
-                matrix
+                TextRenderInfo.getAffineTransfrom info
+                
 
             member private info.GetAffineTransfromRecord() =
                 info.GetAffineTransfrom()
@@ -1158,22 +1186,17 @@ module iText =
 
                 rotation
 
+
             member info.GetActualFontSize() =
-                let affime = info.GetAffineTransfrom() 
+                let affime = TextRenderInfo.getCtmAndTextCtm info
                 //let m = AffineTransform.GetRotateInstance(90.) |> AffineTransformRecord.ofAffineTransform
                 //let affimeRecord = info.GetAffineTransfromRecord()
 
                 let baseFontSize = info.GetFontSize()
                 
                 let textRotation = info.GetTextRotation()
-                let direction = textRotation |> Rotation.toDirection
 
-                let rect = new Rectangle(1.f, baseFontSize)
-                let newRect = affime.Transform(rect)
-
-                match direction with 
-                | Direction.Vertical -> newRect.GetWidthF()
-                | Direction.Horizontal -> newRect.GetHeightF()
+                affime.GetActualFontSize(baseFontSize, textRotation)
 
 
                 //let fontSize = info.GetFontSize()
@@ -1181,7 +1204,8 @@ module iText =
                 //float (fontSize) * scaleY
 
             member info.ToTransformedFontSize(actualFontSize: float) =
-                actualFontSize / (info.ScaleY()) 
+                let affime = TextRenderInfo.getCtmAndTextCtm info
+                affime.ToTransformedSize(actualFontSize)
 
             member info.GetFontName() =
                 TextRenderInfo.getDocumentFontName info
@@ -1503,7 +1527,7 @@ module iText =
                     | FillOrStrokeOptions.FillAndStroke -> IAbstractRenderInfo.hasFill info && IAbstractRenderInfo.hasStroke info
                     | FillOrStrokeOptions.FillOrStroke -> IAbstractRenderInfo.hasFill info || IAbstractRenderInfo.hasStroke info
                     &&
-                        match info with 
+                        match info.Value with 
                         | :? PathRenderInfo as info -> not (info.IsPathModifiesClippingPath())
                         | _ -> true
 

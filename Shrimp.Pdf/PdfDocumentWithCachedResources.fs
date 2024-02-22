@@ -158,6 +158,19 @@ type private PdfDocumentCache private
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>())
 
+    member internal x.CacheDocumentFont(font: PdfFont) =
+        let fontNames = font.GetFontProgram().GetFontNames()
+
+        match FsFontName.TryCreate fontNames with 
+        | Some fontNames ->
+            fontsCache.GetOrAdd(FsPdfFontFactory.DocumentFont(fontNames), fun _ ->
+                font
+            ) |> ignore
+
+        | None -> ()
+
+    member internal x.FontsCache = fontsCache
+
     member internal x.CacheDocumentFonts(fonts) =
         for (font: PdfFont) in fonts do
             let fontNames = font.GetFontProgram().GetFontNames()
@@ -181,14 +194,17 @@ type private PdfDocumentCache private
             //    ) 
             //| None -> 
             let number = hashNumberOfPdfIndirectReference <| font.GetPdfObject().GetIndirectReference() 
-            fontsCache_hashable_fromOtherDocument.GetOrAdd(
-                number,
-                (fun number ->
-                    let pdfObject = font.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false) :?> PdfDictionary
-                    PdfFontFactory.CreateFont(pdfObject)
+            let font = 
+                fontsCache_hashable_fromOtherDocument.GetOrAdd(
+                    number,
+                    (fun number ->
+                        let pdfObject = font.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false) :?> PdfDictionary
+                        PdfFontFactory.CreateFont(pdfObject)
+                    )
                 )
-            )
 
+
+            font
 
 
 
@@ -442,6 +458,8 @@ and PdfDocumentWithCachedResources =
         x.cache.GetOrCreateFont(fontFactory)
 
     member private x.ClearCache() = x.cache.Clear()
+
+    member internal x.FontsCache = x.cache.FontsCache
 
     /// defaultPageSelector is First
     member x.CacheDocumentFonts(?pageSelector: PageSelector) =

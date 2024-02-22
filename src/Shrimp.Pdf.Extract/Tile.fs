@@ -86,17 +86,8 @@ module _Tile =
                 match splitTextToWords with 
                 | false -> [info]
                 | true ->
-                    match textInfo.OriginInfo.SplitToWords() with 
-                    | []
-                    | [_] -> [info]
-                    | infos ->
-                        infos
-                        |> List.mapi(fun i m -> 
-                            m.Renewable(
-                                isWord = true
-                            )
-                        )
-                        |> List.map RenewableInfo.Text
+                    textInfo.SplitTextToWords()
+                    |> List.map RenewableInfo.Text
 
             |> List.map ExpandedRenewableInfo
 

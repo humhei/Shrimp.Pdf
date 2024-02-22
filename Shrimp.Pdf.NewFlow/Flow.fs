@@ -93,15 +93,14 @@ type SlimModifyPage =
                                     match info.OriginInfo.LazyVisibleBound0 with 
                                     | None -> info0
                                     | Some bound ->
-                                        let newBound = bound.MapCoordinate(fun point ->
-
-
-                                            { X = point.X + offsetX
-                                              Y = point.Y + offsetY 
-                                        }
-                                        )
+                                        let newBound = 
+                                            bound.MapCoordinate(fun point ->
+                                                { X = point.X + offsetX
+                                                  Y = point.Y + offsetY 
+                                            })
                                         { info with 
-                                            OriginInfo.LazyVisibleBound0_Backup = Some bound
+                                            OriginInfo.LazyVisibleBound0_Backup = 
+                                                Some { Rectangle = bound; OffsetX = offsetX; OffsetY = offsetY }
                                             OriginInfo.LazyVisibleBound0 =
                                                 Some newBound
                                         }
@@ -111,12 +110,15 @@ type SlimModifyPage =
                                     match info.OriginInfo.LazyVisibleBound0 with 
                                     | None -> info0
                                     | Some bound ->
+                                        
                                         let newBound = bound.MapCoordinate(fun point ->
-                                            { X = point.X + actualBox.GetXF()
-                                              Y = point.Y + actualBox.GetYF() }
+                                            { X = point.X + offsetX
+                                              Y = point.Y + offsetY }
                                         )
                                         { info with 
-                                            OriginInfo.LazyVisibleBound0_Backup = Some bound
+                                            OriginInfo.LazyVisibleBound0_Backup = 
+                                                Some { Rectangle = bound; OffsetX = offsetX; OffsetY = offsetY }
+                                                
                                             OriginInfo.LazyVisibleBound0 =
                                                 Some newBound
                                         }
@@ -127,11 +129,13 @@ type SlimModifyPage =
                                     | None -> info0
                                     | Some bound ->
                                         let newBound = bound.MapCoordinate(fun point ->
-                                            { X = point.X + actualBox.GetXF()
-                                              Y = point.Y + actualBox.GetYF() }
+                                            { X = point.X + offsetX
+                                              Y = point.Y + offsetY }
                                         )
                                         { info with 
-                                            OriginInfo.LazyVisibleBound_Backup = Some bound
+                                            OriginInfo.LazyVisibleBound_Backup = 
+                                                Some { Rectangle = bound; OffsetX = offsetX; OffsetY = offsetY }
+                                                
                                             OriginInfo.LazyVisibleBound =
                                                 Some newBound
                                         }

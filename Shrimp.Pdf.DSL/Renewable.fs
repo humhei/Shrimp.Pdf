@@ -757,6 +757,20 @@ module _Renewable =
                     document.Renew_OtherDocument_PdfShading(writerResources, info.StrokeColor)
             }
 
+        member x.GetVisibleBound(boundStrokeOptions) =
+            match boundStrokeOptions with 
+            | BoundGettingStrokeOptions.WithoutStrokeWidth -> x.VisibleBound0
+            | BoundGettingStrokeOptions.WithStrokeWidth    -> x.VisibleBound1
+
+
+        interface ISABPathRenderInfo with 
+            member x.Tag = IntegratedRenderInfoTag.Path
+            member x.GetDenseBound(boundStrokeOptions) = x.GetVisibleBound(boundStrokeOptions)
+            member x.GetBound(boundStrokeOptions) = x.GetVisibleBound(boundStrokeOptions)
+            member x.GetFillColor() = x.LazyFillColor
+
+            member x.GetStrokeColor() = x.LazyStrokeColor
+
 
     type IntegratedPathRenderInfo with    
         member x.Renewable() =
@@ -809,7 +823,7 @@ module _Renewable =
            GsStates: InfoGsStateLists
            Ctm: Matrix
            FontName: DocumentFontName
-           TextMatrix: Matrix
+           HeaderTextMatrix: Matrix
            TextLeading: float32
            TextRenderingMode: int
            WordSpacing: float32
@@ -821,17 +835,29 @@ module _Renewable =
            OriginInfo: IntegratedTextRenderInfo
            LazyFillColor_Modifiable: RenewableModifableColor option
            LazyStrokeColor_Modifiable: RenewableModifableColor option
+           NewFontAndSize: NewFontAndSize option
            }
      with 
-        member x.MapFontAndSize(query: FontAndSizeQueryUnion, target: NewFontAndSize) =
-            
-            failwithf ""
+        member x.NewFont =
+            x.NewFontAndSize
+            |> Option.bind(fun m -> m.Font)
 
         member x.PdfConcatedWord() =
             x.OriginInfo.PdfConcatedWord()
 
         member x.ConcatedText(?wordSep) =
             x.OriginInfo.ConcatedText(?wordSep = wordSep)
+
+        member x.SetNewFontAndSize(target: NewFontAndSize) =
+            { x with NewFontAndSize = Some target }
+
+        member x.MapFontAndSize(query: FontAndSizeQueryUnion, target: NewFontAndSize) =
+            match query.PredicateSABTextInfo x with 
+            | true -> x.SetNewFontAndSize(target)
+            | false -> x
+
+        member x.MapFontAndSize(query: FontAndSizeQuery, target: NewFontAndSize) =
+            x.MapFontAndSize(FontAndSizeQueryUnion.Value query, target)
 
         member info.MapColor(f) =
             { info with 
@@ -921,7 +947,27 @@ module _Renewable =
             { Fill = x.LazyFillColor_Modifiable 
               Stroke = x.LazyStrokeColor_Modifiable }.LazyColorIsOneOf(fillOrStrokeOptions, colors)
 
+        member private x.ApplyNewFontAndSize() =
+            match x.NewFontAndSize with 
+            | None -> x
+            | Some newFontAndSize ->
+                match newFontAndSize.FontSize with 
+                | None -> x
+                | Some targetFontSize ->
+                    
+                    let word = x.PdfConcatedWord()
+                    let textMatrixAndFontSize = x.TransformedTextMatrixAndRawSize(word, x.Font, targetFontSize, ?alignment = newFontAndSize.Alignment)
+                    { x with 
+                        RawFontSize = float32 textMatrixAndFontSize.TransformedFontSize
+                        HeaderTextMatrix = 
+                            match textMatrixAndFontSize.TextTransform with 
+                            | None -> x.HeaderTextMatrix
+                            | Some affimenTransform -> AffineTransformRecord.toMatrix affimenTransform
+                        Kind    = RenewableTextInfoKind.Word(x.OriginInfo.TextRenderInfo.GetText())
+                    }
+
         member x.ApplyCtm_WriteToCanvas(pdfCanvas: OffsetablePdfCanvas) =
+            let x = x.ApplyNewFontAndSize()
             match x.FillShading, x.StrokeShading with 
             | None, None -> ()
             | _ -> failwithf "Not implemented when renewing text with shading color"
@@ -947,7 +993,9 @@ module _Renewable =
                 | _ -> ()
 
             PdfCanvas.useCanvas pdfCanvas (fun pdfCanvas ->
-                let textMatrix = x.HeaderTextRenderInfo.GetTextMatrix()
+                let textMatrix = x.HeaderTextMatrix
+
+                let font = x.Font
 
                 set_inPage_extGsState()
 
@@ -980,7 +1028,7 @@ module _Renewable =
                 |> PdfCanvas.setHorizontalScaling x.HorizontalScaling
                 |> PdfCanvas.setCharSpacing x.CharSpacing
                 |> PdfCanvas.setWordSpacing x.WordSpacing
-                |> PdfCanvas.setFontAndSize(x.Font, x.RawFontSize)
+                |> PdfCanvas.setFontAndSize(font, x.RawFontSize)
                 |> PdfCanvas.setTextMatrix textMatrix
                 |> (fun canvas ->
                     match x.Kind with 
@@ -1001,13 +1049,40 @@ module _Renewable =
             { info with 
                 FillColor = document.Renew_OtherDocument_Color (info.FillColor)
                 StrokeColor = document.Renew_OtherDocument_Color (info.StrokeColor)
-                Font = document.Renew_OtherDocument_Font(info.Font)
                 FillShading = 
                     document.Renew_OtherDocument_PdfShading(writerResources, info.FillColor)
                 StrokeShading =
                     document.Renew_OtherDocument_PdfShading(writerResources, info.StrokeColor)
             }
 
+        member x.GetVisibleBound(boundStrokeOptions) =
+            match boundStrokeOptions with 
+            | BoundGettingStrokeOptions.WithoutStrokeWidth -> x.VisibleBound0
+            | BoundGettingStrokeOptions.WithStrokeWidth    -> x.VisibleBound0
+
+        member x.GetDenseVisibleBound(boundStrokeOptions) =
+            match boundStrokeOptions with 
+            | BoundGettingStrokeOptions.WithoutStrokeWidth -> x.DenseVisibleBound0
+            | BoundGettingStrokeOptions.WithStrokeWidth    -> x.DenseVisibleBound0
+
+        interface ISABTextRenderInfo with 
+            member x.Tag = IntegratedRenderInfoTag.Text
+            member x.GetDenseBound(boundStrokeOptions) = x.GetVisibleBound(boundStrokeOptions)
+            member x.GetBound(boundStrokeOptions) = x.GetVisibleBound(boundStrokeOptions)
+            member x.GetFillColor() = x.LazyFillColor
+            member x.GetStrokeColor() = x.LazyStrokeColor
+            member x.ConcatedText(?wordSep) = x.ConcatedText(?wordSep = wordSep)
+            member x.GetActualFontSize() = 
+                let ctmAndTextCtm = x.CtmAndTextCtm()
+                let textRotation = ITextRenderInfo.getTextRotation x.OriginInfo
+                ctmAndTextCtm.GetActualFontSize(x.RawFontSize, textRotation)
+
+            member x.GetFontName() = x.FontName
+            member x.GetRawFontSize() = x.RawFontSize
+            member x.PdfConcatedWord() = x.PdfConcatedWord()
+            member x.GetMatrix() = x.Ctm
+            member x.GetTextMatrix() = x.HeaderTextMatrix
+            member x.GetWidth() = x.VisibleBound0.GetWidthF()
 
     type IntegratedTextRenderInfo with 
         member x.Renewable(?isWord): RenewableTextInfo =
@@ -1018,6 +1093,13 @@ module _Renewable =
             //    match x.GetAppliedExtGState() with 
             //    | EqualTo FsExtGState.DefaultValue -> None
             //    | extGState -> Some extGState
+
+            let headerTextRenderInfo = 
+                match x.EndTextState with 
+                | EndTextState.Yes -> x.ConcatedTextInfo.HeadWordInfo
+                | EndTextState.Undified -> x.TextRenderInfo
+                | EndTextState.No -> x.TextRenderInfo
+                
 
             { FillColor = x.TextRenderInfo.GetFillColor()
               StrokeColor = x.TextRenderInfo.GetStrokeColor()
@@ -1030,7 +1112,7 @@ module _Renewable =
               RawFontSize = renderInfo.GetFontSize()
               Font = renderInfo.GetFont()
               Ctm = renderInfo.GetGraphicsState().GetCtm()
-              TextMatrix = renderInfo.GetTextMatrix()
+              HeaderTextMatrix = headerTextRenderInfo.GetTextMatrix()
               TextLeading = renderInfo.GetLeading()
               TextRenderingMode = renderInfo.GetTextRenderMode()
               HorizontalScaling = renderInfo.GetHorizontalScaling()
@@ -1040,20 +1122,39 @@ module _Renewable =
               GsStates = x.GsStates
               //ExtGState = extGState
               LineShapingStyle = ITextRenderInfo.getLineShapingStyle x
-              HeaderTextRenderInfo = 
-                match x.EndTextState with 
-                | EndTextState.Yes -> x.ConcatedTextInfo.HeadWordInfo
-                | EndTextState.Undified -> x.TextRenderInfo
-                | EndTextState.No -> x.TextRenderInfo
-
+              HeaderTextRenderInfo = headerTextRenderInfo
               ClippingPathInfos = x.ClippingPathInfos
               FillShading = None
               StrokeShading = None
               OriginInfo = x
               LazyFillColor_Modifiable = None
               LazyStrokeColor_Modifiable = None
+              NewFontAndSize = None
             }
 
+    type RenewableTextInfo with 
+        member textInfo.SplitTextToWords() =
+            match textInfo.OriginInfo.SplitToWords() with 
+            | []
+            | [_] -> [textInfo]
+            | infos ->
+                infos
+                |> List.mapi(fun i m ->     
+                    let headerTextRenderInfo = 
+                        match m.EndTextState with 
+                        | EndTextState.Yes -> m.ConcatedTextInfo.HeadWordInfo
+                        | EndTextState.Undified -> m.TextRenderInfo
+                        | EndTextState.No -> m.TextRenderInfo
+                        
+                    { textInfo with 
+                        Kind = RenewableTextInfoKind.Word(m.TextRenderInfo.GetText())
+                        OriginInfo = m
+                        HeaderTextRenderInfo = headerTextRenderInfo
+                        HeaderTextMatrix = headerTextRenderInfo.GetTextMatrix()
+                    }
+
+
+                )
 
     type RenewableImageInfo =
         { Image: ImageRenderInfo
@@ -1275,6 +1376,49 @@ module _Renewable =
             | RenewableVectorInfo.Path info -> Some info
             | _ -> None
 
+    type RenewableWordInfo(textInfo: RenewableTextInfo) =
+        let mutable isSplitted = false
+        let mutable words = [textInfo]
+
+        member x.Words = words
+
+        member x.SplitTextToWords(?query: FontAndSizeQuery) =
+            match isSplitted with 
+            | true -> failwithf "text is already splitted"
+            | false ->
+                match query with 
+                | None -> 
+                    words <-
+                        textInfo.SplitTextToWords()
+
+                    isSplitted <- true
+
+                | Some query ->
+                    match query.PredicateSABTextInfo textInfo with 
+                    | true -> 
+                        words <-
+                            textInfo.SplitTextToWords()
+
+                        isSplitted <- true
+
+                    | false -> ()
+
+            x
+
+
+        member x.MapInfo(mapping) =
+            words <-
+                words
+                |> List.map(fun info -> 
+                    mapping info
+                )
+            x
+
+        member x.MapFontAndSize(query: FontAndSizeQuery, target: NewFontAndSize) =
+            x.MapInfo(fun info ->
+                info.MapFontAndSize(query, target)
+            )
+
     [<RequireQualifiedAccess>]
     type RenewableInfo =
         | Path of RenewablePathInfo
@@ -1291,20 +1435,20 @@ module _Renewable =
             match x with 
             | Path info -> 
                 { info with 
-                    OriginInfo.LazyVisibleBound0 = info.OriginInfo.LazyVisibleBound0_Backup
+                    OriginInfo.LazyVisibleBound0 = info.OriginInfo.LazyVisibleBound0_Backup |> Option.map(fun m -> m.Rectangle)
                     OriginInfo.LazyVisibleBound0_Backup = None }
                 |> Path
 
             | Text info -> 
                 { info with 
-                    OriginInfo.LazyVisibleBound0 = info.OriginInfo.LazyVisibleBound0_Backup
+                    OriginInfo.LazyVisibleBound0 = info.OriginInfo.LazyVisibleBound0_Backup |> Option.map(fun m -> m.Rectangle)
                     OriginInfo.LazyVisibleBound0_Backup = None }
                 |> Text
 
 
             | Image info -> 
                 { info with 
-                    OriginInfo.LazyVisibleBound = info.OriginInfo.LazyVisibleBound_Backup
+                    OriginInfo.LazyVisibleBound = info.OriginInfo.LazyVisibleBound_Backup |> Option.map(fun m -> m.Rectangle)
                     OriginInfo.LazyVisibleBound_Backup = None }
                 |> Image
 
@@ -1345,6 +1489,14 @@ module _Renewable =
             match x with 
             | Text info -> f info |> Text
             | _ -> x
+
+        member x.MapWord(f) =
+            match x with 
+            | Text info -> 
+                let r: RenewableWordInfo = f (RenewableWordInfo info) 
+                r.Words
+                |> List.map Text
+            | _ -> [x]
 
         member x.MapImage(f) =
             match x with 
@@ -1646,6 +1798,8 @@ module _Renewable =
                 image.Renewable()
                 |> RenewableInfo.Image
             
+
+
 
 namespace Shrimp.Pdf.DSL
 [<AutoOpen>]

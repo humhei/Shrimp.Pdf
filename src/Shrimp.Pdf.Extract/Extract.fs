@@ -105,7 +105,7 @@ module _Extract =
             )
 
 
-    let internal writeInfos maxLevel_plus writer (writerPageBox: Rectangle) writerCanvas (infos: RenewableInfo list) =
+    let internal writeInfos maxLevel_plus (writer: PdfDocumentWithCachedResources) (writerPageBox: Rectangle) (writerCanvas: OffsetablePdfCanvas) (infos: RenewableInfo list) =
         match infos with 
         | [] -> ()
         | _ ->
@@ -116,6 +116,52 @@ module _Extract =
                 |> fun m -> m - 1 
 
             let maxLevel = maxLevel
+
+            let applyDocumentFonts(infos: RenewableInfo list) =
+                let textInfos = 
+                    infos
+                    |> List.choose(RenewableInfo.asText)
+
+                infos
+                |> List.map(fun m ->
+                    match m with 
+                    | RenewableInfo.Text info ->
+                        let font = 
+                            match info.NewFont with 
+                            | Some newFont ->
+                                match newFont with 
+                                | FsPdfFontFactory.DocumentFont documentFont ->
+                                    let pdfFont = 
+                                        writer.FontsCache.GetOrAdd(newFont, valueFactory = fun _ ->
+                                            let finedTextInfo = 
+                                                textInfos
+                                                |> List.tryFind(fun m -> 
+                                                    match m.FontName with 
+                                                    | DocumentFontName.Valid fontName -> fontName = documentFont
+                                                    | DocumentFontName.Invalid  -> false
+                                                )
+
+                                            match finedTextInfo with 
+                                            | None -> failwithf "Cannot find documentFont %A in document" documentFont
+                                            | Some findedTextInfo -> writer.Renew_OtherDocument_Font(findedTextInfo.Font)
+                                        )
+
+                                    pdfFont
+                                | _ ->
+                                    writer.GetOrCreatePdfFont(newFont)
+
+                            | None -> writer.Renew_OtherDocument_Font(info.Font)
+
+                        { info with Font = font }
+                        |> RenewableInfo.Text
+
+                    | _ -> m
+                )
+
+            let infos =
+                infos
+                |> applyDocumentFonts
+
 
             let rec loop (writerCanvas: OffsetablePdfCanvas) (xobjectGsState: al1List<FsParserGraphicsStateValue> option) (level: int) (infos: RenewableInfo list) =
                 match level = maxLevel, xobjectGsState with 

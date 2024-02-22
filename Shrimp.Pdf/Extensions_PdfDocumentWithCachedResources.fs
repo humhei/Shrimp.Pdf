@@ -192,6 +192,10 @@ module PdfDocumentWithCachedResources =
             let doc = x.GetDocument() :?> PdfDocumentWithCachedResources
             doc.GetOrCreateColor(pdfCanvasColor)
 
+        member internal x.GetOrCreateFont(pdfFont) =
+            let doc = x.GetDocument() :?> PdfDocumentWithCachedResources
+            doc.GetOrCreatePdfFont(pdfFont)
+
         static member SetStrokeColor(strokeColor: NullablePdfCanvasColor) =
             fun (canvas: PdfCanvas) ->
                 match strokeColor with 

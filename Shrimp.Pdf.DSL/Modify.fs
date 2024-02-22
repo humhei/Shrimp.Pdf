@@ -1104,55 +1104,29 @@ type Modifier =
                 let text = ITextRenderInfo.getPdfConcatedText info
                 ModifierPdfCanvasActions.CreateCloseOperator(args.Tag, text = text)
 
+
+
     static member SetFontAndSize(font, size: float, ?alignment: XEffort) : Modifier<'userState> =
         fun (args: _SelectionModifierFixmentArguments<'userState>) ->
-            let alignment = defaultArg alignment XEffort.Left
+            
             match args.Tag with 
             | IntegratedRenderInfoTag.Path ->
                 ModifierPdfCanvasActions.Keep(args.Tag)
 
             | IntegratedRenderInfoTag.Text ->
                 let info = args.CurrentRenderInfo :?> IntegratedTextRenderInfo
-                let transformedFontSize = ITextRenderInfo.toTransformedFontSize size info 
-                let text = ITextRenderInfo.getPdfConcatedText info
-                let difference() =
-                    let originWidth = ITextRenderInfo.getWidth info
-                    let newWidth =
-                        text.SplitByLine()
-                        |> List.map(fun text ->
-                            let widthUnits = 
-                                let text = text.ConcatedText()
-                                PdfFont.calcLineWidthUnits text font
-                            List.max widthUnits * size
-                        )
-                        |> List.max
-
-                    newWidth - originWidth
-
-                let originTransform() = 
-                    info.TextRenderInfo.GetTextMatrix()
-                    |> AffineTransform.ofMatrix
+                let info = IntegratedTextRenderInfo2(info) :> ISABTextRenderInfo
+                let text = info.PdfConcatedWord()
+                let r = info.TransformedTextMatrixAndRawSize(text, font, size, ?alignment = alignment)
 
                 { Actions =
                     [
-                        match alignment with 
-                        | XEffort.Left -> ()
-                        | XEffort.Middle ->
-                            let offset = -(difference() / 2.) * transformedFontSize / size
-                            let transform = originTransform()
-                            transform.Translate(offset, 0.)
-                            PdfCanvas.setTextMatrixByTransform(AffineTransformRecord.ofAffineTransform transform)
-
-                        | XEffort.Right ->
-                            let offset = difference()
-                            let transform = 
-                                { AffineTransformRecord.DefaultValue with 
-                                    TranslateX = offset }
+                        match r.TextTransform with 
+                        | None -> ()
+                        | Some transform ->
                             PdfCanvas.setTextMatrixByTransform(transform)
 
-
-
-                        PdfCanvas.setFontAndSize(font, float32 transformedFontSize)
+                        PdfCanvas.setFontAndSize(font, float32 r.TransformedFontSize)
                         //PdfCanvas.writeOperatorRange args.Close
                     ]
                     
@@ -1924,9 +1898,6 @@ module ModifyOperators =
             modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList, ops)
 
 
-type  FontAndSizeInfoCommon =
-    { GetConcatedText: string option -> string
-      }
 
 type FontAndSizeQuery [<JsonConstructor>] (?fontNames, ?fontSize, ?fillColor, ?info_BoundIs_Args, ?textPattern, ?wordSep) =
     inherit POCOBaseEquatable<option<string list> * float option * FsColor option * Info_BoundIs_Args option * TextSelectorOrTransformExpr option * string option>(fontNames, fontSize, fillColor, info_BoundIs_Args, textPattern, wordSep)
@@ -2125,47 +2096,50 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontNames, ?fontSize, ?fillColor, ?i
         | None -> true
 
 
+    member x.PredicateSABTextInfo(textInfo: ISABTextRenderInfo) =
+        match textPattern with 
+        | Some textPattern -> 
+            let text = textInfo.ConcatedText(?wordSep = wordSep)
+            textPattern.Predicate text
+        | None -> true
+        &&
+        match fontNamesQuery, fontSize with 
+        | Some fontNames, Some fontSize -> 
+            fontNames.AsList
+            |> List.exists(fun fontName ->
+                textInfo.FontNameAndSizeIs(fontName, fontSize)
+            )
+        | Some fontNames, None -> 
+            fontNames.AsList
+            |> List.exists(fun fontName ->
+                textInfo.FontNameIs(fontName)
+            )
+
+        | None, Some fontSize -> textInfo.FontSizeIs(fontSize)
+        | None, None -> true 
+        && (match fillColor with 
+              | Some fillColor -> 
+                 match textInfo.GetFillColor() with 
+                 | None -> false
+                 | Some fillColor' -> FsColor.equal (fillColor) fillColor'
+              | None -> true
+           )
+        &&
+        match info_BoundIs_Args with 
+        | Some args2 ->
+            let args2 = args2
+            let denseBound = textInfo.GetDenseBound(args2.BoundGettingStrokeOptions)
+            match args2.AreaGettingOptions with 
+            | AreaGettingOptions.FsSpecfic rect ->
+                denseBound.IsRelativeTo(args2.RelativePosition, rect.AsRectangle)
+
+            | _ -> failwithf "FontAndSizeQuery: Not supported Area getting options %A" args2.AreaGettingOptions
+        | None -> true
 
     member x.AsSelector() = 
         Selector.Text(fun args textInfo ->
-            match textPattern with 
-            | Some textPattern -> 
-                let text = ITextRenderInfo.getConcatedText wordSep textInfo
-                textPattern.Predicate text
-            | None -> true
-            &&
-            match fontNamesQuery, fontSize with 
-            | Some fontNames, Some fontSize -> 
-                fontNames.AsList
-                |> List.exists(fun fontName ->
-                    TextInfo.FontNameAndSizeIs(fontName, fontSize) args textInfo
-                )
-            | Some fontNames, None -> 
-                fontNames.AsList
-                |> List.exists(fun fontName ->
-                    TextInfo.FontNameIs(fontName) args textInfo
-                )
-
-            | None, Some fontSize -> TextInfo.FontSizeIs(fontSize) args textInfo
-            | None, None -> true 
-            && ( match fillColor with 
-                  | Some fillColor -> 
-                     let fillColor' = textInfo.TextRenderInfo.GetFillColor() |> FsColor.OfItextColor
-                     FsColor.equal (fillColor) fillColor'
-                  | None -> true
-               )
-            &&
-            match info_BoundIs_Args with 
-            | Some args2 ->
-                let args2 = args2
-                Info.DenseBoundIs(
-                    args2.RelativePosition,
-                    args2.AreaGettingOptions,
-                    args2.BoundGettingStrokeOptions
-                ) args textInfo
-
-            | None -> true
-
+            let info = IntegratedTextRenderInfo2(textInfo)
+            x.PredicateSABTextInfo(info)
         )
 
 [<RequireQualifiedAccess>]
@@ -2174,6 +2148,16 @@ type FontAndSizeQueryUnion =
     | AND of FontAndSizeQueryUnion list
     | OR of FontAndSizeQueryUnion list
 with 
+    member x.PredicateSABTextInfo(info: ISABTextRenderInfo) =
+        match x with 
+        | FontAndSizeQueryUnion.Value v -> v.PredicateSABTextInfo(info)
+        | FontAndSizeQueryUnion.AND vs ->
+            vs
+            |> List.forall(fun v -> v.PredicateSABTextInfo(info))
+        | FontAndSizeQueryUnion.OR vs ->
+            vs
+            |> List.exists(fun v -> v.PredicateSABTextInfo(info))
+
     member x.AsSelector() =
         match x with 
         | FontAndSizeQueryUnion.Value v -> v.AsSelector()

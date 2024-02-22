@@ -108,6 +108,20 @@ with
                 | ContainsBy [f; F; ``f*``] -> n
                 | _ -> failwithf "Unexcepted operator %s" operatorName
 
+        | CloseOperator.Close, CloseOperator.Close -> n
+        | CloseOperator.Close, CloseOperator.Open -> 
+            match operator with 
+            | EQ b -> s
+            | EQ B -> S
+            | EQ ``b*`` -> s
+            | EQ ``B*`` -> S
+            | operatorName -> 
+                match operatorName with 
+                | ContainsBy [s; S] -> operatorName
+                | ContainsBy [f; ``f*``] -> s
+                | EQ F -> S
+                | _ -> failwithf "Unexcepted operator %s" operatorName
+
         | CloseOperator.Open, CloseOperator.Keep ->
             match operator with 
             | EQ s -> b
@@ -116,6 +130,19 @@ with
                 match operatorName with 
                 | ContainsBy [b; B; ``B*``;``b*``] 
                 | ContainsBy [f; F; ``f*``] -> operatorName
+                | _ -> failwithf "Unexcepted operator %s" operatorName
+
+        | CloseOperator.Open, CloseOperator.Close ->
+            match operator with 
+            | EQ b -> f
+            | EQ B -> F
+            | EQ ``b*`` -> ``f*``
+            | EQ ``B*`` -> F
+            | operatorName -> 
+                match operatorName with 
+                | ContainsBy [f; F; ``f*``]  -> operatorName
+                | EQ s -> f
+                | EQ S -> F
                 | _ -> failwithf "Unexcepted operator %s" operatorName
 
         | CloseOperator.Open, CloseOperator.Open -> 
@@ -128,7 +155,6 @@ with
             | ContainsBy [s; n] -> b
             | _ -> failwithf "Unexcepted operator %s" operator
 
-        | CloseOperator.Close, CloseOperator.Close -> n
             
             
 type TextCloseOperator =
@@ -175,6 +201,10 @@ with
                 | TextRenderingMode.INVISIBLE -> TextRenderingMode.INVISIBLE
                 | _ -> failwith "Invalid token"
 
+            | CloseOperator.Close, CloseOperator.Close -> TextRenderingMode.INVISIBLE
+            | CloseOperator.Close, CloseOperator.Open -> TextRenderingMode.STROKE
+
+            | CloseOperator.Open, CloseOperator.Close -> TextRenderingMode.FILL
             | CloseOperator.Open, CloseOperator.Keep ->
                 match textRenderingMode with 
                 | PdfCanvasConstants.TextRenderingMode.FILL_STROKE -> TextRenderingMode.FILL_STROKE
@@ -184,7 +214,6 @@ with
                 | _ -> failwith "Invalid token"
 
             | CloseOperator.Open, CloseOperator.Open -> TextRenderingMode.FILL_STROKE
-            | CloseOperator.Close, CloseOperator.Close -> TextRenderingMode.INVISIBLE
                 
         | _ -> 
             PdfLogger.unSupportedTextRenderMode textRenderingMode
@@ -884,9 +913,9 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                             | CloseOperatorUnion.Image close ->
                                 let name = operatorRange.Operands.[0] :?> PdfName
                                 match close with 
-                                | ImageCloseOperator.Remove _ 
-                                | ImageCloseOperator.New _  -> resources.AddRemovableXObjectName(name)
-                                | ImageCloseOperator.Keep _ -> resources.AddKeepingXObjectName(name)
+                                | ImageCloseOperator.Remove 
+                                | ImageCloseOperator.New _   -> resources.AddRemovableXObjectName(name)
+                                | ImageCloseOperator.Keep -> resources.AddKeepingXObjectName(name)
 
                             | _ -> failwith "Invalid token"
 

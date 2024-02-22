@@ -1,12 +1,15 @@
 ﻿module SlimFlowTests
 open Expecto
 open Shrimp.Pdf
+open Shrimp.Pdf.FontNames
+open Shrimp.Pdf.FontNames.Query
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.Colors
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.Extract
 open Shrimp.Pdf.SlimFlow
 open Shrimp.FSharp.Plus
+open Shrimp.Pdf.RegisterableFonts.YaHei
 
 
 
@@ -307,7 +310,7 @@ let manipulatesTests =
 
         pass()
 
-    ftestCase "add background test5" <| fun _ ->
+    testCase "add background test5" <| fun _ ->
         let flow =
             Flow.Reuse ( 
                 Reuses.SlimFlows(
@@ -376,7 +379,58 @@ let manipulatesTests =
 
         pass()
 
-    ftestCase "compose flow test" <| fun _ ->
+    testCase "map arial to arial_bold" <| fun _ -> 
+        let flow =
+            Flow.Reuse (
+                Reuses.SlimFlows(
+                    PageSelector.All,
+                    slimFlow = ( 
+                        SlimModifyPage.MapInfos(fun args infos ->
+                            infos
+                                .MapText("MapFont", [], fun info ->
+                                    info
+                                        .MapFontAndSize(
+                                            FontAndSizeQuery([ArialMT], 12.),
+                                            NewFontAndSize(FsPdfFontFactory.Registerable(yaHei FontWeight.Regular), 12.)
+                                        )
+                                )
+                        )
+                    )
+                )    
+            )   
+
+        flow
+        |> runTest "datas/slimFlow/map arial to arial_bold.pdf" 
+        |> ignore
+
+    testCase "map font for horizontal line" <| fun _ -> 
+        let flow =
+            Flow.Reuse (
+                Reuses.SlimFlows(
+                    PageSelector.All,
+                    slimFlow = ( 
+                        SlimModifyPage.MapInfos(fun args infos ->
+                            infos
+                                .MapWord("MapFont", [], fun info ->
+                                    info
+                                        .SplitTextToWords(
+                                            FontAndSizeQuery(textPattern = TextSelectorOrTransformExpr.Selector (TextSelector.Contains ("30")))
+                                        )
+                                        .MapFontAndSize(
+                                            FontAndSizeQuery(textPattern = TextSelectorOrTransformExpr.Selector (TextSelector.EqualTo ("30"))),
+                                            NewFontAndSize(FsPdfFontFactory.CreateDocumentFont(FontNames.``Tahoma-Bold``), fontSize = 12., alignment = XEffort.Left)
+                                        )
+                                )
+                        )
+                    )
+                )    
+            )   
+
+        flow
+        |> runTest "datas/slimFlow/map font for horizontal line.pdf" 
+        |> ignore
+
+    testCase "compose flow test" <| fun _ ->
         let flow =
             Flow.Reuse (
                 Reuses.SlimFlows(

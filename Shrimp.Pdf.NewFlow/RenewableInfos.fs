@@ -10,6 +10,7 @@ open iText.Kernel.Geom
 
 
 
+
 type RenewableInfos = 
     { Infos: RenewableInfo list 
       LazyCuttingDieBound0: Rectangle option
@@ -78,6 +79,15 @@ with
                 m.MapText f
             )
         )
+
+    member x.MapWord(name, parameters, f) =
+        x.MapInfos(name, parameters, fun infos ->
+            infos
+            |> List.collect(fun m ->
+                m.MapWord f
+            )
+        )
+
 
     member x.MapImage(name, parameters, f) =
         x.MapInfos(name, parameters, fun infos ->

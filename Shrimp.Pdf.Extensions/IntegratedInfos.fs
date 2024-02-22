@@ -324,6 +324,10 @@ module IntegratedInfos =
           Bound: FsRectangle }
 
 
+    type LazyVisibleBound0_Backup =
+        { Rectangle: Rectangle 
+          OffsetX: float 
+          OffsetY: float }
 
     [<Struct>]
     type IntegratedPathRenderInfo =
@@ -332,7 +336,7 @@ module IntegratedInfos =
           AccumulatedPathOperatorRanges: seq<OperatorRange>
           GsStates: InfoGsStateLists
           ContainerID: InfoContainerID list
-          LazyVisibleBound0_Backup: Rectangle option
+          LazyVisibleBound0_Backup: LazyVisibleBound0_Backup option
           LazyVisibleBound0: Rectangle option
           PageBox: Rectangle
         }
@@ -409,40 +413,75 @@ module IntegratedInfos =
           OperatorRange: OperatorRange option
           GsStates: InfoGsStateLists
           ContainerID: InfoContainerID list
-          LazyVisibleBound0_Backup: Rectangle option
+          LazyVisibleBound0_Backup: LazyVisibleBound0_Backup option
           LazyVisibleBound0: Rectangle option
           PageBox: Rectangle
           }
 
     with 
-        
-
         member x.SplitToWords() =
             let gsStates = x.GsStates
             let containderID = x.ContainerID
+            let pageBox = x.PageBox
             let lazyVisibleBound = x.LazyVisibleBound0
             let lazyVisibleBound_backup = x.LazyVisibleBound0_Backup
-            let pageBox = x.PageBox
 
             match x.EndTextState with 
             | EndTextState.No
             | EndTextState.Undified -> [x]
             | EndTextState.Yes ->
                 let clippingPathInfos = x.ClippingPathInfos
-                x.ConcatedTextInfo.AsList
-                |> List.map(fun textInfo ->
-                    {   
-                        TextRenderInfo = textInfo
-                        EndTextState = EndTextState.No
-                        OperatorRange = None
-                        ConcatedTextInfo = {HeadWordInfo = textInfo; FollowedWordInfos = []}
-                        ClippingPathInfos = clippingPathInfos
-                        GsStates = gsStates
-                        ContainerID = containderID
-                        LazyVisibleBound0 = lazyVisibleBound
-                        PageBox = pageBox
-                        LazyVisibleBound0_Backup = lazyVisibleBound_backup
-                    }
+
+
+                let infos = 
+                    x.ConcatedTextInfo.AsList
+                    |> List.map(fun textInfo ->
+                        {   
+                            TextRenderInfo = textInfo
+                            EndTextState = EndTextState.No
+                            OperatorRange = None
+                            ConcatedTextInfo = {HeadWordInfo = textInfo; FollowedWordInfos = []}
+                            ClippingPathInfos = clippingPathInfos
+                            GsStates = gsStates
+                            ContainerID = containderID
+                            LazyVisibleBound0 = None
+                            PageBox = pageBox
+                            LazyVisibleBound0_Backup = None
+                        }
+                    )
+
+                match lazyVisibleBound with 
+                | None -> infos
+                | Some lazyVisibleBound ->
+                    infos
+                    |> List.map(fun textInfo ->
+                        let newVisibleBound0 =      
+                            let bound =
+                                IIntegratedRenderInfo.tryGetVisibleBound BoundGettingStrokeOptions.WithoutStrokeWidth textInfo
+                            bound
+
+                        let lazyVisibleBound0_Backup =
+                            match lazyVisibleBound_backup with 
+                            | None -> None
+                            | Some lazyVisibleBound_backup ->
+                                match newVisibleBound0 with 
+                                | Some visibleBound ->  
+                                    let rect = 
+                                        visibleBound.MapCoordinate(fun point ->
+                                            { X = point.X + lazyVisibleBound_backup.OffsetX
+                                              Y = point.Y + lazyVisibleBound_backup.OffsetY
+                                        })
+
+                                    { lazyVisibleBound_backup with Rectangle = rect }
+                                    |> Some
+
+                                | None -> failwithf "Invalid token, lazyVisibleBound_backup should be defined as visbleBound0 was setted"
+                          
+                        { textInfo with 
+                            LazyVisibleBound0 = newVisibleBound0
+                            LazyVisibleBound0_Backup = lazyVisibleBound0_Backup
+                        }
+
                 )
 
         /// Revealed ExtGState
@@ -594,7 +633,7 @@ module IntegratedInfos =
           LazyColorSpace: Lazy<ImageColorSpaceData option> 
           GsStates: InfoGsStateLists
           ContainerID: InfoContainerID list
-          LazyVisibleBound_Backup: Rectangle option
+          LazyVisibleBound_Backup: LazyVisibleBound0_Backup option
           LazyVisibleBound: Rectangle option
           PageBox: Rectangle
         }

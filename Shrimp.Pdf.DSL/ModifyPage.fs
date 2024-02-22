@@ -98,6 +98,46 @@ with
           Length = mm 6 
           LTRB = EdgeCropMarkLTRB.All }
 
+
+type SABPageModifier =
+    static member PickLine(picker: PdfConcatedLine -> _ option, ?selectionGrouper: SelectionGrouper) : SABPageModifier<_, _> =
+        let selectionGrouper = defaultArg selectionGrouper SelectionGrouper.DefaultValue
+
+        fun (args: PageModifingArguments<_>) infos ->
+            let infos = 
+                infos
+                |> List.ofSeq
+                |> List.choose ISABRenderInfo.asText
+                |> List.map(fun m -> m, m.GetBound(BoundGettingStrokeOptions.WithoutStrokeWidth))
+                |> List.distinctBy_explictly<_, _>(fun (m, bound) ->
+                    Rectangle.equalableValue bound
+                )
+
+            let infos = 
+                infos
+                |> selectionGrouper.GroupBy_Bottom(snd) 
+
+            infos
+            |> Seq.choose(fun (_, infos) ->
+                let text = 
+                    infos
+                    |> List.ofSeq
+                    |> List.map fst
+                    |> List.map (fun m -> m.PdfConcatedWord())
+                    |> PdfConcatedLine
+                picker text
+            )
+            |> List.ofSeq
+
+[<RequireQualifiedAccess>]
+module SABPageModifier =
+    let toPageModifier (f: SABPageModifier<_, _>) =
+        fun args (infos: seq<IIntegratedRenderInfo>) ->
+            let infos = infos |> Seq.map (ISABRenderInfo.ofIIntegratedRenderInfo)
+            f args infos
+
+
+
 type PageModifier =
 
     static member AddNew (canvasAreaOptions, canvasActionsBuilder) : PageModifier<_, _> =
@@ -194,35 +234,11 @@ type PageModifier =
             )
         )
 
+        
 
     static member PickLine(picker: PdfConcatedLine -> _ option, ?selectionGrouper: SelectionGrouper) : PageModifier<_, _> =
-        let selectionGrouper = defaultArg selectionGrouper SelectionGrouper.DefaultValue
-
-        fun (args: PageModifingArguments<_>) infos ->
-            let infos = 
-                infos
-                |> List.ofSeq
-                |> List.choose IIntegratedRenderInfo.asITextRenderInfo
-                |> List.map(fun m -> m, IAbstractRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth m)
-                |> List.distinctBy_explictly<_, _>(fun (m, bound) ->
-                    Rectangle.equalableValue bound
-                )
-
-            let infos = 
-                infos
-                |> selectionGrouper.GroupBy_Bottom(snd) 
-
-            infos
-            |> Seq.choose(fun (_, infos) ->
-                let text = 
-                    infos
-                    |> List.ofSeq
-                    |> List.map fst
-                    |> List.map (ITextRenderInfo.getPdfConcatedText)
-                    |> PdfConcatedLine
-                picker text
-            )
-            |> List.ofSeq
+        SABPageModifier.PickLine(picker, ?selectionGrouper = selectionGrouper)
+        |> SABPageModifier.toPageModifier
 
     static member SetPageBox(pageBoxKind: PageBoxKind, rect: Rectangle) : PageModifier<_, _> =
         fun (args: PageModifingArguments<_>) infos ->
