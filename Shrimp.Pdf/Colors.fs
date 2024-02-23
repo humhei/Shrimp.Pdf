@@ -131,9 +131,8 @@ module _Colors =
 
 
     let private whitePoint = 
-        lazy 
-            config.Value.GetFloatList("shrimp.pdf.colors.labWhitePoint")
-            |> Array.ofSeq
+        config.GetFloatList("shrimp.pdf.colors.labWhitePoint")
+        |> Array.ofSeq
 
     /// valueRange: Black 0 -> White 1
     type FsGray = FsGray of float32
@@ -362,7 +361,7 @@ module _Colors =
 
             | None -> 
                 new Lab(
-                    whitePoint.Value,
+                    whitePoint,
                     null,
                     [| -128.f; 127.f; -128.f; 127.f |], 
                     [| x.L; x.a; x.b |]) :> Color
@@ -1886,7 +1885,10 @@ module _Colors =
         //        | _ -> failwithf "Cannot compare diffrent type %A" (x.GetType(), y.GetType())
 
 
-
+    [<RequireQualifiedAccess>]
+    type NullableFsColor =
+        | N 
+        | FsColor of FsColor
 
     type FsSeparation with 
         member x.IsEqualTo(color, valueEqualOptions) =
@@ -2364,6 +2366,7 @@ module _Colors =
         | ColorCard of ColorCard
         | Registration
     with 
+            
 
         static member OfPdfCanvasColor color =
             match color with 
@@ -2412,10 +2415,15 @@ module _Colors =
 
 
     type NullablePdfCanvasColor with 
-        member x.ToFsColor() =
+        //member x.ToFsColor() =
+        //    match x with 
+        //    | NullablePdfCanvasColor.Non -> None
+        //    | NullablePdfCanvasColor.PdfCanvasColor v -> Some (v.ToFsColor())
+
+        member x.ToNullableFsColor() =
             match x with 
-            | NullablePdfCanvasColor.Non -> None
-            | NullablePdfCanvasColor.PdfCanvasColor v -> Some (v.ToFsColor())
+            | NullablePdfCanvasColor.Non -> NullableFsColor.N
+            | NullablePdfCanvasColor.PdfCanvasColor v -> NullableFsColor.FsColor <| v.ToFsColor()
 
         member x.LoggingText =
             match x with 

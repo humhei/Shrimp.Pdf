@@ -1,11 +1,13 @@
 ﻿namespace Shrimp.Pdf.Image
 
 open iText.Kernel.Pdf
+open icms2_wrapper
 
 #nowarn "0104"
 open Shrimp.Pdf.DSL
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf
+open Shrimp.Pdf.icms2.CmsCore
 open System.IO
 open iText.Kernel.Pdf.Xobject
 open Shrimp.Pdf.Parser
@@ -91,7 +93,7 @@ module _ModifierIM =
                         b
 
 
-    let private client  = lazy GetDefaultClusterIcm2Client()
+    //let private client  = lazy GetDefaultClusterIcm2Client()
 
     [<RequireQualifiedAccess>]
     module BitmapColorValues =
@@ -166,7 +168,7 @@ module _ModifierIM =
               PageModifingArguments = args.PageModifingArguments }
 
     let private cache = 
-        new ConcurrentDictionary<PdfImageXObject * Icc option * Icc * Intent , ImageDataOrImageXObject option>()
+        new ConcurrentDictionary<PdfImageXObject * Icc option * Icc * Indent , ImageDataOrImageXObject option>()
 
 
     type ModifierIM =
@@ -183,7 +185,7 @@ module _ModifierIM =
                     match imageRenderInfo.ImageColorSpaceData with 
                     | ImageColorSpaceData.Indexable indexableColorSpace ->
                         let newImageData = 
-                            cache.GetOrAdd(key, fun _ ->
+                            cache.GetOrAdd(key, valueFactory = fun _ ->
                                     let colorSpace = indexableColorSpace.ColorSpace
                                     let inputIcc = 
                                         match inputIcc with 
@@ -257,14 +259,12 @@ module _ModifierIM =
                                                     int <| imageData.GetHeight())
 
                                             let newArrayRawFile: RawFile = 
-                                                client.Value <? 
-                                                    ServerMsg.ConvertImageColorSpace (
+                                                FsIcmsTransformer.ConvertImageColorSpace (
                                                         inputIcc,
                                                         IndexableBitmapColorValuesStorage.Express(size, r),
                                                         outputIcc,
                                                         intent
-                                                    )
-                                                |> Async.RunSynchronously
+                                                )
 
                                             let bytes = File.ReadAllBytes newArrayRawFile.Path
 
@@ -307,14 +307,12 @@ module _ModifierIM =
                                                     let storage, imageData = imageRenderInfo.SaveToTmpColorValuesStorage(indexableColorSpace)
                                                     let size = storage.Size
                                                     let newArrayRawFile: RawFile = 
-                                                        client.Value <? 
-                                                            ServerMsg.ConvertImageColorSpace (
+                                                        FsIcmsTransformer.ConvertImageColorSpace (
                                                                 inputIcc,
                                                                 storage,
                                                                 outputIcc,
                                                                 intent
                                                             )
-                                                        |> Async.RunSynchronously
 
                                                     let bytes = File.ReadAllBytes newArrayRawFile.Path
 
@@ -376,7 +374,7 @@ module _ModifierIM =
 
 
         static member ConvertImageToGray() =
-            ModifierIM.ConvertImageColorSpace(None, Icc.Gray defaultGrayIcc.Value, defaultIntent.Value)
+            ModifierIM.ConvertImageColorSpace(None, Icc.Gray defaultGrayIcc, defaultIntent)
 
 
         static member ConvertAllObjectsToDeviceGray() =
@@ -388,7 +386,7 @@ module _ModifierIM =
                 | IIntegratedRenderInfoIM.Vector renderInfo ->
                     //ModifierPdfCanvasActions.Keep(renderInfo.Tag)
                     let args = SelectionModifierFixmentArguments.OfIM(args, renderInfo) 
-                    Modifier.ConvertColorsTo(Icc.Gray defaultGrayIcc.Value) args
+                    Modifier.ConvertColorsTo(Icc.Gray defaultGrayIcc) args
 
             
         static member AddImageBorder(?fArgs): ModifierIM<'userState> =

@@ -242,11 +242,14 @@ let manipulatesTests =
                 Reuses.SlimFlows(
                     PageSelector.All,
                     slimFlow = 
-                        SlimModifyPage.AddBackgroundOrForeground(
-                            BackgroundFile.Create(@"datas/slimFlow/add background2.bk.pdf"),
-                            layerName = BackgroundAddingLayerOptions.Create("current", "background"),
-                            refOptions = SlimBackgroundRefOptions.XObject_Simply
+                        SlimModifyPage.InPage(PageSelector.Numbers [1; 2], 
+                            SlimModifyPage.AddBackgroundOrForeground(
+                                BackgroundFile.Create(@"datas/slimFlow/add background2.bk.pdf"),
+                                layerName = BackgroundAddingLayerOptions.Create("current", "background"),
+                                refOptions = SlimBackgroundRefOptions.XObject_Simply
+                            )
                         )
+
                 )  
             )  
 
@@ -428,6 +431,50 @@ let manipulatesTests =
 
         flow
         |> runTest "datas/slimFlow/map font for horizontal line.pdf" 
+        |> ignore
+
+    testCase "expandStrokeWidth" <| fun _ -> 
+        let flow =
+            Flow.Reuse (
+                Reuses.SlimFlows(
+                    PageSelector.All,
+                    slimFlow = ( 
+                        SlimModifyPage.MapInfos(fun args infos ->
+                            infos   
+                                .SetColor()
+                                .MapVector("ExpandStrokeWidth", [], fun info ->
+                                    info.ExpandStrokeWidth(
+                                        [FsColor.CMYK_BLACK; FsColor.BLACK],
+                                        mmZ 0.8,
+                                        PdfCanvasColor.valueColor FsDeviceCmyk.MAGENTA)
+                                )
+                        )
+                    )
+                )    
+            )   
+
+        flow
+        |> runTest "datas/slimFlow/expand black stroke.pdf" 
+        |> ignore
+
+    ftestCase "black or white inversed" <| fun _ -> 
+        let flow =
+            Flow.Reuse (
+                Reuses.SlimFlows(
+                    PageSelector.All,
+                    slimFlow = ( 
+                        SlimModifyPage.MapInfos(fun args infos ->
+                            infos   
+                                .SetColor()
+                        )
+                        <+>
+                        SlimModifyPage.BlackOrWhite_Negative_Film(strokeWidthIncrement = StrokeWidthIncrement.Create (mm 0.3))
+                    )
+                )    
+            )   
+
+        flow
+        |> runTest "datas/slimFlow/black or white inversed.pdf" 
         |> ignore
 
     testCase "compose flow test" <| fun _ ->

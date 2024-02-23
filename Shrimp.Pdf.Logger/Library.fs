@@ -12,39 +12,38 @@ type PdfLoggerLevel =
 [<RequireQualifiedAccess>]
 module PdfLogger =
 
-    let private logger: Lazy<NLog.Logger> = 
-        lazy (NLog.LogManager.GetCurrentClassLogger())
+    let private logger: NLog.Logger = 
+        (NLog.LogManager.GetCurrentClassLogger())
       
     let private configuration =
-        lazy
-            match NLog.LogManager.Configuration with 
-            | null -> None
-            | config -> Some config
+        match NLog.LogManager.Configuration with 
+        | null -> None
+        | config -> Some config
 
     let warning (message: string) =
-        match configuration.Value with 
+        match configuration with 
         | Some (_) -> 
-            logger.Value.Warn message
+            logger.Warn message
         | None -> printfn "WARNING: %s" message
 
     let error (message: string) =
-        match configuration.Value with 
+        match configuration with 
         | Some (_) -> 
-            logger.Value.Error message
+            logger.Error message
         | None -> printfn "ERROR: %s" message
 
     let info (message: string) =
         
-        match configuration.Value with 
+        match configuration with 
         | Some (_) -> 
-            logger.Value.Info message
+            logger.Info message
         | None -> printfn "%s" message
 
     let info_alwaysPrintingInConsole (message: string) =
         
-        match configuration.Value with 
+        match configuration with 
         | Some (_) -> 
-            logger.Value.Info message
+            logger.Info message
             printfn "%s" message
 
         | None -> printfn "%s" message

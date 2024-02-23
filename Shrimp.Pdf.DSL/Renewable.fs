@@ -18,8 +18,6 @@ open iText.Kernel.Pdf.Canvas.Parser.Data
 
 [<AutoOpen>]
 module _Renewable =
-    
-
 
     type private RenewablePathInfoCommon = 
         { AccumulatedPathOperatorRanges: seq<OperatorRange>
@@ -250,12 +248,7 @@ module _Renewable =
         
 
 
-    type RenewablePathInfoTag =
-        | Normal = 0
-        | CuttingDie = 1
-        | CuttingDieDashLine = 3
-        | PossibleTagInfo = 4
-        | TagInfo = 5
+
 
     [<RequireQualifiedAccess>]
     type RenewableModifableColor =  
@@ -412,7 +405,7 @@ module _Renewable =
           OriginInfo: IntegratedPathRenderInfo
           LazyFillColor_Modifiable: RenewableModifableColor option
           LazyStrokeColor_Modifiable: RenewableModifableColor option
-          Tag: RenewablePathInfoTag
+          Tag: RenewableInfoTag
           LazyVisibleBound1: Rectangle option
         }
     with 
@@ -428,23 +421,72 @@ module _Renewable =
             | Some bound -> bound 
             | None -> failwithf "LazyVisibleBound0 is None"
 
-        member x.MapColor(f) =
-            { x with 
-                LazyFillColor_Modifiable = 
-                    match x.LazyFillColor with 
-                    | Some color -> 
-                        f color
-                        |> Option.map RenewableModifableColor.Modified
-                    | None -> None
+        member x.MapColor(f, ?fillOrStrokeOptions: FillOrStrokeModifingOptions) =
+            let fillOrStrokeOptions = defaultArg fillOrStrokeOptions FillOrStrokeModifingOptions.FillAndStroke
+            let mutable closeFill = false
+            let mutable closeStroke = false
 
-                LazyStrokeColor_Modifiable = 
-                    match x.LazyStrokeColor with 
-                    | Some color -> 
-                        f color
-                        |> Option.map RenewableModifableColor.Modified
+            let x = 
+                { x with 
+                    LazyFillColor_Modifiable = 
+                        match fillOrStrokeOptions with 
+                        | FillOrStrokeModifingOptions.Fill
+                        | FillOrStrokeModifingOptions.FillAndStroke ->
+                            match x.LazyFillColor with 
+                            | Some color -> 
+                                f color
+                                |> Option.bind (function
+                                    | NullableFsColor.N -> 
+                                        closeFill <- true
+                                        None
+                                    | NullableFsColor.FsColor color -> Some color
+                                )
+                                |> Option.map RenewableModifableColor.Modified
+                            | None -> None
 
-                    | None -> None
-            }
+                        | FillOrStrokeModifingOptions.Stroke -> x.LazyFillColor_Modifiable
+
+                    LazyStrokeColor_Modifiable = 
+                        match fillOrStrokeOptions with 
+                        | FillOrStrokeModifingOptions.Stroke
+                        | FillOrStrokeModifingOptions.FillAndStroke ->
+                            match x.LazyStrokeColor with 
+                            | Some color -> 
+                                f color
+                                |> Option.bind (function
+                                    | NullableFsColor.N -> 
+                                        closeStroke <- true
+                                        None
+                                    | NullableFsColor.FsColor color -> Some color
+                                )
+                                |> Option.map RenewableModifableColor.Modified
+
+                            | None -> None
+
+                        | FillOrStrokeModifingOptions.Fill -> x.LazyStrokeColor_Modifiable
+                }
+
+            match closeStroke, closeFill with 
+            | false, false -> x
+            | true, false -> 
+                let textRenderingMode = 
+                    StrokeStyle.ApplyPathOperation_CloseStroke x.Operation
+
+                { x with Operation = textRenderingMode }
+
+            | false, true ->
+                let textRenderingMode = 
+                    FillStyle.ApplyPathOperation_CloseFill x.Operation
+
+                { x with Operation = textRenderingMode }
+                
+            | true, true ->
+                let textRenderingMode = 
+                    x.Operation
+                    |> FillStyle.ApplyPathOperation_CloseFill 
+                    |> StrokeStyle.ApplyPathOperation_CloseStroke
+
+                { x with Operation = textRenderingMode }
 
         member x.UpdateVisibleBoundWithStrokeWidth() =
             let bound = 
@@ -484,154 +526,63 @@ module _Renewable =
             { x with Operation = PathRenderInfo.NO_OP }
 
         member x.IsCuttingDie = 
-            x.Tag = RenewablePathInfoTag.CuttingDie
+            x.Tag = RenewableInfoTag.CuttingDie
 
         member x.IsPossibleTagInfo =
-            x.Tag = RenewablePathInfoTag.PossibleTagInfo
-            || x.Tag = RenewablePathInfoTag.TagInfo
+            x.Tag = RenewableInfoTag.PossibleTagInfo
+            || x.Tag = RenewableInfoTag.TagInfo
+
+        member x.IsClosed = x.LazyFillColor_Modifiable.IsNone && x.LazyStrokeColor_Modifiable.IsNone
 
         member x.ApplyStrokeStyle(strokeStyle: StrokeStyle) =
             let x = 
                 { x with 
-                    LineShapingStyle = 
-                        { CapStyle = strokeStyle.CapStyle |> Option.defaultValue x.LineShapingStyle.CapStyle
-                          JoinStyle = strokeStyle.LineJoinStyle |> Option.defaultValue x.LineShapingStyle.JoinStyle
-                          DashPattern = strokeStyle.DashPattern |> Option.defaultValue x.LineShapingStyle.DashPattern
-                          ActualLineWidth = 
-                            match strokeStyle.Width with 
-                            | None -> x.LineShapingStyle.ActualLineWidth
-                            | Some width -> 
-                                match x.LineShapingStyle.ActualLineWidth with 
-                                | ActualLineWidth.Exactly (raw, scale) ->
-                                    ActualLineWidth.Exactly(width.Value / scale, scale)
-                            
-                                | ActualLineWidth.Unbalance (raw, scaleX, scaleY) ->
-                                    let scale = max scaleX scaleY
-                                    ActualLineWidth.Exactly(width.Value / scale, scale)
-                        }
+                    LineShapingStyle = strokeStyle.ApplyToLineShapingStyle(x.LineShapingStyle)
                 }
 
-            match strokeStyle.ColorStyle with 
-            | None -> x
-            | Some colorStyle ->
-                { x with 
-                    Operation = 
-                        match colorStyle.NullablePdfCanvasColor with
-                        | Some (NullablePdfCanvasColor.N) ->
-                            match x.Operation with 
-                            | IPathRenderInfo.Operation.HasFill -> PathRenderInfo.FILL
-                            | IPathRenderInfo.Operation.NoFill -> PathRenderInfo.NO_OP
-
-                        | _ ->
-                            match colorStyle.CloseOperator with 
-                            | None -> x.Operation
-                            | Some closeOperator -> 
-                                match closeOperator with 
-                                | CloseOperator.Open ->
-                                    match x.Operation with 
-                                    | IPathRenderInfo.Operation.HasFill -> IPathRenderInfo.FILLANDSTROKE
-                                    | IPathRenderInfo.Operation.NoFill -> PathRenderInfo.STROKE
-
-                                | CloseOperator.Close ->
-                                    match x.Operation with 
-                                    | IPathRenderInfo.Operation.HasFill -> PathRenderInfo.FILL
-                                    | IPathRenderInfo.Operation.NoFill -> PathRenderInfo.NO_OP
-
-                                | CloseOperator.Keep -> x.Operation
-
-                    LazyStrokeColor_Modifiable =
-                        match colorStyle.NullablePdfCanvasColor with 
+            let operation = strokeStyle.ApplyToPathOperation(x.Operation)
+            { x with 
+                Operation = operation
+                LazyStrokeColor_Modifiable =
+                    match operation with 
+                    | IPathRenderInfo.Operation.NoStroke -> None
+                    | IPathRenderInfo.Operation.HasStroke ->
+                        
+                        match strokeStyle.NullablePdfCanvasColor with 
                         | None -> x.LazyStrokeColor_Modifiable
                         | Some color ->
                             match color with 
-                            | NullablePdfCanvasColor.Non -> x.LazyStrokeColor_Modifiable
+                            | NullablePdfCanvasColor.Non -> None
                             | NullablePdfCanvasColor.PdfCanvasColor color ->
                                 color.ToFsColor()
                                 |> RenewableModifableColor.Modified
                                 |> Some
 
+                GsStates = strokeStyle.ApplyToGsStates(x.GsStates)
+            }
 
-                    GsStates =
-                        match colorStyle.Opacity, colorStyle.Overprint with 
-                        | None, None -> x.GsStates
-                        | Some opacity, Some overprint ->
-                            x.GsStates.MapFsExtGsState(fun m ->
-                                m.SetStrokeOpactity(opacity).SetStrokeOverprint(overprint)
-                            )
-
-                        | Some opacity, None ->
-                            x.GsStates.MapFsExtGsState(fun m ->
-                                m.SetStrokeOpactity(opacity)
-
-                            )
-
-                        | None, Some overprint ->
-                            x.GsStates.MapFsExtGsState(fun m ->
-                                m.SetStrokeOverprint(overprint)
-                            )
-                }
 
 
         member x.ApplyFillStyle(fillStyle: FillStyle) =
-            match fillStyle.ColorStyle with 
-            | None -> x
-            | Some colorStyle ->
-                { x with 
-                    Operation = 
-                        match colorStyle.NullablePdfCanvasColor with
-                        | Some (NullablePdfCanvasColor.N) ->
-                            match x.Operation with 
-                            | IPathRenderInfo.Operation.HasStroke -> PathRenderInfo.STROKE
-                            | IPathRenderInfo.Operation.NoStroke -> PathRenderInfo.NO_OP
-
-                        | _ ->
-                            match colorStyle.CloseOperator with 
-                            | None -> x.Operation
-                            | Some closeOperator -> 
-                                match closeOperator with 
-                                | CloseOperator.Open ->
-                                    match x.Operation with 
-                                    | IPathRenderInfo.Operation.HasStroke -> IPathRenderInfo.FILLANDSTROKE
-                                    | IPathRenderInfo.Operation.NoStroke -> PathRenderInfo.FILL
-
-                                | CloseOperator.Close ->
-                                    match x.Operation with 
-                                    | IPathRenderInfo.Operation.HasStroke -> PathRenderInfo.STROKE
-                                    | IPathRenderInfo.Operation.NoStroke -> PathRenderInfo.NO_OP
-
-                                | CloseOperator.Keep -> x.Operation
-
-                    LazyFillColor_Modifiable =
-                        match colorStyle.NullablePdfCanvasColor with 
+            let operation = fillStyle.ApplyToPathOperation(x.Operation)
+            { x with 
+                Operation = operation
+                LazyFillColor_Modifiable =
+                    match operation with 
+                    | IPathRenderInfo.Operation.NoFill -> None
+                    | IPathRenderInfo.Operation.HasFill ->
+                        match fillStyle.NullablePdfCanvasColor with 
                         | None -> x.LazyFillColor_Modifiable
                         | Some color ->
                             match color with 
-                            | NullablePdfCanvasColor.Non -> x.LazyFillColor_Modifiable
+                            | NullablePdfCanvasColor.Non -> None
                             | NullablePdfCanvasColor.PdfCanvasColor color ->
                                 color.ToFsColor()
                                 |> RenewableModifableColor.Modified
                                 |> Some
 
-
-                    GsStates =
-                        match colorStyle.Opacity, colorStyle.Overprint with 
-                        | None, None -> x.GsStates
-                        | Some opacity, Some overprint ->
-                            x.GsStates.MapFsExtGsState(fun m ->
-                                m.SetFillOpactity(opacity).SetFillOverprint(overprint)
-                            )
-
-                        | Some opacity, None ->
-                            x.GsStates.MapFsExtGsState(fun m ->
-                                m.SetFillOpactity(opacity)
-
-                            )
-
-                        | None, Some overprint ->
-                            x.GsStates.MapFsExtGsState(fun m ->
-                                m.SetFillOverprint(overprint)
-                            )
-                }
+                GsStates = fillStyle.ApplyToGsStates(x.GsStates)
+            }
 
 
 
@@ -799,7 +750,7 @@ module _Renewable =
                 OriginInfo = x
                 LazyFillColor_Modifiable = None
                 LazyStrokeColor_Modifiable = None
-                Tag = RenewablePathInfoTag.Normal
+                Tag = RenewableInfoTag.Normal
                 LazyVisibleBound1 = None
             }
 
@@ -838,6 +789,56 @@ module _Renewable =
            NewFontAndSize: NewFontAndSize option
            }
      with 
+        member x.ApplyStrokeStyle(strokeStyle: StrokeStyle) =
+            let x = 
+                { x with 
+                    LineShapingStyle = strokeStyle.ApplyToLineShapingStyle(x.LineShapingStyle)
+                }
+
+            let textRenderingMode = strokeStyle.ApplyToTextRenderingMode(x.TextRenderingMode)
+            { x with 
+                TextRenderingMode = textRenderingMode
+                LazyStrokeColor_Modifiable =
+                    match textRenderingMode with 
+                    | TextRenderInfo.TextRenderingMode.NoStroke -> None
+                    | TextRenderInfo.TextRenderingMode.HasStroke ->
+                        
+                        match strokeStyle.NullablePdfCanvasColor with 
+                        | None -> x.LazyStrokeColor_Modifiable
+                        | Some color ->
+                            match color with 
+                            | NullablePdfCanvasColor.Non -> None
+                            | NullablePdfCanvasColor.PdfCanvasColor color ->
+                                color.ToFsColor()
+                                |> RenewableModifableColor.Modified
+                                |> Some
+
+                GsStates = strokeStyle.ApplyToGsStates(x.GsStates)
+            }
+
+        member x.IsClosed = x.LazyFillColor_Modifiable.IsNone && x.LazyStrokeColor_Modifiable.IsNone
+
+        member x.ApplyFillStyle(fillStyle: FillStyle) =
+            let textRenderingMode = fillStyle.ApplyToTextRederingMode(x.TextRenderingMode)
+            { x with 
+                TextRenderingMode = textRenderingMode
+                LazyFillColor_Modifiable =
+                    match textRenderingMode with 
+                    | TextRenderInfo.TextRenderingMode.NoFill -> None
+                    | TextRenderInfo.TextRenderingMode.HasFill ->
+                        match fillStyle.NullablePdfCanvasColor with 
+                        | None -> x.LazyFillColor_Modifiable
+                        | Some color ->
+                            match color with 
+                            | NullablePdfCanvasColor.Non -> None
+                            | NullablePdfCanvasColor.PdfCanvasColor color ->
+                                color.ToFsColor()
+                                |> RenewableModifableColor.Modified
+                                |> Some
+
+                GsStates = fillStyle.ApplyToGsStates(x.GsStates)
+            }
+
         member x.NewFont =
             x.NewFontAndSize
             |> Option.bind(fun m -> m.Font)
@@ -859,24 +860,73 @@ module _Renewable =
         member x.MapFontAndSize(query: FontAndSizeQuery, target: NewFontAndSize) =
             x.MapFontAndSize(FontAndSizeQueryUnion.Value query, target)
 
-        member info.MapColor(f) =
-            { info with 
-                LazyFillColor_Modifiable = 
-                    match info.LazyFillColor with 
-                    | Some color -> 
-                        f color
-                        |> Option.map RenewableModifableColor.Modified
+        member info.MapColor(f, ?fillOrStrokeOptions: FillOrStrokeModifingOptions) =
+            let fillOrStrokeOptions = defaultArg fillOrStrokeOptions FillOrStrokeModifingOptions.FillAndStroke
+            let mutable closeFill = false
+            let mutable closeStroke = false
+            let info =
+                { info with 
+                    LazyFillColor_Modifiable = 
+                        match fillOrStrokeOptions with 
+                        | FillOrStrokeModifingOptions.Fill
+                        | FillOrStrokeModifingOptions.FillAndStroke ->
+                            match info.LazyFillColor with 
+                            | Some color -> 
+                                f color
+                                |> Option.bind (function
+                                    | NullableFsColor.N -> 
+                                        closeFill <- true
+                                        None
+                                    | NullableFsColor.FsColor color -> Some color
 
-                    | None   -> None
+                                )
+                                |> Option.map RenewableModifableColor.Modified
 
-                LazyStrokeColor_Modifiable = 
-                    match info.LazyStrokeColor with 
-                    | Some color -> 
-                        f color
-                        |> Option.map RenewableModifableColor.Modified
+                            | None   -> None
+                        | FillOrStrokeModifingOptions.Stroke -> info.LazyFillColor_Modifiable
 
-                    | None   -> None
-            }
+                    LazyStrokeColor_Modifiable = 
+                        match fillOrStrokeOptions with 
+                        | FillOrStrokeModifingOptions.Stroke
+                        | FillOrStrokeModifingOptions.FillAndStroke ->
+                            match info.LazyStrokeColor with 
+                            | Some color -> 
+                            
+                                f color
+                                |> Option.bind (function
+                                    | NullableFsColor.N -> 
+                                        closeStroke <- true
+                                        None
+                                    | NullableFsColor.FsColor color -> Some color
+                                )
+                                |> Option.map RenewableModifableColor.Modified
+
+                            | None   -> None
+                        | FillOrStrokeModifingOptions.Fill -> info.LazyStrokeColor_Modifiable
+                }
+
+            match closeStroke, closeFill with 
+            | false, false -> info
+            | true, false -> 
+                let textRenderingMode = 
+                    StrokeStyle.ApplyTextRenderingMode_CloseStroke info.TextRenderingMode
+
+                { info with TextRenderingMode = textRenderingMode }
+
+            | false, true ->
+                let textRenderingMode = 
+                    FillStyle.ApplyTextRenderingMode_CloseFill info.TextRenderingMode
+
+                { info with TextRenderingMode = textRenderingMode }
+                
+            | true, true ->
+                let textRenderingMode = 
+                    info.TextRenderingMode
+                    |> FillStyle.ApplyTextRenderingMode_CloseFill 
+                    |> StrokeStyle.ApplyTextRenderingMode_CloseStroke
+
+                { info with TextRenderingMode = textRenderingMode }
+                
 
         member x.LazyVisibleBound0 = x.OriginInfo.LazyVisibleBound0
 
@@ -1228,6 +1278,11 @@ module _Renewable =
         | Path of RenewablePathInfo
         | Text of RenewableTextInfo
     with 
+        member x.LineShapingStyle = 
+            match x with 
+            | Path info -> info.LineShapingStyle
+            | Text info -> info.LineShapingStyle
+
         member x.LazyFillColor =
             match x with 
             | Path info -> info.LazyFillColor
@@ -1294,14 +1349,29 @@ module _Renewable =
             | Text info -> f info |> Text
             | _ -> x
 
-        member x.MapColor(f) =
+        member x.MapColor(f, ?fillOrStrokeOptions) =
             match x with 
             | Path info ->
-                info.MapColor f
+                info.MapColor(f, ?fillOrStrokeOptions = fillOrStrokeOptions)
                 |> Path
 
             | Text info ->
-                info.MapColor f
+                info.MapColor(f, ?fillOrStrokeOptions = fillOrStrokeOptions)
+                |> Text
+
+        member x.MapColor(f, ?fillOrStrokeOptions) =
+            let f color =
+                match f color with 
+                | Some color -> Some (NullableFsColor.FsColor color)
+                | None -> None
+
+            match x with 
+            | Path info ->
+                info.MapColor(f, ?fillOrStrokeOptions = fillOrStrokeOptions)
+                |> Path
+
+            | Text info ->
+                info.MapColor(f, ?fillOrStrokeOptions = fillOrStrokeOptions)
                 |> Text
 
         member private x.LazyVisibleBound0 = 
@@ -1329,6 +1399,10 @@ module _Renewable =
             | Path info -> info.VisibleBound1
             | Text info -> info.DenseVisibleBound0
 
+        member x.IsClosed = 
+            match x with 
+            | Path info -> info.IsClosed
+            | Text info -> info.IsClosed
 
         member x.VisibleBound1 =
             match x.LazyVisibleBound1 with 
@@ -1365,6 +1439,57 @@ module _Renewable =
             | Path info -> info.ClippingPathInfos
             | Text info -> info.ClippingPathInfos
 
+        member x.ApplyStrokeStyle(strokeStyle: StrokeStyle) =   
+            match x with 
+            | Path info -> info.ApplyStrokeStyle(strokeStyle) |> Path
+            | Text info -> info.ApplyStrokeStyle(strokeStyle) |> Text
+
+        member x.ApplyFillStyle(fillStyle: FillStyle) =   
+            match x with 
+            | Path info -> info.ApplyFillStyle(fillStyle) |> Path
+            | Text info -> info.ApplyFillStyle(fillStyle) |> Text
+
+        member x.RenewableInfoTag =
+            match x with 
+            | Path info -> info.Tag
+            | Text _ -> RenewableInfoTag.Normal
+
+        member x.ExpandStrokeWidth(colors: FsColor list, width: ``ufloat>0``, targetColor: PdfCanvasColor, ?lineJoinStyle, ?overprint) =
+            match x.LazyColorIsOneOf(FillOrStrokeOptions.Stroke, colors) with 
+            | true ->
+                let originLineWidth = x.LineShapingStyle.ActualLineWidth.CalculatedWidth
+                let newLineWidth  = width.Value + originLineWidth
+                x.ApplyStrokeStyle(
+                    StrokeStyle(
+                        width = ``ufloat>0`` newLineWidth,
+                        ?lineJoinStyle = lineJoinStyle,
+                        targetColorStyle = 
+                            ColorStyle(NullablePdfCanvasColor.OfPdfCanvasColor targetColor, ?overprint = overprint)
+                    ))
+
+            | false ->
+                match x.LazyStrokeColor with 
+                | None ->
+                    match x.LazyColorIsOneOf(FillOrStrokeOptions.Fill, colors) with 
+                    | true ->
+                        x.ApplyStrokeStyle(
+                            StrokeStyle(
+                                width = width,
+                                ?lineJoinStyle = lineJoinStyle,
+                                targetColorStyle = 
+                                    ColorStyle(
+                                        NullablePdfCanvasColor.OfPdfCanvasColor targetColor,
+                                        ?overprint = overprint,
+                                        closeOperator = CloseOperator.Open
+                                    )
+                            )
+                        )
+
+                    | false -> x
+
+                | Some _ -> x
+
+                
 
     [<RequireQualifiedAccess>]
     module RenewableVectorInfo =
@@ -1425,6 +1550,12 @@ module _Renewable =
         | Text of RenewableTextInfo
         | Image of RenewableImageInfo
     with 
+        member x.IsClosed = 
+            match x with 
+            | Path info -> info.IsClosed
+            | Text info -> info.IsClosed
+            | Image _ -> false
+
         member x.UpdateVisibleBound1() =
             match x with 
             | Path info -> info.UpdateVisibleBoundWithStrokeWidth() |> Path
@@ -1479,6 +1610,7 @@ module _Renewable =
             match x with 
             | Path info -> info.IsPossibleTagInfo
             | _ -> false
+
 
         member x.MapPath(f) =
             match x with 
@@ -1548,19 +1680,41 @@ module _Renewable =
             | BoundGettingStrokeOptions.WithoutStrokeWidth -> x.DenseVisibleBound1
             | BoundGettingStrokeOptions.WithStrokeWidth    -> x.VisibleBound1
 
+        member x.RenewableInfoTag =
+            match x with 
+            | Path info -> info.Tag
+            | Text _ -> RenewableInfoTag.Normal
+            | Image _ -> RenewableInfoTag.Normal
 
-        member x.MapColor(f) =
+        member x.MapColor(f, ?fillOrStrokeOptions: FillOrStrokeModifingOptions) =
             match x with 
             | Path info ->
-                info.MapColor f
+                info.MapColor(f, ?fillOrStrokeOptions = fillOrStrokeOptions)
                 |> RenewableInfo.Path
 
             | Text info ->
-                info.MapColor f
+                info.MapColor(f, ?fillOrStrokeOptions = fillOrStrokeOptions)
                 |> RenewableInfo.Text
 
             | Image info -> x
+
+        member x.MapColor(f, ?fillOrStrokeOptions) =
+            let f color =
+                match f color with 
+                | Some color -> Some (NullableFsColor.FsColor color)
+                | None -> None
+
+            match x with 
+            | Path info ->
+                info.MapColor(f, ?fillOrStrokeOptions = fillOrStrokeOptions)
+                |> Path
+
+            | Text info ->
+                info.MapColor(f, ?fillOrStrokeOptions = fillOrStrokeOptions)
+                |> Text
             
+            | Image info -> x
+
         member x.SetColor() =
             match x with 
             | Path info ->
@@ -1765,7 +1919,9 @@ module _Renewable =
             | Vector info -> Some info
             | Pixel _ -> None
 
-
+        let ofVector = function
+            | RenewableVectorInfo.Text info -> RenewableInfo.Text info
+            | RenewableVectorInfo.Path info -> RenewableInfo.Path info
 
     type IntegratedRenderInfo with
         member info.Renewable() =

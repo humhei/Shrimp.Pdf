@@ -277,7 +277,7 @@ module Imposing =
                 | Some _, Some _ -> 
                     Some DesiredPageOrientation.Automatic
 
-                | Some _, None _ -> Some DesiredPageOrientation.Landscape
+                | Some _, None  -> Some DesiredPageOrientation.Landscape
                 | None, Some _ -> Some DesiredPageOrientation.Portrait
                 | None, None -> None
 
@@ -772,7 +772,7 @@ module Imposing =
                     |> List.collect(fun m -> m.AsList)
                 cells
                 |> List.map (fun rect ->
-                    Rectangle.applyMargin (Margin.Create (cropmark.Distance - tolerance.Value)) rect
+                    Rectangle.applyMargin (Margin.Create (cropmark.Distance - tolerance)) rect
                 )
 
             table
@@ -1235,7 +1235,7 @@ module Imposing =
                   Index = cells.Count
                   ImposingRow = this }
 
-            if newCell.Size.Width > pageSize.Width + tolerance.Value || newCell.Size.Height > pageSize.Height + tolerance.Value
+            if newCell.Size.Width > pageSize.Width + tolerance || newCell.Size.Height > pageSize.Height + tolerance
             then 
                 CellSizeExceedPageSizeException(newCell.Size, Margin.Zero, pageSize.Size)
                 |> raise
@@ -1258,7 +1258,7 @@ module Imposing =
                         | Position.Right (x, _) -> -x
                         | Position.XCenter(x, _) -> abs x
 
-                newCell.X + newCell.Size.Width + marginX > pageSize.Width + tolerance.Value
+                newCell.X + newCell.Size.Width + marginX > pageSize.Width + tolerance
                 
 
             if willWidthExceedPageWidth then false
@@ -1372,7 +1372,7 @@ module Imposing =
                                     | Position.Bottom (_, y) -> y
                                     | Position.YCenter(_, y) -> abs y
 
-                            row.Height + y + marginY > pageSize.Height + tolerance.Value
+                            row.Height + y + marginY > pageSize.Height + tolerance
 
                         | None -> false
 
@@ -1494,7 +1494,7 @@ module Imposing =
                     |> List.ofSeq
                     |> List.map (fun cell ->
                         let rect = cell.ToRectangle()
-                        Rectangle.applyMargin (Margin.Create (cropmark.Distance - tolerance.Value)) rect
+                        Rectangle.applyMargin (Margin.Create (cropmark.Distance - tolerance)) rect
                     )
                 | _ -> []
 

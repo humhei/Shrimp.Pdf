@@ -45,7 +45,7 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.PostScript", "Sh
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.PostScriptTests", "Shrimp.Pdf.PostScriptTests\Shrimp.Pdf.PostScriptTests.fsproj", "{DB014E91-A2F7-4A01-8338-14B6DEB85726}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Shrimp.Pdf.SlimFlow", "Shrimp.Pdf.NewFlow\Shrimp.Pdf.SlimFlow.fsproj", "{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Shrimp.Pdf.SlimFlow", "Shrimp.Pdf.NewFlow\Shrimp.Pdf.SlimFlow.fsproj", "{3BA70898-3C8C-4B2D-A9C8-71C30A4E4019}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

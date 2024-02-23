@@ -1,4 +1,12 @@
 ﻿
+namespace Shrimp.Pdf
+type RenewableInfoTag =
+    | Normal = 0
+    | CuttingDie = 1
+    | CuttingDieDashLine = 3
+    | PossibleTagInfo = 4
+    | TagInfo = 5
+
 namespace Shrimp.Pdf.DSL
 open Shrimp.Pdf.Extensions
 open iText.Kernel.Pdf

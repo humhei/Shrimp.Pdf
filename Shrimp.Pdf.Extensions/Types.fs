@@ -2088,6 +2088,16 @@ module ExtensionTypes =
             match pageSelector with 
             | PageSelector.First -> [1]
             | PageSelector.Last -> [numberOfPages]
+            | PageSelector.NumbersCase numbers -> 
+                let intersectedNumbers =
+                    numbers.AsList
+                    |> List.map(fun m -> m.Value)
+                    |> List.filter(fun m ->
+                        m >= 1 && m <= numberOfPages
+                    )
+
+                intersectedNumbers
+
             | PageSelector.MultipleOf multiple -> 
                 allPageNumbers
                 |> List.filter(fun m ->
@@ -2106,15 +2116,6 @@ module ExtensionTypes =
                 allPageNumbers.GetByIndexExpr(indexExpr)
 
             | PageSelector.All -> allPageNumbers
-            | PageSelector.NumbersCase numbers -> 
-                let intersectedNumbers =
-                    numbers.AsList
-                    |> List.map(fun m -> m.Value)
-                    |> List.filter(fun m ->
-                        m >= 1 && m <= numberOfPages
-                    )
-
-                intersectedNumbers
 
             | PageSelector.And (pageSelectors: PageSelector list) ->
                 let pageNumberLists = 

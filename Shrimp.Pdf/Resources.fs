@@ -18,28 +18,26 @@ module internal Config =
     type private AssemblyFinder = AssemblyFinder
 
     let internal config = 
-        lazy
-            ConfigurationFactory
-                .FromResource<AssemblyFinder>("Shrimp.Pdf.reference.conf")
-            |> Configuration.fallBackByApplicationConf
+        ConfigurationFactory
+            .FromResource<AssemblyFinder>("Shrimp.Pdf.reference.conf")
+        |> Configuration.fallBackByApplicationConf
 
 module Resources =
     open Fake.IO
     open Fake.Core
-    let internal resourceDirectory = 
+    let resourceDirectory = 
         
-        lazy
-            match Environment.environVarOrNone "ShrimpPdfResources" with 
-            | Some dir ->
-                match FsDirectoryInfo.tryCreate dir with 
-                | Some dir -> dir.Path
-                | None ->
-                    Path.GetFullPath (config.Value.GetString("shrimp.pdf.resourcesDirectory"))
-            | None -> Path.GetFullPath (config.Value.GetString("shrimp.pdf.resourcesDirectory"))
+        match Environment.environVarOrNone "ShrimpPdfResources" with 
+        | Some dir ->
+            match FsDirectoryInfo.tryCreate dir with 
+            | Some dir -> dir.Path
+            | None ->
+                Path.GetFullPath (config.GetString("shrimp.pdf.resourcesDirectory"))
+        | None -> Path.GetFullPath (config.GetString("shrimp.pdf.resourcesDirectory"))
 
 
     let obtainMarkFile (fileNameWithoutExtension: string) =
-        resourceDirectory.Value </> "Marks" </> fileNameWithoutExtension + ".pdf"
+        resourceDirectory </> "Marks" </> fileNameWithoutExtension + ".pdf"
         |> PdfFile
 
     [<RequireQualifiedAccess>]
@@ -66,7 +64,7 @@ module Resources =
         /// then invoke it: e.g. obtainColorFromResource "registration" writer 
         /// e.g. obtainColorFromResource @"Pantone+ Solid Coated/PANTONE 100 C" writer 
         let obtainSperationColorFromResources (fileNameWithoutExtension: string) (writer: PdfDocument) =
-            let file = resourceDirectory.Value </> "Colors" </> fileNameWithoutExtension + ".pdf"
+            let file = resourceDirectory </> "Colors" </> fileNameWithoutExtension + ".pdf"
             
             PdfFile file |> ignore
 

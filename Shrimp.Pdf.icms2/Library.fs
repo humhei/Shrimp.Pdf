@@ -5,6 +5,7 @@ open Shrimp.Akkling.Cluster
 open Shrimp.Akkling.Cluster.Intergraction
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
 open Shrimp.FSharp.Plus
+open Fake.Core
 open System.IO
 open System.Drawing.Imaging
 open System.Drawing
@@ -243,38 +244,34 @@ module Core =
             | Icc.Rgb _ -> 3
             | Icc.Lab _ -> 3
 
-    type Intent = 
-        | INTENT_PERCEPTUAL = 0u
-        | INTENT_RELATIVE_COLORIMETRIC = 1u
-        | INTENT_SATURATION = 2u
-        | INTENT_ABSOLUTE_COLORIMETRIC = 3u
-        | INTENT_PRESERVE_K_ONLY_PERCEPTUAL = 10u
-        | INTENT_PRESERVE_K_ONLY_RELATIVE_COLORIMETRIC = 11u
-        | INTENT_PRESERVE_K_ONLY_SATURATION = 12u
-        | INTENT_PRESERVE_K_PLANE_PERCEPTUAL = 13u
-        | INTENT_PRESERVE_K_PLANE_RELATIVE_COLORIMETRIC = 14u
-        | INTENT_PRESERVE_K_PLANE_SATURATION = 15u
+
+    //type Intent = 
+    //    | INTENT_PERCEPTUAL = 0u
+    //    | INTENT_RELATIVE_COLORIMETRIC = 1u
+    //    | INTENT_SATURATION = 2u
+    //    | INTENT_ABSOLUTE_COLORIMETRIC = 3u
+    //    | INTENT_PRESERVE_K_ONLY_PERCEPTUAL = 10u
+    //    | INTENT_PRESERVE_K_ONLY_RELATIVE_COLORIMETRIC = 11u
+    //    | INTENT_PRESERVE_K_ONLY_SATURATION = 12u
+    //    | INTENT_PRESERVE_K_PLANE_PERCEPTUAL = 13u
+    //    | INTENT_PRESERVE_K_PLANE_RELATIVE_COLORIMETRIC = 14u
+    //    | INTENT_PRESERVE_K_PLANE_SATURATION = 15u
     
 
-    [<RequireQualifiedAccess>]
-    type ServerMsg =
-        | CalcColor of inputIcc: Icc * inputValues: float32 []  * outputIcc: Icc * indent: Intent
-        | ConvertImageColorSpace of inputIcc: Icc * storage: IndexableBitmapColorValuesStorage * outputIcc: Icc * indent: Intent
-    with 
-        interface ServerMsgLoggerLevel.IDebugServerMsg
+    //[<RequireQualifiedAccess>]
+    //type ServerMsg =
+    //    | CalcColor of inputIcc: Icc * inputValues: float32 []  * outputIcc: Icc * indent: Intent
+    //    | ConvertImageColorSpace of inputIcc: Icc * storage: IndexableBitmapColorValuesStorage * outputIcc: Icc * indent: Intent
+    //with 
+    //    interface ServerMsgLoggerLevel.IDebugServerMsg
 
-    type private AssemblyFinder = AssemblyFinder
 
-    let private referenceConfig = 
-        lazy
-            ConfigurationFactory.FromResource<AssemblyFinder>("Shrimp.Pdf.icms2.reference.conf")
-            |> Configuration.fallBackByApplicationConf
 
     [<RequireQualifiedAccess>]
     module ExpressConfig =
-        let nodeExpressBuildDir = referenceConfig.Value.GetString("shrimp.pdf.icms2.nodeExpressBuildDir")
-        let nodeExpressAppFileName = referenceConfig.Value.GetString("shrimp.pdf.icms2.nodeExpressAppFileName")
-        let foreverExePath = referenceConfig.Value.GetString("shrimp.pdf.icms2.foreverExe")
+        let nodeExpressBuildDir = referenceConfig.GetString("shrimp.pdf.icms2.nodeExpressBuildDir")
+        let nodeExpressAppFileName = referenceConfig.GetString("shrimp.pdf.icms2.nodeExpressAppFileName")
+        let foreverExePath = referenceConfig.GetString("shrimp.pdf.icms2.foreverExe")
         
 
 
@@ -285,21 +282,20 @@ module Core =
     let [<Literal>] private SHRIMP_PDF_ICMS2 = "shrimpPdfIcms2"
 
     let private seedPort = 
-        lazy
-            referenceConfig.Value.GetInt("shrimp.pdf.icms2.port")
+        referenceConfig.GetInt("shrimp.pdf.icms2.port")
 
-    [<RequireQualifiedAccess>]
-    module Server =
-        let createAgent (receive): Server<unit, ServerMsg> =
-            Server(SHRIMP_PDF_ICMS2, SERVER, CLIENT, seedPort.Value, seedPort.Value, setParams_Loggers_Nlog, receive)
-
+    //[<RequireQualifiedAccess>]
+    //module Server =
+    //    let createAgent (receive): Server<unit, ServerMsg> =
+    //        Server(SHRIMP_PDF_ICMS2, SERVER, CLIENT, seedPort, seedPort, setParams_Loggers_Nlog, receive)
 
 
 
-    [<RequireQualifiedAccess>]
-    module Client =
-        let create(): Client<unit, ServerMsg>  =
-            Client(SHRIMP_PDF_ICMS2, CLIENT, SERVER, 0, seedPort.Value, Behaviors.ignore, setParams_Loggers_Nlog)
+
+    //[<RequireQualifiedAccess>]
+    //module Client =
+    //    let create(): Client<unit, ServerMsg>  =
+    //        Client(SHRIMP_PDF_ICMS2, CLIENT, SERVER, 0, seedPort, Behaviors.ignore, setParams_Loggers_Nlog)
 
 
 

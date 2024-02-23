@@ -368,7 +368,7 @@ module _Extract =
         let stopWatch = System.Diagnostics.Stopwatch.StartNew()
         let keepBorder = List.contains pageNumber borderKeepingPageNumbers
         
-        let loggingPageCountInterval = loggingPageCountInterval.Value
+        let loggingPageCountInterval = loggingPageCountInterval
 
         let logInfo (text) = 
             let logger: PageLogger =
@@ -582,7 +582,7 @@ module _Extract =
                                                 infoChoices.TagInfos
                                                 |> List.filter(fun m -> 
                                                     match m with 
-                                                    | RenewableInfo.Path info -> info.Tag = RenewablePathInfoTag.CuttingDieDashLine
+                                                    | RenewableInfo.Path info -> info.Tag = RenewableInfoTag.CuttingDieDashLine
                                                     | _ -> false 
                                                 )
 
@@ -874,16 +874,16 @@ module _Extract =
                                 match slimFlow with 
                                 | None -> [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers), SlimWriterPageSetter.Ignore)]
                                 | Some slimFlow ->
-                                    let r = slimFlow.Invoke flowModel args (RenewableInfos.Create infos) SlimWriterPageSetter.Ignore
+                                    let r = slimFlow.Invoke flowModel args (RenewableInfos.Create(infos, PageNumber args.PageNum, args.TotalNumberOfPages)) SlimWriterPageSetter.Ignore
                                     let infos = r.Infos.AsList
                                     let writerPageSetter = r.WriterPageSetter
                                     let background = r.Infos.Background
                                     let boundPredicate (info: RenewablePathInfo) =
-                                        info.Tag = RenewablePathInfoTag.CuttingDie
+                                        info.Tag = RenewableInfoTag.CuttingDie
 
                                     let addtionalTagInfoPredicate (info: RenewablePathInfo) =
-                                        info.Tag = RenewablePathInfoTag.TagInfo
-                                        || info.Tag = RenewablePathInfoTag.CuttingDieDashLine
+                                        info.Tag = RenewableInfoTag.TagInfo
+                                        || info.Tag = RenewableInfoTag.CuttingDieDashLine
 
 
                                     [TargetRenewablePageInfo.NewPage(TargetPageBox None, TargetRenewableNewPageInfoElement.Create (infos, borderKeepingPageNumbers, boundPredicate = boundPredicate, addtionalTagColorPredicate = addtionalTagInfoPredicate), writerPageSetter, background = background, slimFlowUserState = r.UserState)]

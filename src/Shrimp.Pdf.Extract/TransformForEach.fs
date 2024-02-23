@@ -149,7 +149,7 @@ module _TransformForEach =
                                           NewBound = 
                                             { indexedBound with Bound = transform indexedBound }
                                           BoundPredicate = fun info ->
-                                            info.Tag = RenewablePathInfoTag.CuttingDie
+                                            info.Tag = RenewableInfoTag.CuttingDie
                                             || boundPredicate info.OriginInfo
 
                                           BorderKeepingPageNumbers = borderKeepingPageNumbers

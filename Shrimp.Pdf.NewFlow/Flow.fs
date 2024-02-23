@@ -1,9 +1,12 @@
 ﻿namespace Shrimp.Pdf.SlimFlow
 #nowarn "0104"
+open Shrimp.Pdf.icms2.client
+
 open Shrimp.Pdf
 open Shrimp.Pdf.Extensions
 open Shrimp.Pdf.DSL
 open Shrimp.FSharp.Plus
+open Shrimp.Pdf.Colors
 
 
 
@@ -178,6 +181,9 @@ type SlimModifyPage =
 
 
 
+
+
+
     static member MovePageBoxToOrigin() =
         SlimFlow(fun flowModel args infos pageSetter ->
             { Infos = infos 
@@ -271,6 +277,12 @@ type SlimModifyPage =
     static member InPage (pageSelector, flow: SlimFlowUnion<_, _>) =
         flow.InPage(pageSelector)
         
+    static member InPageWith (pageSelector, flow: SlimFlowUnion<_, _>) =
+        SlimModifyPage.Func2(fun flowModel args infos ->
+            let flow = flow.InPage(pageSelector)
+            flow
+
+        )
 
     static member ReadInfos(name, f) =
         SlimFlow(fun flowModel args infos pageSetter ->
@@ -347,6 +359,55 @@ type SlimModifyPage =
                 "Margin"      => margin.Text()
             ]
         |> SlimFlowUnion.Flow
+
+    static member BlackOrWhite_Negative_Film(?strokeWidthIncrement: StrokeWidthIncrement, ?labIcc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParameters: NameAndParameters) =
+        let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
+        let labIcc = defaultArg labIcc defaultLabIcc
+        let inputIccFactory = options.InputIccModifyArgs |> Option.map (fun m -> m.Factory)
+
+        SlimModifyPage.AddSolidBackgound(
+            PageBoxKind.ActualBox,
+            fun args -> 
+                { args with 
+                    FillColor = NullablePdfCanvasColor.BLACK
+                    StrokeColor = NullablePdfCanvasColor.N }
+        )
+        <+>
+        SlimModifyPage.MapInfos(fun args infos ->
+            let infos = 
+                infos
+                    .ReplaceAlternativeColors(
+                        "BlackOrWhite_Negative_Film_ReplaceColors",
+                        [],
+                        fun color ->
+                            match options.Predicate color with 
+                            | true ->
+                                color.Cms_AsBlackOrWhite_Inversed_FsColor(labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory)
+                                |> Some
+
+                            | false -> None
+                    )
+
+            match strokeWidthIncrement with 
+            | None -> infos
+            | Some strokeWidthIncrement ->
+                let parameters =
+                    [
+                        "strokeWidthIncrement" => strokeWidthIncrement.ToString()
+                    ]
+                    
+                infos
+                    .MapVector("BlackOrWhite_Negative_Film_ExpandStrokeWidth", parameters, fun info ->
+                        info.ExpandStrokeWidth(
+                            [FsColor.WHITE],
+                            strokeWidthIncrement.Value,
+                            PdfCanvasColor.WHITE,
+                            lineJoinStyle = strokeWidthIncrement.LineJoinStyle
+                        )
+                    )
+
+        )
+
 
     static member Func(f) =
         SlimFlowUnion.Func(

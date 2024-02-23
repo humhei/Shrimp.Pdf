@@ -9,6 +9,7 @@ open Shrimp.FSharp.Plus.Refection
 open Shrimp.FSharp.Plus.Text
 open Shrimp.FSharp.Plus.Operators
 open Shrimp.Pdf.RegisterableFonts
+open iText.Kernel.Pdf.Canvas.Parser.Data
 
 #nowarn "0104"
 open iText.Kernel.Colors
@@ -21,7 +22,7 @@ open iText.Kernel.Pdf
 
 open iText.Kernel.Geom
 
-type StrokeWidthIncrenment =
+type StrokeWidthIncrement =
     { Value: ``ufloat>0`` 
       LineJoinStyle: int }
 with 
@@ -33,6 +34,16 @@ type FillOrStrokeModifingOptions =
     | Stroke = 0
     | Fill = 1
     | FillAndStroke = 2
+
+[<AutoOpen>]
+module _FillOrStrokeModifingOptionsExtensions =
+    type FillOrStrokeOptions with 
+        member x.ToModifingOptions() =
+            match x with 
+            | FillOrStrokeOptions.FillAndStroke 
+            | FillOrStrokeOptions.FillOrStroke -> FillOrStrokeModifingOptions.FillAndStroke
+            | FillOrStrokeOptions.Fill -> FillOrStrokeModifingOptions.Fill
+            | FillOrStrokeOptions.Stroke -> FillOrStrokeModifingOptions.Stroke
 
 type _SelectionModifierAddNewArguments<'userState> =
     { CurrentRenderInfo: IIntegratedRenderInfo  
@@ -76,50 +87,29 @@ with
 
 
 
-type PageInfosValidation = PageInfosValidation of (PageNumber -> seq<IIntegratedRenderInfo> -> unit)
+[<RequireQualifiedAccess>]
+type PageInfosValidation =
+    | ValidateLength of (PageNumber -> int -> unit)
+    | Ignore
 with 
-    member x.Value =
-        let (PageInfosValidation value) = x
-        value
+    member x.PreicateInfos (pageNumber: PageNumber) (infos: seq<_>) =
+        match x with 
+        | ValidateLength validata -> 
+            let length = Seq.length infos
+            validata pageNumber length
+
+        | Ignore  -> ()
 
 [<RequireQualifiedAccess>]
 module PageInfosValidation =
     let atLeastOne =
-        fun (pageNumber) infos ->
-            let length = (Seq.length infos)
+        fun (pageNumber) length ->
             if length = 0 then failwith "Didn't selector any page infos"
 
-        |> PageInfosValidation
+        |> PageInfosValidation.ValidateLength
 
-    let ignore = 
-        fun _ _ -> ()
-        |> PageInfosValidation
+    let ignore = PageInfosValidation.Ignore
 
-type PageInfosValidationIM = PageInfosValidationIM of (PageNumber -> seq<IIntegratedRenderInfoIM> -> unit)
-with 
-    member x.Value =
-        let (PageInfosValidationIM value) = x
-        value
-
-[<RequireQualifiedAccess>]
-module PageInfosValidationIM =
-    let atLeastOne =
-        fun (pageNumber) infos ->
-            let length = (Seq.length infos)
-            if length = 0 then failwith "Didn't selector any page infos"
-
-        |> PageInfosValidationIM
-
-    let ignore = 
-        fun _ _ -> ()
-        |> PageInfosValidationIM
-
-    let internal ofPageInfosValidation (pageInfosValidation: PageInfosValidation) =
-        PageInfosValidationIM(fun pageNumber infos ->
-            let infos = infos |> Seq.map(fun info -> info :?> IIntegratedRenderInfo)
-            pageInfosValidation.Value pageNumber infos
-            
-        )
 
 
 
@@ -381,7 +371,7 @@ type ColorStyle [<JsonConstructor>] private (v) =
 
     static member DefaultValue = ColorStyle()
 
-        
+    
 
 
 
@@ -420,7 +410,90 @@ type StrokeStyle [<JsonConstructor>] private  (v) =
         | Some colorStyle -> colorStyle.Opacity
         | None -> None
 
+    static member ApplyTextRenderingMode_CloseStroke (textRenderingMode: int) =
+        match textRenderingMode with 
+        | TextRenderInfo.TextRenderingMode.HasFill -> TextRenderingMode.FILL
+        | TextRenderInfo.TextRenderingMode.NoFill -> TextRenderingMode.INVISIBLE
+
+    member colorStyle.ApplyToTextRenderingMode(textRenderingMode: int) =
+        match colorStyle.NullablePdfCanvasColor with
+        | Some (NullablePdfCanvasColor.N) -> StrokeStyle.ApplyTextRenderingMode_CloseStroke(textRenderingMode)
+
+        | None -> textRenderingMode
+        | Some _ ->
+            match colorStyle.CloseOperator with 
+            | CloseOperator.Open ->
+                match textRenderingMode with 
+                | TextRenderInfo.TextRenderingMode.HasFill -> TextRenderingMode.FILL_STROKE
+                | TextRenderInfo.TextRenderingMode.NoFill -> TextRenderingMode.STROKE
+
+            | CloseOperator.Close -> StrokeStyle.ApplyTextRenderingMode_CloseStroke(textRenderingMode)
+
+            | CloseOperator.Keep -> textRenderingMode
+
+    static member ApplyPathOperation_CloseStroke (operation: int) =
+        match operation with 
+        | IPathRenderInfo.Operation.HasFill -> PathRenderInfo.FILL
+        | IPathRenderInfo.Operation.NoFill -> PathRenderInfo.NO_OP
+
+    member colorStyle.ApplyToPathOperation(operation: int) =
+        match colorStyle.NullablePdfCanvasColor with
+        | Some (NullablePdfCanvasColor.N) -> StrokeStyle.ApplyPathOperation_CloseStroke(operation)
+
+        | None -> operation
+        | Some _ ->
+            match colorStyle.CloseOperator with 
+            | CloseOperator.Open ->
+                match operation with 
+                | IPathRenderInfo.Operation.HasFill -> IPathRenderInfo.FILLANDSTROKE
+                | IPathRenderInfo.Operation.NoFill -> PathRenderInfo.STROKE
+
+            | CloseOperator.Close -> StrokeStyle.ApplyPathOperation_CloseStroke(operation)
+
+            | CloseOperator.Keep -> operation
+
+    member strokeStyle.ApplyToGsStates(gsStates: InfoGsStateLists) =
+        match strokeStyle.ColorStyle with 
+        | Some colorStyle ->
+            match colorStyle.Opacity, colorStyle.Overprint with 
+            | None, None -> gsStates
+            | Some opacity, Some overprint ->
+                gsStates.MapFsExtGsState(fun m ->
+                    m.SetStrokeOpactity(opacity).SetStrokeOverprint(overprint)
+                )
+
+            | Some opacity, None ->
+                gsStates.MapFsExtGsState(fun m ->
+                    m.SetStrokeOpactity(opacity)
+
+                )
+
+            | None, Some overprint ->
+                gsStates.MapFsExtGsState(fun m ->
+                    m.SetStrokeOverprint(overprint)
+                )
+
+        | None -> gsStates
+
+    member strokeStyle.ApplyToLineShapingStyle(lineShapingStyle: LineShapingStyle) =
+        { CapStyle = strokeStyle.CapStyle |> Option.defaultValue lineShapingStyle.CapStyle
+          JoinStyle = strokeStyle.LineJoinStyle |> Option.defaultValue lineShapingStyle.JoinStyle
+          DashPattern = strokeStyle.DashPattern |> Option.defaultValue lineShapingStyle.DashPattern
+          ActualLineWidth = 
+            match strokeStyle.Width with 
+            | None -> lineShapingStyle.ActualLineWidth
+            | Some width -> 
+                match lineShapingStyle.ActualLineWidth with 
+                | ActualLineWidth.Exactly (raw, scale) ->
+                    ActualLineWidth.Exactly(width.Value / scale, scale)
+            
+                | ActualLineWidth.Unbalance (raw, scaleX, scaleY) ->
+                    let scale = max scaleX scaleY
+                    ActualLineWidth.Exactly(width.Value / scale, scale)
+        }
+
     member x.AsModifier(args: _SelectionModifierFixmentArguments<_>) =
+        
         let pdfCanvasActions = 
             [
                 match x.NullablePdfCanvasColor with 
@@ -516,6 +589,62 @@ type FillStyle [<JsonConstructor>] (?v) =
         | Some colorStyle -> colorStyle.CloseOperator
         |> Option.defaultValue CloseOperator.Keep
 
+    static member ApplyTextRenderingMode_CloseFill (textRenderingMode: int) =
+        match textRenderingMode with 
+        | TextRenderInfo.TextRenderingMode.HasStroke -> TextRenderingMode.STROKE
+        | TextRenderInfo.TextRenderingMode.NoStroke -> TextRenderingMode.INVISIBLE
+
+    member colorStyle.ApplyToTextRederingMode(textRenderingMode) =
+        match colorStyle.NullablePdfCanvasColor with
+        | Some (NullablePdfCanvasColor.N) -> FillStyle.ApplyTextRenderingMode_CloseFill textRenderingMode
+        | _ ->
+            match colorStyle.CloseOperator with 
+            | CloseOperator.Open ->
+                match textRenderingMode with 
+                | TextRenderInfo.TextRenderingMode.HasStroke -> TextRenderingMode.FILL_STROKE
+                | TextRenderInfo.TextRenderingMode.NoStroke -> TextRenderingMode.FILL
+
+            | CloseOperator.Close -> FillStyle.ApplyTextRenderingMode_CloseFill textRenderingMode
+            | CloseOperator.Keep -> textRenderingMode
+
+    static member ApplyPathOperation_CloseFill (operation: int) =
+        match operation with 
+        | IPathRenderInfo.Operation.HasFill -> PathRenderInfo.FILL
+        | IPathRenderInfo.Operation.NoFill -> PathRenderInfo.NO_OP
+
+    member colorStyle.ApplyToPathOperation(operation) =
+        match colorStyle.NullablePdfCanvasColor with
+        | Some (NullablePdfCanvasColor.N) -> FillStyle.ApplyPathOperation_CloseFill operation
+
+        | _ ->
+            match colorStyle.CloseOperator with 
+            | CloseOperator.Open ->
+                match operation with 
+                | IPathRenderInfo.Operation.HasStroke -> IPathRenderInfo.FILLANDSTROKE
+                | IPathRenderInfo.Operation.NoStroke -> PathRenderInfo.FILL
+
+            | CloseOperator.Close -> FillStyle.ApplyPathOperation_CloseFill operation
+
+            | CloseOperator.Keep -> operation
+
+    member colorStyle.ApplyToGsStates(gsStates: InfoGsStateLists) =
+        match colorStyle.Opacity, colorStyle.Overprint with 
+        | None, None -> gsStates
+        | Some opacity, Some overprint ->
+            gsStates.MapFsExtGsState(fun m ->
+                m.SetFillOpactity(opacity).SetFillOverprint(overprint)
+            )
+
+        | Some opacity, None ->
+            gsStates.MapFsExtGsState(fun m ->
+                m.SetFillOpactity(opacity)
+
+            )
+
+        | None, Some overprint ->
+            gsStates.MapFsExtGsState(fun m ->
+                m.SetFillOverprint(overprint)
+            )
 
     member x.AsModifier(args: _SelectionModifierFixmentArguments<_>) =
         let pdfCanvasActions = 
@@ -1232,10 +1361,10 @@ type Modifier =
                 match color with 
                 | Choice.Choice1Of2 color -> Some color
                 | Choice.Choice2Of2 color ->
-                    let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
                     match color with 
                     | NullablePdfCanvasColor.Non -> None
                     | NullablePdfCanvasColor.PdfCanvasColor color ->
+                        let doc = args.Page.GetDocument() :?> PdfDocumentWithCachedResources
                         doc.GetOrCreateColor(color)
                         |> Some
 
@@ -1502,12 +1631,12 @@ type SelectorAndModifiersRecordEx<'userState> =
     { Name: string 
       Selector: Selector<'userState> 
       Modifiers: Modifier<'userState> list
-      PageInfosValidation: PageInfosValidation 
+      PageInfosValidation: PageInfosValidation
       Parameters: list<string * string>}
 
-type SelectorAndModifiers<'userState>(name, selector: Selector<'userState>, modifiers: Modifier<'userState> list, ?parameters: list<string * string>, ?pageInfosValidation) =
+type SelectorAndModifiers<'userState>(name, selector: Selector<'userState>, modifiers: Modifier<'userState> list, ?parameters: list<string * string>, ?pageInfosValidation: PageInfosValidation) =
     let pageInfosValidation = defaultArg pageInfosValidation PageInfosValidation.ignore
-    
+
     member x.Name = name
 
     member x.Selector = selector
@@ -1532,7 +1661,7 @@ type SelectorAndModifiersUnion<'userState>(name, selector: Selector<'userState>,
     member x.PageInfosValidation = pageInfosValidation
 
 type SelectorAndModifiersUnionIM<'userState>(name, selector: Selector<'userState>, modifiers: ModifierUnionIM<'userState> list, ?parameters: list<string * string>, ?pageInfosValidation) =
-    let pageInfosValidation = defaultArg pageInfosValidation PageInfosValidationIM.ignore
+    let pageInfosValidation = defaultArg pageInfosValidation PageInfosValidation.ignore
 
     member x.Name = name
 
@@ -1545,7 +1674,7 @@ type SelectorAndModifiersUnionIM<'userState>(name, selector: Selector<'userState
     member x.PageInfosValidation = pageInfosValidation
 
 type SelectorAndModifiersIM<'userState>(name, selector: Selector<'userState>, modifiers: ModifierIM<'userState> list, ?parameters: list<string * string>, ?pageInfosValidation) =
-    let pageInfosValidation = defaultArg pageInfosValidation PageInfosValidationIM.ignore
+    let pageInfosValidation = defaultArg pageInfosValidation PageInfosValidation.ignore
 
     member x.Name = name
 
@@ -1563,8 +1692,7 @@ type SelectorAndModifiers<'userState> with
             x.Modifiers
             |> List.map(Modifier.toIM)
 
-        let pageInfosValidation =
-            PageInfosValidationIM.ofPageInfosValidation x.PageInfosValidation
+        let pageInfosValidation = x.PageInfosValidation
 
         SelectorAndModifiersIM(x.Name, x.Selector, modifiers, ?parameters = x.Parameters, pageInfosValidation = pageInfosValidation)
 
@@ -1595,8 +1723,7 @@ type SelectorAndModifiersUnion<'userState> with
             x.Modifiers
             |> List.map(ModifierUnion.toIM)
 
-        let pageInfosValidation =
-            PageInfosValidationIM.ofPageInfosValidation x.PageInfosValidation
+        let pageInfosValidation = x.PageInfosValidation
 
         SelectorAndModifiersUnionIM(x.Name, x.Selector, modifiers, ?parameters = x.Parameters, pageInfosValidation = pageInfosValidation)
 
@@ -1798,7 +1925,7 @@ module ModifyOperators =
                                 ( { Name = selectorAndModifiers.Name }, 
                                     ( Selector.toRenderInfoSelector pageModifingArguments selectorAndModifiers.Selector,
                                       Modifiers.toSelectionModifierUnionIM pageModifingArguments selectorAndModifiers.Modifiers,
-                                      selectorAndModifiers.PageInfosValidation.Value
+                                      selectorAndModifiers.PageInfosValidation.PreicateInfos
                                     )
                                 )
                             )
@@ -1897,6 +2024,34 @@ module ModifyOperators =
                 )
             modify(modifyingAsyncWorker, pageSelector, loggingPageCountInterval, selectorAndModifiersList, ops)
 
+
+type SABAreaGettingOptions = private SABAreaGettingOptions of FsRectangle
+with 
+    member x.FsRectangle =
+        let (SABAreaGettingOptions rect)  =x
+        rect
+
+    static member Create(areaGettingOptions: AreaGettingOptions) =
+        match areaGettingOptions with 
+        | AreaGettingOptions.FsSpecfic rect -> SABAreaGettingOptions rect
+        | _ -> failwithf "SAB: Not supported Area getting options %A" areaGettingOptions
+
+type SABInfo_BoundIs_Args = private SABAreaGettingOptions of Info_BoundIs_Args
+with 
+
+    member x.Value =
+        let (SABAreaGettingOptions args) = x
+        args
+
+    member x.BoundGettingStrokeOptions = x.Value.BoundGettingStrokeOptions
+
+    member x.PredicateBound(bound: Rectangle) =
+            let args2 = x.Value
+            let areaGettingOptions = SABAreaGettingOptions.Create args2.AreaGettingOptions
+            bound.IsRelativeTo(args2.RelativePosition, areaGettingOptions.FsRectangle.AsRectangle)
+        
+    static member Create(args: Info_BoundIs_Args) =
+        SABAreaGettingOptions args
 
 
 type FontAndSizeQuery [<JsonConstructor>] (?fontNames, ?fontSize, ?fillColor, ?info_BoundIs_Args, ?textPattern, ?wordSep) =
@@ -2127,13 +2282,10 @@ type FontAndSizeQuery [<JsonConstructor>] (?fontNames, ?fontSize, ?fillColor, ?i
         &&
         match info_BoundIs_Args with 
         | Some args2 ->
-            let args2 = args2
+            let args2 = SABInfo_BoundIs_Args.Create args2
             let denseBound = textInfo.GetDenseBound(args2.BoundGettingStrokeOptions)
-            match args2.AreaGettingOptions with 
-            | AreaGettingOptions.FsSpecfic rect ->
-                denseBound.IsRelativeTo(args2.RelativePosition, rect.AsRectangle)
+            args2.PredicateBound(denseBound)
 
-            | _ -> failwithf "FontAndSizeQuery: Not supported Area getting options %A" args2.AreaGettingOptions
         | None -> true
 
     member x.AsSelector() = 
@@ -2269,9 +2421,12 @@ type Modifier with
     static member ChangeTextStyle(textStyle: TextStyle) =
         textStyle.AsModifier()
 
+
 type Modify_ReplaceColors_Options = 
     { FillOrStrokeOptions: FillOrStrokeOptions 
-      PageInfosValidation: PageInfosValidation 
+      RenewableInfoTagPredicate: RenewableInfoTag -> bool
+
+      PageInfosValidation: PageInfosValidation
       SelectorTag: SelectorTag
       Info_BoundIs_Args: Info_BoundIs_Args option
       PageSelector: PageSelector }
@@ -2279,6 +2434,7 @@ with
     static member DefaultValue =
         { FillOrStrokeOptions = FillOrStrokeOptions.FillOrStroke 
           PageInfosValidation = PageInfosValidation.ignore
+          RenewableInfoTagPredicate = fun _ -> true
           SelectorTag = SelectorTag.PathOrText 
           Info_BoundIs_Args = None
           PageSelector = PageSelector.All }
@@ -2345,12 +2501,7 @@ type Modify =
 
         let pageInfosValidation = options.PageInfosValidation
 
-        let fillOrStrokeModifyingOptions =
-            match fillOrStrokeOptions with 
-            | FillOrStrokeOptions.FillAndStroke 
-            | FillOrStrokeOptions.FillOrStroke -> FillOrStrokeModifingOptions.FillAndStroke
-            | FillOrStrokeOptions.Fill -> FillOrStrokeModifingOptions.Fill
-            | FillOrStrokeOptions.Stroke -> FillOrStrokeModifingOptions.Stroke
+        let fillOrStrokeModifyingOptions = fillOrStrokeOptions.ToModifingOptions()
         
         let nameAndParameters =
             defaultArg 

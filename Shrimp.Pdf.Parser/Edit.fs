@@ -4,6 +4,7 @@ namespace Shrimp.Pdf.Parser
 
 open iText.IO.Image
 open System.Collections.Concurrent
+open iText.Kernel.Pdf.Canvas.Parser.Data
 
 #nowarn "0104"
 open iText.Kernel.Pdf
@@ -52,11 +53,12 @@ type CloseOperator=
 
 [<RequireQualifiedAccess>]
 module CloseOperator=
-    let apply left right =
+    let concatenate left right =
         match left, right with 
         | CloseOperator.Keep, _ -> right
         | _ ,CloseOperator.Keep -> left
         | _ -> right
+
 
         
 
@@ -67,6 +69,8 @@ with
     static member Keep =
         { Fill = CloseOperator.Keep 
           Stroke = CloseOperator.Keep }
+
+
 
     member x.Apply(originOperator: string) = 
         let operator = originOperator.ToString()
@@ -155,8 +159,7 @@ with
             | ContainsBy [s; n] -> b
             | _ -> failwithf "Unexcepted operator %s" operator
 
-            
-            
+
 type TextCloseOperator =
     { Fill: CloseOperator
       Stroke: CloseOperator
@@ -272,15 +275,15 @@ module private CloseOperatorUnion =
     let concatPath (operators: PathCloseOperator al1List) =
         operators.AsList
         |> List.reduce(fun left right ->
-            { Fill = CloseOperator.apply left.Fill right.Fill
-              Stroke = CloseOperator.apply left.Stroke right.Stroke }
+            { Fill = CloseOperator.concatenate left.Fill right.Fill
+              Stroke = CloseOperator.concatenate left.Stroke right.Stroke }
         )
 
     let concatText (operators: TextCloseOperator al1List) =
         operators.AsList
         |> List.reduce(fun left right ->
-            { Fill = CloseOperator.apply left.Fill right.Fill
-              Stroke = CloseOperator.apply left.Stroke right.Stroke
+            { Fill = CloseOperator.concatenate left.Fill right.Fill
+              Stroke = CloseOperator.concatenate left.Stroke right.Stroke
               Text = 
                 match right.Text, left.Text with 
                 | Some text, _ -> Some text

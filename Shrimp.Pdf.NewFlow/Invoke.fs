@@ -446,13 +446,22 @@ type SlimFlowBackgroundFactory() =
 
     member internal x.Dict = dict
 
+type SlimUserStatesCache<'userState>() =
+    let userStates = System.Collections.Generic.Dictionary<PageNumber, 'userState>()
+    
+    member x.Add(pageNumber, userState) = userStates.Add(pageNumber, userState)
 
-type SlimFlowModel<'userState> =    
+    interface System.IDisposable with 
+        member x.Dispose() = userStates.Clear()
+
+type SlimFlowModel<'userState, 'newUserState> =    
     { BackgroundFactory: SlimFlowBackgroundFactory
       FlowModel: FlowModel<'userState>
       CurrentSlimFlowCacheFactory: CurrentSlimFlowCacheFactory
+      CurrentUserStateCache: SlimUserStatesCache<'newUserState> option
       AllSlimFlowCacheFactory: HashSet<System.IDisposable> }
 with 
+
     member x.PdfFile = x.FlowModel.PdfFile
 
     member x.UserState = x.FlowModel.UserState
@@ -463,14 +472,27 @@ with
         { BackgroundFactory = x.BackgroundFactory 
           FlowModel = x.FlowModel.MapUserState f
           CurrentSlimFlowCacheFactory = x.CurrentSlimFlowCacheFactory
-          AllSlimFlowCacheFactory = x.AllSlimFlowCacheFactory }
+          AllSlimFlowCacheFactory = x.AllSlimFlowCacheFactory
+          CurrentUserStateCache = x.CurrentUserStateCache }
+
+    member internal x.SetUserStateCacheToNone() =
+        { BackgroundFactory = x.BackgroundFactory 
+          FlowModel = x.FlowModel
+          CurrentSlimFlowCacheFactory = x.CurrentSlimFlowCacheFactory
+          AllSlimFlowCacheFactory = x.AllSlimFlowCacheFactory
+          CurrentUserStateCache = None }
+
+type SlimFlowFunc<'userState, 'newUserState> = SlimFlowModel<'userState, 'newUserState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>
 
 
-type SlimFlowFunc<'userState, 'newUserState> = SlimFlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>
+    
 
-type SlimFlow<'userState, 'newUserState>(f: SlimFlowModel<'userState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>, ?flowName: FlowName, ?background) =
+type SlimFlow<'userState, 'newUserState>(f: SlimFlowModel<'userState, 'newUserState> -> PageModifingArguments<'userState> -> RenewableInfos ->  SlimWriterPageSetter -> SlimFlowResult<'newUserState>, ?flowName: FlowName, ?background) =
+    let userStates = new SlimUserStatesCache<'newUserState>()
 
     let cacheFactory = new CurrentSlimFlowCacheFactory()
+
+    member x.UserStatesCache = userStates
 
     member internal x.SetFlowName(flowName: FlowName) =
         SlimFlow(f, flowName)
@@ -479,14 +501,18 @@ type SlimFlow<'userState, 'newUserState>(f: SlimFlowModel<'userState> -> PageMod
 
     member x.FlowName = flowName
 
-    member internal x.ClearCache() = (cacheFactory :> System.IDisposable).Dispose()
+    member internal x.ClearCache() = 
+        (cacheFactory :> System.IDisposable).Dispose()
+        (userStates :> System.IDisposable).Dispose()
+        
 
     member internal x.Internal_Invoke_Origin = f
 
-    member internal x.Invoke (flowModel: SlimFlowModel<'userState>) args infos setter = 
+    member internal x.Invoke (flowModel: SlimFlowModel<'userState, 'newUserState>) args infos setter = 
         let flowModel = 
             { flowModel with 
                 CurrentSlimFlowCacheFactory = cacheFactory
+                CurrentUserStateCache = Some userStates
             }
 
         flowModel.AllSlimFlowCacheFactory.Add(cacheFactory)
@@ -505,28 +531,33 @@ type SlimFlow<'userState, 'newUserState>(f: SlimFlowModel<'userState> -> PageMod
 
             f flowModel args infos pageSetter
 
-        match flowName with 
-        | None -> 
-            f flowModel args infos setter
+        let result = 
+            match flowName with 
+            | None -> 
+                f flowModel args infos setter
 
-        | Some flowName ->  
-            match args.PageNum with 
-            | 1 -> 
-                let flowModel1: InternalFlowModel<'userState> =  
-                    let m = flowModel
-                    { File = m.PdfFile.Path 
-                      UserState = m.UserState 
-                      FlowName = x.FlowName
-                      OperatedFlowNames = []
-                      Configuration = m.Configuration }
+            | Some flowName ->  
+                match args.PageNum with 
+                | 1 -> 
+                    let flowModel1: InternalFlowModel<'userState> =  
+                        let m = flowModel
+                        { File = m.PdfFile.Path 
+                          UserState = m.UserState 
+                          FlowName = x.FlowName
+                          OperatedFlowNames = []
+                          Configuration = m.Configuration }
 
-                let infos = 
-                    { infos with InternalFlowModel = Some (flowModel1.MapUserState (fun _ -> -1)) }
+                    let infos = 
+                        { infos with InternalFlowModel = Some (flowModel1.MapUserState (fun _ -> -1)) }
 
-                let r = PdfLogger.TryInfoWithFlowModel(setter.Index, flowModel1, fun () -> f flowModel args infos setter)
-                { r with WriterPageSetter = { r.WriterPageSetter with Index = r.WriterPageSetter.Index + 1} }
+                    let r = PdfLogger.TryInfoWithFlowModel(setter.Index, flowModel1, fun () -> f flowModel args infos setter)
+                    { r with WriterPageSetter = { r.WriterPageSetter with Index = r.WriterPageSetter.Index + 1} }
 
-            | _ -> f flowModel args infos setter
+                | _ -> f flowModel args infos setter
+
+        userStates.Add(PageNumber args.PageNum, result.UserState)
+
+        result
 
     member internal x.SetParentFlowName(parentName: FlowName) =
         match x.FlowName with 
@@ -563,7 +594,7 @@ module SlimFlow =
         )
 
     let mapStateBack (mapping) (x: SlimFlow<_, _>) =
-        let newF (flowModel: SlimFlowModel<_>) (args: PageModifingArguments<_>) infos pageSetter =
+        let newF (flowModel: SlimFlowModel<_, _>) (args: PageModifingArguments<_>) infos pageSetter =
             let flowModel = flowModel.MapUserState mapping
             let args = args.MapUserState mapping
             x.Internal_Invoke_Origin flowModel args infos pageSetter
@@ -579,9 +610,10 @@ module SlimFlow =
         new SlimFlow<_, _>(newF, ?flowName = x.FlowName, ?background = x.Background)
 
     let applyPageSelector (pageSelector: PageSelector) (x: SlimFlow<_, _>) =
-        let newF flowModel (args: PageModifingArguments<_>) infos pageSetter =
+        let newF (flowModel: SlimFlowModel<_, _>) (args: PageModifingArguments<_>) infos pageSetter =
             match PageModifingArguments.isCurrentPageSelected pageSelector args with 
             | true -> 
+                let flowModel = flowModel.SetUserStateCacheToNone()
                 let r = x.Internal_Invoke_Origin flowModel args infos pageSetter
                 r.MapUserState(Some)
                 

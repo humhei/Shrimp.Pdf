@@ -527,7 +527,7 @@ module _Tile =
                 let configuration = flowModel.Configuration
                 let logger: PageLogger =
                     { LoggerLevel = configuration.LoggerLevel 
-                      LoggingPageCountInterval = loggingPageCountInterval.Value }
+                      LoggingPageCountInterval = loggingPageCountInterval }
 
                 logger.Log(text, alwaysPrintingConsole_If_Info = true)
 
@@ -963,7 +963,7 @@ module _Tile =
                                                             borderKeepingPageNumbers,
                                                             ?tagColor = distincterOrTextPicker.TagColor,
                                                             boundPredicate = fun info ->
-                                                                info.Tag = RenewablePathInfoTag.CuttingDie
+                                                                info.Tag = RenewableInfoTag.CuttingDie
                                                                 || boundGroups.[0].BoundPredicate info.OriginInfo
                                                             ,
                                                             ?rectangleTransform = 

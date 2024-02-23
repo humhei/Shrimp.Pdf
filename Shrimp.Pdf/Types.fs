@@ -263,13 +263,13 @@ module PageOrientationChecker =
         let exceedHorizontal =
             cellSizes 
             |> List.tryFind(fun cellSize ->
-                cellSize.Width + margin.Left + margin.Right >= backgroundSize.Width + Constants.tolerance.Value
+                cellSize.Width + margin.Left + margin.Right >= backgroundSize.Width + Constants.tolerance
             )
 
         let exceedVertical =
             cellSizes 
             |> List.tryFind(fun cellSize ->
-                cellSize.Height + margin.Top + margin.Bottom >= backgroundSize.Height + Constants.tolerance.Value
+                cellSize.Height + margin.Top + margin.Bottom >= backgroundSize.Height + Constants.tolerance
             )
 
         match exceedHorizontal, exceedVertical with 

@@ -282,7 +282,7 @@ module iText =
             |> List.distinct
 
         member this.IsOutsideOf(rect: Rectangle) =
-            let rect = rect.applyMargin(Margin.Create -tolerance.Value)
+            let rect = rect.applyMargin(Margin.Create -tolerance)
             this.GetBottom() > rect.GetTop() 
             || this.GetTop() < rect.GetBottom()
             || this.GetLeft() > rect.GetRight()
@@ -290,7 +290,7 @@ module iText =
 
 
         member this.IsInsideOf(rect: Rectangle) =
-            let rect = rect.applyMargin(Margin.Create tolerance.Value)
+            let rect = rect.applyMargin(Margin.Create tolerance)
             this.GetBottom() > rect.GetBottom()
             && this.GetTop() < rect.GetTop()
             && this.GetLeft() > rect.GetLeft()
@@ -504,7 +504,7 @@ module iText =
                     let searchers = accum @ t
                     searchers
                     |> List.tryFind(fun searcher ->
-                        let searcher = searcher.applyMargin(Margin.Create tolerance.Value)
+                        let searcher = searcher.applyMargin(Margin.Create tolerance)
                         rect.IsInsideOf searcher
                     )
                     |> function 
@@ -1390,6 +1390,8 @@ module iText =
         let getExtGState info = cata (ITextRenderInfo.getExtGState) (IPathRenderInfo.getExtGState) info
 
         let getBound boundGettingStrokeOptions info = cata (ITextRenderInfo.getBound boundGettingStrokeOptions) (IPathRenderInfo.getBound boundGettingStrokeOptions) info
+        
+        let getLineShapingStyle (info: IAbstractRenderInfo) = cata (ITextRenderInfo.getLineShapingStyle) (IPathRenderInfo.getLineShapingStyle) info
         
         let getStrokeColor (info: IAbstractRenderInfo) = info.Value.GetStrokeColor() 
 

@@ -24,7 +24,7 @@ module _SlimFlowUnion =
     type SlimFlowUnion<'oldUserState, 'newUserState> =
         | Flow of SlimFlow<'oldUserState, 'newUserState>
         | TupledFlow of ISlimTupleFlow<'oldUserState, 'newUserState>
-        | Func2 of (SlimFlowModel<'oldUserState> -> PageModifingArguments<'oldUserState> -> RenewableInfos -> SlimFlowUnion<'oldUserState, 'newUserState>)
+        | Func2 of (SlimFlowModel<'oldUserState, 'newUserState> -> PageModifingArguments<'oldUserState> -> RenewableInfos -> SlimFlowUnion<'oldUserState, 'newUserState>)
     with 
 
                 

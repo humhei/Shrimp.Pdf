@@ -1461,7 +1461,7 @@ module RegisterableFonts =
     //        let weightText =  weight.ToString()
     //        { PdfEncodings = PdfEncodings.IDENTITY_H
     //          FontFamily = "阿里巴巴普惠体-" + (weightText.Substring(0,1).ToUpper())
-    //          File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/Alibaba-PuHuiTi/Alibaba-PuHuiTi-" + weightText + ".otf")) }
+    //          File = FsFileInfo.create (Path.Combine(resourceDirectory, @"Fonts/Alibaba-PuHuiTi/Alibaba-PuHuiTi-" + weightText + ".otf")) }
 
     //    let light = alibabaPuHuiTi FontWeight.Light
 
@@ -1477,13 +1477,13 @@ module RegisterableFonts =
         let Heiti = 
             { PdfEncodings = PdfEncodings.IDENTITY_H
               FontFamily = "黑体"
-              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/黑体.ttf")) }
+              File = FsFileInfo.create (Path.Combine(resourceDirectory, @"Fonts/黑体.ttf")) }
 
 
         let Songti =
             { PdfEncodings = PdfEncodings.IDENTITY_H
               FontFamily = "宋体"
-              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/宋体.ttc")) }
+              File = FsFileInfo.create (Path.Combine(resourceDirectory, @"Fonts/宋体.ttc")) }
 
 
     module Adobe =
@@ -1491,7 +1491,7 @@ module RegisterableFonts =
         let AdobeHeitiStd_Regular = 
             { PdfEncodings = PdfEncodings.IDENTITY_H
               FontFamily = "AdobeHeitiStd-Regular"
-              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/Adobe/AdobeHeitiStd-Regular.otf")) }
+              File = FsFileInfo.create (Path.Combine(resourceDirectory, @"Fonts/Adobe/AdobeHeitiStd-Regular.otf")) }
 
     module ArialUnicode =
         
@@ -1507,7 +1507,7 @@ module RegisterableFonts =
 
             { PdfEncodings = PdfEncodings.IDENTITY_H
               FontFamily = weightText
-              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/Arial-Unicode/" + (weightText) + ".ttf")) }
+              File = FsFileInfo.create (Path.Combine(resourceDirectory, @"Fonts/Arial-Unicode/" + (weightText) + ".ttf")) }
 
 
     module Arial =
@@ -1535,7 +1535,7 @@ module RegisterableFonts =
 
             { PdfEncodings = PdfEncodings.CP1252
               FontFamily = fontFamily
-              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/Arial/" + (fontName) + ".ttf")) }
+              File = FsFileInfo.create (Path.Combine(resourceDirectory, @"Fonts/Arial/" + (fontName) + ".ttf")) }
 
 
     module YaHei =
@@ -1569,7 +1569,7 @@ module RegisterableFonts =
 
             { PdfEncodings = PdfEncodings.IDENTITY_H
               FontFamily = weightText
-              File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/微软雅黑/" + fontName)) }
+              File = FsFileInfo.create (Path.Combine(resourceDirectory, @"Fonts/微软雅黑/" + fontName)) }
 
 
 
@@ -1592,7 +1592,7 @@ module RegisterableFonts =
 
     //        { PdfEncodings = PdfEncodings.IDENTITY_H
     //          FontFamily = weightText
-    //          File = FsFileInfo.create (Path.Combine(resourceDirectory.Value, @"Fonts/思源黑体/NotoSansHans-" + (weight.ToString()) + ".otf")) }
+    //          File = FsFileInfo.create (Path.Combine(resourceDirectory, @"Fonts/思源黑体/NotoSansHans-" + (weight.ToString()) + ".otf")) }
 
      
 

@@ -312,7 +312,6 @@ let manipulateTests =
         |> runTest "datas/manipulate/clipping Contents To Pagebox.pdf" 
         |> ignore
 
-
     testCase "expand stroke width" <| fun _ -> 
         Flow.Manipulate (
             Modify.ExpandStrokeWidth(

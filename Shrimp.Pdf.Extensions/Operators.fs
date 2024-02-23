@@ -35,20 +35,17 @@ module Constants =
     type private AssemblyFinder = AssemblyFinder
 
     let private config = 
-        lazy
-            ConfigurationFactory
-                .FromResource<AssemblyFinder>("Shrimp.Pdf.Extensions.reference.conf")
-            |> Configuration.fallBackByApplicationConf
+        ConfigurationFactory
+            .FromResource<AssemblyFinder>("Shrimp.Pdf.Extensions.reference.conf")
+        |> Configuration.fallBackByApplicationConf
 
     /// default is 0.1
     let tolerance = 
-        lazy
-            config.Value.GetDouble("shrimp.pdf.tolerance")
+        config.GetDouble("shrimp.pdf.tolerance")
 
 
     let textInfoHeightRedirectPercentage = 
-        lazy
-            config.Value.GetDouble("shrimp.pdf.textInfoHeightRedirectPercentage")
+        config.GetDouble("shrimp.pdf.textInfoHeightRedirectPercentage")
 
     let [<Literal>] MAXIMUM_MM_WIDTH = 5080.
 
@@ -430,13 +427,13 @@ module Operators =
     /// approximately equal to 
     /// benchmark by (CONFIG: shrimp.pdf.tolerance (default is 0.1))
     let (@=) a b =
-        (abs (a - b)) < tolerance.Value
+        (abs (a - b)) < tolerance
 
     ///// approximately bigger or equal to 
     ///// benchmark by (CONFIG: shrimp.pdf.tolerance (default is 0.1))
     //let (>=@) a b =
     //    a > b
-    //    || (abs (a - b)) < tolerance.Value
+    //    || (abs (a - b)) < tolerance
 
     /// unSerializable
     type NearbyPX (v: float, tolerance) =
@@ -449,7 +446,7 @@ module Operators =
         member x.Value = v
 
         new (v) =
-            NearbyPX(v, tolerance.Value)
+            NearbyPX(v, tolerance)
             
 
     /// defaultConversion: mm to user unit

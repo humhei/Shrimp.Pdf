@@ -238,14 +238,14 @@ module _SlimFlow_BackgroundOrForeground =
 
         member x.FileName = backgroundFile.Name
 
-        member x.ModifyInfos(name, paramters, f) =
-            match modifyFlowNames.Contains(name, paramters) with 
+        member x.ModifyInfos(name, parameters, f) =
+            match modifyFlowNames.Contains(name, parameters) with 
             | true -> ()
             | false ->
                 let newInfos: RenewableInfo list = f infos
                 infos <- newInfos
                 filterInfosCache.Clear()
-                modifyFlowNames.Add(name, paramters) |> ignore
+                modifyFlowNames.Add(name, parameters) |> ignore
 
         member x.CollectInfos<'T>(name: string, mapping: RenewableInfo list -> 'T list) =
             filterInfosCache.GetOrAdd(name, valueFactory = fun _ ->
@@ -517,9 +517,9 @@ module _SlimFlow_BackgroundOrForeground =
 
 
     
-        member x.ModifyInfos(name, paramters, f) =
+        member x.ModifyInfos(name, parameters, f) =
             for pair in cache do 
-                pair.Value.ModifyInfos(name, paramters, f)
+                pair.Value.ModifyInfos(name, parameters, f)
 
         member x.SetColor() =
             for pair in cache do 
@@ -620,10 +620,10 @@ module _SlimFlow_BackgroundOrForeground =
             | Singleton v -> v.SetColor()
             | Multiple v  -> v.SetColor()
 
-        member x.ModifyInfos(name, paramters, f) =
+        member x.ModifyInfos(name, parameters, f) =
             match x with 
-            | Singleton v -> v.ModifyInfos(name, paramters, f)
-            | Multiple v  -> v.ModifyInfos(name, paramters, f)
+            | Singleton v -> v.ModifyInfos(name, parameters, f)
+            | Multiple v  -> v.ModifyInfos(name, parameters, f)
 
         member x.FilterInfos(pageNumber, name, filter) =
             x.GetByPageNumber(pageNumber).FilterInfos(name, filter)

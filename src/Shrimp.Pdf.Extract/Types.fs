@@ -13,14 +13,12 @@ module internal Config =
     type private AssemblyFinder = AssemblyFinder
 
     let internal config = 
-        lazy
-            ConfigurationFactory
-                .FromResource<AssemblyFinder>("Shrimp.Pdf.Extract.reference.conf")
-            |> Configuration.fallBackByApplicationConf
+        ConfigurationFactory
+            .FromResource<AssemblyFinder>("Shrimp.Pdf.Extract.reference.conf")
+        |> Configuration.fallBackByApplicationConf
 
 
-    let loggingPageCountInterval = 
-        lazy config.Value.GetInt("Shrimp.Pdf.Extract.LoggingPageCountInterval")
+    let loggingPageCountInterval = config.GetInt("Shrimp.Pdf.Extract.LoggingPageCountInterval")
 
 //[<AutoOpen>]
 //module _Types =

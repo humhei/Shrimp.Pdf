@@ -1,6 +1,11 @@
 ﻿namespace Shrimp.Pdf.icms2.client
 #nowarn "0104"
+open icms2_wrapper
+
+open Shrimp.Pdf.icms2
+
 open Shrimp.Pdf.icms2.Core
+open Shrimp.Pdf.icms2.CmsCore
 open iText.Kernel.Colors
 open Akka.Configuration
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
@@ -39,13 +44,12 @@ module Client =
     type private AssemblyFinder = AssemblyFinder
 
     let private referenceConfig = 
-        lazy
-            ConfigurationFactory.FromResource<AssemblyFinder>("Shrimp.Pdf.icms2.Client.reference.conf")
-            |> Configuration.fallBackByApplicationConf
+        ConfigurationFactory.FromResource<AssemblyFinder>("Shrimp.Pdf.icms2.Client.reference.conf")
+        |> Configuration.fallBackByApplicationConf
 
     let private getEnumFromConfig configName : 'enum =
         let avaliableIccs = Enum.GetNames(typeof<'enum>)
-        let cmykIccText = referenceConfig.Value.GetString(configName)
+        let cmykIccText = referenceConfig.GetString(configName)
         match Array.tryFind (fun m -> String.Compare(m, cmykIccText.Trim(), true) = 0) avaliableIccs with 
         | Some icc -> 
             Enum.Parse(typeof<'enum>, icc)
@@ -53,55 +57,49 @@ module Client =
         | None -> failwithf "avaliableIccs %A not include %s" avaliableIccs cmykIccText 
      
 
-    let defaultCmykIcc: Lazy<CmykIcc> = 
-        lazy
-            getEnumFromConfig "shrimp.pdf.icms2.client.icc.cmyk"
+    let defaultCmykIcc: CmykIcc = 
+        getEnumFromConfig "shrimp.pdf.icms2.client.icc.cmyk"
 
-    let defaultRgbIcc: Lazy<RgbIcc> =
-        lazy
-            getEnumFromConfig "shrimp.pdf.icms2.client.icc.rgb"
+    let defaultRgbIcc: RgbIcc =
+        getEnumFromConfig "shrimp.pdf.icms2.client.icc.rgb"
 
-    let defaultLabIcc: Lazy<LabIcc> =
-        lazy
-            getEnumFromConfig "shrimp.pdf.icms2.client.icc.lab"
+    let defaultLabIcc: LabIcc =
+        getEnumFromConfig "shrimp.pdf.icms2.client.icc.lab"
 
-    let defaultGrayIcc: Lazy<GrayIcc> =
-        lazy
-            getEnumFromConfig "shrimp.pdf.icms2.client.icc.gray"
+    let defaultGrayIcc: GrayIcc =
+        getEnumFromConfig "shrimp.pdf.icms2.client.icc.gray"
 
-    let defaultIntent: Lazy<Intent> =
-        lazy
-            getEnumFromConfig "shrimp.pdf.icms2.client.icc.intent"
+    let defaultIntent: Indent =
+        getEnumFromConfig "shrimp.pdf.icms2.client.icc.intent"
 
-    let defaultMaxCmsGrayDeviation: Lazy<float32> =
-        lazy
-            referenceConfig.Value.GetFloat("shrimp.pdf.icms2.client.maxCmsGrayDeviation")
+    let defaultMaxCmsGrayDeviation: float32 =
+        referenceConfig.GetFloat("shrimp.pdf.icms2.client.maxCmsGrayDeviation")
 
-    [<AutoOpen>]
-    module ClientCluster =
-        let private client = 
-            lazy
-                let actorClient = Client.create()
-                actorClient.WarmUp(fun _ ->
-                    actorClient <! ServerMsg.CalcColor (Icc.Rgb defaultRgbIcc.Value, [|0.5f; 0.5f; 0.5f|], Icc.Cmyk defaultCmykIcc.Value, defaultIntent.Value)
-                )
-                actorClient
+    //[<AutoOpen>]
+    //module ClientCluster =
+        //let private client = 
+        //    lazy
+        //        let actorClient = Client.create()
+        //        actorClient.WarmUp(fun _ ->
+        //            actorClient <! ServerMsg.CalcColor (Icc.Rgb defaultRgbIcc, [|0.5f; 0.5f; 0.5f|], Icc.Cmyk defaultCmykIcc, defaultIntent)
+        //        )
+        //        actorClient
 
-        let GetDefaultClusterIcm2Client() = 
-            client.Value
+        //let GetDefaultClusterIcm2Client() = 
+        //    client.Value
 
 
 
-    let private msgCache = new ConcurrentDictionary<ServerMsg, float32[]>()
+    //let private msgCache = new ConcurrentDictionary<ServerMsg, float32[]>()
 
 
     type ColorSpace with 
         static member DefaultIcc(colorSpace) =
             match colorSpace with
-            | ColorSpace.Rgb  -> Icc.Rgb defaultRgbIcc.Value
-            | ColorSpace.Cmyk  -> Icc.Cmyk defaultCmykIcc.Value
-            | ColorSpace.Gray  -> Icc.Gray defaultGrayIcc.Value
-            | ColorSpace.Lab  -> Icc.Lab defaultLabIcc.Value
+            | ColorSpace.Rgb  -> Icc.Rgb defaultRgbIcc
+            | ColorSpace.Cmyk  -> Icc.Cmyk defaultCmykIcc
+            | ColorSpace.Gray  -> Icc.Gray defaultGrayIcc
+            | ColorSpace.Lab  -> Icc.Lab defaultLabIcc
 
     type AlternativeFsColor 
     with 
@@ -120,73 +118,67 @@ module Client =
             
         member x.IsSameColorSpaceWith(icc: Icc) = x.AlterColor.ColorSpace = icc.ColorSpace
 
-        member private x.GetConvertedColorValuesAsync(outputIcc: Icc, intent: Intent, inputIcc: Icc) = async {
+        member private x.GetConvertedColorValues(outputIcc: Icc, intent: Indent, inputIcc: Icc) = 
             if x.IsSameColorSpaceWith(inputIcc)
             then
                 match inputIcc.ColorSpace = outputIcc.ColorSpace with 
-                | true -> return x.GetColorValues()
+                | true -> x.GetColorValues()
                 | false ->
                     let inputValues = x.GetColorValues()
-                    let msg = (ServerMsg.CalcColor (inputIcc, inputValues, outputIcc, intent))
-                    return
-                        msgCache.GetOrAdd(msg, fun msg ->
-                            GetDefaultClusterIcm2Client() <? msg
-                            |> Async.RunSynchronously
-                        )
+                    (FsIcmsTransformer.CalcColor(inputIcc, inputValues, outputIcc, intent))
+              
 
-            else return x.GetColorValues()
-        }
+            else x.GetColorValues()
 
-        member x.ConvertToAsync(outputIcc: Icc, ?intent: Intent, ?inputIcc: AlternativeFsColor -> Icc) = async {
+        member x.ConvertTo(outputIcc: Icc, ?intent: Indent, ?inputIcc: AlternativeFsColor -> Icc) = 
             
             let inputIcc = (defaultArg inputIcc AlternativeFsColor.DefaultIcc) x
             match inputIcc.ColorSpace = outputIcc.ColorSpace with 
-            | true -> return x.AlterColor
+            | true -> x.AlterColor
             | false ->
                 if x.IsWhite()
-                then return (ColorSpace.createWhite outputIcc.ColorSpace)
+                then (ColorSpace.createWhite outputIcc.ColorSpace)
                 elif x.IsBlack()
-                then return (ColorSpace.createBlack outputIcc.ColorSpace)
+                then (ColorSpace.createBlack outputIcc.ColorSpace)
                 else
-                    let intent = defaultArg intent defaultIntent.Value
+                    let intent = defaultArg intent defaultIntent
 
                     if inputIcc = outputIcc 
-                    then return x.AlterColor
+                    then x.AlterColor
                     else
-                        let! (outputValues : float32[])  = x.GetConvertedColorValuesAsync(outputIcc, intent, inputIcc)
+                        let (outputValues : float32[])  = x.GetConvertedColorValues(outputIcc, intent, inputIcc)
 
                         match outputIcc with 
                         | Icc.Lab _ ->
-                            return FsValueColor.Lab( {L = outputValues.[0]; a = outputValues.[1]; b = outputValues.[2]} )
+                            FsValueColor.Lab( {L = outputValues.[0]; a = outputValues.[1]; b = outputValues.[2]} )
 
-                        | Icc.Cmyk _ -> return FsValueColor.Cmyk(FsDeviceCmyk.Create(outputValues.[0], outputValues.[1], outputValues.[2], outputValues.[3]))
-                        | Icc.Gray _ -> return FsValueColor.Gray(FsGray(outputValues.[0]))
-                        | Icc.Rgb _ -> return FsValueColor.Rgb(FsDeviceRgb.Create(outputValues.[0], outputValues.[1], outputValues.[2]))
-            }
+                        | Icc.Cmyk _ -> FsValueColor.Cmyk(FsDeviceCmyk.Create(outputValues.[0], outputValues.[1], outputValues.[2], outputValues.[3]))
+                        | Icc.Gray _ -> FsValueColor.Gray(FsGray(outputValues.[0]))
+                        | Icc.Rgb _ -> FsValueColor.Rgb(FsDeviceRgb.Create(outputValues.[0], outputValues.[1], outputValues.[2]))
 
-        member x.ConvertToLabAsync(?labIcc: LabIcc, ?intent: Intent, ?inputIcc: AlternativeFsColor -> Icc) = async {
+        member x.ConvertToLab(?labIcc: LabIcc, ?intent: Indent, ?inputIcc: AlternativeFsColor -> Icc) = 
             
             if x.IsWhite()
-            then return (FsLab.WHITE)
+            then (FsLab.WHITE)
             elif x.IsBlack()
-            then return (FsLab.BLACK)
+            then (FsLab.BLACK)
             else
-                let labIcc = defaultArg labIcc defaultLabIcc.Value
+                let labIcc = defaultArg labIcc defaultLabIcc
                 let inputIcc = (defaultArg inputIcc AlternativeFsColor.DefaultIcc) x
-                let intent = defaultArg intent defaultIntent.Value
+                let intent = defaultArg intent defaultIntent
 
                 if x.IsSameColorSpaceWith(inputIcc) 
                 then 
                     if inputIcc = Icc.Lab labIcc
                     then
-                        return x.AsLab().Value
+                        x.AsLab().Value
                     else
-                        let! (outputValues : float32[])  = x.GetConvertedColorValuesAsync(Icc.Lab labIcc, intent, inputIcc)
-                        return{L = outputValues.[0]; a = outputValues.[1]; b = outputValues.[2]}
+                        let (outputValues : float32[])  = x.GetConvertedColorValues(Icc.Lab labIcc, intent, inputIcc)
+                        {L = outputValues.[0]; a = outputValues.[1]; b = outputValues.[2]}
 
                 else 
-                    return failwithf "input icc %A and color %A are not in same namespace" inputIcc x
-        }
+                    failwithf "input icc %A and color %A are not in same namespace" inputIcc x
+        
 
 
     type AlternativeFsColor with
@@ -199,13 +191,12 @@ module Client =
 
             fun (color: AlternativeFsColor) ->
                 let labColor = 
-                    color.ConvertToLabAsync(?labIcc = labIcc, ?intent = intent, ?inputIcc = inputIcc)
-                    |> Async.RunSynchronously
+                    color.ConvertToLab(?labIcc = labIcc, ?intent = intent, ?inputIcc = inputIcc)
 
                 predicate labColor
 
         static member IsCmsGray(?maxDeviation: float32, ?predicateCompose, ?labIcc, ?intent, ?inputIcc) =
-            let maxDeviation = defaultArg maxDeviation defaultMaxCmsGrayDeviation.Value
+            let maxDeviation = defaultArg maxDeviation defaultMaxCmsGrayDeviation
             let predicate (labColor: FsLab) = 
                 abs labColor.a <= maxDeviation && abs labColor.b <= maxDeviation
 
@@ -217,19 +208,23 @@ module Client =
 
             AlternativeFsColor.Is(predicate, ?predicateCompose = predicateCompose, ?labIcc = labIcc, ?intent = intent, ?inputIcc = inputIcc)
 
-        member internal x.AsSpecificOrWhite(specificColor, ?labIcc, ?intent, ?inputIcc) =
+        member x.Cms_AsSpecificOrWhite(specificColor, ?labIcc, ?intent, ?inputIcc) =
             if AlternativeFsColor.IsCmsWhite(?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc) x
             then (DeviceGray.WHITE :> Color)
             else specificColor
 
-        member internal x.AsBlackOrWhite(?labIcc, ?intent, ?inputIcc) =
-            x.AsSpecificOrWhite(DeviceGray.BLACK, ?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc)
+        member x.Cms_AsBlackOrWhite(?labIcc, ?intent, ?inputIcc) =
+            x.Cms_AsSpecificOrWhite(DeviceGray.BLACK, ?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc)
 
-        member internal x.AsBlackOrWhite_Inversed(?labIcc, ?intent, ?inputIcc) =
+        member x.Cms_AsBlackOrWhite_Inversed(?labIcc, ?intent, ?inputIcc) =
             if AlternativeFsColor.IsCmsWhite(?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc) x
             then (DeviceGray.BLACK :> Color)
             else (DeviceGray.WHITE :> Color)
 
+        member x.Cms_AsBlackOrWhite_Inversed_FsColor(?labIcc, ?intent, ?inputIcc) =
+            if AlternativeFsColor.IsCmsWhite(?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc) x
+            then (FsColor.BLACK)
+            else (FsColor.WHITE)
 
     [<RequireQualifiedAccess>]
     module private FsColor =
@@ -269,7 +264,7 @@ module Client =
                             match color.AsAlternativeFsColor with 
                             | None -> None
                             | Some color ->
-                                color.AsSpecificOrWhite(specificColor, ?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc)
+                                color.Cms_AsSpecificOrWhite(specificColor, ?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc)
                                 |> Some
                 ) args
 
@@ -282,7 +277,7 @@ module Client =
                             match color.AsAlternativeFsColor with 
                             | None -> None
                             | Some color ->
-                                color.AsBlackOrWhite(?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc)
+                                color.Cms_AsBlackOrWhite(?labIcc = labIcc,?intent = intent,?inputIcc = inputIcc)
                                 |> Some
                 ) args
         
@@ -295,15 +290,13 @@ module Client =
                         match inputIcc with 
                         | Some inputIcc ->
                             if cmsColor.IsSameColorSpaceWith(inputIcc cmsColor) then
-                                cmsColor.ConvertToLabAsync(?labIcc = labIcc, ?intent = intent, inputIcc = inputIcc)
-                                |> Async.RunSynchronously
+                                cmsColor.ConvertToLab(?labIcc = labIcc, ?intent = intent, inputIcc = inputIcc)
                                 |> labPicker
                             else 
                                 None
 
                         | None -> 
-                            cmsColor.ConvertToLabAsync(?labIcc = labIcc, ?intent = intent)
-                            |> Async.RunSynchronously
+                            cmsColor.ConvertToLab(?labIcc = labIcc, ?intent = intent)
                             |> labPicker
                 )
 
@@ -318,8 +311,8 @@ module Client =
                         if predicate cmsColor 
                         then 
                             let newColor = 
-                                cmsColor.ConvertToAsync(outputIcc, ?intent = intent, ?inputIcc = inputIcc)
-                                |> Async.RunSynchronously
+                                cmsColor.ConvertTo(outputIcc, ?intent = intent, ?inputIcc = inputIcc)
+
                             Some (FsValueColor.ToItextColor newColor)
                         else None
                 ) args
@@ -344,7 +337,8 @@ module Client =
 
     type Modify_ConvertColorsTo_Options =
         { Predicate: AlternativeFsColor -> bool 
-          Intent: Intent
+          Intent: Indent
+          RenewableInfoTagPredicate: RenewableInfoTag -> bool
           InputIccModifyArgs: InputIccModifyArgs option
           PageSelector: PageSelector 
           FillOrStrokeOptions: FillOrStrokeOptions 
@@ -356,7 +350,8 @@ module Client =
         static member DefaultValue =
             { PageSelector = PageSelector.All 
               Predicate = fun _ -> true 
-              Intent = defaultIntent.Value 
+              Intent = defaultIntent
+              RenewableInfoTagPredicate = fun _ -> true
               InputIccModifyArgs = None
               FillOrStrokeOptions = FillOrStrokeOptions.FillOrStroke
               PageInfosValidation = PageInfosValidation.ignore
@@ -366,6 +361,7 @@ module Client =
         member x.To_Modify_ReplaceColors_Options() : Modify_ReplaceColors_Options =
             { PageSelector = x.PageSelector 
               FillOrStrokeOptions = x.FillOrStrokeOptions 
+              RenewableInfoTagPredicate = x.RenewableInfoTagPredicate
               PageInfosValidation = x.PageInfosValidation 
               Info_BoundIs_Args = x.Info_BoundIs_Args
               SelectorTag = x.SelectorTag }
@@ -387,9 +383,9 @@ module Client =
 
     with 
         static member DefaultValue =
-            { MaxDeviation =  defaultMaxCmsGrayDeviation.Value 
-              OutputIcc = defaultGrayIcc.Value 
-              LabIcc = defaultLabIcc.Value
+            { MaxDeviation =  defaultMaxCmsGrayDeviation 
+              OutputIcc = defaultGrayIcc 
+              LabIcc = defaultLabIcc
               Modify_ConvertColorsTo_Options = Modify_ConvertColorsTo_Options.DefaultValue }
 
     type Modify with
@@ -417,8 +413,8 @@ module Client =
                         if options.Predicate cmsColor 
                         then 
                             let newColor = 
-                                cmsColor.ConvertToAsync(outputIcc, ?intent = Some options.Intent, ?inputIcc = inputIcc)
-                                |> Async.RunSynchronously
+                                cmsColor.ConvertTo(outputIcc, ?intent = Some options.Intent, ?inputIcc = inputIcc)
+
                             Some (FsValueColor.ToItextColor newColor)
                         else None
             )
@@ -458,7 +454,7 @@ module Client =
                 
         static member SpecificOrWhite(specificColor: PdfCanvasColor, ?labIcc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParameters: NameAndParameters) =
             let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
-            let labIcc = defaultArg labIcc defaultLabIcc.Value
+            let labIcc = defaultArg labIcc defaultLabIcc
             let nameAndParameters = 
                 { NameAndParameters.Name = sprintf "Sepecific color %s Or White" specificColor.LoggingText
                   Parameters =
@@ -479,7 +475,7 @@ module Client =
                             let inputIccFactory = options.InputIccModifyArgs |> Option.map (fun m -> m.Factory)
                             if options.Predicate color 
                             then 
-                                color.AsSpecificOrWhite(specificColor.Value, labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory)
+                                color.Cms_AsSpecificOrWhite(specificColor.Value, labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory)
                                 |> Some
                             else None
                 )
@@ -488,7 +484,7 @@ module Client =
 
         static member BlackOrWhite(?labIcc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParameters: NameAndParameters) =
             let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
-            let labIcc = defaultArg labIcc defaultLabIcc.Value
+            let labIcc = defaultArg labIcc defaultLabIcc
             let nameAndParameters = 
                 { NameAndParameters.Name = "BlackOrWhite"
                   Parameters =
@@ -500,23 +496,23 @@ module Client =
                 |> defaultArg nameAndParameters
 
 
+            let inputIccFactory = options.InputIccModifyArgs |> Option.map (fun m -> m.Factory)
             Modify.ReplaceAlternativeColors(
                 options = options.To_Modify_ReplaceColors_Options(),
                 nameAndParameters = nameAndParameters,
                 picker = 
                     fun color ->
-                        let inputIccFactory = options.InputIccModifyArgs |> Option.map (fun m -> m.Factory)
                         if options.Predicate color 
                         then 
-                            color.AsBlackOrWhite(labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory)
+                            color.Cms_AsBlackOrWhite(labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory)
                             |> Some
                         else None
             )
                 
     type Flows with
-        static member BlackOrWhite_Negative_Film(?strokeWidthIncrement: StrokeWidthIncrenment, ?labIcc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParameters: NameAndParameters) =
+        static member BlackOrWhite_Negative_Film(?strokeWidthIncrement: StrokeWidthIncrement, ?labIcc, ?options: Modify_ConvertColorsTo_Options, ?nameAndParameters: NameAndParameters) =
             let options = defaultArg options Modify_ConvertColorsTo_Options.DefaultValue
-            let labIcc = defaultArg labIcc defaultLabIcc.Value
+            let labIcc = defaultArg labIcc defaultLabIcc
             let nameAndParameters = 
                 { NameAndParameters.Name = "BlackOrWhite_Negative_Film"
                   Parameters =
@@ -549,7 +545,7 @@ module Client =
 
                             if options.Predicate color
                             then 
-                                color.AsBlackOrWhite_Inversed(labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory)
+                                color.Cms_AsBlackOrWhite_Inversed(labIcc = labIcc, intent = options.Intent, ?inputIcc = inputIccFactory)
                                 |> Some
                             else None
                 )

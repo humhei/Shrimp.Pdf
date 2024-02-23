@@ -64,9 +64,9 @@ module _SelectionGrouper =
         | None
         | Plane of tolerance: float 
     with    
-        /// (SelectionGrouper.Plane (tolerance.Value))
+        /// (SelectionGrouper.Plane (tolerance))
         static member DefaultValue =
-            (SelectionGrouper.Plane (tolerance.Value))
+            (SelectionGrouper.Plane (tolerance))
 
 
         member grouper.GroupBy(frect: 'info -> iText.Kernel.Geom.Rectangle, ?position: Position) = 
@@ -223,7 +223,7 @@ type SelectionDistincter =
 with    
     /// (SelectionSorter.Plane (tolerance 0.1)
     static member DefaultValue =
-        (SelectionDistincter.Plane (tolerance.Value))
+        (SelectionDistincter.Plane (tolerance))
 
 
     member x.DistinctBy(frect: _ -> FsSize) values =
