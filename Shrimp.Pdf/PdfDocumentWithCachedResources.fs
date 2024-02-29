@@ -2,6 +2,8 @@
 
 open System.Collections.Generic
 open iText.Kernel.Geom
+open iText.IO.Image
+open iText.Kernel.Pdf.Canvas.Wmf
 
 #nowarn "0104"
 open iText.Kernel.Font
@@ -108,18 +110,20 @@ type ReaderDocument (reader: string) =
 [<RequireQualifiedAccess>]
 type CurrentDocumentImage =
     | Inline of PdfStream 
-    | XObject of Xobject.PdfImageXObject
+    | XObject of Xobject.PdfXObject
+    | MaskColor of FsValueColor
+
 
 
 type private PdfDocumentCache private 
     (pdfDocument: unit -> PdfDocumentWithCachedResources,
      fontsCache: ConcurrentDictionary<FsPdfFontFactory, PdfFont>,
-     smaskInfo_hashable_fromOtherDocument : ConcurrentDictionary<(int * int) * AffineTransformRecord, SoftMaskRenderInfo>,
-     fontsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfFont>,
-     patternColorsCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PatternColor>,
-     shadingCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfShading>,
+     smaskInfo_hashable_fromOtherDocument : ConcurrentDictionary<(FsPdfObjectID) * AffineTransformRecord, SoftMaskRenderInfo>,
+     fontsCache_hashable_fromOtherDocument : ConcurrentDictionary<FsPdfObjectID, PdfFont>,
+     patternColorsCache_hashable_fromOtherDocument : ConcurrentDictionary<FsPdfObjectID, PatternColor>,
+     shadingCache_hashable_fromOtherDocument : ConcurrentDictionary<FsPdfObjectID, PdfShading>,
      deviceNCache_hashable_fromOtherDocument : ConcurrentDictionary<FsDeviceN, DeviceN>,
-     imageCache_hashable_fromOtherDocument : ConcurrentDictionary<int * int, PdfImageXObject>,
+     imageCache_hashable_fromOtherDocument : ConcurrentDictionary<SpawnablePdfObjectID, CurrentDocumentImage>,
      colorsCache: ConcurrentDictionary<ResourceColor, Color>,
      xobjectCache: ConcurrentDictionary<PdfFile, ReaderDocument * PdfFormXObject>,
      extGStateCache: ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>) =
@@ -216,6 +220,17 @@ type private PdfDocumentCache private
             PdfShading.MakeShading(pdfObject :?> PdfDictionary)
         )
 
+    member internal x.GetOrCreateImage_FromOtherDocument(key: SpawnablePdfObjectID, image: ImageData) =
+        let number = key
+        imageCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
+            match image.GetOriginalType() with 
+            | ImageType.WMF ->
+                let wmf = new WmfImageHelper(image);
+                wmf.CreateFormXObject(pdfDocument())
+
+            | _ -> PdfImageXObject(image) :> PdfXObject
+            |> CurrentDocumentImage.XObject
+        )
 
 
     member internal x.GetOrCreateImage_FromOtherDocument(image: ImageRenderInfo) =
@@ -223,13 +238,18 @@ type private PdfDocumentCache private
         | true -> 
             let stream = image.GetImage().GetPdfObject()
             CurrentDocumentImage.Inline stream 
+
         | false ->
             let image = image.GetImage()
-            let number = hashNumberOfPdfIndirectReference <| image.GetPdfObject().GetIndirectReference()
-            imageCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
-                image.CopyTo(pdfDocument())
+            let id = 
+                let id = hashNumberOfPdfIndirectReference <| image.GetPdfObject().GetIndirectReference()
+                SpawnablePdfObjectID.OfPdfObjectID id
+
+            imageCache_hashable_fromOtherDocument.GetOrAdd(id, fun number ->
+                image.CopyTo(pdfDocument()) :> PdfXObject
+                |> CurrentDocumentImage.XObject
+
             )
-            |> CurrentDocumentImage.XObject
 
     member internal x.GetOrCreatePatternColor_FromOtherDocument(patternColor: PatternColor) =
             match patternColor.GetColorSpace() with 
@@ -451,13 +471,17 @@ and PdfDocumentWithCachedResources =
     inherit PdfDocument
     val private cache: PdfDocumentCache
     val private editorResources: FsPdfDocumentEditorResources
+    val private parserCache: DocumentParserCache
 
 
+    member internal x.ParserCache = x.parserCache
 
     member x.GetOrCreatePdfFont(fontFactory: FsPdfFontFactory) =
         x.cache.GetOrCreateFont(fontFactory)
 
-    member private x.ClearCache() = x.cache.Clear()
+    member private x.ClearCache() = 
+        x.cache.Clear()
+        x.parserCache.Clear()
 
     member internal x.FontsCache = x.cache.FontsCache
 
@@ -563,6 +587,9 @@ and PdfDocumentWithCachedResources =
     member x.Renew_OtherDocument_Image(otherDocumentImage: ImageRenderInfo) =
         x.cache.GetOrCreateImage_FromOtherDocument(otherDocumentImage)
 
+    member x.Renew_OtherDocument_Image(hashNumber, imageData: ImageData) =
+        x.cache.GetOrCreateImage_FromOtherDocument(hashNumber, imageData)
+
 
     member x.Renew_OtherDocument_Font(pdfFont: PdfFont) =
         x.cache.GetOrCreateFont_FromOtherDocument(pdfFont)
@@ -585,17 +612,20 @@ and PdfDocumentWithCachedResources =
     new (writer: string) as this = 
         { inherit PdfDocument(new PdfWriter(writer));
             cache = new PdfDocumentCache((fun _ -> this));
-            editorResources = FsPdfDocumentEditorResources() }
+            editorResources = FsPdfDocumentEditorResources();
+            parserCache = DocumentParserCache.Create() }
 
     new (reader: string, writer: string) as this =  
         { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer));
             cache = new PdfDocumentCache((fun _ -> this));
-            editorResources = FsPdfDocumentEditorResources() }
+            editorResources = FsPdfDocumentEditorResources();
+            parserCache = DocumentParserCache.Create() }
 
     new (reader: string, writer: string, oldDocument: PdfDocumentWithCachedResources) as this =  
         { inherit PdfDocument(new PdfReader(reader), new PdfWriter(writer));
             cache = oldDocument.cache.Spawn(fun _ -> this);
-            editorResources = FsPdfDocumentEditorResources() }
+            editorResources = FsPdfDocumentEditorResources();
+            parserCache = DocumentParserCache.Create() }
 
 
 type IntegratedDocument internal (reader: string, writer: string) =

@@ -1891,7 +1891,39 @@ module iText =
 
             else failwithf "innerBox %O is not inside pageBox %O" innerBox pageBox
             
+
+
+    type PageBoxes with
+        member x.GetPageBox(pageBoxKind: PageBoxKind) =
+            match pageBoxKind with 
+            | PageBoxKind.MediaBox -> x.MediaBox
+            | PageBoxKind.ArtBox -> x.ArtBox
+            | PageBoxKind.TrimBox -> x.TrimBox
+            | PageBoxKind.CropBox -> x.CropBox
+            | PageBoxKind.BleedBox -> x.BleedBox
+            | PageBoxKind.ActualBox -> x.ActualBox
+
+
+            | PageBoxKind.AllBox ->
+                x.GetPageBox(PageBoxKind.ActualBox)
+
     type PdfPage with
+        member x.GetPageBoxes() =
+            
+            let crop = x.GetCropBox() 
+            let media = x.GetMediaBox()
+            let actualBox = 
+                match Rectangle.tryGetIntersection crop media with 
+                | Some rect -> rect
+                | None -> failwithf "crop box %O doesn't has Intersection to media box %O" crop media
+
+            { CropBox    = crop
+              MediaBox   = media
+              ArtBox     = x.GetArtBox()  
+              TrimBox    = x.GetTrimBox() 
+              BleedBox   = x.GetBleedBox()
+              ActualBox = actualBox }
+
         member x.SetPageBoxToPage(targetPdfPage: PdfPage) =
             x
                 .SetCropBox(targetPdfPage.GetCropBox())

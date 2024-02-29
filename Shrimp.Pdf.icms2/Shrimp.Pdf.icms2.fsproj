@@ -17,7 +17,7 @@
     <PackageReference Include="Fake.Core.Environment" Version="5.16.1" />
     <PackageReference Include="icms2-wrapper-fsharp" Version="1.0.6" />
     <PackageReference Include="Shrimp.Akkling.Cluster.Intergraction" Version="0.2.100" />
-    <PackageReference Include="Shrimp.FSharp.Plus" Version="5.99.492" />
+    <PackageReference Include="Shrimp.FSharp.Plus" Version="5.99.494"/>
     <PackageReference Include="System.Drawing.Common" Version="6.0.0" />
     <PackageReference Include="System.ValueTuple" Version="4.5.0" />
       <PackageReference Include="FParsec" Version="1.1.1" />

@@ -46,6 +46,27 @@ with
         { XObjectReference = XObjectReference.ByCopied 
           RemovingLayer = None }
 
+type PdfModifyOptions2 =
+    { XObjectReference: XObjectReference
+      RemovingLayer: string option
+      ParserCache: DocumentParserCache }
+with 
+    member x.NoCache() =
+        { XObjectReference = x.XObjectReference 
+          RemovingLayer = x.RemovingLayer }
+
+    static member ByRef =
+        { RemovingLayer = None
+          XObjectReference = XObjectReference.ByRef }
+
+    static member Create(cache, ?xobjectReference, ?removingLayer) =
+        { XObjectReference = defaultArg xobjectReference XObjectReference.ByCopied 
+          RemovingLayer = removingLayer
+          ParserCache = cache }
+
+
+
+
 type CloseOperator= 
     | Open  = 0
     | Close = 1
@@ -224,8 +245,14 @@ with
     
 [<RequireQualifiedAccess>]
 type ImageDataOrImageXObject =
-    | ImageData of ImageData
+    | ImageData of  SpawnablePdfObjectID * ImageData * (PdfCanvas -> SpawnablePdfObjectID * ImageData -> PdfXObject)
     | ImageXObject of PdfImageXObject
+with 
+    member x.AsSpawned() =
+        match x with 
+        | ImageXObject _ -> x
+        | ImageData (id, imageData, factory) ->
+            ImageData({id with IsSpawned = true}, imageData, factory)
 
 [<RequireQualifiedAccess>]
 type ImageCloseOperator =
@@ -526,9 +553,9 @@ with
                     
                 | ImageCloseOperator.New (ctm, image) ->
                     match image with 
-                    | ImageDataOrImageXObject.ImageData image ->
-                        canvas.AddImage(image, ctm) |> ignore
-                        canvas
+                    | ImageDataOrImageXObject.ImageData (hashKey, image, imageFactory) ->
+                        let xobject = imageFactory canvas (hashKey, image)
+                        canvas.AddXObject(xobject, ctm) 
 
                     | ImageDataOrImageXObject.ImageXObject image ->
                         canvas.AddXObject(image, ctm) 
@@ -717,8 +744,8 @@ type internal ModifierPdfCanvas(contentStream, resources: FsPdfResources, docume
         base.Rectangle(rect)
 
 
-and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * ModifierUnion>, ops: PdfModifyOptions, page: PdfPage, document: PdfDocument) =
-    inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(page.GetActualBox(), Map.map (fun _ -> fst) selectorModifierMapping))
+and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * ModifierUnion>, ops: PdfModifyOptions2, page: PdfPage, document: PdfDocument) =
+    inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(ops.ParserCache, page, Map.map (fun _ -> fst) selectorModifierMapping))
     let fsDocumentResources = (box document :?> IFsPdfDocumentEditor).Resources
     let removingLayer = ops.RemovingLayer
     let exists_ClippingPath_Shading_Modifier =
@@ -897,7 +924,7 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                                 |> FsPdfResources
 
 
-                        let fixedStream: PdfStream = this.EditContent(xobjectResources, xobjectStream)
+                        let fixedStream: PdfStream = this.EditContent(xobjectResources, xobjectStream) :?> PdfStream
                         let name = resources.AddForm(fixedStream)
                         container.Put(name, fixedStream) |> ignore
                         let operatorRange =
@@ -974,8 +1001,17 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
             | PathOrText tag ->
                 match eventListener.CurrentRenderInfoStatus with 
                 | CurrentRenderInfoStatus.Skiped -> 
-                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                    |> ignore
+                    match eventListener.OffsetedTextMatrix with 
+                    | None ->
+                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                        |> ignore
+
+                    | Some textMatrix ->
+                        currentPdfCanvas.SetTextMatrix(AffineTransform.ofMatrix textMatrix)
+                        |> ignore
+
+                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                        |> ignore
 
                 | CurrentRenderInfoStatus.Selected ->
                     let isShading = 
@@ -1146,9 +1182,10 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
     member internal x.ParsedRenderInfos = eventListener.ParsedRenderInfos
 
     override this.ProcessContent(contentBytes, resources) =
+        
         base.ProcessContent(contentBytes, resources)
 
-    member this.EditContent (resources: FsPdfResources, pdfObject: PdfObject) =
+    member this.EditContent (resources: FsPdfResources, pdfObject: PdfObject): PdfObject =
         match eventListener with 
         | null -> eventListener <- this.GetEventListener() :?> FilteredEventListenerEx
         | _ -> ()
@@ -1181,11 +1218,22 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
         | :? PdfArray as array ->
             if array |> Seq.forall (fun o -> o :? PdfStream) && Seq.length array > 1 then 
-                let stream = new PdfStream()
-                array |> Seq.cast<PdfStream> |> Seq.iter (fun s1 ->
-                    stream.GetOutputStream().WriteBytes(s1.GetBytes()) |> ignore
-                )
-                this.EditContent (resources, stream)
+                match ops.XObjectReference with 
+                | XObjectReference.ByCopied ->
+                    let stream = new PdfStream()
+                    array |> Seq.cast<PdfStream> |> Seq.iter (fun s1 ->
+                        stream.GetOutputStream().WriteBytes(s1.GetBytes()) |> ignore
+                    )
+                    this.EditContent (resources, stream)
+
+                | XObjectReference.ByRef ->
+                    let streams = array |> Seq.cast<PdfStream>
+                    for stream in streams do
+                        this.EditContent (resources, stream)
+                        |> ignore
+                    array
+
+
             else
                 failwith "Not implemented"
 
@@ -1197,34 +1245,38 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
 [<RequireQualifiedAccess>]
 module PdfPage =
-    let modifyIM ops (selectorModifierMapping) (page: PdfPage) =
+    let modifyIM (ops: PdfModifyOptions2) (selectorModifierMapping) (page: PdfPage) =
         let document = page.GetDocument()
         let editor = new PdfCanvasEditor(selectorModifierMapping, ops, page, document)
+        editor.Listener.SaveGS(editor.GetGraphicsState())
         let pageContents = 
             match ops.XObjectReference with 
             | XObjectReference.ByCopied -> page.GetPdfObject().Get(PdfName.Contents).Clone()
             | XObjectReference.ByRef -> page.GetPdfObject().Get(PdfName.Contents)
 
-        match pageContents with 
-        | null -> Seq.empty
-        | _ ->
-            let resources = 
-                page.GetResources()
-                |> FsPdfResources
+        let r = 
+            match pageContents with 
+            | null -> Seq.empty
+            | _ ->
+                let resources = 
+                    page.GetResources()
+                    |> FsPdfResources
 
-            editor.InitClippingPath(page)
-            let fixedStream = editor.EditContent(resources, pageContents)
+                editor.InitClippingPath(page)
+                let fixedStream = editor.EditContent(resources, pageContents)
 
-            page.Put(PdfName.Contents, fixedStream)
-            |> ignore
+                page.Put(PdfName.Contents, fixedStream)
+                |> ignore
 
-            editor.ParsedRenderInfos
+                editor.ParsedRenderInfos
 
+        editor.Listener.RestoreGS()
 
+        r
 
-    let removeLayer layerName (page: PdfPage) =
+    let removeLayer (ops: PdfModifyOptions2) layerName (page: PdfPage) =
         let ops =   
-            { PdfModifyOptions.DefaultValue with RemovingLayer = Some layerName }
+            { ops with RemovingLayer = Some layerName }
         modifyIM ops Map.empty  page
 
     let modify ops (selectorModifierMapping) (page: PdfPage) =

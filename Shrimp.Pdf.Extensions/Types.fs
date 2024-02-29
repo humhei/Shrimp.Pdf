@@ -21,6 +21,9 @@ open Shrimp.FSharp.Plus.Math
 [<AutoOpen>]
 module ExtensionTypes =
 
+    
+
+
 
     [<AutoOpen>]
     module _Colors =
@@ -1657,6 +1660,18 @@ module ExtensionTypes =
             AreaGettingOptions.FsSpecfic(FsRectangle.OfRectangle rect)
 
 
+    type PageBoxes =
+        { CropBox: Rectangle
+          MediaBox: Rectangle
+          ArtBox: Rectangle
+          TrimBox: Rectangle
+          BleedBox: Rectangle
+          ActualBox: Rectangle }
+
+
+            
+
+
 
     [<RequireQualifiedAccess>]
     type CanvasFontSize =
@@ -1682,7 +1697,7 @@ module ExtensionTypes =
 
     type IdentifiedPdfObject =
         { PdfObject_SkipComparation: SkipComparation<PdfObject>
-          ID: int * int }
+          ID: FsPdfObjectID }
     with
         member x.PdfObject = x.PdfObject_SkipComparation.Value
 

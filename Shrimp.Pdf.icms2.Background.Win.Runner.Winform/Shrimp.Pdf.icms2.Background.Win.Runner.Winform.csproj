@@ -465,20 +465,6 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Shrimp.Pdf.icms2.Helper\Shrimp.Pdf.icms2.Helper.csproj">
-      <Project>{8ffbe1ec-9394-4cfc-a482-97e60d5cdb18}</Project>
-      <Name>Shrimp.Pdf.icms2.Helper</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Shrimp.Pdf.icms2.Server\Shrimp.Pdf.icms2.Server.fsproj">
-      <Project>{5c5bcd51-2e7b-4cbe-87ce-83dc3bed1680}</Project>
-      <Name>Shrimp.Pdf.icms2.Server</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Shrimp.Pdf.icms2\Shrimp.Pdf.icms2.fsproj">
-      <Project>{1c7f98d8-ce4e-41ee-8feb-3053a35052e8}</Project>
-      <Name>Shrimp.Pdf.icms2</Name>
-    </ProjectReference>
-  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="..\packages\LightningDB.0.13.0\build\LightningDB.targets" Condition="Exists('..\packages\LightningDB.0.13.0\build\LightningDB.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">

@@ -7,20 +7,12 @@ open Shrimp.FSharp.Plus
 open System
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
 open iText.Kernel.Pdf
-
-module PdfNames =
+[<AutoOpen>]
+module _ShpLayer =
+    
     [<RequireQualifiedAccess>]
-    module PdfName =
-        //let ShpLayer = PdfName "ShpLayer" 
-        let ShpLayerBk_XObjectOnly = PdfName "ShpLayerBk_XObjectOnly" 
-        let ShpLayerFr_XObjectOnly = PdfName "ShpLayerFr_XObjectOnly" 
-        let ShpLayerBK = PdfName "ShpLayerBK" 
-        let ShpLayerPixel = PdfName "ShpLayerPixel" 
-        let ShpLayerForeground = PdfName "ShpLayerForeground" 
-        let ShpLayerContent = PdfName "ShpLayerContent" 
-        let ShpLayerCuttingDie = PdfName "ShpLayerCuttingDie" 
-        let ShpLayerBkSolid = PdfName "ShpLayerBkSolid" 
-
+    module private PdfName =
+        let ShpLayer = PdfName "ShpLayer" 
 
     [<System.Flags>]
     type CuttingDieShpLayerInfosEnum =
@@ -28,6 +20,87 @@ module PdfNames =
         | CuttingDieDashLine = 2
         | TagInfos = 4
 
+    [<RequireQualifiedAccess>]
+    type ShpLayer =
+        | Bk_XObjectOnly of string
+        | Fr_XObjectOnly of string
+        | BK             of string
+        | Foreground     of string
+        | Content        of string option        
+        | Pixel          of string
+        | CuttingDie     of CuttingDieShpLayerInfosEnum
+        | BkSolid
+        | CompoundPath
+        | ClippingPath
+    with 
+        static member CreateContent(?name) =
+            ShpLayer.Content name
+
+        member x.AsPdfObject() =
+            let createPdfArray (text1: string) (text2: string) =
+                let pdfArray = PdfArray()
+                pdfArray.Add(PdfString text1)
+                pdfArray.Add(PdfString text2)
+                pdfArray :> PdfObject
+
+            let createPdfArrayOp (text1: string) (text2: string option) =
+                let pdfArray = PdfArray()
+                pdfArray.Add(PdfString text1)
+                match text2 with 
+                | None -> ()
+                | Some text2 -> pdfArray.Add(PdfString text2)
+                pdfArray :> PdfObject
+
+            match x with 
+            | Bk_XObjectOnly v -> 
+                let name = nameof(ShpLayer.Bk_XObjectOnly)
+                createPdfArray name v
+                
+            | Fr_XObjectOnly v -> 
+                let name = nameof(ShpLayer.Fr_XObjectOnly)
+                createPdfArray name v
+
+            | BK v -> 
+                let name = nameof(ShpLayer.BK)
+                createPdfArray name v
+
+            | Foreground v -> 
+                let name = nameof(ShpLayer.Foreground)
+                createPdfArray name v
+
+            | Content v -> 
+                let name = nameof(ShpLayer.Content)
+                createPdfArrayOp name v
+
+            | Pixel v -> 
+                let name = nameof(ShpLayer.Pixel)
+                createPdfArray name v
+
+            | CuttingDie enum -> 
+                let pdfArray = PdfArray()
+                let name = nameof(ShpLayer.CuttingDie)
+                pdfArray.Add(PdfString name)
+                pdfArray.Add(PdfNumber (int enum))
+                pdfArray
+
+            | BkSolid -> 
+                let name = nameof(ShpLayer.BkSolid)
+                PdfString name
+
+            | CompoundPath -> 
+                let name = nameof(ShpLayer.CompoundPath)
+                PdfString name
+
+            | ClippingPath -> 
+                let name = nameof(ShpLayer.ClippingPath)
+                PdfString name
+
+
+
+
+    type PdfDictionary with 
+        member x.PutShpLayer(shpLayer: ShpLayer) =
+            x.Put(PdfName.ShpLayer, shpLayer.AsPdfObject())
 
 
 module Constants =
@@ -420,8 +493,25 @@ module Constants =
 module Operators =
     open Constants
 
+
+
+    type FsPdfObjectID =
+        { ObjNumber: int 
+          GenNumber: int }
+
+    type SpawnablePdfObjectID =
+        { ObjNumber: int 
+          GenNumber: int
+          IsSpawned: bool }
+    with 
+        static member OfPdfObjectID(id: FsPdfObjectID, ?isSpawnded) =
+            { ObjNumber = id.ObjNumber
+              GenNumber = id.GenNumber 
+              IsSpawned = defaultArg isSpawnded false }
+
     let hashNumberOfPdfIndirectReference(pdfIndirectReference: PdfIndirectReference) =
-        pdfIndirectReference.GetObjNumber(), pdfIndirectReference.GetGenNumber()
+        { ObjNumber = pdfIndirectReference.GetObjNumber() 
+          GenNumber = pdfIndirectReference.GetGenNumber() }
 
 
     /// approximately equal to 

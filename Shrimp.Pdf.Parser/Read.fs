@@ -204,17 +204,29 @@ type SelectorModiferToken =
 
 
 
+type DocumentParserCache =
+    { ImageColorSpaceCache: ConcurrentDictionary<PdfObject, ImageColorSpaceData option>
+      ImageDataCache: ConcurrentDictionary<FsPdfObjectID, FsImageData> }
+with 
+    member x.Clear() =
+        x.ImageColorSpaceCache.Clear()
+        x.ImageDataCache.Clear()
+
+    static member Create() =
+        { ImageColorSpaceCache = ConcurrentDictionary()
+          ImageDataCache = ConcurrentDictionary() }
+
 module internal Listeners =
     
     type CurrentRenderInfoStatus =
         | Skiped = 0
         | Selected = 1
 
-    let private imageColorSpaceCache = new ConcurrentDictionary<_, _>()
+
 
 
     [<AllowNullLiteral>]
-    type GSStateStackableEventListener() =
+    type GSStateStackableEventListener(pdfPage: PdfPage) =
         let gsStack = new Stack<FsParserGraphicsState>()
         let mutable gsStates_invokeByGS = InfoGsStateLists []
         let mutable is_gsStates_invokeByGS_updated = false
@@ -242,17 +254,24 @@ module internal Listeners =
             gsStates_invokeByGS <- gsState
             is_gsStates_invokeByGS_updated <- true
 
-        member internal x.SaveGS(containerID, gs: ParserGraphicsState, ?invokeByGS) =
-            let invokeByGS = defaultArg invokeByGS false
-            let gs = FsParserGraphicsState(containerID, gs, invokeByGS)
+        member internal x.SaveGS(containerID, gs: ParserGraphicsState) =
+            let isOffsetedByPreviousText =
+                match gsStack.Count with 
+                | 0 -> false
+                | _ -> gsStack.Peek().IsOffsetedByPreviousText
+
+            let gs = FsParserGraphicsState(containerID, gs, false, isOffsetedByPreviousText)
             gsStack.Push(gs)
             is_gsStates_invokeByGS_updated <- false
 
+        member internal x.Set_IsOffsetedByPreviousText(b) =
+            gsStack.Peek().Internal_Set_IsOffsetedByPreviousText(b)
+
+        member internal x.IsOffsetedByPreviousText() = 
+            gsStack.Peek().IsOffsetedByPreviousText
 
         member internal x.ProcessGraphicsStateResource(containerID, gs) =
-            match gsStack.Count with 
-            | 0 -> x.SaveGS(containerID, gs, invokeByGS = true)
-            | _-> gsStack.Peek().ProcessGraphicsStateResource(gs)
+            gsStack.Peek().ProcessGraphicsStateResource(gs)
             is_gsStates_invokeByGS_updated <- false
 
 
@@ -292,8 +311,9 @@ module internal Listeners =
     [<AllowNullLiteral>]
     /// a type named FilteredEventListener is already defined in itext7
     /// renderInfoSelectorMapping bitwise relation: OR 
-    type FilteredEventListenerEx(pageBox: Rectangle, renderInfoSelectorMapping: Map<SelectorModiferToken, RenderInfoSelector>) =
-        inherit GSStateStackableEventListener()
+    type FilteredEventListenerEx(cache: DocumentParserCache, page: PdfPage, renderInfoSelectorMapping: Map<SelectorModiferToken, RenderInfoSelector>) =
+        inherit GSStateStackableEventListener(page)
+        let pageBoxes = page.GetPageBoxes()
         let et = 
             renderInfoSelectorMapping
             |> Map.toList
@@ -315,7 +335,7 @@ module internal Listeners =
         let mutable currentRenderInfoToken = None
         let mutable currentRenderInfoStatus = CurrentRenderInfoStatus.Skiped
         let mutable infoContainerIDStack = [InfoContainerID.Page]
-
+        let mutable offsetedTextMatrix = None
         let mutable currentXObjectClippingBox = XObjectClippingBoxState.Init
         let mutable currentClippingPathInfo = ClippingPathInfoState.Init
 
@@ -337,6 +357,8 @@ module internal Listeners =
         member internal x.EventTypes = et
 
         member internal x.CurrentRenderingClippingPathInfo_Integrated = currentRenderingClippingPathInfo_Integrated
+
+        member internal x.OffsetedTextMatrix = offsetedTextMatrix
 
         member internal x.InfoContainerIDStack_Push(container) = infoContainerIDStack <- infoContainerIDStack @ [container]
         member internal x.InfoContainerIDStack_Pop() = infoContainerIDStack <- List.take (infoContainerIDStack.Length-1) infoContainerIDStack
@@ -465,8 +487,8 @@ module internal Listeners =
             match textInfo with 
             | Some textInfo -> 
 
-                let textInfo = { textInfo with OperatorRange = Some operatorRange }
-                let textInfo = (textInfo :> IIntegratedRenderInfoIM)
+                let textInfo0 = { textInfo with OperatorRange = Some operatorRange }
+                let textInfo = textInfo0 :> IIntegratedRenderInfoIM
                 let predicate _ filter =
                     filter (textInfo)
 
@@ -480,14 +502,23 @@ module internal Listeners =
 
                     parsedRenderInfos.Add(textInfo)
 
+                    offsetedTextMatrix <- None
                     currentRenderInfoToken <- Some tokens
                     currentRenderInfo <- Some textInfo
                     currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
 
                 | true -> 
+                    match x.IsOffsetedByPreviousText() with 
+                    | false -> offsetedTextMatrix <- None
+                    | true -> 
+                        offsetedTextMatrix <- Some (textInfo0.ConcatedTextInfo.HeadWordInfo.GetTextMatrix())
+
+
                     releaseGraphicsState()
                     currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
                     currentRenderInfo <- None
+
+
 
             | None -> 
                 releaseGraphicsState()
@@ -496,6 +527,9 @@ module internal Listeners =
 
             concatedTextInfos <- new ResizeArray<_>()
             isShowingText <- false
+            base.Set_IsOffsetedByPreviousText(true)
+
+
 
         member internal this.ConcatedTextInfo = concatedTextInfos :> seq<IntegratedTextRenderInfo>
 
@@ -521,6 +555,8 @@ module internal Listeners =
         member internal this.RestoreGS_XObject() = 
             base.RestoreGS()
 
+        member internal this.Set_IsOffsetedByPreviousText(b) =
+            base.Set_IsOffsetedByPreviousText(b)
 
         member private this.GetCurrentClippingPathInfoElements() = 
             currentClippingPathInfoElementsStack.Peek()
@@ -587,7 +623,7 @@ module internal Listeners =
                                   ContainerID = this.CurrentInfoContainerID
                                   LazyVisibleBound0_Backup = None
                                   LazyVisibleBound0 = None
-                                  PageBox = pageBox
+                                  PageBox = pageBoxes
                                   }
 
 
@@ -634,7 +670,7 @@ module internal Listeners =
                               ContainerID = this.CurrentInfoContainerID
                               LazyVisibleBound0 = None
                               LazyVisibleBound0_Backup = None
-                              PageBox = pageBox
+                              PageBox = pageBoxes
                               }
                             :> IIntegratedRenderInfoIM
 
@@ -648,38 +684,50 @@ module internal Listeners =
                                   LazyVisibleBound_Backup = None
                                   GsStates = this.GsStates_invokeByGS
                                   ContainerID = this.CurrentInfoContainerID
-                                  PageBox = pageBox
+                                  PageBox = pageBoxes
                                   LazyImageData = 
                                     lazy 
-                                        let rgbIndexedColorSpace =
-                                            let image = 
-                                                imageRenderInfo
-                                                    .GetImage()
+                                        let hash = 
+                                            imageRenderInfo.GetImage().GetPdfObject().GetIndirectReference()
+                                            |> hashNumberOfPdfIndirectReference
 
-                                            let bitsPerComponent = 
-                                                image
-                                                    .GetPdfObject()
-                                                    .GetAsNumber(PdfName.BitsPerComponent)
-                                                    .IntValue()
+                                        let image = 
+                                        
+                                            let rgbIndexedColorSpace =
+                                                let image = 
+                                                    imageRenderInfo
+                                                        .GetImage()
 
-                                            let imageType =
-                                                image.IdentifyImageType()
+                                                let bitsPerComponent = 
+                                                    image
+                                                        .GetPdfObject()
+                                                        .GetAsNumber(PdfName.BitsPerComponent)
+                                                        .IntValue()
 
-                                            let colorSpace = image.GetPdfObject().GetAsArray(PdfName.ColorSpace)
+                                                let imageType =
+                                                    image.IdentifyImageType()
 
-                                            match bitsPerComponent, imageType with 
-                                            | 2, _ -> 
-                                                match colorSpace.Contains(PdfName.Indexed) && colorSpace.Contains(PdfName.DeviceRGB) with 
-                                                | true -> Some { ImageXObject = image; ImageType = imageType }
+                                                let colorSpace = image.GetPdfObject().GetAsArray(PdfName.ColorSpace)
+
+                                                match bitsPerComponent, imageType with 
+                                                | 2, _ -> 
+                                                    match colorSpace.Contains(PdfName.Indexed) && colorSpace.Contains(PdfName.DeviceRGB) with 
+                                                    | true -> Some { ImageXObject = image; ImageType = imageType }
                                                 
-                                                | false -> None
-                                            | _ -> None
+                                                    | false -> None
+                                                | _ -> None
                                     
-                                        match rgbIndexedColorSpace with 
-                                        | Some rgbIndexedColorSpace -> FsImageData.IndexedRgb rgbIndexedColorSpace
-                                        | None -> 
-                                            (ImageDataFactory.Create(imageRenderInfo.GetImage().GetImageBytes()))
-                                            |> FsImageData.ImageData
+                                            match rgbIndexedColorSpace with 
+                                            | Some rgbIndexedColorSpace -> FsImageData.IndexedRgb (rgbIndexedColorSpace)
+                                            | None -> 
+
+                                                cache.ImageDataCache.GetOrAdd(hash, fun hash ->
+                                                    (ImageDataFactory.Create(imageRenderInfo.GetImage().GetImageBytes()))
+                                                    |> FsImageData.ImageData
+                                                )
+
+                                        hash, image
+
 
                                   LazyColorSpace = 
                                     lazy 
@@ -700,7 +748,7 @@ module internal Listeners =
                                             | _ -> Some ImageColorSpaceData.ImageMask
                                         | colorSpace ->
                                             let decode = pdfObject.Get(PdfName.Decode) |> Option.ofObj |> Option.map (fun m -> m :?> PdfArray)
-                                            imageColorSpaceCache.GetOrAdd(colorSpace, valueFactory = (fun colorSpace ->
+                                            cache.ImageColorSpaceCache.GetOrAdd(colorSpace, valueFactory = (fun colorSpace ->
                                                 match colorSpace with 
                                                 | :? PdfArray as array ->
                                                     match array.Get(0) with 
@@ -968,6 +1016,10 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
     override this.InvokeOperator(operator, operands) =
         //printfn "%s %A" (operator.ToString())(List.ofSeq operands)
         match operator.ToString() with
+        | Operators.Tm -> 
+            listener.Set_IsOffsetedByPreviousText(false)
+            base.InvokeOperator(operator, operands)
+
         | Operators.Do -> 
             match this.GetEventListener() with 
             | :? FilteredEventListenerEx as listener ->
@@ -1032,12 +1084,17 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
 
 
     override this.ProcessPageContent(page) =
+        listener.SaveGS(this.GetGraphicsState())
         this.InitClippingPath(page);
 
         this.ProcessContent(page.GetContentBytes(), page.GetResources())
+        listener.RestoreGS()
 
 
-    new (listener) = NonInitialCallbackablePdfCanvasProcessor(listener, dict [])
+
+    new (listener) = 
+        NonInitialCallbackablePdfCanvasProcessor(listener, dict [])
+
 
 
 
@@ -1122,6 +1179,9 @@ type internal ReaderPdfCanvasProcessor(listener: FilteredEventListenerEx, additi
 
 type NonInitialClippingPathPdfDocumentContentParser(pdfDocument) =
     inherit PdfDocumentContentParser(pdfDocument)
+    let cache = DocumentParserCache.Create()
+
+    member x.Cache = cache
 
     member x.PdfDocument = pdfDocument
 
@@ -1156,8 +1216,8 @@ module NonInitialClippingPathPdfDocumentContentParser =
             let infos = 
                 RenderInfoSelector.checkNonImageSelectorExists [renderInfoSelector]
                 let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled" }, renderInfoSelector]
-                let actualPageBox = parser.PdfDocument.GetPage(pageNum).GetActualBox()
-                let listener = new FilteredEventListenerEx(actualPageBox, renderInfoSelectorMapping)
+                let pdfPage = parser.PdfDocument.GetPage(pageNum)
+                let listener = new FilteredEventListenerEx(parser.Cache, pdfPage, renderInfoSelectorMapping)
                 parser.ProcessContent(pageNum, listener).ParsedRenderInfos
                 |> Seq.map(fun m -> m :?> IIntegratedRenderInfo)
 
@@ -1171,8 +1231,8 @@ module NonInitialClippingPathPdfDocumentContentParser =
         | [] -> [] :> seq<IIntegratedRenderInfoIM>
         | _ ->
             let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled" }, renderInfoSelector]
-            let actualPageBox = parser.PdfDocument.GetPage(pageNum).GetActualBox()
-            let listener = new FilteredEventListenerEx(actualPageBox, renderInfoSelectorMapping)
+            let pdfPage = parser.PdfDocument.GetPage(pageNum)
+            let listener = new FilteredEventListenerEx(parser.Cache, pdfPage, renderInfoSelectorMapping)
             parser.ProcessContent(pageNum, listener).ParsedRenderInfos
         
     let parseIMStoppable (pageNum: int) (renderInfoSelector: RenderInfoSelector) (parser: NonInitialClippingPathPdfDocumentContentParser) =
@@ -1182,8 +1242,8 @@ module NonInitialClippingPathPdfDocumentContentParser =
         | [] -> [] :> seq<IIntegratedRenderInfoIM> |>StoppableParsedRenderInfoIMs.NonStopped
         | _ ->
             let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled" }, renderInfoSelector]
-            let actualPageBox = parser.PdfDocument.GetPage(pageNum).GetActualBox()
-            let listener = new FilteredEventListenerEx(actualPageBox, renderInfoSelectorMapping)
+            let pdfPage = parser.PdfDocument.GetPage(pageNum)
+            let listener = new FilteredEventListenerEx(parser.Cache, pdfPage, renderInfoSelectorMapping)
             try
                 parser.ProcessContent(pageNum, listener).ParsedRenderInfos
                 |> StoppableParsedRenderInfoIMs.NonStopped

@@ -21,7 +21,7 @@ open Shrimp.Pdf.Constants.Operators
 [<Struct>]
 type InfoContainerID =
     | Page
-    | XObject of int * int
+    | XObject of FsPdfObjectID
 
 [<AutoOpen>]
 module _FsParserGraphicsStateValueUtils =
@@ -114,7 +114,9 @@ type FsParserGraphicsStateValue(fsExtState: FsExtGState, invokeByGS: bool) =
         new FsParserGraphicsStateValue(fsExtState, invokeByGS)
 
 
-type FsParserGraphicsState private (containerID: InfoContainerID list, gs: FsParserGraphicsStateValue) =
+type FsParserGraphicsState private (containerID: InfoContainerID list, gs: FsParserGraphicsStateValue, isOffsetedByPreviousText: bool) =
+    
+    let mutable isOffsetedByPreviousText = isOffsetedByPreviousText
 
     let innerStack = 
         let stack = Stack()
@@ -123,15 +125,19 @@ type FsParserGraphicsState private (containerID: InfoContainerID list, gs: FsPar
 
     member x.ContainerID = containerID
 
+    member x.IsOffsetedByPreviousText = isOffsetedByPreviousText
+
+    member x.Internal_Set_IsOffsetedByPreviousText(b) = isOffsetedByPreviousText <- b
+
     member x.InnerStack = innerStack
 
     member x.ProcessGraphicsStateResource(gs: ParserGraphicsState) =
         let gs = FsParserGraphicsStateValue(gs, invokeByGS = true)
         innerStack.Push(gs)
         
-    new (containerID, gs: ParserGraphicsState, invokeByGS) =
+    new (containerID, gs: ParserGraphicsState, invokeByGS, isOffsetedByPreviousText) =
         let value = FsParserGraphicsStateValue(gs, invokeByGS = invokeByGS)
-        new FsParserGraphicsState(containerID, value)
+        new FsParserGraphicsState(containerID, value, isOffsetedByPreviousText)
 
 type InfoGsStates = InfoGsStates of InfoContainerID list * FsParserGraphicsStateValue list
 with 
@@ -162,6 +168,15 @@ with
             let headers = f2 userState headers
 
             InfoGsStates(id, headers @ [FsParserGraphicsStateValue(fsExtState, invokeByGS = true)]) 
+
+    member x.ChangeBlendingMode(blendingModes) =
+        x.MapExtGState(
+            (fun header gsState ->
+                { gsState with 
+                    BlendModes = blendingModes }, ()
+            ),
+            (fun _ headers -> headers)
+        )
 
     member x.SetStrokeOpactity(opacity) =
         x.MapExtGState(
@@ -338,7 +353,7 @@ module IntegratedInfos =
           ContainerID: InfoContainerID list
           LazyVisibleBound0_Backup: LazyVisibleBound0_Backup option
           LazyVisibleBound0: Rectangle option
-          PageBox: Rectangle
+          PageBox: PageBoxes
         }
     with 
         member x.IsShading = 
@@ -415,7 +430,7 @@ module IntegratedInfos =
           ContainerID: InfoContainerID list
           LazyVisibleBound0_Backup: LazyVisibleBound0_Backup option
           LazyVisibleBound0: Rectangle option
-          PageBox: Rectangle
+          PageBox: PageBoxes
           }
 
     with 
@@ -590,7 +605,7 @@ module IntegratedInfos =
 
     [<RequireQualifiedAccess>]
     type FsImageData =
-        | ImageData of ImageData
+        | ImageData of  ImageData
         | IndexedRgb of IndexedRGBImageData
     with 
 
@@ -629,13 +644,13 @@ module IntegratedInfos =
     type IntegratedImageRenderInfo =
         { ImageRenderInfo: ImageRenderInfo 
           ClippingPathInfos: ClippingPathInfos
-          LazyImageData: Lazy<FsImageData>
+          LazyImageData: Lazy<(FsPdfObjectID) * FsImageData>
           LazyColorSpace: Lazy<ImageColorSpaceData option> 
           GsStates: InfoGsStateLists
           ContainerID: InfoContainerID list
           LazyVisibleBound_Backup: LazyVisibleBound0_Backup option
           LazyVisibleBound: Rectangle option
-          PageBox: Rectangle
+          PageBox: PageBoxes
         }
 
     with 
@@ -649,7 +664,8 @@ module IntegratedInfos =
             
             exState
 
-        member x.ImageData = x.LazyImageData.Value
+        member x.ImageData = snd x.LazyImageData.Value
+        member x.ImageDataHashKey = fst x.LazyImageData.Value
 
         member x.ImageColorSpaceData = 
             match x.LazyColorSpace.Value with 
