@@ -878,11 +878,64 @@ open Listeners
         
 open Constants
 
+[<RequireQualifiedAccess>]
+type FsLayer =
+    | CustomLayer of string
+    | ShpLayer of ShpLayer
+
+[<RequireQualifiedAccess>]
+type FsLayerUnion =
+    | CustomLayer of string
+    | ShpLayer of ShpLayer
+    | Group of FsLayerUnion list
+with 
+    member x.ContainsLayer(layer: FsLayer) =
+        match x, layer with 
+        | CustomLayer layerName1, FsLayer.CustomLayer layerName2 ->
+            layerName1 = layerName2
+
+        | ShpLayer layer1, FsLayer.ShpLayer layer2 -> layer1 = layer2
+        | Group layers, _ ->
+            layers
+            |> List.exists(fun layerUnion ->
+                layerUnion.ContainsLayer layer
+            )
+        | _ -> false
+
+    member x.IsSameLayerTo(layer: PdfDictionary) =
+        failwithf ""
+
+    static member OfPdfDictionary(pdfDictionary: PdfDictionary) =
+        match pdfDictionary.Get(PdfName.ShpLayer) with 
+        | null ->
+            match pdfDictionary.GetAsName(PdfName.Type) with 
+            | EqualTo PdfName.OCG -> 
+                let name = pdfDictionary.GetAsString(PdfName.Name)
+                FsLayerUnion.CustomLayer(name.GetValue())
+
+            | EqualTo PdfName.OCMD ->
+                let array = pdfDictionary.GetAsArray(PdfName.OCGs)
+                array
+                |> Seq.cast<PdfDictionary>
+                |> List.ofSeq
+                |> List.map FsLayerUnion.OfPdfDictionary
+                |> FsLayerUnion.Group
+
+            | tp -> failwithf "Cannot parse %A to PdfLayer" tp
+
+        | shpLayer ->
+            let shpLayer = ShpLayer.OfPdfObject shpLayer
+            FsLayerUnion.ShpLayer shpLayer
+            
+
+
+type ReaderLayerOptions =
+    | AllLayers 
+    | SpecificLayers of FsLayer list
 
 
 type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventListenerEx, additionalContentOperators) =
     inherit PdfCanvasProcessor(listener, additionalContentOperators)
-
     let mutable initClippingBox = None
 
     member internal x.GetCurrentResource() = x.GetResources()
@@ -1096,6 +1149,154 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
         NonInitialCallbackablePdfCanvasProcessor(listener, dict [])
 
 
+[<RequireQualifiedAccess>]
+type internal MarkContent =
+    | SelectedLayer of FsLayerUnion
+    | UnSelectedLayer of FsLayerUnion
+    | OtherMarkContent 
+
+
+type internal IsInLayerChoice =
+    | InSelectedLayer = 0
+    | InTopLayer = 1
+
+[<RequireQualifiedAccess>]
+type internal InLayerOperationOverride =
+    | Override of (IsInLayerChoice -> OperatorRange -> unit)
+    | InvokeOperator
+
+
+type internal LayerStackablePdfCanvasProcessor(listener: FilteredEventListenerEx, additionalContentOperators, ?readerLayerOptions: ReaderLayerOptions, ?noLayerOperation: OperatorRange -> unit, ?inLayerOperationOverride: unit -> InLayerOperationOverride) =
+    inherit NonInitialCallbackablePdfCanvasProcessor(listener, additionalContentOperators)
+    let layerStack = Stack()
+    let layerCache = System.Collections.Concurrent.ConcurrentDictionary()
+    let mutable isInLayer = (Some IsInLayerChoice.InTopLayer)
+
+    member internal x.LayerStack = layerStack
+
+    member x.IsInLayer = isInLayer
+
+    member private x.BaseInvokeOperator(operator, operands) =
+        base.InvokeOperator(operator, operands)
+
+    override x.InvokeOperator(operator, operands) =
+        let noLayerOperation() =
+            match noLayerOperation with 
+            | None -> ()
+            | Some noLayerOperation -> noLayerOperation {Operator = operator; Operands = operands}
+
+        let inLayerOperation(isInLayerChoice) =
+            match inLayerOperationOverride with 
+            | None -> x.BaseInvokeOperator(operator, operands)
+            | Some inLayerOperationOverride ->
+                let inLayerOperationOverride = inLayerOperationOverride()
+                match inLayerOperationOverride with 
+                | InLayerOperationOverride.InvokeOperator -> x.BaseInvokeOperator(operator, operands)
+                | InLayerOperationOverride.Override customInLayerOperation ->
+                    customInLayerOperation isInLayerChoice {Operator = operator; Operands = operands}
+
+        match defaultArg readerLayerOptions ReaderLayerOptions.AllLayers with
+        | ReaderLayerOptions.AllLayers -> base.InvokeOperator(operator, operands)
+        | ReaderLayerOptions.SpecificLayers layers ->
+            
+            match operator.ToString() with 
+            | BDC -> 
+                match operands.Item(0) with 
+                | :? PdfName as name1 ->
+                    match name1 with 
+                    | EqualTo PdfName.OC ->
+                        let resources = x.GetCurrentResource()
+                        let name2 = operands.Item(1) :?> PdfName
+
+                        let layerDict = resources.GetProperties(name2) :?> PdfDictionary
+                        let documentLayer = 
+                            let hashCode = hashNumberOfPdfIndirectReference (layerDict.GetIndirectReference())
+                            layerCache.GetOrAdd(hashCode, valueFactory = fun _ ->
+                                FsLayerUnion.OfPdfDictionary layerDict
+                            )
+
+                        let isSelectedLayer =
+                            layers
+                            |> List.exists(fun layer ->
+                                documentLayer.ContainsLayer layer
+                            )
+
+                        match isSelectedLayer with 
+                        | true -> 
+                            layerStack.Push (MarkContent.SelectedLayer documentLayer)
+                            isInLayer <- (Some IsInLayerChoice.InSelectedLayer)
+                        | false -> 
+                            layerStack.Push (MarkContent.UnSelectedLayer documentLayer)
+                            isInLayer <- (None)
+
+                    | _ -> 
+                        layerStack.Push (MarkContent.OtherMarkContent)
+
+                | _ -> layerStack.Push (MarkContent.OtherMarkContent)
+
+                match isInLayer with 
+                | Some layerChoice -> inLayerOperation(layerChoice)
+                | None -> noLayerOperation()
+                   
+
+            | EMC -> 
+                match isInLayer with 
+                | Some layerChoice -> inLayerOperation(layerChoice)
+                | None -> noLayerOperation()
+
+                let poped = layerStack.Pop() 
+                match layerStack.Count with 
+                | 0 -> isInLayer <- Some IsInLayerChoice.InTopLayer
+                | _ ->
+                    let b =
+                        layerStack.ToArray()
+                        |> Array.exists(fun m ->
+                            match m with 
+                            | MarkContent.SelectedLayer _ -> true
+                            | _ -> false
+                        )
+                    match b with 
+                    | true -> 
+                        isInLayer <- (Some IsInLayerChoice.InSelectedLayer)
+                    | false -> isInLayer <- None
+
+
+            | Do -> 
+                match isInLayer with 
+                | Some isInLayerChoice -> 
+                    match inLayerOperationOverride with 
+                    | None -> x.BaseInvokeOperator(operator, operands)
+                    | Some inLayerOperationOverride ->
+                        let inLayerOperationOverride = inLayerOperationOverride()
+
+                        match inLayerOperationOverride with 
+                        | InLayerOperationOverride.InvokeOperator -> x.BaseInvokeOperator(operator, operands)
+                        | InLayerOperationOverride.Override customInLayerOperation ->
+                            let resources = x.GetCurrentResource()
+                            let container = resources.GetResource(PdfName.XObject).GetAsStream(operands.[0] :?> PdfName)
+                            let subType   = container.GetAsName(PdfName.Subtype)
+                            match subType with 
+                            | EqualTo PdfName.Form -> x.BaseInvokeOperator(operator, operands)
+
+                            | _ -> customInLayerOperation isInLayerChoice {Operator = operator; Operands = operands}
+
+                | None -> 
+                    let resources = x.GetCurrentResource()
+                    let container = resources.GetResource(PdfName.XObject).GetAsStream(operands.[0] :?> PdfName)
+                    let subType   = container.GetAsName(PdfName.Subtype)
+                    match subType with 
+                    | EqualTo PdfName.Form -> x.BaseInvokeOperator(operator, operands)
+
+                    | _ -> noLayerOperation()
+                    
+            | _ -> 
+                match isInLayer with 
+                | Some isInLayerChoice -> inLayerOperation(isInLayerChoice)
+                | None -> noLayerOperation()
+
+
+    new (listener: FilteredEventListenerEx, ?readerLayerOptions: ReaderLayerOptions, ?noLayerOperation, ?inLayerOperationOverride) =
+        LayerStackablePdfCanvasProcessor(listener, dict [], ?readerLayerOptions = readerLayerOptions, ?noLayerOperation = noLayerOperation, ?inLayerOperationOverride = inLayerOperationOverride)
 
 
 type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXObjectOperator, fCurrentResource) =
@@ -1161,8 +1362,9 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
             this.Invoke(processor, operator, operands, ignore)
             
 
-type internal ReaderPdfCanvasProcessor(listener: FilteredEventListenerEx, additionalContentOperators) =
-    inherit NonInitialCallbackablePdfCanvasProcessor(listener, additionalContentOperators)
+
+type internal ReaderPdfCanvasProcessor(listener: FilteredEventListenerEx, additionalContentOperators: IDictionary<_, _>, ?readerLayerOptions: ReaderLayerOptions) =
+    inherit LayerStackablePdfCanvasProcessor(listener, additionalContentOperators, ?readerLayerOptions = readerLayerOptions)
 
     override this.RegisterContentOperator(operatorString: string, operator: IContentOperator) : IContentOperator =
         let wrapper = new RenderInfoAccumulatableContentOperator(operator, (true), fun processor ->
@@ -1177,7 +1379,7 @@ type internal ReaderPdfCanvasProcessor(listener: FilteredEventListenerEx, additi
 
 
 
-type NonInitialClippingPathPdfDocumentContentParser(pdfDocument) =
+type NonInitialClippingPathPdfDocumentContentParser(pdfDocument, ?readerLayerOptions) =
     inherit PdfDocumentContentParser(pdfDocument)
     let cache = DocumentParserCache.Create()
 
@@ -1188,7 +1390,7 @@ type NonInitialClippingPathPdfDocumentContentParser(pdfDocument) =
     override this.ProcessContent(pageNumber, renderListener, additionalContentOperators) =  
         
         let listener = (renderListener :> IEventListener) :?> FilteredEventListenerEx
-        let processor = new ReaderPdfCanvasProcessor(listener, additionalContentOperators)
+        let processor = new ReaderPdfCanvasProcessor(listener, additionalContentOperators, ?readerLayerOptions = readerLayerOptions)
         processor.ProcessPageContent(pdfDocument.GetPage(pageNumber))
         renderListener
 

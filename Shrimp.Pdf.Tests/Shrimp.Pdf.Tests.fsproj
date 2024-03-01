@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+      <None Include="datas\**\*.pdf">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <Compile Include="Tests.MyTests.fs" />
+      <Compile Include="Program.fs" />
+
+  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Expecto" Version="8.11.0" />
+    </ItemGroup>
+    <ItemGroup>
+      <ProjectReference Include="..\Shrimp.Pdf\Shrimp.Pdf.fsproj" />
+    </ItemGroup>
+</Project>

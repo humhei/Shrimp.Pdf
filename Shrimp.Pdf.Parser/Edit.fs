@@ -34,34 +34,49 @@ type XObjectReference =
     | ByCopied
 
 
+
+[<RequireQualifiedAccess>]
+type ModifyLayerOptions =
+    | RemoveLayer of FsLayer list
+    | InLayer of FsLayer list
+with 
+    member private x.Layers() =
+        match x with 
+        | RemoveLayer layers 
+        | InLayer layers -> layers
+
+    member internal x.ToReaderLayerOptions() =
+        let layers = x.Layers()
+        ReaderLayerOptions.SpecificLayers layers
+
 type PdfModifyOptions =
     { XObjectReference: XObjectReference
-      RemovingLayer: string option }
+      LayerOptions: ModifyLayerOptions option }
 with 
     static member ByRef =
-        { RemovingLayer = None
+        { LayerOptions = None
           XObjectReference = XObjectReference.ByRef }
 
     static member DefaultValue =
         { XObjectReference = XObjectReference.ByCopied 
-          RemovingLayer = None }
+          LayerOptions = None }
 
 type PdfModifyOptions2 =
     { XObjectReference: XObjectReference
-      RemovingLayer: string option
+      LayerOptions: ModifyLayerOptions option
       ParserCache: DocumentParserCache }
 with 
     member x.NoCache() =
         { XObjectReference = x.XObjectReference 
-          RemovingLayer = x.RemovingLayer }
+          LayerOptions = x.LayerOptions }
 
     static member ByRef =
-        { RemovingLayer = None
+        { LayerOptions = None
           XObjectReference = XObjectReference.ByRef }
 
-    static member Create(cache, ?xobjectReference, ?removingLayer) =
+    static member Create(cache, ?xobjectReference, ?layerOptions) =
         { XObjectReference = defaultArg xobjectReference XObjectReference.ByCopied 
-          RemovingLayer = removingLayer
+          LayerOptions = layerOptions
           ParserCache = cache }
 
 
@@ -641,6 +656,8 @@ type FsPdfDocumentEditorResources() =
 type IFsPdfDocumentEditor =
     abstract member Resources: FsPdfDocumentEditorResources
 
+
+
 type internal CallbackableContentOperator (originalOperator) =
     let listenterConnectedContentOperator = 
         RenderInfoAccumulatableContentOperator(originalOperator, false ,(fun processor ->
@@ -659,8 +676,8 @@ type internal CallbackableContentOperator (originalOperator) =
 
             
 
-and private OperatorRangeCallbackablePdfCanvasProcessor(listener) =
-    inherit NonInitialCallbackablePdfCanvasProcessor(listener)
+and private OperatorRangeCallbackablePdfCanvasProcessor(listener, ?readerLayerOptions, ?noLayerOperation, ?inLayerOperationOverride) =
+    inherit LayerStackablePdfCanvasProcessor(listener, ?readerLayerOptions = readerLayerOptions, ?noLayerOperation = noLayerOperation, ?inLayerOperationOverride = inLayerOperationOverride)
     abstract member InvokeOperatorRange: OperatorRange -> unit
     abstract member CurrentResource: unit -> FsPdfResources
 
@@ -678,9 +695,22 @@ and private OperatorRangeCallbackablePdfCanvasProcessor(listener) =
         | :? CallbackableContentOperator as wrapper -> wrapper.OriginalOperator
         | _ -> formOperator
 
+[<AbstractClass>]
+type private LayerStackableOperatorRangeCallbackablePdfCanvasProcessor
+    (listener, ?modifyLayerOptions: ModifyLayerOptions) as this =
+    inherit OperatorRangeCallbackablePdfCanvasProcessor(
+        listener,
+        ?readerLayerOptions = (modifyLayerOptions |> Option.map (fun m -> m.ToReaderLayerOptions())),
+        noLayerOperation = (fun operatorRange ->
+            this.InvokeOperatorRange_NoLayer(operatorRange)
+        ),
+        inLayerOperationOverride = (fun () ->
+            this.InvokeOperatorRange_InLayer_Override()
+        )
+    )
 
-
-
+    abstract member InvokeOperatorRange_InLayer_Override: unit -> InLayerOperationOverride
+    abstract member InvokeOperatorRange_NoLayer: OperatorRange -> unit
 
 
 type ShadableKind =
@@ -745,9 +775,11 @@ type internal ModifierPdfCanvas(contentStream, resources: FsPdfResources, docume
 
 
 and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, RenderInfoSelector * ModifierUnion>, ops: PdfModifyOptions2, page: PdfPage, document: PdfDocument) =
-    inherit OperatorRangeCallbackablePdfCanvasProcessor(FilteredEventListenerEx(ops.ParserCache, page, Map.map (fun _ -> fst) selectorModifierMapping))
+    inherit LayerStackableOperatorRangeCallbackablePdfCanvasProcessor
+        (FilteredEventListenerEx(ops.ParserCache, page, Map.map (fun _ -> fst) selectorModifierMapping),
+         ?modifyLayerOptions = ops.LayerOptions)
     let fsDocumentResources = (box document :?> IFsPdfDocumentEditor).Resources
-    let removingLayer = ops.RemovingLayer
+    let layerOptions = ops.LayerOptions
     let exists_ClippingPath_Shading_Modifier =
         selectorModifierMapping
         |> Map.exists(fun _ (_, modifier) ->
@@ -794,14 +826,9 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
 
 
-
-
-
     let mutable eventListener: FilteredEventListenerEx = null
     let pdfCanvasStack = new Stack<ModifierPdfCanvas>()
     let resourcesStack = new Stack<FsPdfResources>()
-
-    let mutable isRemovingLayer = false
 
     let (|PathOrText|_|) operatorName =
         let (|Path|_|) operatorName =
@@ -836,6 +863,36 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
     override this.CurrentResource() = resourcesStack.Peek()
 
+    override this.InvokeOperatorRange_InLayer_Override () =
+        
+        match layerOptions with 
+        | Some (ModifyLayerOptions.RemoveLayer _) -> 
+            InLayerOperationOverride.Override(fun choice operatorRange ->
+                match choice with 
+                | IsInLayerChoice.InTopLayer -> 
+                    let currentPdfCanvas = pdfCanvasStack.Peek()
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
+
+                | IsInLayerChoice.InSelectedLayer -> ()
+            )
+        | _ -> InLayerOperationOverride.InvokeOperator
+
+    override this.InvokeOperatorRange_NoLayer (operatorRange: OperatorRange) =
+        let currentPdfCanvas = pdfCanvasStack.Peek()
+        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+        |> ignore
+
+        //match layerOptions with 
+        //| Some (ModifyLayerOptions.RemoveLayer _) -> 
+        //    let currentPdfCanvas = pdfCanvasStack.Peek()
+        //    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+        //    |> ignore
+        //| _ ->
+        //    let currentPdfCanvas = pdfCanvasStack.Peek()
+        //    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+        //    |> ignore
+        
     override this.InvokeOperatorRange (operatorRange: OperatorRange) =
         
         let currentPdfCanvas = pdfCanvasStack.Peek()
@@ -881,303 +938,275 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
 
                 Some modifierPdfCanvasActions
 
-        match isRemovingLayer with 
-        | false ->
 
-            match operatorName with 
-            | EI -> writeImage() |> ignore
-            | Do ->
-            
-                let resources = resourcesStack.Peek()
-                let name = operatorRange.Operands.[0] :?> PdfName
-                let container = resources.GetResource(PdfName.XObject)
-                let xobjectStream = 
-                    let value =  container.Get(name)
-                    let pdfStream = (value :?> PdfStream)
-                    pdfStream
+        match operatorName with 
+        | EI -> writeImage() |> ignore
+        | Do ->
+        
+            let resources = resourcesStack.Peek()
+            let name = operatorRange.Operands.[0] :?> PdfName
+            let container = resources.GetResource(PdfName.XObject)
+            let xobjectStream = 
+                let value =  container.Get(name)
+                let pdfStream = (value :?> PdfStream)
+                pdfStream
 
-                let subType = xobjectStream.GetAsName(PdfName.Subtype)
+            let subType = xobjectStream.GetAsName(PdfName.Subtype)
 
-                let xobjectStream =
-                    match ops.XObjectReference with 
-                    | XObjectReference.ByCopied -> 
-                        match subType with 
-                        | Form -> xobjectStream.Clone() :?> PdfStream
-                        | _ -> xobjectStream
+            let xobjectStream =
+                match ops.XObjectReference with 
+                | XObjectReference.ByCopied -> 
+                    match subType with 
+                    | Form -> xobjectStream.Clone() :?> PdfStream
+                    | _ -> xobjectStream
 
-                    | XObjectReference.ByRef -> xobjectStream
+                | XObjectReference.ByRef -> xobjectStream
 
-                let fixXObjectStream() = 
+            let fixXObjectStream() = 
+                match subType with 
+                | Form ->
+                    this.Listener.SaveGS_XObject(this.GetGraphicsState())
+                    
+                    resources.AddRemovableXObjectName(name)
+
+                    let xobjectResources = 
+                        let subResources = xobjectStream.GetAsDictionary(PdfName.Resources)
+                        match subResources with 
+                        | null -> resources
+                        | _ -> 
+                            subResources
+                            |> PdfResources 
+                            |> FsPdfResources
+
+
+                    let fixedStream: PdfStream = this.EditContent(xobjectResources, xobjectStream) :?> PdfStream
+                    let name = resources.AddForm(fixedStream)
+                    container.Put(name, fixedStream) |> ignore
+                    let operatorRange =
+                        { Operator = operatorRange.Operator 
+                          Operands = [| name :> PdfObject; PdfLiteral("Do") :> PdfObject |] }
+
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
+                    this.Listener.RestoreGS_XObject()
+
+                | Image -> 
+                    match writeImage() with 
+                    | None -> ()
+                    | Some modifierPdfCanvasActions ->
+                        match modifierPdfCanvasActions.Close with 
+                        | CloseOperatorUnion.Image close ->
+                            let name = operatorRange.Operands.[0] :?> PdfName
+                            match close with 
+                            | ImageCloseOperator.Remove 
+                            | ImageCloseOperator.New _   -> resources.AddRemovableXObjectName(name)
+                            | ImageCloseOperator.Keep -> resources.AddKeepingXObjectName(name)
+
+                        | _ -> failwith "Invalid token"
+
+                | Others ->
+
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
+
+            match ops.XObjectReference with 
+            | XObjectReference.ByCopied -> fixXObjectStream()
+            | XObjectReference.ByRef ->
+ 
+                let xobjectStreamID = xobjectStream.GetIndirectReference().GetObjNumber()
+                match fsDocumentResources.FixedStreamObjNums.TryGetValue xobjectStreamID with 
+                | true, xobjectStream -> 
                     match subType with 
                     | Form ->
-                        this.Listener.SaveGS_XObject(this.GetGraphicsState())
-                        
-                        resources.AddRemovableXObjectName(name)
-
-                        let xobjectResources = 
-                            let subResources = xobjectStream.GetAsDictionary(PdfName.Resources)
-                            match subResources with 
-                            | null -> resources
-                            | _ -> 
-                                subResources
-                                |> PdfResources 
-                                |> FsPdfResources
-
-
-                        let fixedStream: PdfStream = this.EditContent(xobjectResources, xobjectStream) :?> PdfStream
-                        let name = resources.AddForm(fixedStream)
-                        container.Put(name, fixedStream) |> ignore
-                        let operatorRange =
-                            { Operator = operatorRange.Operator 
-                              Operands = [| name :> PdfObject; PdfLiteral("Do") :> PdfObject |] }
-
                         PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
                         |> ignore
-                        this.Listener.RestoreGS_XObject()
 
-                    | Image -> 
-                        match writeImage() with 
-                        | None -> ()
-                        | Some modifierPdfCanvasActions ->
+                    | Image ->
+                        match (getImageClose()) with 
+                        | Choice1Of2 operatorRange ->
+                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                            |> ignore
+
+                        | Choice2Of2 modifierPdfCanvasActions ->
                             match modifierPdfCanvasActions.Close with 
                             | CloseOperatorUnion.Image close ->
-                                let name = operatorRange.Operands.[0] :?> PdfName
                                 match close with 
-                                | ImageCloseOperator.Remove 
-                                | ImageCloseOperator.New _   -> resources.AddRemovableXObjectName(name)
-                                | ImageCloseOperator.Keep -> resources.AddKeepingXObjectName(name)
+                                | ImageCloseOperator.Keep ->
+                                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                                    |> ignore
+
+                                | ImageCloseOperator.Remove -> ()
+                                | ImageCloseOperator.New _ -> failwithf "Not implemented for (XObjectRef,ImageCloseOperator.New)"
 
                             | _ -> failwith "Invalid token"
-
-                    | Others ->
-
-                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                        |> ignore
-
-                match ops.XObjectReference with 
-                | XObjectReference.ByCopied -> fixXObjectStream()
-                | XObjectReference.ByRef ->
- 
-                    let xobjectStreamID = xobjectStream.GetIndirectReference().GetObjNumber()
-                    match fsDocumentResources.FixedStreamObjNums.TryGetValue xobjectStreamID with 
-                    | true, xobjectStream -> 
-                        match subType with 
-                        | Form ->
-                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                            |> ignore
-
-                        | Image ->
-                            match (getImageClose()) with 
-                            | Choice1Of2 operatorRange ->
-                                PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                                |> ignore
-
-                            | Choice2Of2 modifierPdfCanvasActions ->
-                                match modifierPdfCanvasActions.Close with 
-                                | CloseOperatorUnion.Image close ->
-                                    match close with 
-                                    | ImageCloseOperator.Keep ->
-                                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                                        |> ignore
-
-                                    | ImageCloseOperator.Remove -> ()
-                                    | ImageCloseOperator.New _ -> failwithf "Not implemented for (XObjectRef,ImageCloseOperator.New)"
-
-                                | _ -> failwith "Invalid token"
-                                
-                        | Others -> 
-                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                            |> ignore
-
-                    | false, _ ->
-                        fsDocumentResources.FixedStreamObjNums.GetOrAdd(xobjectStreamID, valueFactory = fun _ ->
-                            fixXObjectStream()
-                            xobjectStream
-                        )
-                        |> ignore<PdfStream>
-                 
-
-
-            | PathOrText tag ->
-                match eventListener.CurrentRenderInfoStatus with 
-                | CurrentRenderInfoStatus.Skiped -> 
-                    match eventListener.OffsetedTextMatrix with 
-                    | None ->
-                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                        |> ignore
-
-                    | Some textMatrix ->
-                        currentPdfCanvas.SetTextMatrix(AffineTransform.ofMatrix textMatrix)
-                        |> ignore
-
-                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                        |> ignore
-
-                | CurrentRenderInfoStatus.Selected ->
-                    let isShading = 
-                        match eventListener.CurrentRenderInfo with 
-                        | IIntegratedRenderInfoIM.Path (pathRenderInfo) -> 
-                            match pathRenderInfo.IsShading with 
-                            | true -> Some pathRenderInfo
-                            | false -> None
-
-                        | _ -> None
-
-                    match isShading with 
-                    | Some shadingInfo -> 
-                        match exists_ClippingPath_Shading_Modifier with 
-                        | false -> 
-                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                            |> ignore
-
-                        | true ->
-                            let shadingModifiers = 
-                                eventListener.CurrentRenderInfoToken.Value
-                                |> List.choose(fun token -> 
-                                    let fix = snd selectorModifierMapping.[token]
-                                    match fix with 
-                                    | ModifierUnion.ShadingModifier vv -> vv.ClippingPathShadingModifier
-                                    | _ -> None
-                                )
-
-                            match shadingModifiers with 
-                            | [] ->failwithf "Invalid token"
-                            | [shadingModifier] ->
-                                shadingModifier shadingInfo operatorRange currentPdfCanvas
-
-                            | _ -> failwithf "Multiple clippingPath shading %d operators currently not supported" shadingModifiers.Length
-
                             
+                    | Others -> 
+                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                        |> ignore
 
-                    | None ->
-                        let currentGS = this.GetGraphicsState()
-                        currentPdfCanvas.SetCanvasGraphicsState(currentGS)
-
-                        let modifierPdfCanvasActions =
-                            eventListener.CurrentRenderInfoToken.Value
-                            |> List.map(fun token -> 
-                                let fix = snd selectorModifierMapping.[token]
-                                fix.CommonModifier { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
-                            )
-                            |> ModifierPdfCanvasActions.ConcatOrKeep tag
-
-                        let setTextMatrix() =
-                            match tag with 
-                            | IntegratedRenderInfoTag.Text ->   [
-                                fun (canvas: PdfCanvas) -> 
-                                    let x = eventListener.CurrentRenderInfo :?> IntegratedTextRenderInfo
-                                    let textMatrix = x.ConcatedTextInfo.HeadWordInfo.GetTextMatrix()
-                                    let transform = AffineTransform.ofMatrix textMatrix
-                                    canvas.SetTextMatrix(transform)
-                                ]
-
-                            | IntegratedRenderInfoTag.Path -> []
+                | false, _ ->
+                    fsDocumentResources.FixedStreamObjNums.GetOrAdd(xobjectStreamID, valueFactory = fun _ ->
+                        fixXObjectStream()
+                        xobjectStream
+                    )
+                    |> ignore<PdfStream>
+             
 
 
-                        modifierPdfCanvasActions.UseCanvas (currentPdfCanvas :> PdfCanvas) operatorRange (fun operatorRange canvas ->
-                            (canvas, setTextMatrix() @ modifierPdfCanvasActions.Actions)
-                            ||> List.fold(fun canvas action ->
-                                action canvas 
-                            )
-                            |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
-                        )
+        | PathOrText tag ->
+            match eventListener.CurrentRenderInfoStatus with 
+            | CurrentRenderInfoStatus.Skiped -> 
+                match eventListener.OffsetedTextMatrix with 
+                | None ->
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
 
-                        //let onlyWriteClose = 
-                        //    match tag with 
-                        //    | IntegratedRenderInfoTag.Text ->
-                        //        match modifierPdfCanvasActions.AllActionsLength with 
-                        //        | 0 -> 
-                        //            match modifierPdfCanvasActions.Close with 
-                        //            | CloseOperatorUnion.Text textClose ->
-                        //                match textClose.Fill, textClose.Stroke with 
-                        //                | CloseOperator.Keep, CloseOperator.Keep -> true
-                        //                | _ -> false
-                        //            | _ -> failwith "Invalid token"
-                        //        | _ -> false
-                        //    | _ -> false
+                | Some textMatrix ->
+                    currentPdfCanvas.SetTextMatrix(AffineTransform.ofMatrix textMatrix)
+                    |> ignore
 
-                        //match onlyWriteClose with 
-                        //| true -> 
-                        //    (currentPdfCanvas :> PdfCanvas)
-                        //    |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
-                        //    |> ignore
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
 
-                        //| false ->
-                        //    PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
-                        //        (canvas, modifierPdfCanvasActions.Actions)
-                        //        ||> List.fold(fun canvas action ->
-                        //            action canvas 
-                        //        )
-                        //        |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
-                        //    )
+            | CurrentRenderInfoStatus.Selected ->
+                let isShading = 
+                    match eventListener.CurrentRenderInfo with 
+                    | IIntegratedRenderInfoIM.Path (pathRenderInfo) -> 
+                        match pathRenderInfo.IsShading with 
+                        | true -> Some pathRenderInfo
+                        | false -> None
 
+                    | _ -> None
 
-
-                | _ -> failwith "Invalid token"
-
-            | _ ->
-                
-                let writeOperatorRange() =
-                    match exists_SH_Shading_Modifier with 
+                match isShading with 
+                | Some shadingInfo -> 
+                    match exists_ClippingPath_Shading_Modifier with 
                     | false -> 
                         PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
                         |> ignore
 
                     | true ->
-                        match operatorName with 
-                        | EQ sh -> 
-                            let shadingModifiers = 
-                                eventListener.CurrentRenderInfoToken.Value
-                                |> List.choose(fun token -> 
-                                    let fix = snd selectorModifierMapping.[token]
-                                    match fix with 
-                                    | ModifierUnion.ShadingModifier vv -> vv.SHShadingModifier
-                                    | _ -> None
-                                )
+                        let shadingModifiers = 
+                            eventListener.CurrentRenderInfoToken.Value
+                            |> List.choose(fun token -> 
+                                let fix = snd selectorModifierMapping.[token]
+                                match fix with 
+                                | ModifierUnion.ShadingModifier vv -> vv.ClippingPathShadingModifier
+                                | _ -> None
+                            )
 
-                            match shadingModifiers with 
-                            | [] ->failwithf "Invalid token"
-                            | [shadingModifier] ->
-                                let shadingInfo = eventListener.CurrentRenderInfo :?> IntegratedPathRenderInfo
-                                shadingModifier shadingInfo operatorRange currentPdfCanvas
+                        match shadingModifiers with 
+                        | [] ->failwithf "Invalid token"
+                        | [shadingModifier] ->
+                            shadingModifier shadingInfo operatorRange currentPdfCanvas
 
-                            | _ -> failwithf "Multiple sh shading %d  operators currently not supported" shadingModifiers.Length
+                        | _ -> failwithf "Multiple clippingPath shading %d operators currently not supported" shadingModifiers.Length
+
+                        
+
+                | None ->
+                    let currentGS = this.GetGraphicsState()
+                    currentPdfCanvas.SetCanvasGraphicsState(currentGS)
+
+                    let modifierPdfCanvasActions =
+                        eventListener.CurrentRenderInfoToken.Value
+                        |> List.map(fun token -> 
+                            let fix = snd selectorModifierMapping.[token]
+                            fix.CommonModifier { CurrentRenderInfo = eventListener.CurrentRenderInfo }    
+                        )
+                        |> ModifierPdfCanvasActions.ConcatOrKeep tag
+
+                    let setTextMatrix() =
+                        match tag with 
+                        | IntegratedRenderInfoTag.Text ->   [
+                            fun (canvas: PdfCanvas) -> 
+                                let x = eventListener.CurrentRenderInfo :?> IntegratedTextRenderInfo
+                                let textMatrix = x.ConcatedTextInfo.HeadWordInfo.GetTextMatrix()
+                                let transform = AffineTransform.ofMatrix textMatrix
+                                canvas.SetTextMatrix(transform)
+                            ]
+
+                        | IntegratedRenderInfoTag.Path -> []
 
 
-                        | _ -> 
-                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
-                            |> ignore
+                    modifierPdfCanvasActions.UseCanvas (currentPdfCanvas :> PdfCanvas) operatorRange (fun operatorRange canvas ->
+                        (canvas, setTextMatrix() @ modifierPdfCanvasActions.Actions)
+                        ||> List.fold(fun canvas action ->
+                            action canvas 
+                        )
+                        |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
+                    )
 
-                match removingLayer with 
-                | None -> writeOperatorRange()
+                    //let onlyWriteClose = 
+                    //    match tag with 
+                    //    | IntegratedRenderInfoTag.Text ->
+                    //        match modifierPdfCanvasActions.AllActionsLength with 
+                    //        | 0 -> 
+                    //            match modifierPdfCanvasActions.Close with 
+                    //            | CloseOperatorUnion.Text textClose ->
+                    //                match textClose.Fill, textClose.Stroke with 
+                    //                | CloseOperator.Keep, CloseOperator.Keep -> true
+                    //                | _ -> false
+                    //            | _ -> failwith "Invalid token"
+                    //        | _ -> false
+                    //    | _ -> false
 
-                | Some layerName ->
+                    //match onlyWriteClose with 
+                    //| true -> 
+                    //    (currentPdfCanvas :> PdfCanvas)
+                    //    |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
+                    //    |> ignore
+
+                    //| false ->
+                    //    PdfCanvas.useCanvas (currentPdfCanvas :> PdfCanvas) (fun canvas ->
+                    //        (canvas, modifierPdfCanvasActions.Actions)
+                    //        ||> List.fold(fun canvas action ->
+                    //            action canvas 
+                    //        )
+                    //        |> modifierPdfCanvasActions.WriteCloseAndSuffixActions(operatorRange, currentGS.GetTextRenderingMode())
+                    //    )
+
+
+
+            | _ -> failwith "Invalid token"
+
+        | _ ->
+            
+            let writeOperatorRange() =
+                match exists_SH_Shading_Modifier with 
+                | false -> 
+                    PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                    |> ignore
+
+                | true ->
                     match operatorName with 
-                    | BDC -> 
-                        match operatorRange.Operands.Item(0) with 
-                        | :? PdfName as name1 ->
-                            match name1 with 
-                            | EqualTo PdfName.OC -> 
-                                let resources = resourcesStack.Peek()
-                                let name2 = operatorRange.Operands.Item(1) :?> PdfName
+                    | EQ sh -> 
+                        let shadingModifiers = 
+                            eventListener.CurrentRenderInfoToken.Value
+                            |> List.choose(fun token -> 
+                                let fix = snd selectorModifierMapping.[token]
+                                match fix with 
+                                | ModifierUnion.ShadingModifier vv -> vv.SHShadingModifier
+                                | _ -> None
+                            )
 
-                                let layerDict = resources.GetProperties(name2) :?> PdfDictionary
-                                let layerName2 = layerDict.Get(PdfName.Name) :?> PdfString
-                                match layerName2.ToString() with 
-                                | EqualTo layerName -> 
-                                    isRemovingLayer <- true
-                                | _ -> writeOperatorRange()
+                        match shadingModifiers with 
+                        | [] ->failwithf "Invalid token"
+                        | [shadingModifier] ->
+                            let shadingInfo = eventListener.CurrentRenderInfo :?> IntegratedPathRenderInfo
+                            shadingModifier shadingInfo operatorRange currentPdfCanvas
 
-                            | _ -> writeOperatorRange()
+                        | _ -> failwithf "Multiple sh shading %d  operators currently not supported" shadingModifiers.Length
 
-                        | _ -> writeOperatorRange()
 
-                    | _ -> writeOperatorRange()
+                    | _ -> 
+                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                        |> ignore
 
-        | true -> 
-            match operatorName with 
-            | EMC -> isRemovingLayer <- false
-            | _ -> ()
+            writeOperatorRange()
+
+
+
 
     member internal x.ParsedRenderInfos = eventListener.ParsedRenderInfos
 
@@ -1204,7 +1233,8 @@ and private PdfCanvasEditor(selectorModifierMapping: Map<SelectorModiferToken, R
                 let resources_pop = resourcesStack.Pop()
                 fsDocumentResources.FsPdfResources.Push(resources_pop)
                 //let stream = stream.Clone() :?> PdfStream
-                stream.SetData(pdfCanvas.GetContentStream().GetBytes()) |> ignore
+                let bytes = pdfCanvas.GetContentStream().GetBytes()
+                stream.SetData(bytes) |> ignore
                 stream
 
             match ops.XObjectReference with 
@@ -1276,7 +1306,7 @@ module PdfPage =
 
     let removeLayer (ops: PdfModifyOptions2) layerName (page: PdfPage) =
         let ops =   
-            { ops with RemovingLayer = Some layerName }
+            { ops with LayerOptions = Some (ModifyLayerOptions.RemoveLayer layerName) }
         modifyIM ops Map.empty  page
 
     let modify ops (selectorModifierMapping) (page: PdfPage) =

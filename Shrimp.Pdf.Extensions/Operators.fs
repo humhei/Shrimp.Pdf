@@ -11,7 +11,7 @@ open iText.Kernel.Pdf
 module _ShpLayer =
     
     [<RequireQualifiedAccess>]
-    module private PdfName =
+    module PdfName =
         let ShpLayer = PdfName "ShpLayer" 
 
     [<System.Flags>]
@@ -35,6 +35,56 @@ module _ShpLayer =
     with 
         static member CreateContent(?name) =
             ShpLayer.Content name
+
+
+        static member OfPdfObject(pdfObject: PdfObject) =
+            
+            let name, addtionalContent = 
+                match pdfObject with 
+                | :? PdfArray as pdfArray  -> 
+                    let addtionalContent = 
+                        match pdfArray.Size() with 
+                        | 1 -> None
+                        | _ -> pdfArray.Get(1) |> Some
+
+                    pdfArray.GetAsString(0), addtionalContent
+                | :? PdfString as pdfString -> pdfString, None
+                | _ -> failwithf "Invalid token, cannot create ShpLayer from %A" (pdfObject.GetType())
+
+            let getAddtionalContentAsStringOption() =
+                match addtionalContent with 
+                | None -> None
+                | Some addtionalContent -> (addtionalContent :?> PdfString).GetValue() |> Some
+
+            let getAddtionalContentAsString() =
+                match addtionalContent with 
+                | None -> failwithf "addtionalContent Cannot be empty None here"
+                | Some addtionalContent -> (addtionalContent :?> PdfString).GetValue()
+                    
+            let getAddtionalContentAsInt() =
+                match addtionalContent with 
+                | None -> failwithf "addtionalContent Cannot be empty None here"
+                | Some addtionalContent -> (addtionalContent :?> PdfNumber).GetValue() |> int
+                    
+
+            match name.GetValue() with 
+            | nameof(ShpLayer.Bk_XObjectOnly) -> 
+                ShpLayer.Bk_XObjectOnly (getAddtionalContentAsString())
+
+            | nameof Fr_XObjectOnly -> Fr_XObjectOnly(getAddtionalContentAsString())
+            | nameof BK             -> BK            (getAddtionalContentAsString())
+            | nameof Foreground     -> Foreground    (getAddtionalContentAsString())
+            | nameof Content        -> Content       (getAddtionalContentAsStringOption())
+            | nameof Pixel          -> Pixel         (getAddtionalContentAsString())
+            | nameof CuttingDie     ->  
+                let enum_int = getAddtionalContentAsInt()
+                let enum = enum enum_int
+                CuttingDie  enum
+
+            | nameof BkSolid        -> BkSolid       
+            | nameof CompoundPath   -> CompoundPath  
+            | nameof ClippingPath   -> ClippingPath  
+            | _ -> failwithf "Cannot convert %A to ShpLayer" pdfObject
 
         member x.AsPdfObject() =
             let createPdfArray (text1: string) (text2: string) =
