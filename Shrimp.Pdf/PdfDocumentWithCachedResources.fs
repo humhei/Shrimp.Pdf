@@ -4,9 +4,12 @@ open System.Collections.Generic
 open iText.Kernel.Geom
 open iText.IO.Image
 open iText.Kernel.Pdf.Canvas.Wmf
+open icms2_wrapper
+open iText.Kernel.Pdf.Layer
 
 #nowarn "0104"
 open iText.Kernel.Font
+open Shrimp.Pdf.icms2.Core
 open System.IO
 open iText.Kernel.Colors
 open System.Collections.Concurrent
@@ -115,19 +118,40 @@ type CurrentDocumentImage =
 
 
 
+type RenewableFsPdfObjectID =
+    { DocumentFileName: StringIC option
+      FsPdfObjectID: FsPdfObjectID }
+
+type RenewableSpawnablePdfObjectID = 
+    { SpawnablePdfObjectID: SpawnablePdfObjectID 
+      DocumentFileName: StringIC option }
+
+type ImageColorSpaceConversionCache =
+    { Cache: 
+        ConcurrentDictionary<SpawnablePdfObjectID * Icc option * Icc * Indent, ImageDataOrImageXObject option>}
+
+
 type private PdfDocumentCache private 
     (pdfDocument: unit -> PdfDocumentWithCachedResources,
      fontsCache: ConcurrentDictionary<FsPdfFontFactory, PdfFont>,
-     smaskInfo_hashable_fromOtherDocument : ConcurrentDictionary<(FsPdfObjectID) * AffineTransformRecord, SoftMaskRenderInfo>,
-     fontsCache_hashable_fromOtherDocument : ConcurrentDictionary<FsPdfObjectID, PdfFont>,
-     patternColorsCache_hashable_fromOtherDocument : ConcurrentDictionary<FsPdfObjectID, PatternColor>,
-     shadingCache_hashable_fromOtherDocument : ConcurrentDictionary<FsPdfObjectID, PdfShading>,
+     smaskInfo_hashable_fromOtherDocument : ConcurrentDictionary<(RenewableFsPdfObjectID) * AffineTransformRecord, SoftMaskRenderInfo>,
+     fontsCache_hashable_fromOtherDocument : ConcurrentDictionary<RenewableFsPdfObjectID, PdfFont>,
+     patternColorsCache_hashable_fromOtherDocument : ConcurrentDictionary<RenewableFsPdfObjectID, PatternColor>,
+     shadingCache_hashable_fromOtherDocument : ConcurrentDictionary<RenewableFsPdfObjectID, PdfShading>,
      deviceNCache_hashable_fromOtherDocument : ConcurrentDictionary<FsDeviceN, DeviceN>,
-     imageCache_hashable_fromOtherDocument : ConcurrentDictionary<SpawnablePdfObjectID, CurrentDocumentImage>,
+     imageCache_hashable_fromOtherDocument : ConcurrentDictionary<RenewableSpawnablePdfObjectID, CurrentDocumentImage>,
      colorsCache: ConcurrentDictionary<ResourceColor, Color>,
      xobjectCache: ConcurrentDictionary<PdfFile, ReaderDocument * PdfFormXObject>,
-     extGStateCache: ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>) =
+     extGStateCache: ConcurrentDictionary<FsExtGState, Extgstate.PdfExtGState>,
+     layerCache: ConcurrentDictionary<StringIC, IPdfOCG>,
+     imageColorSpaceConversionCache: ImageColorSpaceConversionCache) =
     let mutable labColorSpace = None
+    let mutable documentFileName = None
+
+    let renewableHash (pdfInDirectReference: PdfIndirectReference) =
+        let hashNumber = hashNumberOfPdfIndirectReference <| pdfInDirectReference
+        { DocumentFileName = documentFileName 
+          FsPdfObjectID = hashNumber }
 
 
     member internal x.Clear() = 
@@ -142,6 +166,8 @@ type private PdfDocumentCache private
         imageCache_hashable_fromOtherDocument.Clear()
         xobjectCache.Clear()
         extGStateCache.Clear()
+        layerCache.Clear()
+        imageColorSpaceConversionCache.Cache.Clear()
 
     //member internal x.Clear() =
     //    x.Clear_BeforeSpawn()
@@ -160,7 +186,9 @@ type private PdfDocumentCache private
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(), 
-            new ConcurrentDictionary<_, _>())
+            new ConcurrentDictionary<_, _>(),
+            new ConcurrentDictionary<_, _>(),
+            {ImageColorSpaceConversionCache.Cache = ConcurrentDictionary()})
 
     member internal x.CacheDocumentFont(font: PdfFont) =
         let fontNames = font.GetFontProgram().GetFontNames()
@@ -174,6 +202,16 @@ type private PdfDocumentCache private
         | None -> ()
 
     member internal x.FontsCache = fontsCache
+
+    member internal x.ImageColorSpaceConversionCache = imageColorSpaceConversionCache
+
+    member internal x.LayerCache = layerCache
+
+    member internal x.SetDocumentFileName(fileName: StringIC) =
+        documentFileName <- Some fileName
+
+    member internal x.IgnoreDocumentFileName() =
+        documentFileName <- None
 
     member internal x.CacheDocumentFonts(fonts) =
         for (font: PdfFont) in fonts do
@@ -197,7 +235,7 @@ type private PdfDocumentCache private
             //        PdfFontFactory.CreateFont(pdfObject)
             //    ) 
             //| None -> 
-            let number = hashNumberOfPdfIndirectReference <| font.GetPdfObject().GetIndirectReference() 
+            let number = renewableHash <| font.GetPdfObject().GetIndirectReference() 
             let font = 
                 fontsCache_hashable_fromOtherDocument.GetOrAdd(
                     number,
@@ -214,15 +252,18 @@ type private PdfDocumentCache private
 
     member internal x.GetOrCreateSharding_FromOtherDocument(sharding: PdfShading) =
         
-        let number = hashNumberOfPdfIndirectReference <| sharding.GetPdfObject().GetIndirectReference()
+        let number = renewableHash <| sharding.GetPdfObject().GetIndirectReference()
         shadingCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
             let pdfObject = sharding.GetPdfObject().CopyTo(pdfDocument(), allowDuplicating = false)
             PdfShading.MakeShading(pdfObject :?> PdfDictionary)
         )
 
     member internal x.GetOrCreateImage_FromOtherDocument(key: SpawnablePdfObjectID, image: ImageData) =
-        let number = key
-        imageCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
+        let number =    
+            { SpawnablePdfObjectID = key 
+              DocumentFileName = documentFileName }
+
+        imageCache_hashable_fromOtherDocument.GetOrAdd((number), fun number ->
             match image.GetOriginalType() with 
             | ImageType.WMF ->
                 let wmf = new WmfImageHelper(image);
@@ -233,7 +274,7 @@ type private PdfDocumentCache private
         )
 
 
-    member internal x.GetOrCreateImage_FromOtherDocument(image: ImageRenderInfo) =
+    member x.GetOrCreateImage_FromOtherDocument(image: ImageRenderInfo) =
         match image.IsInline() with 
         | true -> 
             let stream = image.GetImage().GetPdfObject()
@@ -245,7 +286,11 @@ type private PdfDocumentCache private
                 let id = hashNumberOfPdfIndirectReference <| image.GetPdfObject().GetIndirectReference()
                 SpawnablePdfObjectID.OfPdfObjectID id
 
-            imageCache_hashable_fromOtherDocument.GetOrAdd(id, fun number ->
+            let id =
+                { SpawnablePdfObjectID = id 
+                  DocumentFileName = documentFileName }
+
+            imageCache_hashable_fromOtherDocument.GetOrAdd((id), fun number ->
                 image.CopyTo(pdfDocument()) :> PdfXObject
                 |> CurrentDocumentImage.XObject
 
@@ -257,7 +302,7 @@ type private PdfDocumentCache private
                 match colorSpace.GetPdfObject() with 
                 | :? PdfArray ->
                     let pattern = patternColor.GetPattern()
-                    let number = hashNumberOfPdfIndirectReference <| pattern.GetPdfObject().GetIndirectReference()
+                    let number = renewableHash <| pattern.GetPdfObject().GetIndirectReference()
                     
                     patternColorsCache_hashable_fromOtherDocument.GetOrAdd(number, fun number ->
                         match pattern with 
@@ -275,7 +320,7 @@ type private PdfDocumentCache private
                     let pdfObject = patternColor.GetPattern().GetPdfObject()
                     let number = 
                         pdfObject.GetIndirectReference()
-                        |> hashNumberOfPdfIndirectReference
+                        |> renewableHash
 
                     //let pattern = pdfObject
 
@@ -316,7 +361,8 @@ type private PdfDocumentCache private
 
 
             
-            
+    member internal x.GetOrCreateLayer(layerName, f) =
+        layerCache.GetOrAdd(StringIC layerName, valueFactory = f)
 
     member internal x.GetOrCreateColor(resourceColor: ResourceColor) =
         colorsCache.GetOrAdd((resourceColor), fun (color) ->
@@ -335,7 +381,7 @@ type private PdfDocumentCache private
             | ResourceColor.Registration -> Color.registion (pdfDocument())
             | ResourceColor.CustomSeparation separation ->
                 let valueColor = 
-                    match separation.Color with 
+                    match separation.BaseColor with 
                     | FsValueColor.Lab labColor -> labToItextColor labColor
                     | color -> FsValueColor.ToItextColor color
 
@@ -392,7 +438,10 @@ type private PdfDocumentCache private
         )
 
     member internal x.GetOrCreateSMask_FromOtherDocument(softMask: SoftMaskRenderInfo) =
-        smaskInfo_hashable_fromOtherDocument.GetOrAdd((softMask.SoftMask.ID, softMask.Ctm), valueFactory = fun _ ->
+        let id =
+            { FsPdfObjectID = softMask.SoftMask.ID
+              DocumentFileName = documentFileName }
+        smaskInfo_hashable_fromOtherDocument.GetOrAdd((id, softMask.Ctm), valueFactory = fun _ ->
             let newPdfObject = softMask.SoftMask.PdfObject.CopyTo(pdfDocument(), allowDuplicating = false)
             let newSoftMask = 
                 { softMask with 
@@ -465,7 +514,9 @@ type private PdfDocumentCache private
              new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
-             new ConcurrentDictionary<_, _>())
+             new ConcurrentDictionary<_, _>(),
+             new ConcurrentDictionary<_, _>(),
+             {ImageColorSpaceConversionCache.Cache = ConcurrentDictionary()})
 
 and PdfDocumentWithCachedResources =
     inherit PdfDocument
@@ -476,14 +527,31 @@ and PdfDocumentWithCachedResources =
 
     member internal x.ParserCache = x.parserCache
 
+    member x.ImageColorSpaceConversionCache = x.cache.ImageColorSpaceConversionCache
+
     member x.GetOrCreatePdfFont(fontFactory: FsPdfFontFactory) =
         x.cache.GetOrCreateFont(fontFactory)
+
+    member x.GetOrCreateLayer(layerName, f) =
+        x.cache.GetOrCreateLayer(layerName, f)
+
+    member x.GetOrAddShortTimeState<'T>(name, valueFactory) = 
+        x.parserCache.ShortTimeState.GetOrAdd(name, valueFactory = fun _ ->
+            let r: 'T = valueFactory()
+            box r
+        )
+        |> unbox<'T>
 
     member private x.ClearCache() = 
         x.cache.Clear()
         x.parserCache.Clear()
 
     member internal x.FontsCache = x.cache.FontsCache
+
+    member internal x.SetDocumentFileName(fileName: StringIC) =
+        x.cache.SetDocumentFileName(fileName)
+
+    member internal x.IgnoreDocumentFileName() = x.cache.IgnoreDocumentFileName()
 
     /// defaultPageSelector is First
     member x.CacheDocumentFonts(?pageSelector: PageSelector) =

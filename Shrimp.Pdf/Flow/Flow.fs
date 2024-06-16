@@ -366,7 +366,7 @@ module rec _FlowMutualTypes =
 
         type Flow =
             static member Batch(?flowName: FlowName) =
-                fun (flows: seq<Flow<'originUserState,'newUserState>>) ->
+                fun (flows: #seq<Flow<'originUserState,'newUserState>>) ->
                     let flow = 
                         match List.ofSeq flows with 
                         | [] ->  Flow.dummy() ||>> fun _ -> []

@@ -5,6 +5,7 @@ open Newtonsoft.Json
 open iText.Kernel.Pdf
 open iText.Kernel.Geom
 open Shrimp.Pdf.Extensions
+open System.Collections.Generic
 open System.IO
 open Shrimp.FSharp.Plus
 open Shrimp.FSharp.Plus.Text
@@ -58,6 +59,8 @@ with
 
     member x.MultipleValue = x.Width * x.Height
 
+        
+
 [<AutoOpen>]
 module _FsSizeExtensions =
     type Rectangle with 
@@ -66,30 +69,30 @@ module _FsSizeExtensions =
 
 
 
-[<CustomEquality; NoComparison>]
-type RoundedSize = private RoundedSize of FsSize
-with 
-    member x.Value =
-        let (RoundedSize v) = x
-        v
+//[<CustomEquality; NoComparison>]
+//type RoundedSize = private RoundedSize of FsSize
+//with 
+//    member x.Value =
+//        let (RoundedSize v) = x
+//        v
 
-    member x.Width = x.Value.Width
+//    member x.Width = x.Value.Width
 
-    member x.Height = x.Value.Height
+//    member x.Height = x.Value.Height
 
-    member internal x.MMValues = x.Value.MMValues
+//    member internal x.MMValues = x.Value.MMValues
 
-    static member Create(size: FsSize) =
-        size.Round()
-        |> RoundedSize
+//    static member Create(size: FsSize) =
+//        size.Round()
+//        |> RoundedSize
 
 
-    override x.GetHashCode() = x.Value.GetHashCode()
+//    override x.GetHashCode() = x.Value.GetHashCode()
 
-    override x.Equals(y) =
-        match y with 
-        | :? RoundedSize as y -> x.Width @= y.Width && x.Height @= y.Height
-        | _ -> false
+//    override x.Equals(y) =
+//        match y with 
+//        | :? RoundedSize as y -> x.Width @= y.Width && x.Height @= y.Height
+//        | _ -> false
 
 
 [<RequireQualifiedAccess>]
@@ -203,6 +206,16 @@ type FsSize with
         | FsSize.Uniform -> PageOrientation.Landscape
         | FsSize.Portrait -> PageOrientation.Portrait
 
+    /// default alignDirection is true
+    member x.IsInsideOf(targetSize: FsSize, ?alignDirection) =
+        let x = 
+            match defaultArg alignDirection true with 
+            | true -> x.AlignDirection targetSize
+            | false -> x
+        x.Width <= targetSize.Width
+        && x.Height <= targetSize.Height
+
+
 type FsPageSize [<JsonConstructor>] (size: FsSize, pageOrientation) =
     inherit POCOBase<FsSize * PageOrientation>(size, pageOrientation)
     let size = FsSize.rotateTo pageOrientation size
@@ -306,6 +319,151 @@ type SplitDocument internal (reader: string, writer: string) =
 
     member x.Writer = x.LazyWriter.Value 
      
+    member internal splitDocument.CopyOCGS() =
+        let __copyOCG = 
+            let fromOcProps = 
+                splitDocument.Reader.GetCatalog().GetPdfObject().GetAsDictionary(PdfName.OCProperties)
+
+            match fromOcProps with 
+            | null -> ()
+            | fromOcProps ->
+                match fromOcProps.GetAsDictionary(PdfName.D) with 
+                | null -> ()
+                | from_d ->
+
+                    let toVisitedObjects = HashSet()
+
+                    let toDocLayers = HashSet()
+
+                    for page in splitDocument.Writer.GetPages() do
+                        let rec loop (resources: PdfDictionary) =
+                            match toVisitedObjects.Contains resources with 
+                            | false ->
+                                let props = resources.GetAsDictionary(PdfName.Properties)
+                                match props with 
+                                | null -> ()
+                                | props ->
+                                    for prop in props.EntrySet() do
+                                        match prop.Value with 
+                                        | :? PdfDictionary as prop ->
+                                            match toDocLayers.Contains(prop) with 
+                                            | true -> ()
+                                            | false ->
+                                                match prop.Get(PdfName.Type) with 
+                                                | :? PdfName as name -> 
+                                                    match name.GetValue() with 
+                                                    | "OCG" ->
+                                                        toDocLayers.Add(prop)
+                                                        |> ignore
+                                                    | _ -> ()
+
+                                                | _ -> ()
+                                        | _ -> ()
+
+                                let xobjects = resources.GetAsDictionary(PdfName.XObject)
+                                match xobjects with 
+                                | null -> ()
+                                | _ ->
+                                    for name in xobjects.KeySet() do 
+                                        let xobject = xobjects.GetAsStream(name)
+                                        match toVisitedObjects.Contains xobject with 
+                                        | true -> ()
+                                        | false -> 
+                                            toVisitedObjects.Add(xobject) |> ignore
+                                            let resources = xobject.GetAsDictionary(PdfName.Resources)
+                                            match resources with 
+                                            | null -> ()
+                                            | resources -> loop resources
+
+
+                                toVisitedObjects.Add(resources) |> ignore
+
+                            | true -> ()
+
+
+                        loop (page.GetResources().GetPdfObject())
+
+
+                    let toOCProps  =
+                        let dict = 
+                            splitDocument.Writer.GetCatalog().GetPdfObject()
+
+                        let ocProps = new PdfDictionary()
+                        dict.Put(PdfName.OCProperties, ocProps) |> ignore
+                        ocProps
+
+                    let __fillToOCProps = 
+                    
+                        toOCProps.Put(PdfName.D, new PdfDictionary()) |> ignore
+                        toOCProps.Put(PdfName.OCGs, new PdfArray()) |> ignore
+
+                    let toD = toOCProps.GetAsDictionary(PdfName.D)
+                    let toOCGS = toOCProps.GetAsArray(PdfName.OCGs)
+
+                    let toDocLayers =
+                        toDocLayers
+                        |> List.ofSeq
+                        |> List.map(fun docLayer ->
+                            let layerName = docLayer.GetAsString(PdfName.Name).GetValue()
+                            layerName, docLayer
+                        )
+
+                    let __fillD = 
+
+                        for from_dProp in from_d.EntrySet() do    
+                            match from_dProp.Value with 
+                            | :? PdfArray as array ->
+                                let rec loopToDocs (array: PdfArray) =
+                                    
+                                    let toDocs = new PdfArray()
+                                    for from_layer in array do 
+                                        match from_layer with 
+                                        | :? PdfDictionary as from_layer ->
+                                            let from_layer = from_layer :?> PdfDictionary
+                                            let from_LayerName = from_layer.GetAsString(PdfName.Name).GetValue()
+                                            let toDocLayers =
+                                                toDocLayers
+                                                |> List.filter(fun (toName, _) ->
+                                                    toName = from_LayerName
+                                                )
+                                                |> List.map snd
+                                                |> List.map(fun m -> m :> PdfObject)
+                                                |> List.toArray
+
+
+                                            let array = PdfArray(toDocLayers)
+                                            toDocs.AddAll(array)
+
+                                        | :? PdfArray as from_array ->
+                                            let to_array = loopToDocs from_array
+                                            toDocs.Add(to_array)
+
+                                        | :? PdfString -> toDocs.Add(from_layer)
+
+                                        | _ -> failwithf "Not implemented from_layer is %A here" (from_layer.GetType())
+
+                                    toDocs
+
+                                let toDocs = loopToDocs array
+
+                                toD.Put(from_dProp.Key, toDocs)
+                                |> ignore
+
+                            | _ -> ()
+
+
+                    let __fillOCGS =
+                        let toDocLayers = 
+                            toDocLayers
+                            |> List.map snd
+                            |> List.map(fun m -> m :> PdfObject)
+                            |> List.toArray
+
+                        toOCGS.AddAll(toDocLayers)
+
+                    ()
+                
+        ()
 
     member internal x.Open() =
         if not isOpened 

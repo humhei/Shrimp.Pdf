@@ -2,9 +2,11 @@
 namespace Shrimp.Pdf.Parser
 
 open iText.Kernel.Geom
+open iText.Kernel.Pdf.Layer
 
 #nowarn "3536"
 #nowarn "0104"
+#nowarn "3190"
 open iText.Kernel.Colors
 open iText.Kernel.Exceptions
 open iText.Kernel.Pdf.Colorspace
@@ -25,6 +27,13 @@ open System.Collections.Concurrent
 [<AutoOpen>]
 module private _Utils =
     let showTextOperators = [Tj; TJ; "'"; "''"]
+
+type internal PdfShadingTextRenderInfo(color: PdfShadingColor, canvasTagHierarchy, gs, info: IntegratedTextRenderInfo) =
+    inherit AbstractRenderInfo(gs)
+
+    member x.ShadingColor = color
+
+    member x.IntegratedTextRenderInfo = info
 
 type RenderInfoStoppedException(info: IIntegratedRenderInfoIM) =
     inherit System.Exception()
@@ -120,7 +129,7 @@ module RenderInfoSelector =
                     | IIntegratedRenderInfo.Text renderInfo -> predicate renderInfo
 
 
-            | RenderInfoSelector.Dummy _ -> fun _ -> false
+            | RenderInfoSelector.Dummy -> fun _ -> false
 
 
             | RenderInfoSelector.AND selectors ->
@@ -162,7 +171,7 @@ module RenderInfoSelector =
                     loop selector renderInfo
                     |> not
 
-            | RenderInfoSelector.Dummy _ -> fun _ -> false
+            | RenderInfoSelector.Dummy -> fun _ -> false
             | RenderInfoSelector.Path predicate ->
                 fun (renderInfo: IIntegratedRenderInfoIM) ->
                     match renderInfo with 
@@ -202,19 +211,107 @@ type SelectorModiferToken =
     { Name: string }
 
 
+[<RequireQualifiedAccess>]
+type FsOCPdfObjectID =
+    | List of FsOCPdfObjectID list
+    | Item of FsPdfObjectID
+    | String of PdfString
+
+type FsOCProperties =   
+    { Layers: FsPdfObjectID list
+      OFF: FsPdfObjectID list 
+      ON: FsPdfObjectID list 
+      Order: FsOCPdfObjectID list }
+with 
+    static member Create(dict: PdfDictionary) = 
+        match dict with 
+        | null ->
+            { Layers = []
+              OFF = []
+              ON = []
+              Order = [] }
+        | _ ->
+            let rec getIDArray (pdfArray: PdfArray) =
+                match pdfArray with 
+                | null -> []
+                | _ ->
+                    [
+                        for item in pdfArray do
+                            match item with 
+                            | :? PdfArray as pdfArray ->
+                                getIDArray pdfArray
+                                |> FsOCPdfObjectID.List
+
+                            | :? PdfString as pdfString ->
+                                FsOCPdfObjectID.String pdfString
+
+                            | _ -> 
+                                hashNumberOfPdfIndirectReference (item.GetIndirectReference())
+                                |> FsOCPdfObjectID.Item
+                    ]
+
+
+            let layers = 
+                dict.GetAsArray(PdfName.OCGs)
+                |> getIDArray
+            
+
+            let D = 
+                dict.GetAsDictionary(PdfName.D)
+                |> function
+                    | null -> None
+                    | dd -> Some dd
+
+            let getArray_D (pdfName) =
+                match D with 
+                | None -> []
+                | Some d ->
+                    d.GetAsArray(pdfName)
+                    |> getIDArray
+
+            let off = getArray_D PdfName.OFF
+
+            let on = getArray_D PdfName.ON
+
+            let order = getArray_D PdfName.Order
+
+            let toItems (list) =
+                list
+                |> List.map(fun m ->
+                    match m with 
+                    | FsOCPdfObjectID.List _ -> failwithf "not implemtned: FsPdfObjectIDOrList %A cannot be List here" m
+                    | FsOCPdfObjectID.Item item -> item
+                )
+
+            { Layers = 
+                layers
+                |> toItems
+
+              ON = on |> toItems
+              OFF = off |> toItems
+              Order = order }
 
 
 type DocumentParserCache =
     { ImageColorSpaceCache: ConcurrentDictionary<PdfObject, ImageColorSpaceData option>
-      ImageDataCache: ConcurrentDictionary<FsPdfObjectID, FsImageData> }
+      ImageDataCache: ConcurrentDictionary<FsPdfObjectID, FsImageData>
+      PageModifyCache: ConcurrentDictionary<FsPdfObjectID list, PdfObject * PdfResources>
+      ShortTimeState: ConcurrentDictionary<string, obj>
+      OCPropertiesCache: ConcurrentDictionary<bool, FsOCProperties> }
 with 
     member x.Clear() =
         x.ImageColorSpaceCache.Clear()
         x.ImageDataCache.Clear()
+        x.PageModifyCache.Clear()
+        x.ShortTimeState.Clear()
+        x.OCPropertiesCache.Clear()
 
     static member Create() =
         { ImageColorSpaceCache = ConcurrentDictionary()
-          ImageDataCache = ConcurrentDictionary() }
+          ImageDataCache = ConcurrentDictionary()
+          PageModifyCache = ConcurrentDictionary()
+          ShortTimeState = ConcurrentDictionary()
+          OCPropertiesCache = ConcurrentDictionary()}
 
 module internal Listeners =
     
@@ -238,12 +335,12 @@ module internal Listeners =
                 |> List.rev
                 |> List.map(fun m -> 
                     {| ContainerID = m.ContainerID 
-                       Stack = m.InnerStack.ToArray() |> Array.toList |> List.rev |} )
+                       Stack = m.InnerStack.Peek() |} )
                 |> List.splitIfChangedByKey(fun m -> m.ContainerID)
                 |> List.map(fun (id, gsStack) ->    
                     let items = 
                         gsStack.AsList
-                        |> List.collect(fun m -> m.Stack)
+                        |> List.map(fun m -> m.Stack)
                         |> List.filter(fun m -> m.InvokeByGS)
 
                     InfoGsStates (id, items)
@@ -302,6 +399,7 @@ module internal Listeners =
         member internal x.RestoreGS() = 
             gsStack.Pop()
             |> ignore
+            is_gsStates_invokeByGS_updated <- false
 
     [<RequireQualifiedAccess>]
     type private PdfNumberOrPdfString =
@@ -338,11 +436,22 @@ module internal Listeners =
         let mutable offsetedTextMatrix = None
         let mutable currentXObjectClippingBox = XObjectClippingBoxState.Init
         let mutable currentClippingPathInfo = ClippingPathInfoState.Init
+        let mutable currentTextClipingInfo = [||]
+        let mutable pathClose = false
 
+        let currentClippingTextInfoElementsStack = Stack<ResizeArray<TextClippingInfo>>()
+        do currentClippingTextInfoElementsStack.Push(ResizeArray())
         let currentClippingPathInfoElementsStack = Stack<ResizeArray<IntersectedClippingPathInfoElement>>()
         do currentClippingPathInfoElementsStack.Push(ResizeArray())
-        let mutable currentRenderingClippingPathInfo_Integrated: IntegratedPathRenderInfo option = None
+        let mutable currentRenderingClippingPathInfo_Integrated: IIntegratedRenderInfo option = None
         let parsedRenderInfos = List<IIntegratedRenderInfoIM>()
+        let updateCurrentTextClipingInfo() = 
+            currentTextClipingInfo <- 
+                currentClippingTextInfoElementsStack.ToArray()
+                |> Array.filter(fun m -> m.Count > 0)
+
+            ()
+
 
         let supportedEventTypes =
             let supportedEvents = 
@@ -357,18 +466,25 @@ module internal Listeners =
         member internal x.EventTypes = et
 
         member internal x.CurrentRenderingClippingPathInfo_Integrated = currentRenderingClippingPathInfo_Integrated
+        member internal x.CurrentTextClippingInfo = currentTextClipingInfo
 
         member internal x.OffsetedTextMatrix = offsetedTextMatrix
 
         member internal x.InfoContainerIDStack_Push(container) = infoContainerIDStack <- infoContainerIDStack @ [container]
         member internal x.InfoContainerIDStack_Pop() = infoContainerIDStack <- List.take (infoContainerIDStack.Length-1) infoContainerIDStack
+        member internal x.InfoContainerIDStack() = infoContainerIDStack
 
         member internal x.CurrentInfoContainerID = infoContainerIDStack
 
         member internal x.AddPathOperatorRange(operatorRange) = accumulatedPathOperatorRanges.Add(operatorRange)
 
         member internal x.BeginShowText() = isShowingText <- true
-        member internal x.EndShoeText(operatorRange: OperatorRange) = 
+
+        member internal x.FinallyEndText() = 
+            offsetedTextMatrix <- None
+
+
+        member internal x.EndShowText(operatorRange: OperatorRange) = 
             let textInfo = 
                 match concatedTextInfos.Count with 
                 | 0 -> None
@@ -486,11 +602,65 @@ module internal Listeners =
 
             match textInfo with 
             | Some textInfo -> 
-
+                
                 let textInfo0 = { textInfo with OperatorRange = Some operatorRange }
+
+                let isClip = textInfo0.TextRenderMode.IsClip()
+
+                let textInfo0 =
+
+                    match isClip with 
+                    | true -> 
+                        let textClippingInfo: TextClippingInfo =
+                            let bound = 
+                                ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth textInfo0
+                                |> FsRectangle.OfRectangle
+
+                            TextClippingInfo(
+                                textInfo0.ContainerID,
+                                textInfo0.ConcatedTextInfo.AsList,
+                                bound,
+                                textInfo0.ConcatedText(),
+                                textInfo0
+                            )
+                            //failwithf ""
+
+                        currentClippingTextInfoElementsStack.Peek().Add(textClippingInfo)
+                        updateCurrentTextClipingInfo()
+                        let textInfo0 =
+                            textInfo0.TextRenderInfo.GetGraphicsState().SetTextRenderingMode(int FsTextRenderMode.Clip)
+
+                            textInfo0.ConcatedTextInfo.AsList
+                            |> List.iter(fun m ->
+                                m.GetGraphicsState().SetTextRenderingMode(int FsTextRenderMode.Clip)
+                            )
+
+                            { textInfo0 with 
+                                ClippingPathInfos =     
+                                    { textInfo0.ClippingPathInfos with 
+                                        TextClippingInfos = currentTextClipingInfo
+                                    }
+
+                            }
+                        currentRenderingClippingPathInfo_Integrated <- Some textInfo0
+                        textInfo0
+
+                    | false -> 
+                        currentRenderingClippingPathInfo_Integrated <- None
+                        textInfo0
+
                 let textInfo = textInfo0 :> IIntegratedRenderInfoIM
                 let predicate _ filter =
                     filter (textInfo)
+
+
+                let tryReleaseGraphicsState() =
+                    match isClip with 
+                    | true -> ()
+                    | false -> releaseGraphicsState()
+
+
+
 
                 let filtered = Map.filter predicate prediateMapping
                 match filtered.IsEmpty with 
@@ -514,7 +684,8 @@ module internal Listeners =
                         offsetedTextMatrix <- Some (textInfo0.ConcatedTextInfo.HeadWordInfo.GetTextMatrix())
 
 
-                    releaseGraphicsState()
+                    tryReleaseGraphicsState()
+                    currentRenderInfoToken <- None
                     currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
                     currentRenderInfo <- None
 
@@ -522,6 +693,8 @@ module internal Listeners =
 
             | None -> 
                 releaseGraphicsState()
+                offsetedTextMatrix <- None
+                currentRenderInfoToken <- None
                 currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
                 currentRenderInfo <- None
 
@@ -544,10 +717,13 @@ module internal Listeners =
         member internal this.SaveGS(gs) = 
             base.SaveGS(infoContainerIDStack, gs)
             currentClippingPathInfoElementsStack.Push(ResizeArray()) |> ignore
-        
+            currentClippingTextInfoElementsStack.Push(ResizeArray()) |> ignore
+
         member internal this.RestoreGS() = 
             base.RestoreGS()
             currentClippingPathInfoElementsStack.Pop() |> ignore
+            currentClippingTextInfoElementsStack.Pop() |> ignore
+            updateCurrentTextClipingInfo()
 
         member internal this.SaveGS_XObject(gs) = 
             base.SaveGS(infoContainerIDStack, gs)
@@ -557,6 +733,9 @@ module internal Listeners =
 
         member internal this.Set_IsOffsetedByPreviousText(b) =
             base.Set_IsOffsetedByPreviousText(b)
+
+        member internal this.SetPathClose(close: bool) =
+            pathClose <- close
 
         member private this.GetCurrentClippingPathInfoElements() = 
             currentClippingPathInfoElementsStack.Peek()
@@ -610,20 +789,26 @@ module internal Listeners =
                     clippingPathInfo'.PreserveGraphicsState()
 
                 | _ ->
+                    let mutable isPaintShadingTextInfo = false
+
                     let renderInfo = 
                         match data with 
                         | :? PathRenderInfo as pathRenderInfo ->
                             let info = 
                                 { ClippingPathInfos  = 
                                     { XObjectClippingBoxState = currentXObjectClippingBox
-                                      ClippingPathInfoState = currentClippingPathInfo }
+                                      ClippingPathInfoState = currentClippingPathInfo
+                                      TextClippingInfos = currentTextClipingInfo
+                                    }
                                   PathRenderInfo = pathRenderInfo
                                   AccumulatedPathOperatorRanges = accumulatedPathOperatorRanges
                                   GsStates = this.GsStates_invokeByGS
                                   ContainerID = this.CurrentInfoContainerID
+                                  Close = PathClose pathClose
                                   LazyVisibleBound0_Backup = None
                                   LazyVisibleBound0 = None
                                   PageBox = pageBoxes
+                                  ModifyUserState = ModifyUserState()
                                   }
 
 
@@ -634,19 +819,20 @@ module internal Listeners =
                                 operatorRanges.Add(
                                     { OperatorRanges = accumulatedPathOperatorRanges
                                       Ctm = pathRenderInfo.GetGraphicsState().GetCtm()
-                                      ClippingRule = pathRenderInfo.GetClippingRule() }
+                                      ClippingRule = pathRenderInfo.GetClippingRule()
+                                      PathClose = PathClose pathClose }
                                 )
 
                                 info.PathRenderInfo.PreserveGraphicsState()
                                 currentRenderingClippingPathInfo_Integrated <- Some info
 
                             | false -> 
-                                match pathRenderInfo with 
-                                | :? PdfShadingPathRenderInfo -> ()
-                                | _ ->
-                                    match currentRenderingClippingPathInfo_Integrated with 
-                                    | Some info -> info.PathRenderInfo.ReleaseGraphicsState()
-                                    | None -> ()
+                                //match pathRenderInfo with 
+                                //| :? PdfShadingPathRenderInfo -> ()
+                                //| _ ->
+                                //    match currentRenderingClippingPathInfo_Integrated with 
+                                //    | Some info ->  info.PathRenderInfo.ReleaseGraphicsState()
+                                //    | None -> ()
 
                                 currentRenderingClippingPathInfo_Integrated <- None
                                 //let bound = 
@@ -661,7 +847,8 @@ module internal Listeners =
                         | :? TextRenderInfo as textRenderInfo ->
                             { ClippingPathInfos = 
                                 { XObjectClippingBoxState = currentXObjectClippingBox
-                                  ClippingPathInfoState = currentClippingPathInfo }
+                                  ClippingPathInfoState = currentClippingPathInfo
+                                  TextClippingInfos = currentTextClipingInfo }
                               TextRenderInfo = textRenderInfo
                               EndTextState = EndTextState.Undified
                               ConcatedTextInfo = { HeadWordInfo = textRenderInfo; FollowedWordInfos = [] }
@@ -671,20 +858,28 @@ module internal Listeners =
                               LazyVisibleBound0 = None
                               LazyVisibleBound0_Backup = None
                               PageBox = pageBoxes
-                              }
+                              TextRenderMode = textRenderInfo.GetFsTextRenderMode()
+                              ModifyUserState = ModifyUserState()
+                              IsShading = false
+                            }
                             :> IIntegratedRenderInfoIM
+                        | :? PdfShadingTextRenderInfo as textInfo ->
+                            isPaintShadingTextInfo <- true
+                            textInfo.IntegratedTextRenderInfo :> IIntegratedRenderInfoIM
 
                         | :? ImageRenderInfo as imageRenderInfo ->
                             let imageInfo =
                                 { ClippingPathInfos = 
                                     { XObjectClippingBoxState = currentXObjectClippingBox
-                                      ClippingPathInfoState = currentClippingPathInfo }
+                                      ClippingPathInfoState = currentClippingPathInfo
+                                      TextClippingInfos = currentTextClipingInfo }
                                   ImageRenderInfo = imageRenderInfo
                                   LazyVisibleBound = None
                                   LazyVisibleBound_Backup = None
                                   GsStates = this.GsStates_invokeByGS
                                   ContainerID = this.CurrentInfoContainerID
                                   PageBox = pageBoxes
+                                  ModifyUserState = ModifyUserState()
                                   LazyImageData = 
                                     lazy 
                                         let hash = 
@@ -789,8 +984,8 @@ module internal Listeners =
                         |_ -> failwith "Not implemented"
 
 
-                    match isShowingText, renderInfo.TagIM with 
-                    | true, IntegratedRenderInfoTagIM.Text ->
+                    match isShowingText, renderInfo.TagIM, isPaintShadingTextInfo with 
+                    | true, IntegratedRenderInfoTagIM.Text, _ ->
                         let renderInfo = renderInfo :?> IntegratedTextRenderInfo
 
                         renderInfo.TextRenderInfo.PreserveGraphicsState()
@@ -804,9 +999,9 @@ module internal Listeners =
                         //    renderInfo.TextRenderInfo.PreserveGraphicsState()
                         //    concatedTextInfos.Add(renderInfo)
 
-                    | false, IntegratedRenderInfoTagIM.Text -> ()
-                    | true, _ -> failwith "Invalid token"
-                    | false, _ -> 
+                    | false, IntegratedRenderInfoTagIM.Text, false -> ()
+                    | true, _, _ -> failwith "Invalid token"
+                    | false, _, _ -> 
                         let predicate _ filter =
                             filter renderInfo
                         let filtered = Map.filter predicate prediateMapping
@@ -826,6 +1021,8 @@ module internal Listeners =
                             currentRenderInfoStatus <- CurrentRenderInfoStatus.Selected
 
                         | true -> 
+                            renderInfo.Value.ReleaseGraphicsState()
+                            currentRenderInfoToken <- None
                             currentRenderInfoStatus <- CurrentRenderInfoStatus.Skiped
                             currentRenderInfo <- None
 
@@ -894,7 +1091,14 @@ with
         | CustomLayer layerName1, FsLayer.CustomLayer layerName2 ->
             layerName1 = layerName2
 
-        | ShpLayer layer1, FsLayer.ShpLayer layer2 -> layer1 = layer2
+        | ShpLayer layer1, FsLayer.ShpLayer layer2 -> 
+            match layer2 with 
+            | ShpLayer.ImposedData_Case _ -> 
+                match layer1 with 
+                | ShpLayer.SeamInfo_Case _ -> false
+                | _ -> true
+            | _ -> layer1 = layer2
+
         | Group layers, _ ->
             layers
             |> List.exists(fun layerUnion ->
@@ -902,11 +1106,9 @@ with
             )
         | _ -> false
 
-    member x.IsSameLayerTo(layer: PdfDictionary) =
-        failwithf ""
 
     static member OfPdfDictionary(pdfDictionary: PdfDictionary) =
-        match pdfDictionary.Get(PdfName.ShpLayer) with 
+        match pdfDictionary.Get(ShpPdfName.ShpLayer) with 
         | null ->
             match pdfDictionary.GetAsName(PdfName.Type) with 
             | EqualTo PdfName.OCG -> 
@@ -927,11 +1129,42 @@ with
             let shpLayer = ShpLayer.OfPdfObject shpLayer
             FsLayerUnion.ShpLayer shpLayer
             
+[<RequireQualifiedAccess>]
+type StreamableFsLayers =
+    | InStream of layers: ShpLayer list
+    | FsLayers of  FsLayer list
+with 
+    static member CustomLayer(layerName: string list) =
+        layerName
+        |> List.map FsLayer.CustomLayer
+        |> StreamableFsLayers.FsLayers
 
 
+[<RequireQualifiedAccess>]
 type ReaderLayerOptions =
     | AllLayers 
-    | SpecificLayers of FsLayer list
+    | SpecificLayers of includeTopLevel: bool * layers: StreamableFsLayers
+    | OnlyVisibleLayers
+with 
+    static member CustomLayer(customLayers, ?includeToplevel) =
+        let layers = 
+            customLayers
+            |> List.map FsLayer.CustomLayer
+            |> StreamableFsLayers.FsLayers
+
+        ReaderLayerOptions.SpecificLayers (defaultArg includeToplevel true, layers)
+
+
+    static member InShpLayer(shpLayer, ?inStream, ?includeToplevel) =
+        match defaultArg inStream true with 
+        | true -> ReaderLayerOptions.SpecificLayers (defaultArg includeToplevel true, StreamableFsLayers.InStream shpLayer)
+        | false ->
+            let layers = 
+                shpLayer
+                |> List.map FsLayer.ShpLayer
+                |> StreamableFsLayers.FsLayers
+
+            ReaderLayerOptions.SpecificLayers (defaultArg includeToplevel true, layers)
 
 
 type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventListenerEx, additionalContentOperators) =
@@ -942,22 +1175,41 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
 
     member internal x.PaintShading_InClippingArea(pdfName: PdfName) =
         match listener.EventTypes with 
-        | List.Contains EventType.RENDER_PATH & List.Contains EventType.CLIP_PATH_CHANGED ->
+        | List.Contains EventType.CLIP_PATH_CHANGED ->
             let shading = x.GetCurrentResource().GetShading(pdfName)
-            let currentRenderInfo = listener.CurrentRenderingClippingPathInfo_Integrated
+            let currentRenderPathInfo = listener.CurrentRenderingClippingPathInfo_Integrated
             
 
-            match currentRenderInfo with 
-            | Some _ -> 
-                match currentRenderInfo.Value with 
-                | IIntegratedRenderInfoIM.Path renderInfo -> 
+            match currentRenderPathInfo with 
+            | Some renderInfo -> 
+                match currentRenderPathInfo.Value, listener.EventTypes with 
+                | IIntegratedRenderInfo.Path renderInfo, List.Contains EventType.RENDER_PATH -> 
                     let canvasTag = 
                         match renderInfo.IsClippingPath with 
                         | true -> renderInfo.PathRenderInfo.GetCanvasTagHierarchy()
                         | false -> failwith "currentRenderInfo should be clipping path here"
 
-                    let color = new PdfShadingColor(shading, x.GetGraphicsState().GetCtm())
-                    let gsState = renderInfo.PathRenderInfo.GetGraphicsState()
+                    let shadingCtm = 
+                        //let inversed = 
+                        //    renderInfo.PathRenderInfo.GetGraphicsState().GetCtm()
+                        //    |> AffineTransform.ofMatrix
+                        //    |> AffineTransform.inverse
+
+                        //let ctm = 
+                        //    x.GetGraphicsState().GetCtm()
+                        //    |> AffineTransform.ofMatrix
+
+                        //ctm.PreConcatenate(inversed)
+                        //ctm
+                        //|> AffineTransform.toMatrix
+
+                        x.GetGraphicsState().GetCtm()
+
+                    let color = new PdfShadingColor(shading, shadingCtm)
+                    let gsState = 
+                        renderInfo.PathRenderInfo.GetGraphicsState()
+                        |> CanvasGraphicsState
+
                     gsState.SetFillColor(color)
                     let newPathRenderInfo =
                         PdfShadingPathRenderInfo(color, Stack canvasTag, gsState, renderInfo.PathRenderInfo.GetPath())
@@ -968,53 +1220,116 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
                     x.EventOccurred(newPathRenderInfo, EventType.RENDER_PATH)
 
 
-                | IIntegratedRenderInfoIM.Text renderInfo -> 
-                    //renderInfo.TextRenderInfo.GetCanvasTagHierarchy()
-                    failwith "Not implemented"
-                | IIntegratedRenderInfoIM.Image _ -> failwith "currentRenderInfo should not be Image here"
+                | IIntegratedRenderInfo.Text renderInfo, List.Contains EventType.RENDER_TEXT -> 
+                    let canvasTag = 
+                        match renderInfo.TextRenderMode.IsClip() with 
+                        | true -> renderInfo.TextRenderInfo.GetCanvasTagHierarchy() |> Stack
+                        | false -> failwith "currentRenderInfo should be clipping path here"
 
+                    let shadingCtm = 
+                        let renderInfoCtm = 
+                            renderInfo.TextRenderInfo.GetGraphicsState().GetCtm()
+                            |> AffineTransformRecord.ofMatrix
+
+                        let inversed = 
+                            renderInfoCtm
+                            |> AffineTransformRecord.inverse
+
+                        let ctm = 
+                            x.GetGraphicsState().GetCtm()
+                            |> AffineTransformRecord.ofMatrix
+
+                        let newCtm = ctm.PreConcatenate(inversed)
+
+                        newCtm
+                        |> AffineTransformRecord.toMatrix
+
+                    let color = new PdfShadingColor(shading, shadingCtm)
+                    let gsState = 
+                        renderInfo.TextRenderInfo.GetGraphicsState()
+                        |> CanvasGraphicsState
+
+                    gsState.SetTextRenderingMode(TextRenderingMode.FILL)
+                    gsState.SetFillColor(color)
+
+                    let setGs(textRenderInfo: TextRenderInfo) = 
+                        TextRenderInfo(textRenderInfo.GetPdfString(), gsState, textRenderInfo.GetTextMatrix(), canvasTag)
+
+                    let renderInfo =
+                        { renderInfo with 
+                            TextRenderMode = FsTextRenderMode.Fill
+                            IsShading = true
+                            TextRenderInfo = setGs renderInfo.TextRenderInfo
+                            ConcatedTextInfo = renderInfo.ConcatedTextInfo.MapTextRenderInfo setGs
+                            GsStates = listener.GsStates_invokeByGS
+                        }
+
+                    let newPathRenderInfo =
+                        PdfShadingTextRenderInfo(color, canvasTag, gsState, renderInfo)
+                    
+                
+                    x.EventOccurred(newPathRenderInfo, EventType.RENDER_TEXT)
+                    //renderInfo.TextRenderInfo.GetCanvasTagHierarchy()
+                | _ -> 
+                    ()
+                    //failwith "currentRenderInfo should not be Image here"
                 
             | None -> 
                 match initClippingBox with 
                 | Some clippingBox ->
-                    match listener.GetXObjectClippingBox() with 
-                    | XObjectClippingBoxState.IntersectedSome rect2 ->  
-                        match listener.GetCurrentClippingPathInfo() with 
-                        | ClippingPathInfoState.Init ->
-                            let gs = x.GetGraphicsState()
-                            let clippingPath = gs.GetClippingPath()
+                    match listener.EventTypes with 
+                    | List.Contains EventType.RENDER_PATH ->
 
-                            let canvasTag = [||] :> IList<_>
+                        match listener.GetXObjectClippingBox() with 
+                        | XObjectClippingBoxState.IntersectedSome rect2 ->  
+                            match listener.GetCurrentClippingPathInfo() with 
+                            | ClippingPathInfoState.Init ->
+                                let gs = x.GetGraphicsState()
+                                let clippingPath = gs.GetClippingPath()
 
-                            let color = new PdfShadingColor(shading, gs.GetCtm())
-                            let gsState = gs
-                            gsState.SetFillColor(color)
-                            let newPathRenderInfo =
-                                PdfShadingPathRenderInfo(color, Stack canvasTag, gsState, clippingPath)
+                                let canvasTag = [||] :> IList<_>
+
+                                let color = new PdfShadingColor(shading, gs.GetCtm())
+                                let gsState = gs
+                                gsState.SetFillColor(color)
+                                let newPathRenderInfo =
+                                    PdfShadingPathRenderInfo(color, Stack canvasTag, gsState, clippingPath)
                             
 
-                            //let operatorRanges =
-                            //    [
-                            //        { Operator = PdfLiteral("re")
-                            //          Operands = [|
-                            //            PdfLiteral("re") :> PdfObject
-                            //            PdfNumber(rect2.GetXF())
-                            //            PdfNumber(rect2.GetYF())
-                            //            PdfNumber(rect2.GetWidthF())
-                            //            PdfNumber(rect2.GetHeightF())
-                            //          |]
-                            //          }
-                            //    ]
+                                //let operatorRanges =
+                                //    [
+                                //        { Operator = PdfLiteral("re")
+                                //          Operands = [|
+                                //            PdfLiteral("re") :> PdfObject
+                                //            PdfNumber(rect2.GetXF())
+                                //            PdfNumber(rect2.GetYF())
+                                //            PdfNumber(rect2.GetWidthF())
+                                //            PdfNumber(rect2.GetHeightF())
+                                //          |]
+                                //          }
+                                //    ]
 
-                            //for operatorRange in operatorRanges do 
-                            //    listener.AddPathOperatorRange operatorRange
+                                //for operatorRange in operatorRanges do 
+                                //    listener.AddPathOperatorRange operatorRange
                 
-                            x.EventOccurred(newPathRenderInfo, EventType.RENDER_PATH)
+                                x.EventOccurred(newPathRenderInfo, EventType.RENDER_PATH)
 
-                        | _ ->
-                            failwith "current RenderingClippingPathInfo should be exists before Paint Shading"
+                            |  ClippingPathInfoState.Intersected clippingPathInfo ->
+                                let gs = x.GetGraphicsState()
+                                let clippingPath = clippingPathInfo.ClippingPathInfo.GetClippingPath()
 
-                    | _ -> failwith "current RenderingClippingPathInfo should be exists before Paint Shading"
+                                let canvasTag = [||] :> IList<_>
+
+                                let color = new PdfShadingColor(shading, gs.GetCtm())
+                                let gsState = gs
+                                gsState.SetFillColor(color)
+                                let newPathRenderInfo =
+                                    PdfShadingPathRenderInfo(color, Stack canvasTag, gsState, clippingPath)
+                            
+                                x.EventOccurred(newPathRenderInfo, EventType.RENDER_PATH)
+                        | _ -> failwith "current RenderingClippingPathInfo should be exists before Paint Shading"
+
+                    | _ -> ()
 
                 | None -> failwith "current RenderingClippingPathInfo should be exists before Paint Shading"
 
@@ -1046,29 +1361,19 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
         base.ProcessContent(contentBytes, resources)
 
 
-    override this.RegisterXObjectDoHandler(name, handler) =
-        match name with 
-        | EqualTo PdfName.Form ->
-            let handler = 
-                {
-                    new IXObjectDoHandler with 
-                        member x.HandleXObject(processor, canvasTagHierarchy, xObjectStream, xObjectName) =
-                            let id = 
-                                hashNumberOfPdfIndirectReference(xObjectStream.GetIndirectReference())
-                                |> InfoContainerID.XObject
-                            listener.InfoContainerIDStack_Push(id)
-                            handler.HandleXObject(processor, canvasTagHierarchy, xObjectStream, xObjectName)
-                            listener.InfoContainerIDStack_Pop()
-                            |> ignore
-                }
-            base.RegisterXObjectDoHandler(name, handler)
-
-        | _ -> base.RegisterXObjectDoHandler(name, handler)
 
 
     override this.InvokeOperator(operator, operands) =
         //printfn "%s %A" (operator.ToString())(List.ofSeq operands)
         match operator.ToString() with
+        | Operators.s 
+        | Operators.b
+        | Operators.``b*`` ->
+            listener.SetPathClose(true)
+            base.InvokeOperator(operator, operands)
+            listener.SetPathClose(false)
+
+
         | Operators.Tm -> 
             listener.Set_IsOffsetedByPreviousText(false)
             base.InvokeOperator(operator, operands)
@@ -1111,8 +1416,16 @@ type internal NonInitialCallbackablePdfCanvasProcessor (listener: FilteredEventL
                     listener.SetXObjectClippingBoxState(originState)
 
             | _ -> base.InvokeOperator(operator, operands)
-        | _ ->  
-
+        | _ ->      
+            //if operator.ToString() = "cm"
+            //then 
+            //    ()
+            //    let ctm = base.GetGraphicsState().GetCtm() |> AffineTransformRecord.ofMatrix
+            //    base.InvokeOperator(operator, operands)
+            //    let ctm2 = base.GetGraphicsState().GetCtm() |> AffineTransformRecord.ofMatrix
+            //    let p = ctm2
+            //    ()
+            //else
             base.InvokeOperator(operator, operands)
             //match operator.ToString() with 
             //| "cm" ->
@@ -1162,141 +1475,164 @@ type internal IsInLayerChoice =
 
 [<RequireQualifiedAccess>]
 type internal InLayerOperationOverride =
-    | Override of (IsInLayerChoice -> OperatorRange -> unit)
+    | Override of (OperatorRange -> unit)
     | InvokeOperator
 
 
-type internal LayerStackablePdfCanvasProcessor(listener: FilteredEventListenerEx, additionalContentOperators, ?readerLayerOptions: ReaderLayerOptions, ?noLayerOperation: OperatorRange -> unit, ?inLayerOperationOverride: unit -> InLayerOperationOverride) =
+type internal LayerStackablePdfCanvasProcessor(listener: FilteredEventListenerEx, additionalContentOperators, ?readerLayerOptions: ReaderLayerOptions, ?noLayerOperation: OperatorRange -> unit, ?inLayerOperationOverride: IsInLayerChoice -> InLayerOperationOverride) =
     inherit NonInitialCallbackablePdfCanvasProcessor(listener, additionalContentOperators)
     let layerStack = Stack()
     let layerCache = System.Collections.Concurrent.ConcurrentDictionary()
+    let readerLayerOptions = defaultArg readerLayerOptions ReaderLayerOptions.AllLayers
     let mutable isInLayer = (Some IsInLayerChoice.InTopLayer)
 
     member internal x.LayerStack = layerStack
 
     member x.IsInLayer = isInLayer
 
-    member private x.BaseInvokeOperator(operator, operands) =
+    member internal x.BaseInvokeOperator(operator, operands) =
         base.InvokeOperator(operator, operands)
 
-    override x.InvokeOperator(operator, operands) =
-        let noLayerOperation() =
-            match noLayerOperation with 
-            | None -> ()
-            | Some noLayerOperation -> noLayerOperation {Operator = operator; Operands = operands}
+    member internal x.NoLayerOperation(operator, operands) =
+        match noLayerOperation with 
+        | None -> ()
+        | Some noLayerOperation -> noLayerOperation {Operator = operator; Operands = operands}
 
-        let inLayerOperation(isInLayerChoice) =
+    member internal x.InLayerOperation(operator, operands, isInLayerChoice) =
+        match inLayerOperationOverride with 
+        | None -> x.BaseInvokeOperator(operator, operands)
+        | Some inLayerOperationOverride ->
+            let inLayerOperationOverride = inLayerOperationOverride(isInLayerChoice)
             match inLayerOperationOverride with 
-            | None -> x.BaseInvokeOperator(operator, operands)
-            | Some inLayerOperationOverride ->
-                let inLayerOperationOverride = inLayerOperationOverride()
-                match inLayerOperationOverride with 
-                | InLayerOperationOverride.InvokeOperator -> x.BaseInvokeOperator(operator, operands)
-                | InLayerOperationOverride.Override customInLayerOperation ->
-                    customInLayerOperation isInLayerChoice {Operator = operator; Operands = operands}
+            | InLayerOperationOverride.InvokeOperator -> x.BaseInvokeOperator(operator, operands)
+            | InLayerOperationOverride.Override customInLayerOperation ->
+                customInLayerOperation {Operator = operator; Operands = operands}
 
-        match defaultArg readerLayerOptions ReaderLayerOptions.AllLayers with
+
+    override x.InvokeOperator(operator, operands) =
+        match readerLayerOptions with
+        | ReaderLayerOptions.OnlyVisibleLayers -> base.InvokeOperator(operator, operands)
         | ReaderLayerOptions.AllLayers -> base.InvokeOperator(operator, operands)
-        | ReaderLayerOptions.SpecificLayers layers ->
-            
-            match operator.ToString() with 
-            | BDC -> 
-                match operands.Item(0) with 
-                | :? PdfName as name1 ->
-                    match name1 with 
-                    | EqualTo PdfName.OC ->
-                        let resources = x.GetCurrentResource()
-                        let name2 = operands.Item(1) :?> PdfName
+        | ReaderLayerOptions.SpecificLayers (includeTopLevel, layers) ->
+            match layers with 
+            | StreamableFsLayers.InStream _ -> base.InvokeOperator(operator, operands)
+            | StreamableFsLayers.FsLayers layers ->
+                let noLayerOperation() = 
+                    x.NoLayerOperation(operator, operands)
 
-                        let layerDict = resources.GetProperties(name2) :?> PdfDictionary
-                        let documentLayer = 
-                            let hashCode = hashNumberOfPdfIndirectReference (layerDict.GetIndirectReference())
-                            layerCache.GetOrAdd(hashCode, valueFactory = fun _ ->
-                                FsLayerUnion.OfPdfDictionary layerDict
+                let inLayerOperation(isInLayerChoice) = 
+                    x.InLayerOperation(operator, operands, isInLayerChoice)
+
+                let updateIsInLayer_ByStack() =
+                    match layerStack.Count with 
+                    | 0 -> isInLayer <- Some IsInLayerChoice.InTopLayer
+                    | _ ->
+                        let b =
+                            layerStack.ToArray()
+                            |> Array.exists(fun m ->
+                                match m with 
+                                | MarkContent.SelectedLayer _ -> true
+                                | _ -> false
                             )
-
-                        let isSelectedLayer =
-                            layers
-                            |> List.exists(fun layer ->
-                                documentLayer.ContainsLayer layer
-                            )
-
-                        match isSelectedLayer with 
+                        match b with 
                         | true -> 
-                            layerStack.Push (MarkContent.SelectedLayer documentLayer)
                             isInLayer <- (Some IsInLayerChoice.InSelectedLayer)
-                        | false -> 
-                            layerStack.Push (MarkContent.UnSelectedLayer documentLayer)
-                            isInLayer <- (None)
+                        | false -> isInLayer <- None
 
-                    | _ -> 
-                        layerStack.Push (MarkContent.OtherMarkContent)
-
-                | _ -> layerStack.Push (MarkContent.OtherMarkContent)
-
-                match isInLayer with 
-                | Some layerChoice -> inLayerOperation(layerChoice)
-                | None -> noLayerOperation()
-                   
-
-            | EMC -> 
-                match isInLayer with 
-                | Some layerChoice -> inLayerOperation(layerChoice)
-                | None -> noLayerOperation()
-
-                let poped = layerStack.Pop() 
-                match layerStack.Count with 
-                | 0 -> isInLayer <- Some IsInLayerChoice.InTopLayer
-                | _ ->
-                    let b =
-                        layerStack.ToArray()
-                        |> Array.exists(fun m ->
-                            match m with 
-                            | MarkContent.SelectedLayer _ -> true
-                            | _ -> false
-                        )
-                    match b with 
-                    | true -> 
-                        isInLayer <- (Some IsInLayerChoice.InSelectedLayer)
-                    | false -> isInLayer <- None
-
-
-            | Do -> 
-                match isInLayer with 
-                | Some isInLayerChoice -> 
-                    match inLayerOperationOverride with 
-                    | None -> x.BaseInvokeOperator(operator, operands)
-                    | Some inLayerOperationOverride ->
-                        let inLayerOperationOverride = inLayerOperationOverride()
-
-                        match inLayerOperationOverride with 
-                        | InLayerOperationOverride.InvokeOperator -> x.BaseInvokeOperator(operator, operands)
-                        | InLayerOperationOverride.Override customInLayerOperation ->
+                match operator.ToString() with 
+                | BDC -> 
+                    match operands.Item(0) with 
+                    | :? PdfName as name1 ->
+                        match name1 with 
+                        | EqualTo PdfName.OC ->
                             let resources = x.GetCurrentResource()
-                            let container = resources.GetResource(PdfName.XObject).GetAsStream(operands.[0] :?> PdfName)
-                            let subType   = container.GetAsName(PdfName.Subtype)
-                            match subType with 
-                            | EqualTo PdfName.Form -> x.BaseInvokeOperator(operator, operands)
+                            let name2 = operands.Item(1) :?> PdfName
 
-                            | _ -> customInLayerOperation isInLayerChoice {Operator = operator; Operands = operands}
+                            let layerDict = resources.GetProperties(name2) :?> PdfDictionary
+                            let documentLayer = 
+                                let hashCode = hashNumberOfPdfIndirectReference (layerDict.GetIndirectReference())
+                                layerCache.GetOrAdd(hashCode, valueFactory = fun _ ->
+                                    FsLayerUnion.OfPdfDictionary layerDict
+                                )
 
-                | None -> 
-                    let resources = x.GetCurrentResource()
-                    let container = resources.GetResource(PdfName.XObject).GetAsStream(operands.[0] :?> PdfName)
-                    let subType   = container.GetAsName(PdfName.Subtype)
-                    match subType with 
-                    | EqualTo PdfName.Form -> x.BaseInvokeOperator(operator, operands)
+                            let isSelectedLayer =
+                                layers
+                                |> List.exists(fun layer ->
+                                    documentLayer.ContainsLayer layer
+                                )
 
-                    | _ -> noLayerOperation()
-                    
-            | _ -> 
-                match isInLayer with 
-                | Some isInLayerChoice -> inLayerOperation(isInLayerChoice)
-                | None -> noLayerOperation()
+                            match isSelectedLayer with 
+                            | true -> 
+                                layerStack.Push (MarkContent.SelectedLayer documentLayer)
+                                isInLayer <- Some IsInLayerChoice.InSelectedLayer
+                            | false -> 
+                                layerStack.Push (MarkContent.UnSelectedLayer documentLayer)
+                                isInLayer <- None
+
+                        | _ -> 
+                            layerStack.Push (MarkContent.OtherMarkContent)
+
+                    | _ -> layerStack.Push (MarkContent.OtherMarkContent)
+
+                    match isInLayer with 
+                    | Some layerChoice -> inLayerOperation(layerChoice)
+                    | None -> noLayerOperation()
+               
+
+                | EMC -> 
+                    match isInLayer with 
+                    | Some layerChoice -> inLayerOperation(layerChoice)
+                    | None -> noLayerOperation()
+
+                    let __poped = layerStack.Pop() 
+                    updateIsInLayer_ByStack()
+
+
+                | Do -> 
+                    match isInLayer with 
+                    | Some isInLayerChoice -> 
+                        match inLayerOperationOverride with 
+                        | None -> x.BaseInvokeOperator(operator, operands)
+                        | Some inLayerOperationOverride ->
+                            let inLayerOperationOverride = inLayerOperationOverride(isInLayerChoice)
+
+                            match inLayerOperationOverride with 
+                            | InLayerOperationOverride.InvokeOperator -> x.BaseInvokeOperator(operator, operands)
+                            | InLayerOperationOverride.Override customInLayerOperation ->
+                                let resources = x.GetCurrentResource()
+                                let container = resources.GetResource(PdfName.XObject).GetAsStream(operands.[0] :?> PdfName)
+                                let subType   = container.GetAsName(PdfName.Subtype)
+                                match subType with 
+                                | EqualTo PdfName.Form -> x.BaseInvokeOperator(operator, operands)
+
+                                | _ -> customInLayerOperation {Operator = operator; Operands = operands}
+
+                    | None -> 
+                        let resources = x.GetCurrentResource()
+                        let container = resources.GetResource(PdfName.XObject).GetAsStream(operands.[0] :?> PdfName)
+                        let subType   = container.GetAsName(PdfName.Subtype)
+                        match subType with 
+                        | EqualTo PdfName.Form -> x.BaseInvokeOperator(operator, operands)
+
+                        | _ -> noLayerOperation()
+                
+                | operatorText -> 
+                    match isInLayer with 
+                    | Some isInLayerChoice -> 
+                        match isInLayerChoice, includeTopLevel with 
+                        | IsInLayerChoice.InTopLayer, false -> 
+                            match operatorText with 
+                            | Operators.cm 
+                            | Operators.q 
+                            | Operators.Q -> inLayerOperation(isInLayerChoice)
+                            | _ -> noLayerOperation()
+                        | _ -> inLayerOperation(isInLayerChoice)
+                    | None -> noLayerOperation()
 
 
     new (listener: FilteredEventListenerEx, ?readerLayerOptions: ReaderLayerOptions, ?noLayerOperation, ?inLayerOperationOverride) =
         LayerStackablePdfCanvasProcessor(listener, dict [], ?readerLayerOptions = readerLayerOptions, ?noLayerOperation = noLayerOperation, ?inLayerOperationOverride = inLayerOperationOverride)
+        
 
 
 type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXObjectOperator, fCurrentResource) =
@@ -1347,8 +1683,9 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
         match operatorName with 
         | EQ gs -> processor.Listener.ProcessGraphicsStateResource(processor.Listener.CurrentInfoContainerID, processor.GetGraphicsState())
         | EQ sh -> processor.PaintShading_InClippingArea(operands.[0] :?> PdfName)
+        | EQ ET -> processor.Listener.FinallyEndText()
         | ContainsBy showTextOperators -> 
-            processor.Listener.EndShoeText({Operator = operator; Operands = ResizeArray operands})
+            processor.Listener.EndShowText({Operator = operator; Operands = ResizeArray operands})
 
         | ContainsBy [m; v; c; y; l; h; re] -> 
             processor.Listener.AddPathOperatorRange({ Operator = operator; Operands = ResizeArray(operands)})
@@ -1362,9 +1699,244 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
             this.Invoke(processor, operator, operands, ignore)
             
 
+type internal VisibleLayerPdfCanvasProcessor(ocProperties: FsOCProperties, listener: FilteredEventListenerEx, additionalContentOperators, ?readerLayerOptions: ReaderLayerOptions, ?noLayerOperation, ?inLayerOperationOverride) =
+    inherit LayerStackablePdfCanvasProcessor(
+        listener,
+        additionalContentOperators = additionalContentOperators,
+        ?readerLayerOptions = readerLayerOptions,
+        ?noLayerOperation = noLayerOperation,
+        ?inLayerOperationOverride = inLayerOperationOverride)
 
-type internal ReaderPdfCanvasProcessor(listener: FilteredEventListenerEx, additionalContentOperators: IDictionary<_, _>, ?readerLayerOptions: ReaderLayerOptions) =
-    inherit LayerStackablePdfCanvasProcessor(listener, additionalContentOperators, ?readerLayerOptions = readerLayerOptions)
+
+    let layerCache = ConcurrentDictionary()
+    let mutable isInLayer = (Some IsInLayerChoice.InTopLayer)
+
+    let layerStack = Stack()
+
+    override x.InvokeOperator(operator, operands) =
+        match defaultArg readerLayerOptions ReaderLayerOptions.AllLayers with
+        | ReaderLayerOptions.AllLayers 
+        | ReaderLayerOptions.SpecificLayers _ -> base.InvokeOperator(operator, operands)
+        | ReaderLayerOptions.OnlyVisibleLayers ->
+            let noLayerOperation() = 
+                x.NoLayerOperation(operator, operands)
+
+            let inLayerOperation(isInLayerChoice) = 
+                x.InLayerOperation(operator, operands, isInLayerChoice)
+
+            let updateIsInLayer_ByStack() =
+                match layerStack.Count with 
+                | 0 -> isInLayer <- Some IsInLayerChoice.InTopLayer
+                | _ ->
+                    let b =
+                        layerStack.ToArray()
+                        |> Array.exists(fun m ->
+                            match m with 
+                            | MarkContent.SelectedLayer _ -> true
+                            | _ -> false
+                        )
+                    match b with 
+                    | true -> 
+                        isInLayer <- (Some IsInLayerChoice.InSelectedLayer)
+                    | false -> isInLayer <- None
+
+            match operator.ToString() with 
+            | BDC -> 
+                match operands.Item(0) with 
+                | :? PdfName as name1 ->
+                    match name1 with 
+                    | EqualTo PdfName.OC ->
+                        let resources = x.GetCurrentResource()
+                        let name2 = operands.Item(1) :?> PdfName
+
+                        let layerDict = resources.GetProperties(name2) :?> PdfDictionary
+                        let id = hashNumberOfPdfIndirectReference <| layerDict.GetIndirectReference()
+                        let documentLayer = 
+                            layerCache.GetOrAdd(id, valueFactory = fun _ ->
+                                FsLayerUnion.OfPdfDictionary (layerDict)
+                            )
+
+                        match List.contains id ocProperties.OFF with 
+                        | true -> 
+                            layerStack.Push(MarkContent.SelectedLayer documentLayer)
+                            isInLayer <- None
+
+                        | false -> 
+                            layerStack.Push(MarkContent.SelectedLayer documentLayer)
+
+                            isInLayer <- Some (IsInLayerChoice.InSelectedLayer)
+
+                    | _ -> 
+                        layerStack.Push (MarkContent.OtherMarkContent)
+
+                | _ -> layerStack.Push (MarkContent.OtherMarkContent)
+
+                match isInLayer with 
+                | Some layerChoice -> inLayerOperation(layerChoice)
+                | None -> noLayerOperation()
+               
+
+            | EMC -> 
+                match isInLayer with 
+                | Some layerChoice -> inLayerOperation(layerChoice)
+                | None -> noLayerOperation()
+
+                let __poped = layerStack.Pop() 
+                updateIsInLayer_ByStack()
+
+
+            | Do -> 
+                match isInLayer with 
+                | Some isInLayerChoice -> 
+                    match inLayerOperationOverride with 
+                    | None -> x.BaseInvokeOperator(operator, operands)
+                    | Some inLayerOperationOverride ->
+                        let inLayerOperationOverride = inLayerOperationOverride(isInLayerChoice)
+
+                        match inLayerOperationOverride with 
+                        | InLayerOperationOverride.InvokeOperator -> x.BaseInvokeOperator(operator, operands)
+                        | InLayerOperationOverride.Override customInLayerOperation ->
+                            let resources = x.GetCurrentResource()
+                            let container = resources.GetResource(PdfName.XObject).GetAsStream(operands.[0] :?> PdfName)
+                            let subType   = container.GetAsName(PdfName.Subtype)
+                            match subType with 
+                            | EqualTo PdfName.Form -> x.BaseInvokeOperator(operator, operands)
+
+                            | _ -> customInLayerOperation {Operator = operator; Operands = operands}
+
+                | None -> 
+                    let resources = x.GetCurrentResource()
+                    let container = resources.GetResource(PdfName.XObject).GetAsStream(operands.[0] :?> PdfName)
+                    let subType   = container.GetAsName(PdfName.Subtype)
+                    match subType with 
+                    | EqualTo PdfName.Form -> x.BaseInvokeOperator(operator, operands)
+
+                    | _ -> noLayerOperation()
+            
+            | operatorText -> 
+                match isInLayer with 
+                | Some isInLayerChoice -> 
+                    inLayerOperation(isInLayerChoice)
+                | None -> 
+                    match operatorText with 
+                    | Operators.cm 
+                    | Operators.q 
+                    | Operators.Q -> inLayerOperation(IsInLayerChoice.InTopLayer)
+                    | _ -> noLayerOperation()
+
+
+
+
+
+type internal InStreamLayerStackablePdfCanvasProcessor(ocProperties, listener: FilteredEventListenerEx, additionalContentOperators, ?readerLayerOptions: ReaderLayerOptions, ?noLayerOperation, ?inLayerOperationOverride) =
+    inherit VisibleLayerPdfCanvasProcessor(
+        ocProperties,
+        listener,
+        additionalContentOperators = additionalContentOperators,
+        ?readerLayerOptions = readerLayerOptions,
+        ?noLayerOperation = noLayerOperation,
+        ?inLayerOperationOverride = inLayerOperationOverride)
+    let readerLayerOptions = defaultArg readerLayerOptions ReaderLayerOptions.AllLayers
+    let layerCache = System.Collections.Concurrent.ConcurrentDictionary()
+    let layerStack = Stack()
+
+    override x.InvokeOperator(operator, operands) =
+        match readerLayerOptions with 
+        | ReaderLayerOptions.OnlyVisibleLayers -> base.InvokeOperator(operator, operands)
+        | ReaderLayerOptions.AllLayers -> base.BaseInvokeOperator(operator, operands)
+        | ReaderLayerOptions.SpecificLayers (includeTopLevel, layers) ->
+            match layers with 
+            | StreamableFsLayers.FsLayers _ -> base.InvokeOperator(operator, operands)
+            | StreamableFsLayers.InStream layers ->
+                let noLayerOperation() = 
+                    x.NoLayerOperation(operator, operands)
+
+                let inLayerOperation(isInLayerChoice) = 
+                    x.InLayerOperation(operator, operands, isInLayerChoice)
+
+                let operatorText = operator.ToString()
+
+                match operatorText with 
+                | Do ->
+                    let resources = x.GetCurrentResource()
+                    let container = resources.GetResource(PdfName.XObject).GetAsStream(operands.[0] :?> PdfName)
+                    let shpLayer = container.Get(ShpPdfName.ShpLayer)
+                    match shpLayer with 
+                    | null -> 
+                        match layerStack.Count with 
+                        | 0 -> inLayerOperation(IsInLayerChoice.InTopLayer)
+                        | _ -> inLayerOperation(IsInLayerChoice.InSelectedLayer)
+
+                    | shpLayer -> 
+                        let documentLayer = 
+                            let hashCode = hashNumberOfPdfIndirectReference (container.GetIndirectReference())
+                            layerCache.GetOrAdd(hashCode, valueFactory = fun _ ->
+                                ShpLayer.OfPdfObject (shpLayer)
+                            )
+
+                        let isSelectedLayer =
+                            match documentLayer with 
+                            | ShpLayer.ImposedData_Case _ -> 
+                                match layers with 
+                                | [ShpLayer.SeamInfo_Case _] -> false
+                                | _ -> true
+
+                            | _ -> List.contains documentLayer layers
+
+                        match isSelectedLayer with 
+                        | true -> 
+                            layerStack.Push(documentLayer)
+                            inLayerOperation(IsInLayerChoice.InSelectedLayer)
+
+                            let __poped = layerStack.Pop()
+                            ()
+
+                        | false -> noLayerOperation()
+
+                    
+
+                | _ -> 
+                    match layerStack.Count with 
+                    | 0 -> inLayerOperation(IsInLayerChoice.InTopLayer)
+                    | _ -> inLayerOperation(IsInLayerChoice.InSelectedLayer)
+
+    new (ocProperties, listener: FilteredEventListenerEx, ?readerLayerOptions: ReaderLayerOptions, ?noLayerOperation, ?inLayerOperationOverride) =
+        let additionalContentOperators = dict []
+        new InStreamLayerStackablePdfCanvasProcessor(
+            ocProperties,
+            listener,
+            additionalContentOperators,
+            ?readerLayerOptions = readerLayerOptions,
+            ?noLayerOperation = noLayerOperation,
+            ?inLayerOperationOverride = inLayerOperationOverride
+        )
+    
+
+type internal ReaderPdfCanvasProcessor(ocProperties, listener: FilteredEventListenerEx, additionalContentOperators: IDictionary<_, _>, ?readerLayerOptions: ReaderLayerOptions) =
+    inherit InStreamLayerStackablePdfCanvasProcessor(
+        ocProperties,
+        listener,
+        additionalContentOperators,
+        ?readerLayerOptions = readerLayerOptions)
+    
+    override this.RegisterXObjectDoHandler(name, handler) =
+        match name with 
+        | EqualTo PdfName.Form ->
+            let handler = 
+                {
+                    new IXObjectDoHandler with 
+                        member x.HandleXObject(processor, canvasTagHierarchy, xObjectStream, xObjectName) =
+                            let id = 
+                                hashNumberOfPdfIndirectReference(xObjectStream.GetIndirectReference())
+                                |> InfoContainerID.XObject
+                            listener.InfoContainerIDStack_Push(id)
+                            handler.HandleXObject(processor, canvasTagHierarchy, xObjectStream, xObjectName)
+                            listener.InfoContainerIDStack_Pop()
+                            |> ignore
+                }
+            base.RegisterXObjectDoHandler(name, handler)
+
+        | _ -> base.RegisterXObjectDoHandler(name, handler)
 
     override this.RegisterContentOperator(operatorString: string, operator: IContentOperator) : IContentOperator =
         let wrapper = new RenderInfoAccumulatableContentOperator(operator, (true), fun processor ->
@@ -1378,10 +1950,14 @@ type internal ReaderPdfCanvasProcessor(listener: FilteredEventListenerEx, additi
 
 
 
-
 type NonInitialClippingPathPdfDocumentContentParser(pdfDocument, ?readerLayerOptions) =
     inherit PdfDocumentContentParser(pdfDocument)
     let cache = DocumentParserCache.Create()
+    let ocProps = 
+        pdfDocument.GetCatalog().GetPdfObject().GetAsDictionary(PdfName.OCProperties)
+        |> FsOCProperties.Create
+
+    member x.OCProps = ocProps
 
     member x.Cache = cache
 
@@ -1390,7 +1966,7 @@ type NonInitialClippingPathPdfDocumentContentParser(pdfDocument, ?readerLayerOpt
     override this.ProcessContent(pageNumber, renderListener, additionalContentOperators) =  
         
         let listener = (renderListener :> IEventListener) :?> FilteredEventListenerEx
-        let processor = new ReaderPdfCanvasProcessor(listener, additionalContentOperators, ?readerLayerOptions = readerLayerOptions)
+        let processor = new ReaderPdfCanvasProcessor(ocProps, listener, additionalContentOperators, ?readerLayerOptions = readerLayerOptions)
         processor.ProcessPageContent(pdfDocument.GetPage(pageNumber))
         renderListener
 
@@ -1420,8 +1996,9 @@ module NonInitialClippingPathPdfDocumentContentParser =
                 let renderInfoSelectorMapping = Map.ofList [{ Name= "Untitled" }, renderInfoSelector]
                 let pdfPage = parser.PdfDocument.GetPage(pageNum)
                 let listener = new FilteredEventListenerEx(parser.Cache, pdfPage, renderInfoSelectorMapping)
-                parser.ProcessContent(pageNum, listener).ParsedRenderInfos
-                |> Seq.map(fun m -> m :?> IIntegratedRenderInfo)
+                let infos = parser.ProcessContent(pageNum, listener).ParsedRenderInfos
+                
+                infos |> Seq.map(fun m -> m :?> IIntegratedRenderInfo)
 
 
             infos

@@ -3,6 +3,7 @@ open iText.Kernel.Geom
 open Akka.Configuration
 open System.Reflection
 open System.IO
+#nowarn "0020"
 open Shrimp.FSharp.Plus
 open System
 open Shrimp.Akkling.Cluster.Intergraction.Configuration
@@ -11,8 +12,16 @@ open iText.Kernel.Pdf
 module _ShpLayer =
     
     [<RequireQualifiedAccess>]
-    module PdfName =
+    module ShpPdfName =
         let ShpLayer = PdfName "ShpLayer" 
+        let ShpLayerGroup = PdfName "ShpLayerGroup" 
+        let ShpLayerOptions = PdfName "ShpLayerOptions" 
+        let IsLocked = PdfName "IsLocked"
+        let CuttingDieShpLayerInfosEnum = PdfName "CuttingDieShpLayerInfosEnum"
+
+    [<RequireQualifiedAccess>]
+    module PdfName =
+        let ICCBased = PdfName "ICCBased"
 
     [<System.Flags>]
     type CuttingDieShpLayerInfosEnum =
@@ -20,138 +29,262 @@ module _ShpLayer =
         | CuttingDieDashLine = 2
         | TagInfos = 4
 
+    type ShpLayerOptions =
+        { IsLocked: bool }
+    with 
+        static member DefaultValue = { IsLocked = false }
+
+        member x.AsPdfObject() =
+            match x = ShpLayerOptions.DefaultValue with 
+            | true -> None
+            | false -> 
+                let dict = PdfDictionary()
+                dict.Put(ShpPdfName.IsLocked, PdfBoolean x.IsLocked)
+                Some dict
+
+        static member OfPdfObject(pdfDict: PdfDictionary) =
+            { IsLocked = pdfDict.GetAsBool(ShpPdfName.IsLocked).Value}
+
     [<RequireQualifiedAccess>]
     type ShpLayer =
-        | Bk_XObjectOnly of string
-        | Fr_XObjectOnly of string
-        | BK             of string
-        | Foreground     of string
-        | Content        of string option        
-        | Pixel          of string
-        | CuttingDie     of CuttingDieShpLayerInfosEnum
-        | BkSolid
-        | CompoundPath
-        | ClippingPath
+        | Bk_XObjectOnly_Case of name: string        * ops: ShpLayerOptions
+        | Fr_XObjectOnly_Case of name: string        * ops: ShpLayerOptions
+        | BK_Case             of name: string        * ops: ShpLayerOptions
+        | Foreground_Case     of name: string        * ops: ShpLayerOptions
+        | Content_Case        of name: string option * ops: ShpLayerOptions        
+        | Pixel_Case          of name: string        * ops: ShpLayerOptions
+        | CuttingDie_Case     of SkipComparation_Serializable<CuttingDieShpLayerInfosEnum> * ops: ShpLayerOptions
+        | BkSolid_Case        of ops: ShpLayerOptions
+        | CompoundPath_Case   of ops: ShpLayerOptions
+        | ClippingPath_Case   of ops: ShpLayerOptions
+        | SeamInfo_Case       of ops: ShpLayerOptions
+        | ImposedData_Case    of ops: ShpLayerOptions    
+        | PageNumber_Case     of ops: ShpLayerOptions 
     with 
-        static member CreateContent(?name) =
-            ShpLayer.Content name
+        static member Bk_XObjectOnly (name: string        , ?ops: ShpLayerOptions                                         )      =
+            Bk_XObjectOnly_Case(name, ops = defaultArg ops ShpLayerOptions.DefaultValue)
+        static member Fr_XObjectOnly (name: string        , ?ops: ShpLayerOptions                                         )      =
+            Fr_XObjectOnly_Case(name, ops = defaultArg ops ShpLayerOptions.DefaultValue)
+        static member BK             (name: string        , ?ops: ShpLayerOptions                                         )      =
+            BK_Case(name, ops = defaultArg ops ShpLayerOptions.DefaultValue)
+        static member Foreground     (name: string        , ?ops: ShpLayerOptions                                         )      =
+            Foreground_Case(name, ops = defaultArg ops ShpLayerOptions.DefaultValue)
+        static member Content        (?name: string , ?ops: ShpLayerOptions                                         )      =
+            Content_Case(name, ops = defaultArg ops ShpLayerOptions.DefaultValue)
+        static member Pixel          (name: string        , ?ops: ShpLayerOptions                                         )      =
+            Pixel_Case(name, ops = defaultArg ops ShpLayerOptions.DefaultValue)
+        static member CuttingDie     (enum: CuttingDieShpLayerInfosEnum, ?ops: ShpLayerOptions   ) =
+            CuttingDie_Case(SkipComparation_Serializable enum, ops = defaultArg ops ShpLayerOptions.DefaultValue)
+        static member BkSolid        (?ops: ShpLayerOptions)                                                                =
+            BkSolid_Case(ops = defaultArg ops ShpLayerOptions.DefaultValue)
+        static member CompoundPath   (?ops: ShpLayerOptions)                                                                =
+            CompoundPath_Case(ops = defaultArg ops ShpLayerOptions.DefaultValue)
+        static member ClippingPath   (?ops: ShpLayerOptions)                                                          =
+            ClippingPath_Case(ops = defaultArg ops ShpLayerOptions.DefaultValue)
+
+        static member SeamInfo  (?ops: ShpLayerOptions)                                                          =
+            SeamInfo_Case(ops = defaultArg ops ShpLayerOptions.DefaultValue)
+
+        static member ImposedData  (?ops: ShpLayerOptions)                                                          =
+            ImposedData_Case(ops = defaultArg ops ShpLayerOptions.DefaultValue)
+
+        static member PageNumber  (?ops: ShpLayerOptions)                                                          =
+            PageNumber_Case(ops = defaultArg ops ShpLayerOptions.DefaultValue)
+
+
+        member x.Options =
+            match x with
+            | Bk_XObjectOnly_Case (_, v) -> v
+                
+            | Fr_XObjectOnly_Case (_, v) -> v
+
+            | BK_Case (_, v) -> v
+
+            | Foreground_Case (_, v) -> v
+
+            | Content_Case (_, v) -> v
+
+            | Pixel_Case (_, v) -> v
+
+            | CuttingDie_Case (_, v) -> v
+
+            | BkSolid_Case v -> v
+
+            | CompoundPath_Case v -> v
+
+            | ClippingPath_Case v -> v
+
+            | SeamInfo_Case v -> v
+            | ImposedData_Case v -> v
+            | PageNumber_Case v -> v
+
+        member x.DefaultLayerName() =
+            match x with
+            | Bk_XObjectOnly_Case (v, _) -> v
+                
+            | Fr_XObjectOnly_Case (v, _) -> v
+
+            | BK_Case (v, _) -> v
+
+            | Foreground_Case (v, _) -> v
+
+            | Content_Case (v, _) -> defaultArg v "Content"
+
+            | Pixel_Case (v, _) -> v
+
+            | CuttingDie_Case (enum, _) -> "CuttingDie"
+
+            | BkSolid_Case _ -> nameof(ShpLayer.BkSolid)
+
+            | CompoundPath_Case _ -> nameof(ShpLayer.CompoundPath)
+
+            | ClippingPath_Case _ -> nameof(ShpLayer.ClippingPath)
+
+            | SeamInfo_Case _ -> nameof(ShpLayer.SeamInfo)
+            | ImposedData_Case _ -> nameof(ShpLayer.ImposedData)
+            | PageNumber_Case _ -> nameof(ShpLayer.PageNumber)
 
 
         static member OfPdfObject(pdfObject: PdfObject) =
-            
-            let name, addtionalContent = 
-                match pdfObject with 
-                | :? PdfArray as pdfArray  -> 
-                    let addtionalContent = 
-                        match pdfArray.Size() with 
-                        | 1 -> None
-                        | _ -> pdfArray.Get(1) |> Some
+            let shpLayer = pdfObject :?> PdfDictionary
+            let kind = shpLayer.GetAsString(PdfName.Type)
+            let ops = 
+                match shpLayer.ContainsKey ShpPdfName.ShpLayerOptions with 
+                | true -> 
+                    shpLayer.GetAsDictionary(ShpPdfName.ShpLayerOptions)
+                    |> ShpLayerOptions.OfPdfObject
+                    |> Some
 
-                    pdfArray.GetAsString(0), addtionalContent
-                | :? PdfString as pdfString -> pdfString, None
-                | _ -> failwithf "Invalid token, cannot create ShpLayer from %A" (pdfObject.GetType())
+                | false -> None 
 
-            let getAddtionalContentAsStringOption() =
-                match addtionalContent with 
-                | None -> None
-                | Some addtionalContent -> (addtionalContent :?> PdfString).GetValue() |> Some
+            let name =  
+                match shpLayer.ContainsKey(PdfName.Name) with 
+                | false -> None
+                | true -> 
+                    shpLayer.GetAsString(PdfName.Name).GetValue()
+                    |> Some
+          
 
-            let getAddtionalContentAsString() =
-                match addtionalContent with 
-                | None -> failwithf "addtionalContent Cannot be empty None here"
-                | Some addtionalContent -> (addtionalContent :?> PdfString).GetValue()
-                    
-            let getAddtionalContentAsInt() =
-                match addtionalContent with 
-                | None -> failwithf "addtionalContent Cannot be empty None here"
-                | Some addtionalContent -> (addtionalContent :?> PdfNumber).GetValue() |> int
-                    
-
-            match name.GetValue() with 
+            match kind.GetValue() with 
             | nameof(ShpLayer.Bk_XObjectOnly) -> 
-                ShpLayer.Bk_XObjectOnly (getAddtionalContentAsString())
+                ShpLayer.Bk_XObjectOnly (name.Value, ?ops = ops)
 
-            | nameof Fr_XObjectOnly -> Fr_XObjectOnly(getAddtionalContentAsString())
-            | nameof BK             -> BK            (getAddtionalContentAsString())
-            | nameof Foreground     -> Foreground    (getAddtionalContentAsString())
-            | nameof Content        -> Content       (getAddtionalContentAsStringOption())
-            | nameof Pixel          -> Pixel         (getAddtionalContentAsString())
-            | nameof CuttingDie     ->  
-                let enum_int = getAddtionalContentAsInt()
+            | nameof ShpLayer.Fr_XObjectOnly -> ShpLayer.Fr_XObjectOnly(name.Value, ?ops = ops)
+            | nameof ShpLayer.BK             -> ShpLayer.BK            (name.Value, ?ops = ops)
+            | nameof ShpLayer.Foreground     -> ShpLayer.Foreground    (name.Value, ?ops = ops)
+            | nameof ShpLayer.Content        -> ShpLayer.Content       (?name = name, ?ops = ops)
+            | nameof ShpLayer.Pixel          -> ShpLayer.Pixel         (name.Value, ?ops = ops)
+            | nameof ShpLayer.CuttingDie     ->  
+                
+                let enum_int = shpLayer.GetAsInt(ShpPdfName.CuttingDieShpLayerInfosEnum).Value
                 let enum = enum enum_int
-                CuttingDie  enum
+                ShpLayer.CuttingDie (enum, ?ops = ops)
 
-            | nameof BkSolid        -> BkSolid       
-            | nameof CompoundPath   -> CompoundPath  
-            | nameof ClippingPath   -> ClippingPath  
+            | nameof ShpLayer.BkSolid        -> ShpLayer.BkSolid(?ops = ops)     
+            | nameof ShpLayer.CompoundPath   -> ShpLayer.CompoundPath(?ops = ops)  
+            | nameof ShpLayer.ClippingPath   -> ShpLayer.ClippingPath(?ops = ops)  
+            | nameof ShpLayer.SeamInfo   -> ShpLayer.SeamInfo(?ops = ops)  
+            | nameof ShpLayer.ImposedData   -> ShpLayer.ImposedData(?ops = ops)  
+            | nameof ShpLayer.PageNumber   -> ShpLayer.PageNumber(?ops = ops)  
             | _ -> failwithf "Cannot convert %A to ShpLayer" pdfObject
 
         member x.AsPdfObject() =
-            let createPdfArray (text1: string) (text2: string) =
-                let pdfArray = PdfArray()
-                pdfArray.Add(PdfString text1)
-                pdfArray.Add(PdfString text2)
-                pdfArray :> PdfObject
-
-            let createPdfArrayOp (text1: string) (text2: string option) =
-                let pdfArray = PdfArray()
-                pdfArray.Add(PdfString text1)
-                match text2 with 
+            let createPdfDict (ops: ShpLayerOptions) f =
+                let dict = PdfDictionary()
+                match ops.AsPdfObject() with 
                 | None -> ()
-                | Some text2 -> pdfArray.Add(PdfString text2)
-                pdfArray :> PdfObject
+                | Some dict -> 
+                    dict.Put(ShpPdfName.ShpLayerOptions, dict)
+                    |> ignore
 
-            match x with 
-            | Bk_XObjectOnly v -> 
-                let name = nameof(ShpLayer.Bk_XObjectOnly)
-                createPdfArray name v
-                
-            | Fr_XObjectOnly v -> 
-                let name = nameof(ShpLayer.Fr_XObjectOnly)
-                createPdfArray name v
+                f dict |> ignore
+                dict
 
-            | BK v -> 
-                let name = nameof(ShpLayer.BK)
-                createPdfArray name v
+            createPdfDict x.Options (fun dict ->
+                match x with 
+                | Bk_XObjectOnly_Case (v, _) -> 
+                    let name = nameof(ShpLayer.Bk_XObjectOnly)
+                    dict.Put(PdfName.Type, PdfString name)
+                    dict.Put(PdfName.Name, PdfString v)
+                    
+                | Fr_XObjectOnly_Case (v, _) -> 
+                    let name = nameof(ShpLayer.Fr_XObjectOnly)
+                    dict.Put(PdfName.Type, PdfString name)
+                    dict.Put(PdfName.Name, PdfString v)
 
-            | Foreground v -> 
-                let name = nameof(ShpLayer.Foreground)
-                createPdfArray name v
+                | BK_Case (v, _) -> 
+                    let name = nameof(ShpLayer.BK)
+                    dict.Put(PdfName.Type, PdfString name)
+                    dict.Put(PdfName.Name, PdfString v)
 
-            | Content v -> 
-                let name = nameof(ShpLayer.Content)
-                createPdfArrayOp name v
+                | Foreground_Case (v, _) -> 
+                    let name = nameof(ShpLayer.Foreground)
+                    dict.Put(PdfName.Type, PdfString name)
+                    dict.Put(PdfName.Name, PdfString v)
 
-            | Pixel v -> 
-                let name = nameof(ShpLayer.Pixel)
-                createPdfArray name v
+                | Content_Case (v, _) -> 
+                    let name = nameof(ShpLayer.Content)
+                    dict.Put(PdfName.Type, PdfString name)
+                    match v with 
+                    | Some v ->
+                        dict.Put(PdfName.Name, PdfString v)
 
-            | CuttingDie enum -> 
-                let pdfArray = PdfArray()
-                let name = nameof(ShpLayer.CuttingDie)
-                pdfArray.Add(PdfString name)
-                pdfArray.Add(PdfNumber (int enum))
-                pdfArray
+                    | None -> dict
 
-            | BkSolid -> 
-                let name = nameof(ShpLayer.BkSolid)
-                PdfString name
+                | Pixel_Case (v, _) -> 
+                    let name = nameof(ShpLayer.Pixel)
+                    dict.Put(PdfName.Type, PdfString name)
+                    dict.Put(PdfName.Name, PdfString v)
 
-            | CompoundPath -> 
-                let name = nameof(ShpLayer.CompoundPath)
-                PdfString name
+                | CuttingDie_Case (enum, _) -> 
+                    
+                    let name = nameof(ShpLayer.CuttingDie)
+                    dict.Put(PdfName.Type, PdfString name)
+                    dict.Put(ShpPdfName.CuttingDieShpLayerInfosEnum, PdfNumber(int enum.Value))
 
-            | ClippingPath -> 
-                let name = nameof(ShpLayer.ClippingPath)
-                PdfString name
+                | BkSolid_Case _ -> 
+                    let name = nameof(ShpLayer.BkSolid)
+                    dict.Put(PdfName.Type, PdfString name)
+
+                | CompoundPath_Case _ -> 
+                    let name = nameof(ShpLayer.CompoundPath)
+                    dict.Put(PdfName.Type, PdfString name)
+
+                | ClippingPath_Case _ -> 
+                    let name = nameof(ShpLayer.ClippingPath)
+                    dict.Put(PdfName.Type, PdfString name)
+
+                | SeamInfo_Case _ -> 
+                    let name = nameof(ShpLayer.SeamInfo)
+                    dict.Put(PdfName.Type, PdfString name)
+
+                | ImposedData_Case _ -> 
+                    let name = nameof(ShpLayer.ImposedData)
+                    dict.Put(PdfName.Type, PdfString name)
+
+                | PageNumber_Case _ -> 
+                    let name = nameof(ShpLayer.PageNumber)
+                    dict.Put(PdfName.Type, PdfString name)
+            )
+
+
 
 
 
 
     type PdfDictionary with 
-        member x.PutShpLayer(shpLayer: ShpLayer) =
-            x.Put(PdfName.ShpLayer, shpLayer.AsPdfObject())
 
+        member x.PutShpLayerGroup(isGroup: bool) =
+            x.Put(ShpPdfName.ShpLayerGroup, PdfBoolean isGroup)
+            |> ignore
+
+
+        member x.PutShpLayer(shpLayer: ShpLayer) =
+            match x.ContainsKey ShpPdfName.ShpLayerGroup with 
+            | true -> ()
+            | false -> 
+                x.Put(ShpPdfName.ShpLayer, shpLayer.AsPdfObject())
+                |> ignore
 
 module Constants =
 
@@ -548,6 +681,12 @@ module Operators =
     type FsPdfObjectID =
         { ObjNumber: int 
           GenNumber: int }
+
+    
+    [<Struct>]
+    type InfoContainerID =
+        | Page
+        | XObject of FsPdfObjectID
 
     type SpawnablePdfObjectID =
         { ObjNumber: int 

@@ -37,7 +37,8 @@
     <None Include="Resources\Fonts\微软雅黑\msyhl.ttc" />
     <None Include="Resources\Fonts\Adobe\AdobeHeitiStd-Regular.otf" />
     <None Include="Resources\Fonts\方正\方正黑体简体.TTF" />
-    <None Include="Resources\Fonts\方正\方正大黑简体.ttf" />
+      <None Include="Resources\Fonts\方正\方正大黑简体.ttf" />
+      <None Include="Resources\Fonts\SegoeUI\*.ttf" />
     <None Include="Resources\Fonts\Arial-Unicode\arial unicode ms.ttf" />
     <None Include="Resources\Fonts\Arial-Unicode\arial unicode ms bold.ttf" />
     <None Include="Resources\Fonts\*.otf">

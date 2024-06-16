@@ -1,6 +1,7 @@
 ﻿namespace Shrimp.Pdf.Extensions
 
 open Shrimp.FSharp.Plus
+open iText.Kernel.Exceptions
 
 #nowarn "0104"
 open iText.Kernel.Geom
@@ -571,6 +572,7 @@ module iText =
             && rect1.GetYF() @= rect2.GetYF()
             && rect1.GetHeightF() @= rect2.GetHeightF()
 
+
         let increaseHeight (effect) (height:float) (rect: Rectangle) = 
             rect.setHeight(effect, fun m -> height + m)
 
@@ -668,6 +670,30 @@ module iText =
 
             create x y width height
 
+
+        let getTileTable direction (tableIndexer: TileTableIndexer) (rect: Rectangle) = 
+            let tileIndexeres =
+                [ 1 .. tableIndexer.RowNum ]
+                |> List.map(fun i ->
+                    [1 .. tableIndexer.ColNum]
+                    |> List.map(fun j ->
+                        let index = (i-1) * tableIndexer.ColNum + j
+                        //printfn "%d" index
+                        TileCellIndexer.Create((index-1), direction)
+                    )
+                )
+
+            tileIndexeres
+            |> List.map(fun indexes ->
+                indexes
+                |> List.map(fun index ->
+                    getTile index tableIndexer rect
+                    |> FsRectangle.OfRectangle
+                )
+            )
+            |> AreaTable.Create
+
+
         let applyMargin (margin:Margin) (rect: Rectangle) =
             rect.applyMargin(margin)
 
@@ -679,6 +705,7 @@ module iText =
 
     [<RequireQualifiedAccess>]
     module AffineTransform = 
+
 
         let create m00 m10 m01 m11 m02 m12 = 
             new AffineTransform(m00, m10, m01, m11, m02, m12)
@@ -708,6 +735,51 @@ module iText =
 
         let inverse (affineTransform: AffineTransform) =
             affineTransform.CreateInverse()
+
+        let private GetTransformTypeCs(transform: AffineTransform) =
+            let matrix = toRecord transform
+            let scaleX = matrix.m00
+            let shearX = matrix.m01
+            let translateX = matrix.m02
+            let shearY = matrix.m10
+            let scaleY = matrix.m11
+            let translateY = matrix.m12
+
+
+
+            let mutable typeValue = TransformType.IDENTITY
+            if scaleX * shearX + shearY * scaleY <> 0.0 then
+                typeValue <- typeValue ||| TransformType.GENERAL_TRANSFORM
+                typeValue
+            elif scaleX = 1.0 && scaleY = 1.0 && shearX = 0.0 && shearY = 0.0 then
+                typeValue <- TransformType.IDENTITY
+                typeValue
+            else
+                if translateX <> 0.0 || translateY <> 0.0 then
+                    typeValue <- typeValue ||| TransformType.TRANSLATION
+                
+                if scaleX * scaleY - shearX * shearY < 0.0 then
+                    typeValue <- typeValue ||| TransformType.FLIP
+                let dx = scaleX * scaleX + shearY * shearY
+                let dy = shearX * shearX + scaleY * scaleY
+                if dx <> dy then
+                    typeValue <- typeValue ||| TransformType.GENERAL_SCALE
+                elif dx <> 1.0 then
+                    typeValue <- typeValue ||| TransformType.UNIFORM_SCALE
+                if (scaleX = 0.0 && scaleY = 0.0) then
+                    typeValue <- typeValue ||| TransformType.QUADRANT_ROTATION_90
+                elif (shearY = 0.0 && shearX = 0.0 && (scaleX < 0.0 || scaleY < 0.0)) then
+                    typeValue <- typeValue ||| TransformType.QUADRANT_ROTATION_180
+                elif shearX <> 0.0 || shearY <> 0.0 then
+                    typeValue <- typeValue ||| TransformType.GENERAL_ROTATION
+
+                typeValue
+            
+       
+        let getTransformType (affineTransform: AffineTransform) =
+            let v =  GetTransformTypeCs affineTransform
+            v
+
 
     type AffineTransform with 
         member this.Transform(p: Point) =
@@ -827,21 +899,45 @@ module iText =
                 | _ -> failwithf "Cannot read blend mode from %A" (gs.GetBlendMode().GetType())
              }
 
+        let private affime_Rotate90 = AffineTransform.GetRotateInstance(System.Math.PI / -180. * 90.)
+
+
 
         let getActualLineWidth (gs: CanvasGraphicsState) =
             let lineWidth = gs.GetLineWidth() |> float
-            let actualLineWidth =
-                let matrix = 
-                    gs.GetCtm()
-                    |> AffineTransform.ofMatrix
 
-                let scx = matrix.GetScaleX()
-                let scy = matrix.GetScaleY()
-                match scx @= scy with 
-                | true -> ActualLineWidth.Exactly (lineWidth, (min scx scy))
-                | false -> ActualLineWidth.Unbalance(lineWidth, scx, scy)
+            let originMatrix = 
+                gs.GetCtm()
+                |> AffineTransform.ofMatrix
 
-            actualLineWidth
+            let rec loop isRotate90 (matrix: AffineTransform) = 
+                let tp = AffineTransform.getTransformType matrix
+                match isRotate90, tp with 
+                | false, HasFlag TransformType.QUADRANT_ROTATION_90 -> 
+                        let matrix = matrix.Clone()
+                        matrix.Concatenate(affime_Rotate90)
+
+                        let r = loop (true) matrix
+                        match r with 
+                        | ActualLineWidth.Exactly _ -> r
+                        | ActualLineWidth.Unbalance (rawLineWidth, scaleX, scaleY) ->
+                            ActualLineWidth.Unbalance(rawLineWidth, scaleY, scaleX)
+
+                | true, HasFlag TransformType.QUADRANT_ROTATION_90 -> failwithf "Invalid lineScale %A" (AffineTransformRecord.ofAffineTransform originMatrix)
+                | _ ->
+
+                    let actualLineWidth =
+                        let scx = matrix.GetScaleX()
+                        let scy = matrix.GetScaleY()
+                        match scx @= scy with 
+                        | true -> ActualLineWidth.Exactly (lineWidth, (min (abs scx) (abs scy)))
+                        | false -> ActualLineWidth.Unbalance(lineWidth, scx, scy)
+
+                    actualLineWidth
+
+
+
+            loop false originMatrix
 
 
         let getLineShapingStyle (gs: CanvasGraphicsState): LineShapingStyle =
@@ -1531,6 +1627,7 @@ module iText =
                     &&
                         match info.Value with 
                         | :? PathRenderInfo as info -> not (info.IsPathModifiesClippingPath())
+                        | :? TextRenderInfo as info -> not (info.GetFsTextRenderMode().IsClip())
                         | _ -> true
 
                 match b with 
@@ -1798,6 +1895,52 @@ module iText =
         let showText (text: string) (canvas:PdfCanvas)=
             canvas.ShowText(text)
 
+        let showWord (oldFont: (PdfFont) option) (word: PdfConcatedWord) (canvas:PdfCanvas)=    
+            let textArray = word.ToPdfArray()
+            match textArray.Size() with 
+            | 1 -> 
+                let pdfString = textArray.Get(0) :?> PdfString
+                canvas.ShowText(pdfString.GetValue())
+            | _ -> 
+                let currentGs = canvas.GetGraphicsState()
+                let font = currentGs.GetFont()
+                match font with 
+                | null ->
+                    let exp = new PdfException(KernelExceptionMessageConstant.FONT_AND_SIZE_MUST_BE_SET_BEFORE_WRITING_ANY_TEXT, currentGs)
+                    raise exp
+
+                | _ -> 
+                    let mutable shift = 0
+                    let outputStream = canvas.GetContentStream().GetOutputStream()
+                    outputStream.WriteString("[") |> ignore
+
+                    for element in textArray do 
+                        match element.IsNumber() with 
+                        | true -> 
+                            outputStream.WriteFloat((element :?> PdfNumber).FloatValue() + float32 shift)
+                            |> ignore
+
+                        | false ->
+
+                            match element.IsString() with 
+                            | true ->
+
+                                let text = (element :?> PdfString).GetValue()
+                                font.WriteText(text, outputStream)
+                                match oldFont with 
+                                | None -> ()
+                                | Some (oldFont) ->
+                                    let difference = font.GetWidth(text) - oldFont.GetWidth(text)
+                                    shift <- difference + shift
+
+                            | false -> failwithf "Invalid text element type %A" (element.GetType())
+
+
+                    outputStream.WriteString("]") |> ignore
+                    outputStream.WriteString("TJ\n") |> ignore
+                    canvas
+
+   
         let rectangle (rect: Rectangle) (canvas: PdfCanvas) =
             canvas.Rectangle(rect)
 
@@ -1819,6 +1962,14 @@ module iText =
 
 
     type Rectangle with 
+        member x.IsEqualTo(y: Rectangle, ?tolerance) =
+            let tolerance = defaultArg tolerance Constants.tolerance
+            NearbyPX(x.GetXF(), tolerance) = NearbyPX(y.GetXF(), tolerance)
+            && NearbyPX(x.GetYF(), tolerance) = NearbyPX(y.GetYF(), tolerance)
+            && NearbyPX(x.GetWidthF(), tolerance) = NearbyPX(y.GetWidthF(), tolerance)
+            && NearbyPX(x.GetHeightF(), tolerance) = NearbyPX(y.GetHeightF(), tolerance)
+
+
         member x.GetPageEdge (innerBox: Rectangle) =
             let pageBox = x
 

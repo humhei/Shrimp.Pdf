@@ -18,10 +18,6 @@ open Shrimp.FSharp.Plus.Operators
 open iText.IO.Image
 open Shrimp.Pdf.Constants.Operators
 
-[<Struct>]
-type InfoContainerID =
-    | Page
-    | XObject of FsPdfObjectID
 
 [<AutoOpen>]
 module _FsParserGraphicsStateValueUtils =
@@ -145,7 +141,6 @@ with
         let (InfoGsStates (_, values)) = x
         values
 
-
     member x.InfoContainerID =
         let (InfoGsStates (id, _)) = x
         id
@@ -266,6 +261,20 @@ with
         let (InfoGsStateLists v) = x
         v
 
+
+    member x.AppliedExtGState() =
+        match x.AsList with 
+        | [] -> FsExtGState.DefaultValue
+        | items ->
+            let last = List.last items
+            match last.AsList with 
+            | [] -> FsExtGState.DefaultValue
+            | _ ->
+                last.AsList
+                |> List.map(fun m -> m.FsExtState)
+                |> AtLeastOneList.Create
+                |> FsExtGState.Concat
+
     member x.MapFsExtGsState(f) =
         let x = x.AsList
         match List.tryLast x with 
@@ -275,7 +284,23 @@ with
             headers @ [f last]
             |> InfoGsStateLists
 
+    member x.ConcatToPage() =
+        let extState = 
+            x.AsList
+            |> List.collect(fun m -> m.AsList)
+            |> List.map(fun m -> m.FsExtState)
 
+        match AtLeastOneList.TryCreate extState with 
+        | None -> [InfoGsStates([InfoContainerID.Page], [])]
+        | Some extStates ->
+            let extState = FsExtGState.Concat(extStates) 
+            match List.contains (extState.GetCustomHashCode()) FsExtGState.defaultCustomHashCode with 
+            | true -> [InfoGsStates([InfoContainerID.Page], [])]
+            | false ->
+
+                let extState = FsParserGraphicsStateValue(extState, true)
+                [InfoGsStates([InfoContainerID.Page], [extState])]
+        |> InfoGsStateLists
 
 [<AutoOpen>]
 module _OperatorRangeExtensions =
@@ -300,8 +325,6 @@ module _OperatorRangeExtensions =
 
                 let __ID = 
                     outputStream.WriteString(ID).WriteNewLine() |> ignore
-
-                    use memoryStream = new System.IO.MemoryStream()
 
                     let bytes = 
                         //outputStream.GetOutputStream().Flush();
@@ -331,7 +354,15 @@ module _OperatorRangeExtensions =
 [<AutoOpen>]
 module IntegratedInfos =
 
+    type ModifyUserState() =
+        let mutable modifyUserState = None
 
+        member x.Value = modifyUserState
+
+        member x.SetModifyUserState(userState: int) =
+            match modifyUserState with 
+            | None -> modifyUserState <- Some userState
+            | _ -> failwithf "modifyUserState only can be set for once"
 
     type PathInfoRecord =
         { FillColor: iText.Kernel.Colors.Color 
@@ -344,6 +375,8 @@ module IntegratedInfos =
           OffsetX: float 
           OffsetY: float }
 
+
+
     [<Struct>]
     type IntegratedPathRenderInfo =
         { PathRenderInfo: PathRenderInfo 
@@ -354,8 +387,20 @@ module IntegratedInfos =
           LazyVisibleBound0_Backup: LazyVisibleBound0_Backup option
           LazyVisibleBound0: Rectangle option
           PageBox: PageBoxes
+          Close: PathClose
+          ModifyUserState: ModifyUserState
         }
     with 
+        member x.ApplyModifyUserState (userState) b = 
+            match b with 
+            | true ->   
+                x.ModifyUserState.SetModifyUserState(userState)
+                b
+            | false -> b
+
+        member x.SetModifyUserState(userState) = x.ModifyUserState.SetModifyUserState(userState)
+        member x.GetModifyUserState() = x.ModifyUserState.Value
+
         member x.IsShading = 
             match x.PathRenderInfo with 
             | :? PdfShadingPathRenderInfo -> true
@@ -414,8 +459,9 @@ module IntegratedInfos =
           Bound: FsRectangle
           DenseBound: FsRectangle
           EndTextState: EndTextState
-          
-          }
+          TextRenderingMode: FsTextRenderMode
+          IsShading: bool
+        }
     with 
         member x.Text = x.PdfConcatedWord.ConcatedText()
 
@@ -431,15 +477,32 @@ module IntegratedInfos =
           LazyVisibleBound0_Backup: LazyVisibleBound0_Backup option
           LazyVisibleBound0: Rectangle option
           PageBox: PageBoxes
+          TextRenderMode: FsTextRenderMode
+          ModifyUserState: ModifyUserState
+          IsShading: bool
           }
 
     with 
+
+        member x.ApplyModifyUserState (userState) b = 
+            match b with 
+            | true ->   
+                x.ModifyUserState.SetModifyUserState(userState)
+                b
+            | false -> b
+
+        member x.SetModifyUserState(userState) = x.ModifyUserState.SetModifyUserState(userState)
+        member x.GetModifyUserState() = x.ModifyUserState.Value
+
         member x.SplitToWords() =
             let gsStates = x.GsStates
             let containderID = x.ContainerID
             let pageBox = x.PageBox
             let lazyVisibleBound = x.LazyVisibleBound0
             let lazyVisibleBound_backup = x.LazyVisibleBound0_Backup
+            let modifyUserState = x.ModifyUserState
+            let textRenderMode = x.TextRenderMode
+            let isShading = x.IsShading
 
             match x.EndTextState with 
             | EndTextState.No
@@ -462,6 +525,9 @@ module IntegratedInfos =
                             LazyVisibleBound0 = None
                             PageBox = pageBox
                             LazyVisibleBound0_Backup = None
+                            ModifyUserState = modifyUserState
+                            TextRenderMode = textRenderMode
+                            IsShading = isShading
                         }
                     )
 
@@ -546,11 +612,12 @@ module IntegratedInfos =
               Bound = 
                 let bound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo
                 bound.FsRectangle()
+              IsShading = integratedInfo.IsShading
               DenseBound =
                 let bound = ITextRenderInfo.getDenseBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo
                 bound.FsRectangle()
               EndTextState = integratedInfo.EndTextState
-
+              TextRenderingMode = integratedInfo.TextRenderMode
             }
 
         interface IAbstractRenderInfoIM with 
@@ -651,9 +718,20 @@ module IntegratedInfos =
           LazyVisibleBound_Backup: LazyVisibleBound0_Backup option
           LazyVisibleBound: Rectangle option
           PageBox: PageBoxes
+          ModifyUserState: ModifyUserState
         }
 
     with 
+        member x.ApplyModifyUserState (userState) b = 
+            match b with 
+            | true ->   
+                x.ModifyUserState.SetModifyUserState(userState)
+                b
+            | false -> b
+
+        member x.SetModifyUserState(userState) = x.ModifyUserState.SetModifyUserState(userState)
+        member x.GetModifyUserState() = x.ModifyUserState.Value
+
         member x.GetAppliedExtGState() =
             let exState = CanvasGraphicsState.getExtGState (x.ImageRenderInfo.GetGraphicsState())
 

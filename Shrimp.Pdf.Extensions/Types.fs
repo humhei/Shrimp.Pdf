@@ -5,6 +5,8 @@ open iText.IO.Font
 open System.Collections.Generic
 open System
 open System.Text
+open FParsec
+open FParsec.CharParsers
 open iText.Kernel.Pdf.Canvas
 open iText.Kernel.Pdf.Canvas.Parser
 
@@ -21,7 +23,39 @@ open Shrimp.FSharp.Plus.Math
 [<AutoOpen>]
 module ExtensionTypes =
 
-    
+    type FsTextRenderMode =
+        | Fill = 0
+        | Stroke = 1
+        | FillStroke = 2
+        | Invisible = 3
+        | Fill_Clip = 4
+        | Stroke_Clip = 5
+        | FillStroke_Clip = 6
+        | Clip = 7
+
+    [<AutoOpen>]
+    module _FsTextRenderModeExtensions =
+        type FsTextRenderMode with 
+            member x.IsClip() =
+                x = FsTextRenderMode.Clip
+
+
+    type TextRenderInfo with 
+        member x.GetFsTextRenderMode() =
+            x.GetTextRenderMode()
+            |> enum<FsTextRenderMode>
+
+    [<System.Flags>]
+    type TransformType =
+        | IDENTITY = 0
+        | TRANSLATION = 1
+        | UNIFORM_SCALE = 2
+        | GENERAL_SCALE = 4
+        | QUADRANT_ROTATION_90 = 8
+        | QUADRANT_ROTATION_180 = 16
+        | GENERAL_ROTATION = 32
+        | GENERAL_TRANSFORM = 64
+        | FLIP = 128
 
 
 
@@ -34,7 +68,7 @@ module ExtensionTypes =
         type PdfShadingColor(shading: PdfShading, colorSpace: PdfColorSpace, ctm: Matrix) = 
             inherit Color(colorSpace, [||])
 
-            //member x.ColorSpace = colorSpace
+            member x.ColorSpace = colorSpace
 
             member x.Ctm = ctm
 
@@ -64,6 +98,8 @@ module ExtensionTypes =
 
 
             member x.ShadingColor = color
+
+
 
     [<RequireQualifiedAccess>]
     type DecodedPdfNamePart =
@@ -353,6 +389,17 @@ module ExtensionTypes =
             | Position.RightTop (x, y)
             | Position.RightMiddle (x, y) -> y
 
+        member x.EnumValue =
+            match x with
+            | Position.LeftTop      _ -> PositionEnum.LeftTop      
+            | Position.LeftBottom   _ -> PositionEnum.LeftBottom   
+            | Position.LeftMiddle   _ -> PositionEnum.LeftMiddle   
+            | Position.Center       _ -> PositionEnum.Center       
+            | Position.BottomMiddle _ -> PositionEnum.BottomMiddle 
+            | Position.TopMiddle    _ -> PositionEnum.TopMiddle    
+            | Position.RightBottom  _ -> PositionEnum.RightBottom  
+            | Position.RightTop     _ -> PositionEnum.RightTop     
+            | Position.RightMiddle  _ -> PositionEnum.RightMiddle  
 
         static member PreciseCenter = Position.Center(0, 0)
 
@@ -561,7 +608,51 @@ module ExtensionTypes =
               Width = width
               Height = height }
 
+        member x.IsEqualTo(y: FsRectangle, ?tolerance) =
+            let tolerance = defaultArg tolerance Constants.tolerance
+            NearbyPX(x.X, tolerance) = NearbyPX(y.X, tolerance)
+            && NearbyPX(x.Y, tolerance) = NearbyPX(y.Y, tolerance)
+            && NearbyPX(x.Width, tolerance) = NearbyPX(y.Width, tolerance)
+            && NearbyPX(x.Height, tolerance) = NearbyPX(y.Height, tolerance)
+
         override x.ToString() = x.LoggingText
+
+    
+    
+    
+                
+    [<Struct>]
+    type FsPoint =
+        { X: float 
+          Y: float }
+    with 
+        member private x.MMValue =
+            {| X = userUnitToMM x.X
+               Y = userUnitToMM x.Y |}
+    
+        static member Zero =
+            { X = 0. 
+              Y = 0. }
+    
+        static member OfPoint(point: Point) =
+            { X = point.x 
+              Y = point.y }
+    
+        member x.AsPoint = Point(x.X, x.Y)
+
+    type PositedRectangle =
+        { LeftBottom: FsPoint 
+          Rectangle: FsRectangle }
+    with 
+        member x.ZeroBasedRectangle =
+            let rect = x.Rectangle
+            { rect with 
+                X = rect.X - x.LeftBottom.X
+                Y = rect.Y - x.LeftBottom.Y
+            }
+
+        member x.IsEqualTo(y: PositedRectangle) =
+            x.ZeroBasedRectangle.IsEqualTo(y.ZeroBasedRectangle)
 
     type MMRectangle with 
         static member OfFsRectangle(rect: FsRectangle) = rect.MMValue
@@ -612,27 +703,6 @@ module ExtensionTypes =
 
 
 
-
-
-            
-    [<Struct>]
-    type FsPoint =
-        { X: float 
-          Y: float }
-    with 
-        member private x.MMValue =
-            {| X = userUnitToMM x.X
-               Y = userUnitToMM x.Y |}
-
-        static member Zero =
-            { X = 0. 
-              Y = 0. }
-
-        static member OfPoint(point: Point) =
-            { X = point.x 
-              Y = point.y }
-
-        member x.AsPoint = Point(x.X, x.Y)
 
     type Direction =
         | Vertical = 0
@@ -708,12 +778,57 @@ module ExtensionTypes =
         static member DefaultValue =  PdfTextConcater.Create()
 
 
-        
 
     type PdfConcatedWord =
         { HeadWord: string
           FollowedWords: FollowedWord list }
     with 
+        member x.ToPdfArray() =
+            let pdfArray = PdfArray()
+            match x.FollowedWords with 
+            | [] -> pdfArray.Add <| PdfString x.HeadWord 
+            | _ ->
+                let allSomeSpaces = 
+                    x.FollowedWords
+                    |> List.forall(fun m -> m.Space.IsSome)
+
+                let allNonSpaces = 
+                    x.FollowedWords
+                    |> List.forall(fun m -> m.Space.IsNone)
+
+                match allNonSpaces, allSomeSpaces with 
+                | false, false -> 
+                    failwithf "PdfConcatedWord.FollowedWords: Not implemented when some word exists space, while other not\n%A" x
+                | true, true -> failwithf "Invalid token"
+                | true, false -> 
+                    let concatedPdfString = 
+                        let texts =         
+                            x.HeadWord :: (
+                                x.FollowedWords
+                                |> List.map(fun m ->  m.Text)
+                            )
+
+                        texts
+                        |> String.concat ""
+                        |> PdfString
+                    
+                    pdfArray.Add(concatedPdfString)
+
+                | false, true ->
+                    pdfArray.Add <| PdfString x.HeadWord
+                    let followed =
+                        x.FollowedWords
+                        |> List.iter(fun m ->
+                             pdfArray.Add <| PdfNumber m.Space.Value
+                             pdfArray.Add <| PdfString m.Text
+                        )
+
+                    ()
+
+            pdfArray
+
+
+
         member x.AsList = x.HeadWord :: List.map(fun m -> m.Text) x.FollowedWords
 
         member x.ConcatedText(?wordSep) =
@@ -908,6 +1023,14 @@ module ExtensionTypes =
     with 
         member x.AsList = x.HeadWordInfo :: List.map(fun m -> m.TextInfo) x.FollowedWordInfos
 
+        member x.MapTextRenderInfo(f) =
+            { HeadWordInfo = f x.HeadWordInfo
+              FollowedWordInfos = 
+                x.FollowedWordInfos
+                |> List.map(fun m ->
+                    { m with TextInfo = f m.TextInfo }
+                )
+            }
 
         member x.ConcatedText(?wordSep) =
             x.AsList
@@ -997,11 +1120,55 @@ module ExtensionTypes =
             | [] -> ClippingPathInfoResult.IntersectedNone
             | _ -> Rectangle.ofPoints (AtLeastTwoList.Create points) |> ClippingPathInfoResult.IntersectedSome
 
+    [<Struct>]
+    type PathClose = PathClose of bool
+    with 
+        member x.Value = 
+            let (PathClose v) = x
+            v
 
     type IntersectedClippingPathInfoElement =
         { OperatorRanges: ResizeArray<OperatorRange> 
           Ctm: Matrix
-          ClippingRule: int }
+          ClippingRule: int
+          PathClose: PathClose }
+
+    type TextClippingInfo(infoContainers: InfoContainerID list, textRenderInfos: TextRenderInfo list, bound: FsRectangle, concatedText: string, concatedTextInfo: ITextRenderInfo) =
+        inherit POCOBaseEquatable<InfoContainerID list * FsRectangle * string>(infoContainers, bound, concatedText)
+        member x.TextRenderInfo = textRenderInfos
+
+        member x.ConcatedTextInfo = concatedTextInfo
+
+        member x.InfoContainers = infoContainers
+
+        member x.ConcatedText   = concatedText
+
+        member x.Bound          = bound
+
+        static member Concat(textClippingInfos: TextClippingInfo list) =
+            match textClippingInfos with 
+            | [textClippingInfo] -> textClippingInfo
+            | _ ->
+                failwithf "Not implemented to concated multiple text clipping infos"
+                //let textRenderInfos =
+                //    textClippingInfos
+                //    |> List.collect(fun m -> m.TextRenderInfo)
+
+                //let infoContainers =
+                //    textClippingInfos
+                //    |> List.map(fun m -> m.InfoContainers)
+                //    |> List.distinct
+                //    |> List.exactlyOne_DetailFailingText
+
+                //let bound = 
+                //    textClippingInfos
+                //    |> List.map(fun m -> m.Bound)
+                //    |> List.distinct
+                //    |> List.exactlyOne_DetailFailingText
+
+                //TextClippingInfo(infoContainers, textRenderInfos)
+
+
 
     type IntersectedClippingPathInfo =
         { ClippingPathInfo: ClippingPathInfo 
@@ -1022,9 +1189,18 @@ module ExtensionTypes =
     [<Struct>]
     type ClippingPathInfos =
         { XObjectClippingBoxState: XObjectClippingBoxState 
-          ClippingPathInfoState: ClippingPathInfoState }
-
-
+          ClippingPathInfoState: ClippingPathInfoState
+          TextClippingInfos: array<ResizeArray<TextClippingInfo>> }
+    with 
+        member x.ConcatedTextClippingInfo = 
+            match x.TextClippingInfos.Length with 
+            | 0 -> None
+            | _ ->
+                x.TextClippingInfos
+                |> List.ofArray
+                |> List.collect List.ofSeq
+                |> TextClippingInfo.Concat
+                |> Some
 
 
 
@@ -1087,17 +1263,6 @@ module ExtensionTypes =
 
             | _ -> failwithf "values' length %d is not equal to 4" values.Length
 
-        static member Zero = Margin.Create(0.)
-
-        static member MM6 = Margin.Create(mm 6.)
-        static member MM3 = Margin.Create(mm 3.)
-
-        static member ``MM1.5`` = Margin.Create(mm 1.5)
-
-        /// Margin.Create(left = mm 6, right = mm 6, bottom = mm 7, top = mm 7)
-        static member MM_H6_V7 = Margin.Create(left = mm 6, right = mm 6, bottom = mm 7, top = mm 7)
-        //static member MM_H6_V12 = Margin.Create(left = mm 6, right = mm 6, bottom = mm 12, top = mm 12)
-        static member MM_H6_V10 = Margin.Create(left = mm 6, right = mm 6, bottom = mm 10, top = mm 10)
 
 
         static member (~-)(margin: Margin) =
@@ -1130,6 +1295,19 @@ module ExtensionTypes =
 
     [<RequireQualifiedAccess>]
     module Margin =
+        let Zero = Margin.Create(0.)
+
+        let MM6 = Margin.Create(mm 6.)
+        let MM3 = Margin.Create(mm 3.)
+
+        let ``MM1.5`` = Margin.Create(mm 1.5)
+
+        /// Margin.Create(left = mm 6, right = mm 6, bottom = mm 7, top = mm 7)
+        let MM_H6_V7 = Margin.Create(left = mm 6, right = mm 6, bottom = mm 7, top = mm 7)
+        //let MM_H6_V12 = Margin.Create(left = mm 6, right = mm 6, bottom = mm 12, top = mm 12)
+        let MM_H6_V10 = Margin.Create(left = mm 6, right = mm 6, bottom = mm 10, top = mm 10)
+
+
         let getValues (margin: Margin) =
             [ margin.Left; margin.Top; margin.Right; margin.Bottom]
 
@@ -1545,6 +1723,9 @@ module ExtensionTypes =
 
             affineTransform
 
+        let inverse (record: AffineTransformRecord) = 
+            (toAffineTransform record).CreateInverse()
+            |> ofAffineTransform
 
         let ofMatrix (matrix: Matrix) =
             let values =
@@ -1812,52 +1993,115 @@ module ExtensionTypes =
             && not x.AIS
             && x.IsBlendMode_Normal
             
-        static member Concat(values: al1List<FsExtGState>) =
-            let rec loop accum (values: list<FsExtGState>) =
-                match values with 
-                | h :: t ->
-                    match accum with 
-                    | None -> loop (Some h) t
-                    | Some accum ->
-                        let newAccum = 
-                            match accum.IsConcatable(), h.IsConcatable() with 
-                            | true, true ->
-                                { SoftMask = None 
-                                  BlendModes = []
-                                  AIS = false
-                                  Fill = 
-                                    { IsOverprint = false 
-                                      Opacity = accum.Fill.Opacity * h.Fill.Opacity }
+        member private x.IsConcatable_NoOverprint() =
+            x.SoftMask.IsNone
+            && not x.AIS
+            && x.IsBlendMode_Normal
 
-                                  Stroke =
-                                    { IsOverprint = false 
-                                      Opacity = accum.Stroke.Opacity * h.Stroke.Opacity }
+        static member Concat(values: al1List<FsExtGState>, ?isForce) =
+            let isForce = defaultArg isForce false
+            match isForce with 
+            | true ->
+                values.AsList
+                |> List.reduce(fun accum h ->
+                    { SoftMask = accum.SoftMask |> Option.orElse h.SoftMask
+                      BlendModes = List.distinct (accum.BlendModes @ h.BlendModes)
+                      AIS = accum.AIS || h.AIS 
+                      Fill = 
+                        { IsOverprint = accum.IsFillOverprint || h.IsFillOverprint
+                          Opacity = accum.Fill.Opacity * h.Fill.Opacity }
+
+                      Stroke =
+                        { IsOverprint = accum.IsStrokeOverprint || h.IsStrokeOverprint
+                          Opacity = accum.Stroke.Opacity * h.Stroke.Opacity }
+                    
+                      OPM = FsOPM.Illustractor
+                    }
+                )
+
+
+            | false ->
+
+                let rec loop accum (values: list<FsExtGState>) =
+                    match values with 
+                    | h :: t ->
+                        match accum with 
+                        | None -> loop (Some h) t
+                        | Some accum ->
+                            let newAccum = 
+                                match accum.IsConcatable(), h.IsConcatable() with 
+                                | true, true ->
+                                    { SoftMask = None 
+                                      BlendModes = []
+                                      AIS = false
+                                      Fill = 
+                                        { IsOverprint = false 
+                                          Opacity = accum.Fill.Opacity * h.Fill.Opacity }
+
+                                      Stroke =
+                                        { IsOverprint = false 
+                                          Opacity = accum.Stroke.Opacity * h.Stroke.Opacity }
                                 
-                                  OPM = FsOPM.Illustractor
-                                }
-                            | false, false -> failwithf "Cannot concat FsExtGState %A" (accum, h)
-                            | false, true 
-                            | true, false ->
-                                { SoftMask = accum.SoftMask |> Option.orElse h.SoftMask
-                                  BlendModes = List.distinct (accum.BlendModes @ h.BlendModes)
-                                  AIS = accum.AIS || h.AIS 
-                                  Fill = 
-                                    { IsOverprint = accum.IsFillOverprint || h.IsFillOverprint
-                                      Opacity = accum.Fill.Opacity * h.Fill.Opacity }
+                                      OPM = FsOPM.Illustractor
+                                    }
+                                | false, false -> 
+                                    match accum.IsConcatable_NoOverprint(), h.IsConcatable_NoOverprint() with 
+                                    | true, true ->
+                                        { SoftMask = None 
+                                          BlendModes = []
+                                          AIS = false
+                                          Fill = 
+                                            { IsOverprint = accum.IsFillOverprint || h.IsFillOverprint 
+                                              Opacity = accum.Fill.Opacity * h.Fill.Opacity }
 
-                                  Stroke =
-                                    { IsOverprint = accum.IsStrokeOverprint || h.IsStrokeOverprint
-                                      Opacity = accum.Stroke.Opacity * h.Stroke.Opacity }
+                                          Stroke =
+                                            { IsOverprint = accum.IsStrokeOverprint || h.IsStrokeOverprint  
+                                              Opacity = accum.Stroke.Opacity * h.Stroke.Opacity }
+                                      
+                                          OPM = FsOPM.Illustractor
+                                        }
+
+                                    | false, true 
+                                    | true, false ->
+                                        { SoftMask = accum.SoftMask |> Option.orElse h.SoftMask
+                                          BlendModes = List.distinct (accum.BlendModes @ h.BlendModes)
+                                          AIS = accum.AIS || h.AIS 
+                                          Fill = 
+                                            { IsOverprint = accum.IsFillOverprint || h.IsFillOverprint
+                                              Opacity = accum.Fill.Opacity * h.Fill.Opacity }
+
+                                          Stroke =
+                                            { IsOverprint = accum.IsStrokeOverprint || h.IsStrokeOverprint
+                                              Opacity = accum.Stroke.Opacity * h.Stroke.Opacity }
+                                    
+                                          OPM = FsOPM.Illustractor
+                                        }
+
+                                    | _ -> 
+                                        failwithf "Cannot concat FsExtGState %A" (accum, h)
+                                    
+                                | false, true 
+                                | true, false ->
+                                    { SoftMask = accum.SoftMask |> Option.orElse h.SoftMask
+                                      BlendModes = List.distinct (accum.BlendModes @ h.BlendModes)
+                                      AIS = accum.AIS || h.AIS 
+                                      Fill = 
+                                        { IsOverprint = accum.IsFillOverprint || h.IsFillOverprint
+                                          Opacity = accum.Fill.Opacity * h.Fill.Opacity }
+
+                                      Stroke =
+                                        { IsOverprint = accum.IsStrokeOverprint || h.IsStrokeOverprint
+                                          Opacity = accum.Stroke.Opacity * h.Stroke.Opacity }
                                 
-                                  OPM = FsOPM.Illustractor
-                                }
+                                      OPM = FsOPM.Illustractor
+                                    }
 
-                        loop (Some newAccum) t
+                            loop (Some newAccum) t
 
-                | [] -> accum
+                    | [] -> accum
 
-            loop None values.AsList
-            |> Option.get
+                loop None values.AsList
+                |> Option.get
 
 
 
@@ -1958,6 +2202,20 @@ module ExtensionTypes =
         | NumbersCase of al1List<PageNumber>
         | And of PageSelector list
     with 
+        static member Parse(text: string) =
+            let pX = pstringCI "X" >>. pint32 .>> eof
+            match text with 
+            | String.EqualIC "Odd" -> Odd
+            | String.EqualIC "Even" -> Even
+            | String.EqualIC "All" -> All
+            | FParsec pX r ->
+                MultipleOf r
+                
+            | _ -> 
+                PageSelectorExpr.create text
+                |> PageSelector.Expr
+
+
         override x.ToString() =
             match x with 
             | PageSelector.Last -> "1R"
@@ -2213,3 +2471,4 @@ module ExtensionTypes =
             | Some pageSelector -> pdfDocument.GetPageNumbers(pageSelector)
             | None -> []
        
+

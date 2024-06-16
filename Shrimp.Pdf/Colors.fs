@@ -71,6 +71,7 @@ module _Colors =
           Lab: ToleranceColorValue
           Gray: ToleranceColorValue
           SeparationComparison: SeparationComparisonOptions
+          Transparency: ToleranceColorValue
           }
     with    
 
@@ -90,6 +91,7 @@ module _Colors =
               Lab  = ToleranceColorValue 0.1
               Gray = ToleranceColorValue 0.0025
               SeparationComparison = SeparationComparisonOptions.NameAndColorValue 
+              Transparency = ToleranceColorValue 0.001
             }
 
         static member Rough =
@@ -98,6 +100,7 @@ module _Colors =
               Lab  = ToleranceColorValue  1.0
               Gray = ToleranceColorValue  0.01
               SeparationComparison = SeparationComparisonOptions.NameAndColorValue 
+              Transparency = ToleranceColorValue 0.01
             }
             
 
@@ -213,6 +216,7 @@ module _Colors =
         static member GREEN = { R = 0.0f; G = 1.0f; B = 0.0f }
         static member BLUE = { R = 0.0f; G = 0.0f; B = 1.0f }
         static member MAGENTA = { R = 1.0f; G = 0.0f; B = 1.0f }
+        static member CYAN = { R = 0.0f; G = 1.0f; B = 1.0f }
         static member YELLOW = { R = 1.0f; G = 1.0f; B = 0.0f }
         static member BLACK = { R = 0.0f; G = 0.0f; B = 0.0f }
         static member WHITE = { R = 1.0f; G = 1.0f; B = 1.0f }
@@ -301,6 +305,23 @@ module _Colors =
             | [v] -> Gray 
             | _ -> Rgb
 
+    type ColorCard with 
+        static member RedirectPantoneColorName(pantoneColor: string) =
+            let parser_Pantone = pint32 .>> spaces .>> CharParsers.anyOf ['C'; 'c'] .>> eof
+            
+            match pantoneColor with 
+            | Try Int32.tryParse r
+            | FParsec (parser_Pantone) r ->
+                "PANTONE " + r.ToString() + " C"
+
+            | String.EndsWithIC "C" -> 
+                pantoneColor
+
+            | String.EndsWithIC "TPX" ->
+                pantoneColor
+
+            | _ -> pantoneColor
+
     type FsLab =
         { 
           /// 0 -> 100.
@@ -383,7 +404,9 @@ module _Colors =
             FsLab.OfHex (int pantoneColor)
 
 
+
         static member OfPantoneGeneral(pantoneColor: string) =
+            let pantoneColor = ColorCard.RedirectPantoneColorName pantoneColor
             match pantoneColor with 
             | String.EndsWithIC "C" -> 
                 stringToEnum pantoneColor
@@ -426,6 +449,12 @@ module _Colors =
         member x.LoggingText_Raw =
             let x = x.Range100
             let colorName = sprintf "%.1f %.1f %.1f %.1f" (x.C) x.M x.Y x.K
+            "CMYK " + colorName
+
+        /// Range100
+        member x.LoggingText_Raw_Int =
+            let x = x.Range100
+            let colorName = sprintf "%.0f %.0f %.0f %.0f" (x.C) x.M x.Y x.K
             "CMYK " + colorName
         
         /// Color => Literal NAME
@@ -477,6 +506,11 @@ module _Colors =
             match x.C = 0.f && x.Y = 0.f && x.M = 0.f with 
             | true -> Some (FsGray (1.f - x.K))
             | false -> None
+
+    [<RequireQualifiedAccess>]
+    module FsDeviceCmyk =
+        let (|Gray|_|) (cmyk: FsDeviceCmyk) =
+            cmyk.AsGray
 
 
     [<RequireQualifiedAccess>]
@@ -759,8 +793,10 @@ module _Colors =
         let RGB_BLACK = FsDeviceRgb.BLACK |> FsValueColor.Rgb
         let RGB_WHITE = FsDeviceRgb.WHITE |> FsValueColor.Rgb
         let RGB_RED = FsDeviceRgb.RED |> FsValueColor.Rgb
+        let RGB_YELLOW = FsDeviceRgb.YELLOW |> FsValueColor.Rgb
         let RGB_BLUE = FsDeviceRgb.BLUE |> FsValueColor.Rgb
         let RGB_MAGENTA = FsDeviceRgb.MAGENTA |> FsValueColor.Rgb
+        let RGB_CYAN = FsDeviceRgb.CYAN |> FsValueColor.Rgb
 
 
         let CMYK_WHITE = FsDeviceCmyk.WHITE |>     FsValueColor.Cmyk
@@ -787,18 +823,35 @@ module _Colors =
           Transparency: float }
     with 
         member x.Color =
-            x.BaseColor.MapColorValue(fun m -> m * float32 x.Transparency)
+            match x.BaseColor with 
+            | FsValueColor.Rgb _
+            | FsValueColor.Gray _ ->
+                x.BaseColor.MapColorValue(fun m -> 1.f - (1.f - m) * float32 x.Transparency)
+                
+            | FsValueColor.Cmyk _ -> 
+                x.BaseColor.MapColorValue(fun m -> m * float32 x.Transparency)
+
+            | FsValueColor.Lab lab ->
+                { L = 
+                    100. - float (100.f - lab.L) * x.Transparency 
+                    |> Math.round0f
+                    |> float32
+
+                  a = float lab.a * x.Transparency  |> float32
+                  b = float lab.b * x.Transparency  |> float32
+                }
+                |> FsValueColor.Lab
 
         member private x.LoggingTextWithColor = 
             match x.Transparency with 
             | 1.0 -> x.Name + "#" + x.Color.LoggingText
-            | _ -> x.Name + "#" + x.Color.LoggingText + "#" + x.Transparency.ToString()
+            | _ -> x.Name + "#" + x.BaseColor.LoggingText + "#" + x.Transparency.ToString() + "#" + x.Color.LoggingText
 
 
         member private x.LoggingTextWithColor_Raw = 
             match x.Transparency with 
             | 1.0 -> x.Name + "#" + x.Color.LoggingText_Raw
-            | _ -> x.Name + "#" + x.Color.LoggingText_Raw + "#" + x.Transparency.ToString()
+            | _ -> x.Name + "#" + x.BaseColor.LoggingText_Raw + "#" + x.Transparency.ToString() + "#" + x.Color.LoggingText_Raw
 
         member x.LoggingText = 
             //x.Name
@@ -810,8 +863,17 @@ module _Colors =
 
         static member OfLoggingText_Raw_Result(text: string) =
             try
+                let startWithShape, text =
+                    match text with 
+                    | String.TrimStartIC "#" v -> true, v
+                    | _ -> false, text
+
                 let parts = text.Split '#'
-                let name = parts.[0]
+                let name = 
+                    match startWithShape with 
+                    | true -> "#" + parts.[0]
+                    | false -> parts.[0]
+
                 let valueColor = FsValueColor.OfLoggingText_Raw parts.[1]
                 let transparency =
                     match Array.tryItem 2 parts with 
@@ -851,7 +913,12 @@ module _Colors =
 
         static member IsEqual(color1: FsSeparation, color2: FsSeparation, valueEqualOptions: ValueEqualOptions) =
             color1.Name.EqualIC color2.Name
-            && color1.Transparency = color2.Transparency
+            &&  
+                match valueEqualOptions with 
+                | ValueEqualOptions.Exactly -> color1.Transparency = color2.Transparency
+                | ValueEqualOptions.RoundedValue tolerance  -> 
+                    (NearbyColorValue(color1.Transparency, tolerance.Transparency)) = 
+                        (NearbyColorValue(color2.Transparency, tolerance.Transparency)) 
             && 
                 match valueEqualOptions with 
                 | ValueEqualOptions.RoundedValue tolerance ->
@@ -883,7 +950,7 @@ module _Colors =
         static member OfPantoneGeneral(color: string) =
             let fsValueColor = FsLab.OfPantoneGeneral color
     
-            let separationName1 = color.ToString()
+            let separationName1 = ColorCard.RedirectPantoneColorName color
             
             { BaseColor = FsValueColor.Lab fsValueColor
               Name = separationName1
@@ -944,7 +1011,20 @@ module _Colors =
               K = colorValue.[3] }
             |> FsValueColor.Cmyk
 
-        
+    [<RequireQualifiedAccess>]
+    module Icc =
+        let private icc_pdfStream_cache = ConcurrentDictionary()
+        let ofStream (pdfStream: PdfStream) =
+            icc_pdfStream_cache.GetOrAdd(pdfStream, valueFactory = fun pdfStream ->
+                let byarrays = pdfStream.GetBytes()
+                
+                let streamText = System.Text.Encoding.UTF8.GetString(byarrays.[0..500])
+
+                let icc = Icc.OfStreamText streamText
+                    
+                icc
+            )
+
 
     type private PdfCieBasedCs.IccBased with 
         member colorSpace.GetICC() = 
@@ -952,13 +1032,7 @@ module _Colors =
             let pdfStream = 
                 (colorSpace.GetPdfObject() :?> PdfArray).Get(1).GetIndirectReference().GetRefersTo() :?> PdfStream
 
-            let byarrays = pdfStream.GetBytes()
-            
-            let streamText = System.Text.Encoding.UTF8.GetString(byarrays.[0..500])
-
-            let icc = Icc.OfStreamText streamText
-                
-            icc
+            Icc.ofStream pdfStream
 
 
 
@@ -1014,11 +1088,11 @@ module _Colors =
 
     type private PdfSpecialCs.Separation with 
         member internal x.GetAlternateSpace() =
-            let pdfName = 
+            let pdfName, colorSpacePdfArray = 
                 let colorSpacePdfArray = x.GetPdfObject() :?> PdfArray
                 match colorSpacePdfArray.Get(2) with
-                | :? PdfArray as pdfArray -> pdfArray.GetAsName(0)
-                | :? PdfName as pdfName -> pdfName
+                | :? PdfArray as pdfArray -> pdfArray.GetAsName(0), Some pdfArray
+                | :? PdfName as pdfName -> pdfName, None
                 | _ -> failwith "Invalid token "
 
             match pdfName with 
@@ -1027,7 +1101,14 @@ module _Colors =
             | PdfName PdfName.CalRGB -> ColorSpace.Rgb
             | PdfName PdfName.DeviceGray -> ColorSpace.Gray
             | PdfName PdfName.Lab -> ColorSpace.Lab
-            | _ -> failwithf "Cannot convert %A to colorSpace" pdfName
+            | PdfName PdfName.ICCBased -> 
+                let r = colorSpacePdfArray.Value.GetAsStream(1)
+                let colorSpace = Icc.ofStream(r).ColorSpace
+                colorSpace
+
+            | _ -> 
+                let x = x
+                failwithf "Cannot convert %A to colorSpace" pdfName
 
         member x.GetAlternateColorValue() =
             let colorSpacePdfArray = x.GetPdfObject() :?> PdfArray
@@ -1196,13 +1277,17 @@ module _Colors =
         new PdfSpecialCs.Separation(name, alternateSpace.GetPdfObject(), tintTransform.GetPdfObject())
 
 
-    type Separation with 
-        member separation.GetBaseAlterateColor() =
-            let colorSpace = separation.GetColorSpace() :?> PdfSpecialCs.Separation
+    type PdfSpecialCs.Separation with 
+        member colorSpace.GetBaseAlterateColor() =
             let color = 
                 colorSpace.GetAlterateColor()
 
             color
+
+    type Separation with 
+        member separation.GetBaseAlterateColor() =
+            let colorSpace = separation.GetColorSpace() :?> PdfSpecialCs.Separation
+            colorSpace.GetBaseAlterateColor()
             //let colorValues = separation.GetColorValue()
 
             //let multiple = colorValues.[0]
@@ -1309,6 +1394,27 @@ module _Colors =
 
     type FsSeparation with 
 
+        static member OfSeparationColorSpace(colorSpace: PdfSpecialCs.Separation) =
+            fsSeparationCache.GetOrAdd(colorSpace, fun _ ->
+                let colorSpacePdfArray = 
+                    colorSpace.GetPdfObject() :?> PdfArray
+                
+                match colorSpacePdfArray.IsFlushed() with 
+                | true -> failwithf "%A  is alrealy flushed" colorSpace
+                | false ->
+                    let colorName = 
+                        let uri = 
+                            (colorSpacePdfArray.Get(1)
+                             |> string)
+
+                        DecodedPdfName.Create(uri)
+    
+                    try 
+                        FsSeparation.Create(colorName.ReadableName, colorSpace.GetBaseAlterateColor())
+                    with ex ->
+                        raise (new AccumulatedException(sprintf "Error when parsing separation color %s" colorName.ReadableName, ex))
+            )
+
         static member OfSeparation(separation: Separation) =
             let transparency = 
                 separation.GetColorValue() 
@@ -1317,27 +1423,7 @@ module _Colors =
 
             let colorSpace = separation.GetColorSpace() :?> PdfSpecialCs.Separation
             
-            let v = 
-                fsSeparationCache.GetOrAdd(colorSpace, fun _ ->
-                    let colorSpacePdfArray = 
-                        colorSpace.GetPdfObject() :?> PdfArray
-                    
-                    match colorSpacePdfArray.IsFlushed() with 
-                    | true -> failwithf "%A  is alrealy flushed" separation
-                    | false ->
-                        let colorName = 
-                            let uri = 
-                                (colorSpacePdfArray.Get(1)
-                                 |> string)
-
-                            DecodedPdfName.Create(uri)
-    
-                        try 
-                            FsSeparation.Create(colorName.ReadableName, separation.GetBaseAlterateColor())
-                        with ex ->
-                            raise (new AccumulatedException(sprintf "Error when parsing separation color %s" colorName.ReadableName, ex))
-                )
-
+            let v = FsSeparation.OfSeparationColorSpace colorSpace
 
             { v with 
                 BaseColor = v.Color
@@ -1442,6 +1528,7 @@ module _Colors =
         static member RGB_RED = FsValueColor.RGB_RED  |> SeparationOrValueColor.ValueColor
         static member RGB_BLUE = FsValueColor.RGB_BLUE  |> SeparationOrValueColor.ValueColor
         static member RGB_MAGENTA = FsValueColor.RGB_MAGENTA  |> SeparationOrValueColor.ValueColor
+        static member RGB_CYAN = FsValueColor.RGB_CYAN  |> SeparationOrValueColor.ValueColor
 
         static member CMYK_WHITE = FsValueColor.CMYK_WHITE  |> SeparationOrValueColor.ValueColor
         static member CMYK_BLACK = FsValueColor.CMYK_BLACK  |> SeparationOrValueColor.ValueColor
@@ -1584,6 +1671,7 @@ module _Colors =
         static member RGB_RED = FsValueColor.RGB_RED  |> AlternativeFsColor.ValueColor
         static member RGB_BLUE = FsValueColor.RGB_BLUE  |> AlternativeFsColor.ValueColor
         static member RGB_MAGENTA = FsValueColor.RGB_MAGENTA  |> AlternativeFsColor.ValueColor
+        static member RGB_CYAN = FsValueColor.RGB_CYAN  |> AlternativeFsColor.ValueColor
 
         static member CMYK_WHITE = FsValueColor.CMYK_WHITE  |> AlternativeFsColor.ValueColor
         static member CMYK_BLACK = FsValueColor.CMYK_BLACK  |> AlternativeFsColor.ValueColor
@@ -1702,7 +1790,15 @@ module _Colors =
             |> String.concat "; "
 
     
+    type FsShadingColor(pdfShadingColor: PdfShadingColor) =
+        let fsSeparation =
+            match pdfShadingColor.ColorSpace with 
+            | :? Colorspace.PdfSpecialCs.Separation as separation ->
+                FsSeparation.OfSeparationColorSpace separation
+                |> Some
+            | _ -> None
 
+        member x.FsSeparation = fsSeparation
 
     [<RequireQualifiedAccess; CustomEquality; CustomComparison>]
     type FsColor =
@@ -1710,9 +1806,29 @@ module _Colors =
         | IccBased of FsIccBased
         | ValueColor of FsValueColor
         | PatternColor of PatternColor
-        | ShadingColor of PdfShadingColor
+        | ShadingColor of FsShadingColor
         | DeviceN of PdfSpecialCs.DeviceN * FsDeviceN
     with 
+        member x.Is_DeviceN = 
+            match x with 
+            | DeviceN _ -> true
+            | _ -> false
+
+        member x.Is_ShadingColor = 
+            match x with 
+            | ShadingColor _ -> true
+            | _ -> false
+
+        member x.Is_PatternColor = 
+            match x with 
+            | PatternColor _ -> true
+            | _ -> false
+
+        member x.Is_Separation = 
+            match x with 
+            | Separation _ -> true
+            | _ -> false
+
         member x.AsAlternativeFsColor =
             match x with 
             | FsColor.ValueColor v -> v  |> AlternativeFsColor.ValueColor  |> Some
@@ -1911,6 +2027,7 @@ module _Colors =
         let RGB_RED = FsValueColor.RGB_RED  |> FsColor.ValueColor
         let RGB_BLUE = FsValueColor.RGB_BLUE  |> FsColor.ValueColor
         let RGB_MAGENTA = FsValueColor.RGB_MAGENTA  |> FsColor.ValueColor
+        let RGB_CYAN = FsValueColor.RGB_CYAN  |> FsColor.ValueColor
 
         let CMYK_WHITE = FsValueColor.CMYK_WHITE  |> FsColor.ValueColor
         let CMYK_BLACK = FsValueColor.CMYK_BLACK  |> FsColor.ValueColor
@@ -1947,7 +2064,7 @@ module _Colors =
                     |> FsColor.IccBased
                 | :? PatternColor as patternColor -> FsColor.PatternColor patternColor
                 | :? PdfShadingColor as shadingColor -> 
-                    FsColor.ShadingColor shadingColor
+                    FsColor.ShadingColor (FsShadingColor shadingColor)
 
                 | :? DeviceN as deviceN ->
                     let colorSpace_deviceN = deviceN.GetColorSpace() :?> PdfSpecialCs.DeviceN
@@ -2195,6 +2312,11 @@ module _Colors =
             | SeparationOrValueColor.ValueColor color -> PdfCanvasColor.Value color
             | SeparationOrValueColor.Separation color -> PdfCanvasColor.Separation color
 
+        static member OfAlternativeFsColor(color: AlternativeFsColor) =
+            PdfCanvasColor.OfSeparationOrValueColor(color.ToSeparationOrValueColor())
+
+
+
         member x.ToFsColor() =
             match x with 
             | PdfCanvasColor.Value      color -> FsColor.ValueColor color
@@ -2216,6 +2338,9 @@ module _Colors =
             | PdfCanvasColor.Registration -> 
                 FsSeparation.Registration
                 |> FsColor.Separation
+
+        member x.ToAlternativeFsColor() =
+            x.ToFsColor().AsAlternativeFsColor
 
         member x.LoggingText =
             match x with 
@@ -2353,6 +2478,18 @@ module _Colors =
             FsValueColor.Lab color
             |> PdfCanvasColor.Value
 
+
+    [<RequireQualifiedAccess>]
+    module PdfCanvasColor =
+        let (|EqualToValueColor|_|) (valueColor: FsValueColor) (color: PdfCanvasColor) =
+            match color.IsEqualTo(FsColor.ValueColor valueColor) with 
+            | true -> Some()
+            | false -> None
+
+        let (|EqualTo|_|) (fsColor: FsColor) (color: PdfCanvasColor) =
+            match color.IsEqualTo(fsColor) with 
+            | true -> Some()
+            | false -> None
 
     type FsColor with 
         member x.IsEqualTo(pdfCanvasColor: PdfCanvasColor) =

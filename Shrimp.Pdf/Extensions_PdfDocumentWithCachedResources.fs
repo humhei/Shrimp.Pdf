@@ -25,7 +25,7 @@ module PdfDocumentWithCachedResources =
           IsStrokeOverprint: bool
           IsFillOverprint: bool
           Shape: PdfCanvasShape
-          BlendModes: BlendMode list }
+          BlendModes: BlendMode list  }
     with 
         static member DefaultValue =
             { LineWidth = mm 0.1 
@@ -34,7 +34,7 @@ module PdfDocumentWithCachedResources =
               IsFillOverprint = false
               IsStrokeOverprint = false
               BlendModes = []
-              Shape = PdfCanvasShape.Rect }
+              Shape = PdfCanvasShape.Rect  }
             
         member x.FsExtGState: FsExtGState option = 
             let tryAddBlendMode(v: FsExtGState option) =
@@ -75,7 +75,7 @@ module PdfDocumentWithCachedResources =
     type PdfCanvasAddLineArguments =
         { LineWidth: float 
           StrokeColor: PdfCanvasColor
-          DashPattern: DashPattern }
+          DashPattern: DashPattern  }
     with 
         static member DefaultValue =
             { LineWidth = mm 0.1 
@@ -103,9 +103,30 @@ module PdfDocumentWithCachedResources =
           MaxFontSize: float option
           ClipContents: bool
           FsExtGState: FsExtGState option
-          VerticalTextAlignment: VerticalAlignment option }
+          VerticalTextAlignment: VerticalAlignment option  }
 
     with 
+        member x.centerText() =
+            { x with Position = Position.PreciseCenter }
+
+        /// Using yahei regular font
+        member x.yahei_Regular() = 
+            { x with 
+                PdfFontFactory = 
+                    FsPdfFontFactory.Registerable (
+                        RegisterableFonts.YaHei.yaHei RegisterableFonts.YaHei.FontWeight.Regular
+                    )
+            }
+
+        /// Using yahei bold font
+        member x.yahei_Bold() = 
+            { x with 
+                PdfFontFactory = 
+                    FsPdfFontFactory.Registerable (
+                        RegisterableFonts.YaHei.yaHei RegisterableFonts.YaHei.FontWeight.Bold
+                    )
+            }
+
         static member DefaultValue =
             { PdfFontFactory = FsPdfFontFactory.StandardFonts (iText.IO.Font.Constants.StandardFonts.HELVETICA)
               CanvasFontSize = CanvasFontSize.Numeric 9.
@@ -196,6 +217,12 @@ module PdfDocumentWithCachedResources =
             let doc = x.GetDocument() :?> PdfDocumentWithCachedResources
             doc.GetOrCreatePdfFont(pdfFont)
 
+        static member SetStrokeColor(strokeColor: PdfCanvasColor) =
+            fun (canvas: PdfCanvas) ->
+                let color = canvas.GetOrCreateColor(strokeColor) 
+                canvas.SetStrokeColor(color)
+
+
         static member SetStrokeColor(strokeColor: NullablePdfCanvasColor) =
             fun (canvas: PdfCanvas) ->
                 match strokeColor with 
@@ -205,6 +232,11 @@ module PdfDocumentWithCachedResources =
 
                 | NullablePdfCanvasColor.Non -> canvas
 
+        static member SetFillColor(fillColor: PdfCanvasColor) =
+
+            fun (canvas: PdfCanvas) ->
+                let color = canvas.GetOrCreateColor(fillColor) 
+                canvas.SetFillColor(color)
 
         static member SetFillColor(fillColor: NullablePdfCanvasColor) =
 
@@ -215,10 +247,10 @@ module PdfDocumentWithCachedResources =
                     let color = canvas.GetOrCreateColor(fillColor) 
                     canvas.SetFillColor(color)
 
-        member x.SetStrokeColor(strokeColor) =
+        member x.SetStrokeColor(strokeColor: NullablePdfCanvasColor) =
             PdfCanvas.SetStrokeColor (strokeColor) x
 
-        member x.SetFillColor(fillColor) =
+        member x.SetFillColor(fillColor: NullablePdfCanvasColor) =
             PdfCanvas.SetFillColor (fillColor) x
 
 

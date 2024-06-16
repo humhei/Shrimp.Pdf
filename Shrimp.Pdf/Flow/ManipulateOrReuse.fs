@@ -1,6 +1,10 @@
 ﻿namespace Shrimp.Pdf
 open Shrimp.FSharp.Plus
 
+type ManipulateOrReuseEnum =
+    | Manipulate = 0
+    | Reuse = 1
+
 module internal rec ManipulateOrReuse =
 
     [<RequireQualifiedAccess>]

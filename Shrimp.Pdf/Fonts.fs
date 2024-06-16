@@ -5,6 +5,60 @@ open System.IO
 open Resources
 open Shrimp.FSharp.Plus
 
+
+type FsStandardFonts =
+    /// <summary>This is a possible value of a base 14 type 1 font</summary>
+    | COURIER = 1
+    | COURIER_BOLD = 2
+    | COURIER_OBLIQUE = 3
+    | COURIER_BOLDOBLIQUE = 4
+    | HELVETICA = 5
+    | HELVETICA_BOLD = 6
+    | HELVETICA_OBLIQUE = 7
+    | HELVETICA_BOLDOBLIQUE = 8
+    | SYMBOL = 9
+    | TIMES_ROMAN = 10
+    | TIMES_BOLD = 11
+    | TIMES_ITALIC = 12
+    | TIMES_BOLDITALIC = 13
+    | ZAPFDINGBATS = 14
+   
+[<RequireQualifiedAccess>]
+module FsStandardFonts =
+    let toStandardFont = function
+        | FsStandardFonts.COURIER -> iText.IO.Font.Constants.StandardFonts.COURIER
+        | FsStandardFonts.COURIER_BOLD -> iText.IO.Font.Constants.StandardFonts.COURIER_BOLD
+        | FsStandardFonts.COURIER_OBLIQUE -> iText.IO.Font.Constants.StandardFonts.COURIER_OBLIQUE
+        | FsStandardFonts.COURIER_BOLDOBLIQUE -> iText.IO.Font.Constants.StandardFonts.COURIER_BOLDOBLIQUE
+        | FsStandardFonts.HELVETICA -> iText.IO.Font.Constants.StandardFonts.HELVETICA
+        | FsStandardFonts.HELVETICA_BOLD -> iText.IO.Font.Constants.StandardFonts.HELVETICA_BOLD
+        | FsStandardFonts.HELVETICA_OBLIQUE -> iText.IO.Font.Constants.StandardFonts.HELVETICA_OBLIQUE
+        | FsStandardFonts.HELVETICA_BOLDOBLIQUE -> iText.IO.Font.Constants.StandardFonts.HELVETICA_BOLDOBLIQUE
+        | FsStandardFonts.SYMBOL  -> iText.IO.Font.Constants.StandardFonts.SYMBOL 
+        | FsStandardFonts.TIMES_ROMAN  -> iText.IO.Font.Constants.StandardFonts.TIMES_ROMAN 
+        | FsStandardFonts.TIMES_BOLD  -> iText.IO.Font.Constants.StandardFonts.TIMES_BOLD
+        | FsStandardFonts.TIMES_ITALIC  -> iText.IO.Font.Constants.StandardFonts.TIMES_ITALIC
+        | FsStandardFonts.TIMES_BOLDITALIC  -> iText.IO.Font.Constants.StandardFonts.TIMES_BOLDITALIC
+        | FsStandardFonts.ZAPFDINGBATS  -> iText.IO.Font.Constants.StandardFonts.ZAPFDINGBATS
+
+    let allStandardFonts =
+        System.Enum.GetValuesEx<FsStandardFonts>()
+        |> List.ofSeq
+
+    let tryParse (font: string) =
+        let font = font.Trim()
+        match font with 
+        | "TimesNewRoman,Italic" -> Some FsStandardFonts.TIMES_ITALIC
+        | "TimesNewRoman" -> Some FsStandardFonts.TIMES_ROMAN
+        | "TimesNewRoman,BoldItalic" -> Some FsStandardFonts.TIMES_BOLDITALIC
+        | "TimesNewRoman,Bold" -> Some FsStandardFonts.TIMES_BOLD
+        | _ ->
+            allStandardFonts
+            |> List.tryFind(fun m ->
+                let fontName = toStandardFont m
+                fontName.EqualIC font 
+            )
+
 type RegisterableFont =
     { PdfEncodings: string
       File: FsFileInfo 
@@ -1090,6 +1144,7 @@ module FontNames =
             | ``SegoeUIBlack`` = 1058
             | ``SegoeUIBlack-ltalic`` = 1059
             | ``SegoeUI-Bold`` = 1060
+            | ``SegoeUI,Bold`` = 10600
             | ``SegoeUI-Boldltalic`` = 1061
             | ``SegoeUIEmoji`` = 1062
             | ``SegoeLIIHistoric`` = 1063
@@ -1097,6 +1152,7 @@ module FontNames =
             | ``SegoeLM-Light`` = 1065
             | ``SegoeUI-Lightltalic`` = 1066
             | ``SegoeUI-Semibold`` = 1067
+            | ``SegoeUI,Semibold`` = 10670
             | ``SegoeUI-Semiboldltalic`` = 1068
             | ``SegoeUI-Semilight`` = 1069
             | ``SegoeUI-Semilightltalic`` = 1070
@@ -1444,6 +1500,23 @@ module FontNames =
                 FontNames.``Arial,Bold``
             ]
 
+        let SegoeUI_Regular_Names = 
+            [
+                FontNames.SegoeUI
+            ]
+
+        let SegoeUI_Bold_Names = 
+            [
+                FontNames.``SegoeUI-Bold``
+                FontNames.``SegoeUI,Bold``
+            ]
+
+        let SegoeUI_SemiBold_Names = 
+            [
+                FontNames.``SegoeUI-Semibold``
+                FontNames.``SegoeUI,Semibold``
+            ]
+
 
 module RegisterableFonts =
 
@@ -1508,6 +1581,32 @@ module RegisterableFonts =
             { PdfEncodings = PdfEncodings.IDENTITY_H
               FontFamily = weightText
               File = FsFileInfo.create (Path.Combine(resourceDirectory, @"Fonts/Arial-Unicode/" + (weightText) + ".ttf")) }
+
+
+    module SegoeUI =
+
+        type FontWeight =
+            | Regular = 0
+            | Bold = 1
+            | SemiBold = 2
+
+        let segouUI (weight: FontWeight) =
+            let fontName =  
+                match weight with 
+                | FontWeight.Regular -> "segoeui"
+                | FontWeight.Bold -> "segoeuib"
+                | FontWeight.SemiBold -> "seguisb"
+
+            let fontFamily =
+                match weight with 
+                | FontWeight.Regular -> "Segoe UI"
+                | FontWeight.Bold -> "Segoe UI Bold"
+                | FontWeight.SemiBold -> "Segoe UI Semibold"
+
+            { PdfEncodings = PdfEncodings.CP1252
+              FontFamily = fontFamily
+              File = FsFileInfo.create (Path.Combine(resourceDirectory, @"Fonts/SegoeUI/" + (fontName) + ".ttf")) }
+
 
 
     module Arial =
@@ -1598,9 +1697,21 @@ module RegisterableFonts =
 
 
     let findRigisterableFont (fontName: string) =
+        let getNames (names: FontNames.Query.FontNames list) =
+            names
+            |> List.map(fun m -> m.Text())
+
+        let arials = getNames FontNames.Query.Arial_Regular_Names
+
         match fontName with 
         | String.EqualIC "SimSun" -> Result.Ok CommonFonts.Songti
-        | String.EqualIC "ArialMT" -> Result.Ok (Arial.arial (Arial.FontWeight.Regular))
-        | String.EqualIC "Arial" -> Result.Ok (Arial.arial (Arial.FontWeight.Regular))
-        | String.EqualIC "Arial,Bold" -> Result.Ok (Arial.arial (Arial.FontWeight.Bold))
+        | String.IncludedInIC arials _ -> Result.Ok (Arial.arial (Arial.FontWeight.Regular))
+        | String.IncludedInIC (getNames FontNames.Query.Arial_Bold_Names) _ -> Result.Ok (Arial.arial (Arial.FontWeight.Bold))
+        | String.IncludedInIC (getNames FontNames.Query.SegoeUI_Regular_Names) _ -> 
+            Result.Ok (SegoeUI.segouUI (SegoeUI.FontWeight.Regular))
+        | String.IncludedInIC (getNames FontNames.Query.SegoeUI_Bold_Names) _ -> 
+            Result.Ok (SegoeUI.segouUI (SegoeUI.FontWeight.Bold))
+        | String.IncludedInIC (getNames FontNames.Query.SegoeUI_SemiBold_Names) _ -> 
+            Result.Ok (SegoeUI.segouUI (SegoeUI.FontWeight.SemiBold))
+        | String.EqualIC "MicrosoftYaHei" -> Result.Ok(YaHei.yaHei YaHei.FontWeight.Regular)
         | _ -> Result.Error (sprintf "Cannot find RigisterableFont by %s" fontName)

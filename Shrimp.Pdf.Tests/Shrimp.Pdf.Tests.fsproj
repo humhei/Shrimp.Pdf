@@ -9,6 +9,7 @@
       <None Include="datas\**\*.pdf">
           <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>
+      <Compile Include="Tests.Types.fs" />
       <Compile Include="Tests.MyTests.fs" />
       <Compile Include="Program.fs" />
 
