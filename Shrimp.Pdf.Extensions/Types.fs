@@ -1283,14 +1283,17 @@ module ExtensionTypes =
             | _ -> sprintf "Margin %.1f %.1f %.1f %.1f" x.Left x.Top x.Right x.Bottom
 
         member private x.LoggingText_MM = 
-            let distincted =
+            let values = 
                 [x.Left; x.Top; x.Right; x.Bottom]
-                |> List.distinct
                 |> List.map userUnitToMM
+
+            let distincted =
+                values
+                |> List.distinct
 
             match distincted with 
             | [one] -> sprintf "Margin %.1f" one
-            | _ -> sprintf "Margin %.1f %.1f %.1f %.1f" x.Left x.Top x.Right x.Bottom
+            | _ -> sprintf "Margin %.1f %.1f %.1f %.1f" values.[0] values.[1] values.[2] values.[3]
 
 
     [<RequireQualifiedAccess>]

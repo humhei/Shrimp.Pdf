@@ -276,11 +276,18 @@ module iText =
                 {Start = Point(right,top);End = Point(right,y)}
                 {Start = Point(right,y);End = Point(x,y)}
             ]
+        member rect.LeftBottom = rect.GetPoint(Position.LeftBottom(0., 0.))
+        member rect.RightBottom = rect.GetPoint(Position.RightBottom(0., 0.))
+        member rect.LeftTop = rect.GetPoint(Position.LeftTop(0., 0.))
+        member rect.RightTop = rect.GetPoint(Position.RightTop(0., 0.))
 
         member this.GetEdgePoints() =
-            this.ToStaightLines()
-            |> List.collect(fun line -> [line.Start; line.End])
-            |> List.distinct
+            [
+                this.LeftTop
+                this.RightTop
+                this.RightBottom
+                this.LeftBottom
+            ]
 
         member this.IsOutsideOf(rect: Rectangle) =
             let rect = rect.applyMargin(Margin.Create -tolerance)
@@ -321,7 +328,6 @@ module iText =
             | RelativePosition.CrossBox -> this.IsCrossOf(rect)
             | RelativePosition.OutBox -> this.IsOutsideOf(rect)
 
-            
 
         member rect.GetPoint(position: Position) =
             let x = 
@@ -339,8 +345,60 @@ module iText =
 
             new Point (x, y)
 
+        member this.DetailPositionOf(rect: Rectangle) =
+            if this.IsInsideOf(rect) then
+                let rect_half_width = rect.GetWidth() / 2.f
+                let rect_half_height = rect.GetWidth() / 2.f
 
-        member rect.LeftBottom = rect.GetPoint(Position.LeftBottom(0., 0.))
+                let leftTopArea = 
+                    let point = rect.GetPoint(Position.LeftMiddle(0, 0))
+                    Rectangle(point.x32, point.y32, rect_half_width, rect_half_height)
+
+                let rightTopArea = 
+                    let point = rect.GetPoint(Position.Center(0, 0))
+                    Rectangle(point.x32, point.y32, rect_half_width, rect_half_height)
+
+                let leftBottomArea = 
+                    let point = rect.GetPoint(Position.LeftBottom(0, 0))
+                    Rectangle(point.x32, point.y32, rect_half_width, rect_half_height)
+
+                let rightBottomArea = 
+                    let point = rect.GetPoint(Position.BottomMiddle(0, 0))
+                    Rectangle(point.x32, point.y32, rect_half_width, rect_half_height)
+
+                let getRelativePosition(point: Point) =
+                    let (|InsideOf|_|) (rect: Rectangle) (point: Point) =
+                        match point.IsInsideOf rect with 
+                        | true -> Some ()
+                        | false -> None
+
+                    match point with 
+                    | InsideOf leftTopArea -> PositionEnum.LeftTop
+                    | InsideOf rightTopArea -> PositionEnum.RightTop
+                    | InsideOf leftBottomArea -> PositionEnum.LeftBottom
+                    | InsideOf rightBottomArea -> PositionEnum.RightBottom
+                    | _ -> failwithf "Invalid token"
+
+                this.GetEdgePoints()
+                |> List.map(fun m -> getRelativePosition m)
+                |> List.distinct
+                |> function
+                    | [] -> failwithf "Invalid token"
+                    | [position] -> Some position
+                    | [position1; positon2] ->
+                        match position1, positon2 with 
+                        | PositionEnum.RightTop, PositionEnum.RightBottom -> Some PositionEnum.RightMiddle
+                        | PositionEnum.RightBottom, PositionEnum.LeftBottom -> Some PositionEnum.BottomMiddle
+                        | PositionEnum.LeftTop, PositionEnum.RightTop -> Some PositionEnum.TopMiddle
+                        | PositionEnum.LeftTop, PositionEnum.LeftBottom -> Some PositionEnum.LeftMiddle
+                        | _ -> None
+                    | _ -> None
+
+            elif this.IsOutsideOf(rect) then None
+            elif this.IsCrossOf(rect) then None
+            else failwith "invalid token"
+
+
 
         member rect.GetArea(position: Position, width, height) =
             let startPoint = rect.GetPoint(position)
@@ -359,6 +417,9 @@ module iText =
             new Rectangle(float32 x, float32 y, float32 width, float32 height)
 
     and Point with
+        member internal point.x32 = float32 point.x
+        member internal point.y32 = float32 point.y
+
         member point.IsInsideOf (rect: Rectangle) =
             let x,y = point.x, point.y
             x > rect.GetXF() && x < rect.GetRightF() && y > rect.GetYF() && y < rect.GetTopF()

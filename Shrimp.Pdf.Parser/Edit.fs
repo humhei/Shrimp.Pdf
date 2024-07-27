@@ -1189,13 +1189,54 @@ and private PdfCanvasEditor(ocProperties, selectorModifierMapping: Map<SelectorM
                         |> ignore
 
                 | false, _ ->
-                    fsDocumentResources.FixedStreamObjNums.GetOrAdd(xobjectStreamID, valueFactory = fun _ ->
-                        resources.FixedStreamObjNums.GetOrAdd(xobjectStreamID, valueFactory = fun _ ->
-                           fixXObjectStream()
+                    let fixXObjectStream_Cached() =
+                        fsDocumentResources.FixedStreamObjNums.GetOrAdd(xobjectStreamID, valueFactory = fun _ ->
+                            resources.FixedStreamObjNums.GetOrAdd(xobjectStreamID, valueFactory = fun _ ->
+                               fixXObjectStream()
+                            )
                         )
-                    )
-                    |> ignore
-             
+                        |> ignore
+
+                    match subType with 
+                    | Image -> 
+                        let imageClose = getImageClose()
+                        match imageClose with 
+                        | Choice.Choice1Of2 operatorRange ->
+                            PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                            |> ignore
+
+                        | Choice.Choice2Of2 modifierPdfCanvasActions ->
+                            match modifierPdfCanvasActions.Close with 
+                            | CloseOperatorUnion.Image close ->
+                                match modifierPdfCanvasActions.Actions.Length + modifierPdfCanvasActions.SuffixActions.Length with 
+                                | 0 -> 
+                                    match close with 
+                                    | ImageCloseOperator.Keep ->
+                                        PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
+                                        |> ignore
+
+                                    | ImageCloseOperator.Remove -> ()
+                                    | ImageCloseOperator.New _ ->  
+                                        fsDocumentResources.FixedStreamObjNums.GetOrAdd(xobjectStreamID, valueFactory = fun _ ->
+                                            resources.FixedStreamObjNums.GetOrAdd(xobjectStreamID, valueFactory = fun _ ->
+                                               resources.AddRemovableXObjectName(name)
+                                               None, xobjectStream
+                                            )
+                                        )
+                                        |> ignore
+                                        //failwithf "Not implemented for (XObjectRef,ImageCloseOperator.New)"
+
+                                | _ ->
+                                    match close with 
+                                    | ImageCloseOperator.Keep ->
+                                        fixXObjectStream()
+                                        |> ignore
+                                    | _ -> failwithf "Not implemented"
+
+
+                            | _ -> failwith "Invalid token"
+                            
+                    | _ -> fixXObjectStream_Cached()
 
 
         | PathOrText tag ->

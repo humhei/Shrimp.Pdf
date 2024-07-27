@@ -452,14 +452,14 @@ type private PdfDocumentCache private
             let __setMatrix = 
                 let newSoftMaskPdfObject = (newSoftMask.SoftMask.PdfObject :?> PdfDictionary)
                 let stream = newSoftMaskPdfObject.GetAsStream(PdfName("G")) :> PdfDictionary
-                let matrix = 
-                    stream.GetAsArray(PdfName.Matrix)
-                    |> AffineTransformRecord.ofPdfArray
+                //let matrix = 
+                //    stream.GetAsArray(PdfName.Matrix)
+                //    |> AffineTransformRecord.ofPdfArray
 
-                let newMatrix = 
-                    softMask.Ctm.Concatenate(matrix)
+                //let newMatrix = 
+                //    softMask.Ctm.Concatenate(matrix)
 
-                stream.Put(PdfName.Matrix, AffineTransformRecord.toPdfArray newMatrix)
+                stream.Put(PdfName.Matrix, AffineTransformRecord.toPdfArray softMask.Ctm)
 
             newSoftMask
         )
