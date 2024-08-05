@@ -364,10 +364,7 @@ module IntegratedInfos =
             | None -> modifyUserState <- Some userState
             | _ -> failwithf "modifyUserState only can be set for once"
 
-    type PathInfoRecord =
-        { FillColor: iText.Kernel.Colors.Color 
-          StrokeColor: iText.Kernel.Colors.Color 
-          Bound: FsRectangle }
+
 
 
     type LazyVisibleBound0_Backup =
@@ -419,16 +416,6 @@ module IntegratedInfos =
             
             exState
 
-        member integratedInfo.RecordValue =
-            let renderInfo = integratedInfo.PathRenderInfo
-            { FillColor = renderInfo.GetFillColor()
-              StrokeColor = renderInfo.GetStrokeColor()
-              Bound = 
-                let bound = (IPathRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo)
-                bound.FsRectangle()
-
-              }
-
 
         interface IPathRenderInfo with 
             member x.Value = x.PathRenderInfo
@@ -447,23 +434,7 @@ module IntegratedInfos =
             member x.Tag = IntegratedRenderInfoTag.Path
             member x.ClippingPathInfos = x.ClippingPathInfos
 
- 
 
-    type TextInfoRecord =
-        { PdfConcatedWord: PdfConcatedWord
-          FontSize: float 
-          TextRotation: Rotation
-          FillColor: iText.Kernel.Colors.Color 
-          StrokeColor: iText.Kernel.Colors.Color 
-          FontName: DocumentFontName
-          Bound: FsRectangle
-          DenseBound: FsRectangle
-          EndTextState: EndTextState
-          TextRenderingMode: FsTextRenderMode
-          IsShading: bool
-        }
-    with 
-        member x.Text = x.PdfConcatedWord.ConcatedText()
 
     [<Struct; System.Diagnostics.DebuggerDisplay("IntegratedTextRenderInfo: {RecordValue}")>]
     type IntegratedTextRenderInfo =
@@ -601,24 +572,7 @@ module IntegratedInfos =
             | EndTextState.Yes -> true
             | EndTextState.No -> false
 
-        member integratedInfo.RecordValue =
-            let renderInfo = integratedInfo.TextRenderInfo
-            { PdfConcatedWord = integratedInfo.PdfConcatedWord()
-              FontSize = ITextRenderInfo.getActualFontSize integratedInfo
-              FontName = ITextRenderInfo.getFontName integratedInfo
-              TextRotation = ITextRenderInfo.getTextRotation integratedInfo
-              FillColor = renderInfo.GetFillColor()
-              StrokeColor = renderInfo.GetStrokeColor()
-              Bound = 
-                let bound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo
-                bound.FsRectangle()
-              IsShading = integratedInfo.IsShading
-              DenseBound =
-                let bound = ITextRenderInfo.getDenseBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo
-                bound.FsRectangle()
-              EndTextState = integratedInfo.EndTextState
-              TextRenderingMode = integratedInfo.TextRenderMode
-            }
+
 
         interface IAbstractRenderInfoIM with 
             member x.Value = x.TextRenderInfo :> AbstractRenderInfo
@@ -655,10 +609,7 @@ module IntegratedInfos =
         | ImageMask 
         | Indexable of IndexableColorSpace
 
-    type ImageRenderInfoRecord =
-        { UnclippedBound: FsRectangle
-          ImageColorSpaceData: ImageColorSpaceData
-          VisibleBound: FsRectangle option }
+
 
     type IndexedRGBImageData =
         { ImageXObject: PdfImageXObject
@@ -670,8 +621,9 @@ module IntegratedInfos =
 
         member x.Size() = System.Drawing.Size(x.GetWidth() |> int, x.GetHeight() |> int)
 
+
     [<RequireQualifiedAccess>]
-    type FsImageData =
+    type FsImageDataValue =
         | ImageData of  ImageData
         | IndexedRgb of IndexedRGBImageData
     with 
@@ -706,6 +658,50 @@ module IntegratedInfos =
             match x with 
             | ImageData v -> v.GetData()
             | IndexedRgb xobject -> failwithf "Cannot get bytes for indexedRGB image data"
+
+    
+    type FsSoftMask(pdfStream: PdfStream) =
+        let __checkColorSpaceValid = 
+            let pdfName = pdfStream.GetAsName(PdfName.ColorSpace)
+            match pdfName with 
+            | EqualTo PdfName.DeviceGray -> ()
+            | _ -> failwithf "Cannot create FsSolfMask by colorspace %A" pdfName
+
+
+        member x.PdfStream = pdfStream
+
+
+    type FsImageData =
+        { SoftMask: FsSoftMask option 
+          FsImageDataValue: FsImageDataValue }
+    with 
+        member x.GetColorEncodingComponentsNumber()  = x.FsImageDataValue.GetColorEncodingComponentsNumber() 
+        
+        member x.GetBpc()  = x.FsImageDataValue.GetBpc() 
+        
+        member x.GetOriginalType()  = x.FsImageDataValue.GetOriginalType() 
+        
+        member x.GetWidth()  = x.FsImageDataValue.GetWidth() 
+        
+        member x.GetHeight()  = x.FsImageDataValue.GetHeight() 
+        
+        member x.GetData()  = x.FsImageDataValue.GetData() 
+        
+
+        static member CreateImageData (softMask) imageDataValue =
+            { SoftMask = softMask 
+              FsImageDataValue = FsImageDataValue.ImageData imageDataValue }
+
+        static member CreateIndexedRgb (softMask) indexedRGBImageData =
+            { SoftMask = softMask 
+              FsImageDataValue = FsImageDataValue.IndexedRgb indexedRGBImageData }
+
+    [<RequireQualifiedAccess>]
+    module FsImageData =
+        let (|ImageData|IndexedRgb|) (imageData: FsImageData) =
+            match imageData.FsImageDataValue with 
+            | FsImageDataValue.ImageData v -> ImageData v
+            | FsImageDataValue.IndexedRgb v -> IndexedRgb v
 
     [<Struct>]
     type IntegratedImageRenderInfo =
@@ -785,13 +781,7 @@ module IntegratedInfos =
             {| X = dpi_x
                Y = dpi_y |}
 
-        member x.RecordValue =
-            { UnclippedBound = IImageRenderInfo.getUnclippedBound x |> FsRectangle.OfRectangle
-              ImageColorSpaceData = x.ImageColorSpaceData
-              VisibleBound = 
-                x.VisibleBound() 
-                |> Option.map FsRectangle.OfRectangle 
-            }
+
 
         interface IAbstractRenderInfoIM with 
             member x.Value = x.ImageRenderInfo :> AbstractRenderInfo

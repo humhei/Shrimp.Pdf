@@ -128,7 +128,10 @@ type RenewableSpawnablePdfObjectID =
 
 type ImageColorSpaceConversionCache =
     { Cache: 
-        ConcurrentDictionary<SpawnablePdfObjectID * Icc option * Icc * Indent, ImageDataOrImageXObject option>}
+        ConcurrentDictionary<SpawnablePdfObjectID * Icc option * Icc * Indent, ImageDataOrImageXObject option>
+      SetMaximumDpiCache: 
+        ConcurrentDictionary<SpawnablePdfObjectID * int, ImageDataOrImageXObject option>
+    }
 
 
 type private PdfDocumentCache private 
@@ -168,6 +171,7 @@ type private PdfDocumentCache private
         extGStateCache.Clear()
         layerCache.Clear()
         imageColorSpaceConversionCache.Cache.Clear()
+        imageColorSpaceConversionCache.SetMaximumDpiCache.Clear()
 
     //member internal x.Clear() =
     //    x.Clear_BeforeSpawn()
@@ -188,7 +192,8 @@ type private PdfDocumentCache private
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(),
             new ConcurrentDictionary<_, _>(),
-            {ImageColorSpaceConversionCache.Cache = ConcurrentDictionary()})
+            {ImageColorSpaceConversionCache.Cache = ConcurrentDictionary()
+             SetMaximumDpiCache = ConcurrentDictionary() })
 
     member internal x.CacheDocumentFont(font: PdfFont) =
         let fontNames = font.GetFontProgram().GetFontNames()
@@ -516,7 +521,8 @@ type private PdfDocumentCache private
              new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
-             {ImageColorSpaceConversionCache.Cache = ConcurrentDictionary()})
+             {ImageColorSpaceConversionCache.Cache = ConcurrentDictionary()
+              SetMaximumDpiCache = ConcurrentDictionary() })
 
 and PdfDocumentWithCachedResources =
     inherit PdfDocument

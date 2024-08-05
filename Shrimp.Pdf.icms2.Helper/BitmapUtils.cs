@@ -18,7 +18,7 @@ namespace System.Drawing
             System.Drawing.Imaging.BitmapData bmpData =
                 bmp.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadWrite,
                 bmp.PixelFormat);
-
+            
             // Get the address of the first line.
             IntPtr ptr = bmpData.Scan0;
             // Declare an array to hold the bytes of the bitmap.
@@ -30,9 +30,28 @@ namespace System.Drawing
             // Unlock the bits.
             bmp.UnlockBits(bmpData);
             return new BitmapColorValues(colorValues, bmpData.Stride, bmp.Size, bmp.PixelFormat);
-
         }
-   
+        public static void SetColorValues(Bitmap bmp, byte [] colorValues)
+        {
+
+            // Lock the bitmap's bits.  
+            Rectangle rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
+            System.Drawing.Imaging.BitmapData bmpData =
+                bmp.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadWrite,
+                bmp.PixelFormat);
+
+            // Get the address of the first line.
+            IntPtr ptr = bmpData.Scan0;
+            // Declare an array to hold the bytes of the bitmap.
+            int length = Math.Abs(bmpData.Stride) * bmp.Height;
+            //byte[] colorValues = new byte[length];
+
+            // Copy the RGB values into the array.
+            System.Runtime.InteropServices.Marshal.Copy(colorValues, 0, ptr, length);
+            // Unlock the bits.
+            bmp.UnlockBits(bmpData);
+        }
+
     }
 
     public class BitmapColorValues

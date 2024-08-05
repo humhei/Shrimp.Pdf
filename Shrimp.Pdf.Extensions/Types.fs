@@ -656,6 +656,17 @@ module ExtensionTypes =
 
     type MMRectangle with 
         static member OfFsRectangle(rect: FsRectangle) = rect.MMValue
+        static member OfRectangle(rect: Rectangle) = 
+            let toMM(v: float32) =
+                v
+                |> float
+                |> userUnitToMM
+            {
+                MMRectangle.X = toMM <| rect.GetX() 
+                Y = toMM <| rect.GetY() 
+                Width = toMM <| rect.GetWidth() 
+                Height = toMM <| rect.GetHeight() 
+            }
 
         member x.AsFsRectangle: FsRectangle = 
             {
@@ -1261,6 +1272,12 @@ module ExtensionTypes =
                   Right = right
                   Bottom = bottom }
 
+            | [ margin ] ->
+                { Left = margin
+                  Top = margin
+                  Right = margin
+                  Bottom = margin }
+
             | _ -> failwithf "values' length %d is not equal to 4" values.Length
 
 
@@ -1282,7 +1299,7 @@ module ExtensionTypes =
             | [one] -> sprintf "Margin %.1f" one
             | _ -> sprintf "Margin %.1f %.1f %.1f %.1f" x.Left x.Top x.Right x.Bottom
 
-        member private x.LoggingText_MM = 
+        member x.LoggingText_MM = 
             let values = 
                 [x.Left; x.Top; x.Right; x.Bottom]
                 |> List.map userUnitToMM
@@ -1295,6 +1312,14 @@ module ExtensionTypes =
             | [one] -> sprintf "Margin %.1f" one
             | _ -> sprintf "Margin %.1f %.1f %.1f %.1f" values.[0] values.[1] values.[2] values.[3]
 
+        static member ParseMM(text: string) =
+            match text with 
+            | String.TrimStartIC "Margin" v ->
+                v.SplitAsListAndTrim(" ")
+                |> List.map System.Double.Parse
+                |> Margin.Create
+
+            | _ -> failwithf "Cannot parse %s to margin" text
 
     [<RequireQualifiedAccess>]
     module Margin =

@@ -1092,8 +1092,8 @@ and private PdfCanvasEditor(ocProperties, selectorModifierMapping: Map<SelectorM
                         //    | _ -> xobjectStream
 
                         //| XObjectReference.ByRef -> xobjectStream
-                    this.Listener.SaveGS_XObject(this.GetGraphicsState())
                     this.Listener.InfoContainerIDStack_Push(hash)
+                    this.Listener.SaveGS_XObject(this.GetGraphicsState())
                     
                     resources.AddRemovableXObjectName(name)
 
@@ -1111,8 +1111,8 @@ and private PdfCanvasEditor(ocProperties, selectorModifierMapping: Map<SelectorM
 
                     currentPdfCanvas.WriteLiteral(name.ToString() + " Do\n") |> ignore
 
-                    this.Listener.InfoContainerIDStack_Pop()
                     this.Listener.RestoreGS_XObject()
+                    this.Listener.InfoContainerIDStack_Pop()
 
                     Some name, fixedStream
 
@@ -1215,8 +1215,7 @@ and private PdfCanvasEditor(ocProperties, selectorModifierMapping: Map<SelectorM
                                         PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
                                         |> ignore
 
-                                    | ImageCloseOperator.Remove -> ()
-                                    | ImageCloseOperator.New _ ->  
+                                    | ImageCloseOperator.Remove -> 
                                         fsDocumentResources.FixedStreamObjNums.GetOrAdd(xobjectStreamID, valueFactory = fun _ ->
                                             resources.FixedStreamObjNums.GetOrAdd(xobjectStreamID, valueFactory = fun _ ->
                                                resources.AddRemovableXObjectName(name)
@@ -1224,6 +1223,9 @@ and private PdfCanvasEditor(ocProperties, selectorModifierMapping: Map<SelectorM
                                             )
                                         )
                                         |> ignore
+
+                                    | ImageCloseOperator.New _ ->  
+                                        fixXObjectStream_Cached()
                                         //failwithf "Not implemented for (XObjectRef,ImageCloseOperator.New)"
 
                                 | _ ->

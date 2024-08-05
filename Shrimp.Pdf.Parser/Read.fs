@@ -882,43 +882,57 @@ module internal Listeners =
                                   ModifyUserState = ModifyUserState()
                                   LazyImageData = 
                                     lazy 
+                                        let image = imageRenderInfo.GetImage()
+                                        let imagePdfObject =  image.GetPdfObject()
+                                        let softMask = 
+                                            imagePdfObject.GetAsStream(PdfName.SMask)
+                                            |> function
+                                                | null -> None
+                                                | stream -> 
+                                                    stream
+                                                    |> FsSoftMask
+                                                    |> Some
+
                                         let hash = 
-                                            imageRenderInfo.GetImage().GetPdfObject().GetIndirectReference()
+                                            imagePdfObject.GetIndirectReference()
                                             |> hashNumberOfPdfIndirectReference
 
                                         let image = 
                                         
                                             let rgbIndexedColorSpace =
-                                                let image = 
-                                                    imageRenderInfo
-                                                        .GetImage()
-
                                                 let bitsPerComponent = 
-                                                    image
-                                                        .GetPdfObject()
+                                                    imagePdfObject
                                                         .GetAsNumber(PdfName.BitsPerComponent)
                                                         .IntValue()
 
                                                 let imageType =
                                                     image.IdentifyImageType()
 
-                                                let colorSpace = image.GetPdfObject().GetAsArray(PdfName.ColorSpace)
 
                                                 match bitsPerComponent, imageType with 
                                                 | 2, _ -> 
+                                                    let colorSpace = imagePdfObject.GetAsArray(PdfName.ColorSpace)
                                                     match colorSpace.Contains(PdfName.Indexed) && colorSpace.Contains(PdfName.DeviceRGB) with 
                                                     | true -> Some { ImageXObject = image; ImageType = imageType }
                                                 
                                                     | false -> None
+                                                | 8, _ -> None
+                                                    //let colorSpace = imagePdfObject.GetAsArray(PdfName.ColorSpace)
+                                                    //match colorSpace.Contains(PdfName.Indexed) && colorSpace.Contains(PdfName.DeviceRGB) with 
+                                                    //| true -> Some { ImageXObject = image; ImageType = imageType }
+                                                
+                                                    //| false -> None
                                                 | _ -> None
                                     
                                             match rgbIndexedColorSpace with 
-                                            | Some rgbIndexedColorSpace -> FsImageData.IndexedRgb (rgbIndexedColorSpace)
+                                            | Some rgbIndexedColorSpace -> FsImageData.CreateIndexedRgb softMask (rgbIndexedColorSpace)
                                             | None -> 
-
+                                                let m = imageRenderInfo.GetImage().GetImageBytes()
+                                                System.IO.File.WriteAllBytes("C:\Users\Administrator\Desktop\k.jpg", m)
+                                                let colorSpace = imagePdfObject.GetAsArray(PdfName.ColorSpace)
                                                 cache.ImageDataCache.GetOrAdd(hash, fun hash ->
                                                     (ImageDataFactory.Create(imageRenderInfo.GetImage().GetImageBytes()))
-                                                    |> FsImageData.ImageData
+                                                    |> FsImageData.CreateImageData softMask
                                                 )
 
                                         hash, image
@@ -1671,9 +1685,9 @@ type internal RenderInfoAccumulatableContentOperator (originalOperator, invokeXO
             | null -> 
                 match invokeXObjectOperator with 
                 | true ->
-                    processor.Listener.SaveGS_XObject(processor.GetGraphicsState())
+                    //processor.Listener.SaveGS_XObject(processor.GetGraphicsState())
                     this.OriginalOperator.Invoke(processor, operator, operands)
-                    processor.Listener.RestoreGS_XObject()
+                    //processor.Listener.RestoreGS_XObject()
 
                 | false -> ()
 
@@ -1930,9 +1944,11 @@ type internal ReaderPdfCanvasProcessor(ocProperties, listener: FilteredEventList
                                 hashNumberOfPdfIndirectReference(xObjectStream.GetIndirectReference())
                                 |> InfoContainerID.XObject
                             listener.InfoContainerIDStack_Push(id)
+                            listener.SaveGS_XObject(processor.GetGraphicsState())
                             handler.HandleXObject(processor, canvasTagHierarchy, xObjectStream, xObjectName)
                             listener.InfoContainerIDStack_Pop()
                             |> ignore
+                            listener.RestoreGS_XObject()
                 }
             base.RegisterXObjectDoHandler(name, handler)
 

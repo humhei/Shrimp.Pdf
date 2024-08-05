@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Configurations>Debug;Release;TestParser</Configurations>
   </PropertyGroup>
 
   <ItemGroup>
@@ -10,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Shrimp.FSharp.Plus" Version="5.99.549"/>
+    <PackageReference Include="Shrimp.FSharp.Plus" Version="5.99.570" />
   </ItemGroup>
     <ItemGroup>
         <PackageReference Update="FSharp.Core" Version="5.0.1" />

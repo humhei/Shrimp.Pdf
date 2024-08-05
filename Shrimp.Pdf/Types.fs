@@ -23,6 +23,74 @@ module _IAbstractRenderInfoExtensions =
                     |> FsColor.equal fsColor
                 ) info
 
+    type PathInfoRecord =
+        { FillColor: FsColor
+          StrokeColor: FsColor
+          Bound: FsRectangle }
+    
+    type TextInfoRecord =
+        { PdfConcatedWord: PdfConcatedWord
+          FontSize: float 
+          TextRotation: Rotation
+          FillColor: FsColor
+          StrokeColor: FsColor
+          FontName: DocumentFontName
+          Bound: FsRectangle
+          DenseBound: FsRectangle
+          EndTextState: EndTextState
+          TextRenderingMode: FsTextRenderMode
+          IsShading: bool
+        }
+    with 
+        member x.Text = x.PdfConcatedWord.ConcatedText()
+    
+    type ImageRenderInfoRecord =
+        { UnclippedBound: FsRectangle
+          ImageColorSpaceData: ImageColorSpaceData
+          VisibleBound: FsRectangle option }
+
+
+    type IntegratedPathRenderInfo with 
+        member integratedInfo.RecordValue =
+            let renderInfo = integratedInfo.PathRenderInfo
+            { FillColor = renderInfo.GetFillColor()     |> FsColor.OfItextColor
+              StrokeColor = renderInfo.GetStrokeColor() |> FsColor.OfItextColor
+              Bound = 
+                let bound = (IPathRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo)
+                bound.FsRectangle()
+
+              }
+
+    type IntegratedTextRenderInfo with 
+        member integratedInfo.RecordValue =
+            let renderInfo = integratedInfo.TextRenderInfo
+            { PdfConcatedWord = integratedInfo.PdfConcatedWord()
+              FontSize = ITextRenderInfo.getActualFontSize integratedInfo
+              FontName = ITextRenderInfo.getFontName integratedInfo
+              TextRotation = ITextRenderInfo.getTextRotation integratedInfo
+              FillColor = renderInfo.GetFillColor()      |> FsColor.OfItextColor
+              StrokeColor = renderInfo.GetStrokeColor()  |> FsColor.OfItextColor
+              Bound = 
+                let bound = ITextRenderInfo.getBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo
+                bound.FsRectangle()
+              IsShading = integratedInfo.IsShading
+              DenseBound =
+                let bound = ITextRenderInfo.getDenseBound BoundGettingStrokeOptions.WithoutStrokeWidth integratedInfo
+                bound.FsRectangle()
+              EndTextState = integratedInfo.EndTextState
+              TextRenderingMode = integratedInfo.TextRenderMode
+            }
+
+
+    type IntegratedImageRenderInfo with 
+        member x.RecordValue =
+            { UnclippedBound = IImageRenderInfo.getUnclippedBound x |> FsRectangle.OfRectangle
+              ImageColorSpaceData = x.ImageColorSpaceData
+              VisibleBound = 
+                x.VisibleBound() 
+                |> Option.map FsRectangle.OfRectangle 
+            }
+
 type PageOrientation =
     | Landscape  = 0
     | Portrait = 1
@@ -557,7 +625,7 @@ module _Types_Ex =
             && fontSize @= x.FontSize
             &&
                 match fillColor with 
-                | Some fillColor -> FsColor.equal fillColor (FsColor.OfItextColor x.FillColor)
+                | Some fillColor -> FsColor.equal fillColor (x.FillColor)
                 | None -> true
     
         member x.Pick(fontName, fontSize, picker, ?fillColor) =
