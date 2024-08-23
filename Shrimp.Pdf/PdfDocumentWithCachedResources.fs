@@ -110,6 +110,8 @@ type ReaderDocument (reader: string) =
     interface System.IDisposable with 
         member x.Dispose() = x.Close()
 
+
+
 [<RequireQualifiedAccess>]
 type CurrentDocumentImage =
     | Inline of PdfStream 
@@ -661,8 +663,30 @@ and PdfDocumentWithCachedResources =
     member x.Renew_OtherDocument_Image(otherDocumentImage: ImageRenderInfo) =
         x.cache.GetOrCreateImage_FromOtherDocument(otherDocumentImage)
 
-    member x.Renew_OtherDocument_Image(hashNumber, imageData: ImageData) =
+    member private x.Renew_OtherDocument_Image_Entity(hashNumber, imageData: ImageData) =
         x.cache.GetOrCreateImage_FromOtherDocument(hashNumber, imageData)
+
+    member document.Renew_OtherDocument_Image(hashNumber, imageData: ImageData, softMask: FsSoftMask_For_Write option) =
+        match softMask with 
+        | None -> document.Renew_OtherDocument_Image_Entity(hashNumber, imageData)
+
+        | Some softMask ->
+            let image = document.Renew_OtherDocument_Image_Entity(hashNumber, imageData)
+            let mask = 
+                match softMask.ImageData with 
+                | FsImageDataValue.IndexedData _ -> failwithf "Not implemented"
+                | FsImageDataValue.ImageData (imageData, bytes) -> 
+                    document.Renew_OtherDocument_Image_Entity(softMask.ID, imageData)
+            
+            match image, mask with 
+            | CurrentDocumentImage.XObject image, CurrentDocumentImage.XObject mask ->
+                image.GetPdfObject().Put(PdfName.SMask, mask.GetPdfObject())
+                |> ignore
+                
+                image
+                |> CurrentDocumentImage.XObject
+                
+            | _ -> failwithf "Not implemented"
 
 
     member x.Renew_OtherDocument_Font(pdfFont: PdfFont) =

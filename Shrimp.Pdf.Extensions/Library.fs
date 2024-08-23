@@ -1499,16 +1499,31 @@ module iText =
     //        | colorSpaceNumber -> failwithf "Cannot get colorSpace from %d" colorSpaceNumber
 
 
+    type ImageUnclippedBound = ImageUnclippedBound of Rectangle
+    with 
+        member x.Value = 
+            let (ImageUnclippedBound v) = x
+            v
+
+
+
+
     [<RequireQualifiedAccess>]
     module IImageRenderInfo =   
-        let getUnclippedBound (info: IImageRenderInfo) =
-            let image = info.Value
-
+        let imageCtmToUnclippedBound (imageCtm: Matrix) =
             let imageCtm = 
-                image.GetImageCtm()
+                imageCtm
                 |> AffineTransform.ofMatrix
 
             imageCtm.Transform(Rectangle.create 0 0 1 1)
+            |> ImageUnclippedBound
+
+        let getUnclippedBound (info: IImageRenderInfo) =
+            let image = info.Value
+
+            image.GetImageCtm()
+            |> imageCtmToUnclippedBound
+
             //let imageCtm = ctm.Concatenate imageCtm
 
             //let x, width =

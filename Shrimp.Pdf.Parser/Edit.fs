@@ -322,10 +322,16 @@ with
         | _ -> 
             PdfLogger.unSupportedTextRenderMode textRenderingMode
             textRenderingMode
-    
+
+type ImageData_ForWrite =
+    { ID: SpawnablePdfObjectID
+      ImageData: ImageData
+      Bytes: option<byte []>
+      SoftMask: FsSoftMask_For_Write option }
+
 [<RequireQualifiedAccess>]
 type ImageDataOrImageXObject =
-    | ImageData of  SpawnablePdfObjectID * ImageData * (PdfCanvas -> SpawnablePdfObjectID * ImageData -> PdfXObject)
+    | ImageData of  ImageData_ForWrite * (PdfCanvas ->  ImageData_ForWrite -> PdfXObject)
     | ImageXObject of PdfImageXObject
     | Inline       of PdfStream
     | MaskColor    of Color
@@ -333,8 +339,9 @@ with
     member x.AsSpawned() =
         match x with 
         | ImageXObject _ -> x
-        | ImageData (id, imageData, factory) ->
-            ImageData({id with IsSpawned = true}, imageData, factory)
+        | ImageData (data, factory) ->
+            ImageData({data with ID.IsSpawned = true}, factory)
+
         | MaskColor _ -> x
         | Inline _ -> x
 
@@ -637,8 +644,8 @@ with
                     
                 | ImageCloseOperator.New (ctm, image) ->
                     match image with 
-                    | ImageDataOrImageXObject.ImageData (hashKey, image, imageFactory) ->
-                        let xobject = imageFactory canvas (hashKey, image)
+                    | ImageDataOrImageXObject.ImageData (data, imageFactory) ->
+                        let xobject = imageFactory canvas (data)
                         canvas.AddXObject(xobject, ctm) 
 
                     | ImageDataOrImageXObject.ImageXObject image ->
@@ -657,7 +664,8 @@ with
                         |> PdfCanvas.writeOperatorRange operatorRange
                         
                     | ImageDataOrImageXObject.MaskColor color ->
-                        canvas.SetFillColor(color)
+                        canvas.SetFillColor(color) |> ignore
+                        PdfCanvas.writeOperatorRange originCloseOperatorRange canvas
 
                 | ImageCloseOperator.Remove ->
                     canvas

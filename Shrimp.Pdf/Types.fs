@@ -84,7 +84,7 @@ module _IAbstractRenderInfoExtensions =
 
     type IntegratedImageRenderInfo with 
         member x.RecordValue =
-            { UnclippedBound = IImageRenderInfo.getUnclippedBound x |> FsRectangle.OfRectangle
+            { UnclippedBound = (IImageRenderInfo.getUnclippedBound x).Value |> FsRectangle.OfRectangle
               ImageColorSpaceData = x.ImageColorSpaceData
               VisibleBound = 
                 x.VisibleBound() 

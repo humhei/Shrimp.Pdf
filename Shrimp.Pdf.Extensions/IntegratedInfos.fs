@@ -609,11 +609,14 @@ module IntegratedInfos =
         | ImageMask 
         | Indexable of IndexableColorSpace
 
+    type CmykOrRgb =
+        | CMYK = 0
+        | Rgb = 1
 
-
-    type IndexedRGBImageData =
+    type IndexedImageData =
         { ImageXObject: PdfImageXObject
-          ImageType:    ImageType }
+          ImageType:    ImageType
+          CmykOrRgb: CmykOrRgb }
     with 
         member x.GetWidth() = x.ImageXObject.GetWidth()
 
@@ -624,54 +627,101 @@ module IntegratedInfos =
 
     [<RequireQualifiedAccess>]
     type FsImageDataValue =
-        | ImageData of  ImageData
-        | IndexedRgb of IndexedRGBImageData
+        | ImageData of  ImageData * bytes: byte []
+        | IndexedData of IndexedImageData
     with 
 
         member x.GetColorEncodingComponentsNumber() =
             match x with 
-            | ImageData v -> v.GetColorEncodingComponentsNumber()
-            | IndexedRgb _ -> 3
+            | ImageData (v, _) -> v.GetColorEncodingComponentsNumber()
+            | IndexedData v -> 
+                match v.CmykOrRgb with 
+                | CmykOrRgb.Rgb -> 3
+                | CmykOrRgb.CMYK -> 4
 
         member x.GetBpc() =
             match x with 
-            | ImageData v -> v.GetBpc()
-            | IndexedRgb _ -> 2
+            | ImageData (v, _) -> v.GetBpc()
+            | IndexedData v -> 
+                match v.CmykOrRgb with 
+                | CmykOrRgb.Rgb -> 2
+                | CmykOrRgb.CMYK -> 2
 
         member x.GetOriginalType() =
             match x with 
-            | ImageData v -> v.GetOriginalType()
-            | IndexedRgb indexedRGB -> indexedRGB.ImageType
+            | ImageData (v, _) -> v.GetOriginalType()
+            | IndexedData indexedRGB -> indexedRGB.ImageType
 
         member x.GetWidth() =
             match x with 
-            | ImageData v -> v.GetWidth()
-            | IndexedRgb xobject -> xobject.GetWidth() 
+            | ImageData (v, _) -> v.GetWidth()
+            | IndexedData xobject -> xobject.GetWidth() 
 
 
         member x.GetHeight() =
             match x with 
-            | ImageData v -> v.GetHeight()
-            | IndexedRgb xobject -> xobject.GetHeight() 
+            | ImageData (v, _) -> v.GetHeight()
+            | IndexedData xobject -> xobject.GetHeight() 
 
         member x.GetData() =
             match x with 
-            | ImageData v -> v.GetData()
-            | IndexedRgb xobject -> failwithf "Cannot get bytes for indexedRGB image data"
+            | ImageData (_, v) -> v
+            | IndexedData xobject -> failwithf "Cannot get bytes for indexedRGB image data"
 
-    
-    type FsSoftMask(pdfStream: PdfStream) =
+    type FsSoftMask_For_Write(
+        id: SpawnablePdfObjectID,
+        imageData: FsImageDataValue,
+        unclippedBound: ImageUnclippedBound
+    ) =
+        member x.ID = id
+        member x.ImageData = imageData
+        member x.UnclippedBound = unclippedBound
+
+    type FsSoftMask(
+        id: FsPdfObjectID,
+        colorSpace: ImageColorSpaceData option,
+        imageXObject: PdfImageXObject,
+        imageData: FsImageData,
+        unclippedBound: ImageUnclippedBound) =
         let __checkColorSpaceValid = 
-            let pdfName = pdfStream.GetAsName(PdfName.ColorSpace)
+            let pdfName = imageXObject.GetPdfObject().GetAsName(PdfName.ColorSpace)
             match pdfName with 
             | EqualTo PdfName.DeviceGray -> ()
             | _ -> failwithf "Cannot create FsSolfMask by colorspace %A" pdfName
 
+        let __checkNoSubSoftMask = 
+            match imageData.SoftMask with 
+            | None -> ()
+            | Some subSoftMask ->
+                failwithf "Not implemented when Sub soft mask exists"
 
-        member x.PdfStream = pdfStream
+        let colorSpace = 
+            match colorSpace with 
+            | None ->   
+                { ColorSpace = ColorSpace.Gray
+                  IndexTable = None
+                  Decode = None }
+                |> ImageColorSpaceData.Indexable
 
+            | Some colorSpace -> colorSpace
 
-    type FsImageData =
+        let dpi = imageData.CalcDpi(unclippedBound)
+
+        member x.ImageXObject = imageXObject
+        member x.ID = id
+        member x.ImageData = imageData
+        member x.ColorSpace = colorSpace
+        member x.UnclippedBound = unclippedBound
+        member x.Dpi = dpi
+
+        member x.DataForWrite() =
+            FsSoftMask_For_Write(
+                SpawnablePdfObjectID.OfPdfObjectID id,
+                imageData.FsImageDataValue,
+                unclippedBound
+            )
+
+    and FsImageData =
         { SoftMask: FsSoftMask option 
           FsImageDataValue: FsImageDataValue }
     with 
@@ -687,21 +737,29 @@ module IntegratedInfos =
         
         member x.GetData()  = x.FsImageDataValue.GetData() 
         
+        member imageData.CalcDpi(unclippedBound: ImageUnclippedBound) =
+            let bound =  unclippedBound.Value
+            let width = imageData.GetWidth()
+            let height = imageData.GetHeight()
+            let dpi_x = float width / userUnitToMM (bound.GetWidthF())     |> inchToMM |> round |> int
+            let dpi_y = float height / userUnitToMM (bound.GetHeightF())  |> inchToMM |> round |> int
+            {| X = dpi_x
+               Y = dpi_y |}
 
         static member CreateImageData (softMask) imageDataValue =
             { SoftMask = softMask 
               FsImageDataValue = FsImageDataValue.ImageData imageDataValue }
 
-        static member CreateIndexedRgb (softMask) indexedRGBImageData =
+        static member CreateIndexedData (softMask) indexedRGBImageData =
             { SoftMask = softMask 
-              FsImageDataValue = FsImageDataValue.IndexedRgb indexedRGBImageData }
+              FsImageDataValue = FsImageDataValue.IndexedData indexedRGBImageData }
 
     [<RequireQualifiedAccess>]
     module FsImageData =
-        let (|ImageData|IndexedRgb|) (imageData: FsImageData) =
+        let (|ImageData|IndexedData|) (imageData: FsImageData) =
             match imageData.FsImageDataValue with 
-            | FsImageDataValue.ImageData v -> ImageData v
-            | FsImageDataValue.IndexedRgb v -> IndexedRgb v
+            | FsImageDataValue.ImageData (v1, v2) -> ImageData (v1, v2)
+            | FsImageDataValue.IndexedData v -> IndexedData v
 
     [<Struct>]
     type IntegratedImageRenderInfo =
@@ -760,6 +818,7 @@ module IntegratedInfos =
 
         member x.VisibleBound() = 
             let unclippedBound = IImageRenderInfo.getUnclippedBound x
+            let unclippedBound = unclippedBound.Value
             match x.ClippingPathInfos with 
             | ClippingPathInfos.IntersectedNone -> None
             | ClippingPathInfos.IntersectedSome rect ->
@@ -774,12 +833,8 @@ module IntegratedInfos =
 
         member x.Dpi =
             let bound =  IImageRenderInfo.getUnclippedBound x
-            let width = x.ImageData.GetWidth()
-            let height = x.ImageData.GetHeight()
-            let dpi_x = float width / userUnitToMM (bound.GetWidthF())     |> inchToMM |> round |> int
-            let dpi_y = float height / userUnitToMM (bound.GetHeightF())  |> inchToMM |> round |> int
-            {| X = dpi_x
-               Y = dpi_y |}
+            x.ImageData.CalcDpi(bound)
+       
 
 
 
