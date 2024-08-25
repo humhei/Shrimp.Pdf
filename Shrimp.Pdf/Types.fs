@@ -115,6 +115,27 @@ with
         { Width = mapping x.Width
           Height = mapping x.Height }
 
+    member x.MapLongSide mapping =
+        match x.Width >= x.Height with 
+        | true ->
+            { Width = mapping x.Width
+              Height = x.Height }
+
+        | false ->
+            { Width = x.Width
+              Height = mapping x.Height }
+
+    member x.MapShortSide mapping =
+        match x.Width >= x.Height with 
+        | true ->
+            { Width = x.Width
+              Height = mapping  x.Height }
+
+        | false ->
+            { Width = mapping  x.Width
+              Height = x.Height }
+
+
     member x.ScaleInto(targetSize: FsSize) =
         let scaleX = targetSize.Width / x.Width
         let scaleY = targetSize.Height / x.Height
@@ -634,6 +655,12 @@ module _Types_Ex =
             | false -> None
 
     type PdfPage with 
+        member x.GetPageEdge(margin: Margin, pageBoxKind: PageBoxKind) =
+            let pageBox = x.GetPageBox(pageBoxKind)
+            let margin = margin
+            x.GetPageEdge(Rectangle.applyMargin margin pageBox, pageBoxKind)
+
+
         member x.GetPageEdge(innerBox: FsSize, pageBoxKind: PageBoxKind) =
             let pageBox = x.GetPageBox(pageBoxKind)
 

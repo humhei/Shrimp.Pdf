@@ -572,6 +572,7 @@ module internal Listeners =
             currentTextClipingInfo <- 
                 currentClippingTextInfoElementsStack.ToArray()
                 |> Array.filter(fun m -> m.Count > 0)
+                |> Array.map List.ofSeq
 
             ()
 
@@ -930,6 +931,7 @@ module internal Listeners =
                                 { ClippingPathInfos  = 
                                     { XObjectClippingBoxState = currentXObjectClippingBox
                                       ClippingPathInfoState = currentClippingPathInfo
+                                      AddtionalCtm = Matrix.DefaultValue
                                       TextClippingInfos = currentTextClipingInfo
                                     }
                                   PathRenderInfo = pathRenderInfo
@@ -979,6 +981,7 @@ module internal Listeners =
                         | :? TextRenderInfo as textRenderInfo ->
                             { ClippingPathInfos = 
                                 { XObjectClippingBoxState = currentXObjectClippingBox
+                                  AddtionalCtm = Matrix.DefaultValue
                                   ClippingPathInfoState = currentClippingPathInfo
                                   TextClippingInfos = currentTextClipingInfo }
                               TextRenderInfo = textRenderInfo
@@ -1003,6 +1006,7 @@ module internal Listeners =
                             let imageInfo =
                                 { ClippingPathInfos = 
                                     { XObjectClippingBoxState = currentXObjectClippingBox
+                                      AddtionalCtm = Matrix.DefaultValue
                                       ClippingPathInfoState = currentClippingPathInfo
                                       TextClippingInfos = currentTextClipingInfo }
                                   ImageRenderInfo = imageRenderInfo

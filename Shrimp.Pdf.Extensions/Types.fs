@@ -1183,7 +1183,7 @@ module ExtensionTypes =
 
     type IntersectedClippingPathInfo =
         { ClippingPathInfo: ClippingPathInfo 
-          Elements: array<ResizeArray<IntersectedClippingPathInfoElement>>  }
+          Elements: array<ResizeArray<IntersectedClippingPathInfoElement>> }
     
     [<RequireQualifiedAccess; Struct>]
     type ClippingPathInfoState =
@@ -1201,7 +1201,8 @@ module ExtensionTypes =
     type ClippingPathInfos =
         { XObjectClippingBoxState: XObjectClippingBoxState 
           ClippingPathInfoState: ClippingPathInfoState
-          TextClippingInfos: array<ResizeArray<TextClippingInfo>> }
+          AddtionalCtm: Matrix
+          TextClippingInfos: array<list<TextClippingInfo>> }
     with 
         member x.ConcatedTextClippingInfo = 
             match x.TextClippingInfos.Length with 
@@ -1214,7 +1215,31 @@ module ExtensionTypes =
                 |> Some
 
 
+    [<Struct>]
+    type ClippingPathInfos0 =
+        { XObjectClippingBoxState: XObjectClippingBoxState 
+          ClippingPathInfoState: ClippingPathInfoState
+          AddtionalCtm: Matrix
+          TextClippingInfos0: array<ResizeArray<TextClippingInfo>> }
+    with 
+        member x.ConcatedTextClippingInfo = 
+            match x.TextClippingInfos0.Length with 
+            | 0 -> None
+            | _ ->
+                x.TextClippingInfos0
+                |> List.ofArray
+                |> List.collect List.ofSeq
+                |> TextClippingInfo.Concat
+                |> Some
 
+        member x.ToClippingPathInfos() =
+            { XObjectClippingBoxState = x.XObjectClippingBoxState 
+              ClippingPathInfoState = x.ClippingPathInfoState
+              AddtionalCtm = x.AddtionalCtm
+              TextClippingInfos = 
+                x.TextClippingInfos0 
+                |> Array.map List.ofSeq
+            }
 
 
     type PageEdge =
@@ -1288,6 +1313,20 @@ module ExtensionTypes =
               Top = f margin.Top
               Bottom = f margin.Bottom
               Right = f margin.Right
+            }
+
+        static member (+)(margin1: Margin, margin2: Margin) =
+            { Left = margin1.Left + margin2.Left
+              Top =  margin1.Top + margin2.Top
+              Bottom =  margin1.Bottom + margin2.Bottom
+              Right = margin1.Right + margin2.Right
+            }
+
+        static member (-)(margin1: Margin, margin2: Margin) =
+            { Left = margin1.Left - margin2.Left
+              Top =  margin1.Top - margin2.Top
+              Bottom =  margin1.Bottom - margin2.Bottom
+              Right = margin1.Right - margin2.Right
             }
 
         member x.LoggingText = 
@@ -1770,6 +1809,10 @@ module ExtensionTypes =
      
         let ofPdfArray (pdfArray: PdfArray) =
             let values = pdfArray.ToFloatArray()
+            Matrix(values[0], values[1], values[2], values[3], values[4], values[5])
+            |> ofMatrix
+
+        let ofFloatArray (values: float32 []) =
             Matrix(values[0], values[1], values[2], values[3], values[4], values[5])
             |> ofMatrix
 

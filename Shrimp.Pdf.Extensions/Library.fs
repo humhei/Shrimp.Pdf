@@ -152,6 +152,10 @@ module iText =
             let widthUnits = calcLineWidthUnits text font
             List.max widthUnits * fontSize 
 
+    let private defaultMatrix = AffineTransformRecord.toMatrix AffineTransformRecord.DefaultValue
+
+    type Matrix with 
+        static member DefaultValue = defaultMatrix
 
     type Rectangle with 
 
@@ -2206,11 +2210,12 @@ module iText =
 
         member page.SetAllBox(rect: Rectangle) =
             page
-                .SetTrimBox(rect)
-                .SetBleedBox(rect)
+                .SetMediaBox(rect)
                 .SetCropBox(rect)
                 .SetArtBox(rect)
-                .SetMediaBox(rect)
+                .SetBleedBox(rect)
+                .SetTrimBox(rect)
+
 
         member x.GetArea(areaGettingOptions: AreaGettingOptions) =
             match areaGettingOptions with 
@@ -2279,13 +2284,21 @@ module iText =
                 |> setCropBox rect
 
             | PageBoxKind.AllBox ->
-                page 
-                |> setMediaBox rect
-                |> setCropBox rect
-                |> setArtBox rect
-                |> setBleedBox rect
-                |> setTrimBox rect
+                page.SetAllBox(rect)
 
+        let mapPageBox mapping (page: PdfPage) =
+            [
+                PageBoxKind.ActualBox
+                PageBoxKind.ArtBox
+                PageBoxKind.BleedBox
+                PageBoxKind.TrimBox
+            ]
+            |> List.iter(fun pageBoxKind ->
+                let pageBox = page.GetPageBox(pageBoxKind)
+                let newPageBox = mapping pageBox
+                setPageBox (pageBoxKind) newPageBox page
+                |> ignore<PdfPage>
+            )
 
         let getActualWidth (page: PdfPage) = 
             page.GetActualBox().GetWidth() |> float
