@@ -335,6 +335,7 @@ type ImageDataOrImageXObject =
     | ImageXObject of PdfImageXObject
     | Inline       of PdfStream
     | MaskColor    of Color
+    | CurrentDocumentOtherImage of ImageRenderInfo
 with 
     member x.AsSpawned() =
         match x with 
@@ -344,6 +345,7 @@ with
 
         | MaskColor _ -> x
         | Inline _ -> x
+        | CurrentDocumentOtherImage _ -> x
 
 [<RequireQualifiedAccess>]
 type ImageCloseOperator =
@@ -651,6 +653,10 @@ with
                     | ImageDataOrImageXObject.ImageXObject image ->
                         canvas.AddXObject(image, ctm) 
 
+                    | ImageDataOrImageXObject.CurrentDocumentOtherImage(image) ->
+                        let image = image.GetImage()
+                        canvas.AddXObject(image, AffineTransformRecord.DefaultValue)
+
                     | ImageDataOrImageXObject.Inline pdfStream ->
                         let operatorRange =
                             { Operator = PdfLiteral(EI)
@@ -751,7 +757,7 @@ type FsPdfDocumentEditorResources() =
 
 type IFsPdfDocumentEditor =
     abstract member Resources: FsPdfDocumentEditorResources
-
+    abstract member DeleteRemovableImage: unit -> unit
 
 
 type internal CallbackableContentOperator (originalOperator) =
@@ -1126,14 +1132,21 @@ and private PdfCanvasEditor(ocProperties, selectorModifierMapping: Map<SelectorM
 
                 | Image -> 
                     match writeImage() with 
-                    | None -> ()
+                    | None -> 
+                        resources.AddKeepingXObjectName(name)
+                        ()
                     | Some modifierPdfCanvasActions ->
                         match modifierPdfCanvasActions.Close with 
                         | CloseOperatorUnion.Image close ->
                             let name = operatorRange.Operands.[0] :?> PdfName
                             match close with 
-                            | ImageCloseOperator.Remove 
-                            | ImageCloseOperator.New _   -> resources.AddRemovableXObjectName(name)
+                            | ImageCloseOperator.Remove ->
+                                resources.AddRemovableXObjectName(name)
+
+                            | ImageCloseOperator.New (_, image) -> 
+                                match image with 
+                                | ImageDataOrImageXObject.CurrentDocumentOtherImage _ -> ()
+                                | _ -> resources.AddRemovableXObjectName(name)
                             | ImageCloseOperator.Keep -> resources.AddKeepingXObjectName(name)
 
                         | _ -> failwith "Invalid token"
@@ -1174,6 +1187,7 @@ and private PdfCanvasEditor(ocProperties, selectorModifierMapping: Map<SelectorM
                     | Image ->
                         match (getImageClose()) with 
                         | Choice1Of2 operatorRange ->
+                            resources.AddKeepingXObjectName(name)
                             PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
                             |> ignore
 
@@ -1210,6 +1224,7 @@ and private PdfCanvasEditor(ocProperties, selectorModifierMapping: Map<SelectorM
                         let imageClose = getImageClose()
                         match imageClose with 
                         | Choice.Choice1Of2 operatorRange ->
+                            resources.AddKeepingXObjectName(name)
                             PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
                             |> ignore
 
@@ -1220,6 +1235,7 @@ and private PdfCanvasEditor(ocProperties, selectorModifierMapping: Map<SelectorM
                                 | 0 -> 
                                     match close with 
                                     | ImageCloseOperator.Keep ->
+                                        resources.AddKeepingXObjectName(name)
                                         PdfCanvas.writeOperatorRange operatorRange currentPdfCanvas
                                         |> ignore
 

@@ -133,7 +133,16 @@ type ImageColorSpaceConversionCache =
         ConcurrentDictionary<SpawnablePdfObjectID * Icc option * Icc * Indent, ImageDataOrImageXObject option>
       SetMaximumDpiCache: 
         ConcurrentDictionary<SpawnablePdfObjectID * int, ImageDataOrImageXObject option>
+      MinimunImageSizeCache: 
+        ConcurrentDictionary<SHA256, Choice<IntegratedImageRenderInfo, ImageDataOrImageXObject>>
+      RemovableImages: ResizeArray<FsPdfObjectID>
     }
+with 
+    static member CreateNew() =
+        { ImageColorSpaceConversionCache.Cache = ConcurrentDictionary()
+          SetMaximumDpiCache = ConcurrentDictionary()
+          MinimunImageSizeCache = ConcurrentDictionary()
+          RemovableImages = ResizeArray() }
 
 
 type private PdfDocumentCache private 
@@ -194,8 +203,7 @@ type private PdfDocumentCache private
             new ConcurrentDictionary<_, _>(), 
             new ConcurrentDictionary<_, _>(),
             new ConcurrentDictionary<_, _>(),
-            {ImageColorSpaceConversionCache.Cache = ConcurrentDictionary()
-             SetMaximumDpiCache = ConcurrentDictionary() })
+            ImageColorSpaceConversionCache.CreateNew())
 
     member internal x.CacheDocumentFont(font: PdfFont) =
         let fontNames = font.GetFontProgram().GetFontNames()
@@ -523,8 +531,7 @@ type private PdfDocumentCache private
              new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
              new ConcurrentDictionary<_, _>(),
-             {ImageColorSpaceConversionCache.Cache = ConcurrentDictionary()
-              SetMaximumDpiCache = ConcurrentDictionary() })
+             ImageColorSpaceConversionCache.CreateNew())
 
 and PdfDocumentWithCachedResources =
     inherit PdfDocument
@@ -706,6 +713,54 @@ and PdfDocumentWithCachedResources =
 
     interface IFsPdfDocumentEditor with 
         member x.Resources = x.editorResources
+        member x.DeleteRemovableImage() =
+            let imageIDs =
+                x.cache.ImageColorSpaceConversionCache.RemovableImages
+                |> List.ofSeq
+                |> List.distinct
+
+            match imageIDs with 
+            | [] -> ()
+            | _ ->
+
+                for page in x.GetPages() do
+                    let resources = page.GetResources()
+                    let rec delete(resources: PdfResources) =
+                        let container = resources.GetResource(PdfName.XObject)
+                        let removableNames = ResizeArray()
+                        for pair in container.EntrySet() do
+                            let value = pair.Value
+                            match value with 
+                            | :? PdfStream as xobjectStream ->
+                                let subType = xobjectStream.GetAsName(PdfName.Subtype)
+                                match subType with 
+                                | EqualTo PdfName.Image ->
+                                    let imageID = 
+                                        xobjectStream.GetIndirectReference()
+                                        |> hashNumberOfPdfIndirectReference 
+                                    match List.contains imageID imageIDs with 
+                                    | true -> 
+                                        removableNames.Add(pair.Key)
+                                    | false -> ()
+                                       
+                                | EqualTo PdfName.Form ->
+                                    let subResources = xobjectStream.GetAsDictionary(PdfName.Resources)
+                                    match subResources with 
+                                    | null -> ()
+                                    | subResources ->
+                                        PdfResources(subResources)
+                                        |> delete
+
+                                | _ -> ()
+
+                            | _ -> ()
+
+                        for name in removableNames do 
+                            container.Remove(name)
+                            |> ignore
+
+                    delete resources
+
 
     new (writer: string) as this = 
         { inherit PdfDocument(new PdfWriter(writer));
