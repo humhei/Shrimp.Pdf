@@ -308,13 +308,19 @@ module _Colors =
     type ColorCard with 
         static member RedirectPantoneColorName(pantoneColor: string) =
             let parser_Pantone = pint32 .>> spaces .>> CharParsers.anyOf ['C'; 'c'] .>> eof
+            let parser_Pantone_CP = pint32 .>> spaces .>> pstringCI "CP" .>> eof
             
             match pantoneColor with 
             | Try Int32.tryParse r
             | FParsec (parser_Pantone) r ->
                 "PANTONE " + r.ToString() + " C"
+            | FParsec (parser_Pantone_CP) r ->
+                "PANTONE " + r.ToString() + " CP"
 
             | String.EndsWithIC "C" -> 
+                pantoneColor
+
+            | String.EndsWithIC "CP" -> 
                 pantoneColor
 
             | String.EndsWithIC "TPX" ->
@@ -400,24 +406,30 @@ module _Colors =
         static member OfPantone(pantoneColor: PantoneColorEnum) =
             FsLab.OfHex (int pantoneColor)
 
+
         static member OfTpx(pantoneColor: TPXColorEnum) =
             FsLab.OfHex (int pantoneColor)
 
-
-
-        static member OfPantoneGeneral(pantoneColor: string) =
+        static member OfPantoneGeneral_R(pantoneColor: string) =
             let pantoneColor = ColorCard.RedirectPantoneColorName pantoneColor
             match pantoneColor with 
             | String.EndsWithIC "C" -> 
                 stringToEnum pantoneColor
                 |> FsLab.OfPantone
+                |> Result.Ok
 
             | String.EndsWithIC "TPX" ->
                 stringToEnum pantoneColor
                 |> FsLab.OfTpx
+                |> Result.Ok
                 
-            | _ -> failwithf "Cannot parse %s to FsLab" pantoneColor
+            | _ ->  
+                sprintf "Cannot parse %s to FsLab" pantoneColor
+                |> Result.Error
 
+        static member OfPantoneGeneral(pantoneColor: string) =
+            FsLab.OfPantoneGeneral_R pantoneColor
+            |> Result.getOrFail
 
     /// valueRange: WHITE 0 -> BLACK 1
     type FsDeviceCmyk =
@@ -456,6 +468,8 @@ module _Colors =
             let x = x.Range100
             let colorName = sprintf "%.0f %.0f %.0f %.0f" (x.C) x.M x.Y x.K
             "CMYK " + colorName
+
+
         
         /// Color => Literal NAME
         ///
@@ -506,6 +520,45 @@ module _Colors =
             match x.C = 0.f && x.Y = 0.f && x.M = 0.f with 
             | true -> Some (FsGray (1.f - x.K))
             | false -> None
+
+        member x.HexLiteral =
+            x.Values 
+            |> List.map(fun m -> int (m * 1000.f))
+            |> List.map string
+            |> List.map(fun m ->
+                m.PadLeft(4, '0')
+            )
+            |> String.concat ""
+            |> fun m -> m + "L"
+
+        static member OfHexLiteral(text: string) =  
+            let text = text.TrimEnd 'L'
+            let text = text.PadLeft(16, '0')
+            match text.Length with 
+            | 16 -> 
+                text.ToCharArray()
+                |> Array.chunkBySize 4
+                |> function
+                    | [|c; m; y; k|] ->
+                        let getValue (chars: char []) =
+                            let text = System.String chars
+                            let v = Int32.parse_detailError text
+                            float32 v / 1000.f
+
+                        { C = getValue c
+                          M = getValue m 
+                          Y = getValue y
+                          K = getValue k }
+
+                    | _ -> 
+                        failwithf "Invalid token"
+
+            | _ -> failwithf "Cannot parse hexLiteral %s to FsDeviceCMYK" text
+
+        static member OfPantoneCP(pantoneCP: PantoneCPColorEnum) =
+            let color = int64 pantoneCP
+            let hex   = (string color) + "L"
+            FsDeviceCmyk.OfHexLiteral(hex)
 
     [<RequireQualifiedAccess>]
     module FsDeviceCmyk =
@@ -929,12 +982,22 @@ module _Colors =
                 | ValueEqualOptions.Exactly ->
                     FsValueColor.IsEqual (color1.Color, color2.Color, valueEqualOptions)
 
+
         static member OfPantone(color: PantoneColorEnum) =
             let fsValueColor = FsLab.OfPantone color
     
             let separationName1 = color.ToString()
             
             { BaseColor = FsValueColor.Lab fsValueColor
+              Name = separationName1
+              Transparency = 1. }
+
+        static member OfPantoneCP(color: PantoneCPColorEnum) =
+            let fsValueColor = FsDeviceCmyk.OfPantoneCP color
+    
+            let separationName1 = color.ToString()
+            
+            { BaseColor = FsValueColor.Cmyk fsValueColor
               Name = separationName1
               Transparency = 1. }
 
@@ -947,14 +1010,34 @@ module _Colors =
               Name = separationName1
               Transparency = 1. }
 
+        static member OfPantoneGeneral_R(color: string) =
+            match color.EndsWith("CP", true) with 
+            | true ->
+                let color = 
+                    ColorCard.RedirectPantoneColorName color
+                    |> stringToEnum
+                FsSeparation.OfPantoneCP color
+                |> Result.Ok
+
+            | false ->
+
+                let fsValueColor = FsLab.OfPantoneGeneral_R color
+                fsValueColor
+                |> Result.map(fun fsValueColor ->
+                    let separationName1 = ColorCard.RedirectPantoneColorName color
+                
+                    { BaseColor = FsValueColor.Lab fsValueColor
+                      Name = separationName1
+                      Transparency = 1. }
+                )
+                
+
+
+
         static member OfPantoneGeneral(color: string) =
-            let fsValueColor = FsLab.OfPantoneGeneral color
-    
-            let separationName1 = ColorCard.RedirectPantoneColorName color
-            
-            { BaseColor = FsValueColor.Lab fsValueColor
-              Name = separationName1
-              Transparency = 1. }
+            FsSeparation.OfPantoneGeneral_R(color)
+            |> Result.getOrFail
+         
 
     [<RequireQualifiedAccess>]
     module FsSeparation =

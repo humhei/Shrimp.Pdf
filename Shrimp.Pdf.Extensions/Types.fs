@@ -538,6 +538,26 @@ module ExtensionTypes =
                 Height = values.[3]
             }
 
+    
+    [<Struct>]
+    type FsPoint =
+        { X: float 
+          Y: float }
+    with 
+        member private x.MMValue =
+            {| X = userUnitToMM x.X
+               Y = userUnitToMM x.Y |}
+    
+        static member Zero =
+            { X = 0. 
+              Y = 0. }
+    
+        static member OfPoint(point: Point) =
+            { X = point.x 
+              Y = point.y }
+    
+        member x.AsPoint = Point(x.X, x.Y)
+
 
     [<StructuredFormatDisplay("{LoggingText}")>]
     type FsRectangle =
@@ -561,6 +581,14 @@ module ExtensionTypes =
 
         member x.Top = x.Bottom + x.Height
 
+        member this.GetXCenter() = (this.Left + this.Right) / 2.
+        member this.GetYCenter() = (this.Top + this.Bottom) / 2.
+        member this.GetFsCenter() = 
+            { X = this.GetXCenter() 
+              Y = this.GetYCenter() }
+
+        member this.GetCenter() = 
+            Point(this.GetXCenter(), this.GetYCenter())
 
         static member OfRectangle(rect: Rectangle) =
             { X      = rect.GetX()       |> float
@@ -618,27 +646,6 @@ module ExtensionTypes =
         override x.ToString() = x.LoggingText
 
     
-    
-    
-                
-    [<Struct>]
-    type FsPoint =
-        { X: float 
-          Y: float }
-    with 
-        member private x.MMValue =
-            {| X = userUnitToMM x.X
-               Y = userUnitToMM x.Y |}
-    
-        static member Zero =
-            { X = 0. 
-              Y = 0. }
-    
-        static member OfPoint(point: Point) =
-            { X = point.x 
-              Y = point.y }
-    
-        member x.AsPoint = Point(x.X, x.Y)
 
     type PositedRectangle =
         { LeftBottom: FsPoint 

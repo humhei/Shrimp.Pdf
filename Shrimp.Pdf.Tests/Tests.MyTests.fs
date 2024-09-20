@@ -60,11 +60,20 @@ let myTests =
             let a = 1
             ()
 
-        testCase "read path clipping info" <| fun _ ->
-
-
+        ftestCase "read path clipping info" <| fun _ ->
+            let cmyk = FsSeparation.OfPantoneGeneral_R "311CP"
+            failwithf ""
             runTest @"datas/read path clipping info.pdf" (fun i page ->
+                let color = FsSeparation.OfPantoneGeneral_R "311 CP"
                 let parser = NonInitialClippingPathPdfDocumentContentParser(page.GetDocument())
+                let doc = page.GetDocument() :?> PdfDocumentWithCachedResources
+                //let font = 
+                    
+                //    RegisterableFonts.YaHei.yaHei FontWeight.Regular
+                //    |> FsPdfFontFactory.Registerable
+                //let font = doc.GetOrCreatePdfFont(font) 
+                //let height = PdfFont.calcLineHeightWhenParagraphedWidthIs (mm 157) ("750x400mm") font
+
                 let infos =     
                     NonInitialClippingPathPdfDocumentContentParser.parse 
                         (i+1) 
@@ -120,7 +129,7 @@ let myTests =
 
 
         
-        ftestCase "read colors" <| fun _ ->
+        testCase "read colors" <| fun _ ->
             runTest @"C:\Users\Administrator\Desktop\121.pdf" (fun i page ->
                 
 

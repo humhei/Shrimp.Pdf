@@ -1479,11 +1479,18 @@ and private PdfCanvasEditor(ocProperties, selectorModifierMapping: Map<SelectorM
                     this.EditContent (resources, stream, pageOrXObject)
 
                 | XObjectReference.ByRef ->
-                    let streams = array |> Seq.cast<PdfStream>
-                    for stream in streams do
-                        this.EditContent (resources, stream, pageOrXObject)
-                        |> ignore
-                    array
+                    let streams = array |> Seq.cast<PdfStream> |> List.ofSeq
+                    let stream = new PdfStream()
+                    streams |> List.iter (fun s1 ->
+                        stream.GetOutputStream().WriteBytes(s1.GetBytes()) |> ignore
+                    )
+
+                    //for stream in streams do
+                    //    this.EditContent (resources, stream, pageOrXObject)
+                    //    |> ignore
+                    //array
+                    this.EditContent (resources, stream, pageOrXObject)
+
 
 
             else
@@ -1513,14 +1520,21 @@ module PdfPage =
             let pageContents = 
                 match pageContents with 
                 | :? PdfArray as array ->
-                    array 
-                    |> Seq.cast<PdfStream>
-                    |> Seq.map(fun stream ->
-                        stream.Clone()
+                    let streams = array |> Seq.cast<PdfStream> |> List.ofSeq
+                    let stream = new PdfStream()
+                    streams |> List.iter (fun s1 ->
+                        stream.GetOutputStream().WriteBytes(s1.GetBytes()) |> ignore
                     )
-                    |> ResizeArray
-                    |> PdfArray
-                    |> fun array -> array :> PdfObject
+
+                    //array 
+                    //|> Seq.cast<PdfStream>
+                    //|> Seq.map(fun stream ->
+                    //    stream.Clone()
+                    //)
+                    //|> ResizeArray
+                    //|> PdfArray
+                    //|> fun array -> array :> PdfObject
+                    stream :> PdfObject
 
                 | :? PdfStream as stream -> stream.Clone()
                 | _ -> failwithf "Invalid PageContents type %A" (pageContents.GetType())

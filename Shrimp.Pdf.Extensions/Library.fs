@@ -152,6 +152,17 @@ module iText =
             let widthUnits = calcLineWidthUnits text font
             List.max widthUnits * fontSize 
 
+
+        /// px/pt
+        let calcLineHeightWhenParagraphedWidthIs width (text: string) (font: PdfFont) =
+            let widthUnits = 
+                calcLineWidthUnits text font
+
+            let fontSize = width / List.max widthUnits
+            let heightUnit = calcLineHeightUnit font
+
+            heightUnit * float widthUnits.Length * fontSize 
+
     let private defaultMatrix = AffineTransformRecord.toMatrix AffineTransformRecord.DefaultValue
 
     type Matrix with 
